@@ -136,7 +136,7 @@
                          (when (zerop (mod i 10))
                            (skip))
                          (when (cl-evenp i)
-                           (prepend my-collection i)))
+                           (push-into my-collection i)))
                         (finally-return (nreverse my-collection)))
                  '(2 4 6 8 12 14 16 18))))
 
@@ -165,7 +165,7 @@
         (when (zerop (mod i 10))
           (skip))
         (when (cl-evenp i)
-          (prepend my-collection i)))
+          (push-into my-collection i)))
        (finally-return (nreverse my-collection)))
 
 ;;; Conditionals
@@ -183,9 +183,9 @@
            ((seq el [1 2 3 4 5 6 7])
             ;; Could also use (do (cond ...)).
             (when (zerop (mod el first-var))
-              (prepend msg-coll (message "Multiple of 2: %d" el)))
+              (push-into msg-coll (message "Multiple of 2: %d" el)))
             (when (zerop (mod el second-var))
-              (prepend msg-coll (message "Multiple of 3: %d" el))))
+              (push-into msg-coll (message "Multiple of 3: %d" el))))
            (finally-return (string-join (nreverse msg-coll) "\n")))
     "Multiple of 2: 2
 Multiple of 3: 3
@@ -212,9 +212,9 @@ Multiple of 3: 6")))
             ;; Could also use (do (cond ...)).
             ()
             (when (zerop (mod el first-var))
-              (prepend msg-coll (message "Multiple of 2: %d" el)))
+              (push-into msg-coll (message "Multiple of 2: %d" el)))
             (when (zerop (mod el second-var))
-              (prepend msg-coll (message "Multiple of 3: %d" el))))
+              (push-into msg-coll (message "Multiple of 3: %d" el))))
            (finally-return (string-join (nreverse msg-coll) "\n")))
     "Multiple of 2: 2
 Multiple of 3: 3
@@ -231,9 +231,9 @@ Multiple of 3: 6")))
            ((seq el [1 2 3 4 5 6 7])
             ;; Could also use (do (cond ...)).
             (unless (zerop (mod el first-var))
-              (prepend msg-coll (message "Not multiple of 2: %d" el)))
+              (push-into msg-coll (message "Not multiple of 2: %d" el)))
             (unless (zerop (mod el second-var))
-              (prepend msg-coll (message "Not multiple of 3: %d" el))))
+              (push-into msg-coll (message "Not multiple of 3: %d" el))))
            (finally-return (string-join (nreverse msg-coll) "\n")))
     "Not multiple of 2: 1
 Not multiple of 3: 1
@@ -259,8 +259,8 @@ Not multiple of 3: 7")))
   (should (equal (loopy ((list i (number-sequence 1 10))
                          (cond
                           ((cl-evenp i)
-                           (prepend evens i))
-                          (t (prepend odds i))))
+                           (push-into evens i))
+                          (t (push-into odds i))))
                         (finally-return (list evens odds)))
                  '((10 8 6 4 2) (9 7 5 3 1)))))
 
@@ -286,7 +286,7 @@ Not multiple of 3: 7")))
 ;;;; Accumulation
 (should (equal '(3 2 1)
                (loopy ((list j '(1 2 3))
-                       (prepend coll j))
+                       (push-into coll j))
                       (finally-return coll))))
 
 (should (equal '(1 2 3)
