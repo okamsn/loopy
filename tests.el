@@ -1,3 +1,6 @@
+;; Run these tests using:
+;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
+
 (push (expand-file-name ".")
       load-path)
 
