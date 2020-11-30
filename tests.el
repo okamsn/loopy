@@ -34,6 +34,36 @@
                       (after-do (cl-incf i))
                       (finally-return i)))))
 
+;;;; Final Instructions
+(ert-deftest finally-do ()
+  (should (= 10
+             (let (my-var)
+               (loopy ((list i (number-sequence 1 10)))
+                      (finally-do (setq my-var i)))
+               my-var))))
+
+(ert-deftest finally-do-not-affect-return ()
+  (should (eq nil
+              (loopy ((list i (number-sequence 1 10)))
+                     (finally-do 3)))))
+
+(ert-deftest finally-return-single-value ()
+  (should (= 10
+             (loopy ((list i (number-sequence 1 10)))
+                    (finally-return i)))))
+
+(ert-deftest finally-return-list-of-values ()
+  (should (equal '(10 7)
+                 (loopy ((list i (number-sequence 1 10)))
+                        (finally-return i 7)))))
+
+;;;; Changing the order of commands.
+(ert-deftest change-order-of-commands ()
+  (should (= 7
+             (loopy ((list i '(1 2 3)))
+                    (finally-return (+ i a))
+                    (with (a 4))))))
+
 ;;; Iteration
 ;;;; Array
 (ert-deftest loopy-basic-array-test ()
@@ -115,7 +145,7 @@
                   (seq a [1 2 3 4 5])
                   (if (/= l a)
                       (return nil)))
-                 (return t))))
+                 (finally-return t))))
 
 ;;;; Seq Ref
 (ert-deftest loopy-basic-seq-ref-test ()
@@ -125,9 +155,6 @@
                  (loop (seq-ref i my-seq)
                        (do (setf i 7)))
                  (return my-seq)))))
-
-(cl-loop for var being the elements of-ref '(1 2 3)
-         collect i)
 
 ;;; Leaving, Returning, Skipping
 (ert-deftest mod-when-test ()
@@ -140,58 +167,39 @@
                         (finally-return (nreverse my-collection)))
                  '(2 4 6 8 12 14 16 18))))
 
-(ert-deftest leave-named ()
+(ert-deftest return-from ()
   (should (= 6
-             (loopy outer
+             (loopy my-loop
                     ((list i (number-sequence 1 10))
                      (when (> i 5)
-                       (leave-named-loop outer i)))))))
+                       (return-from my-loop i)))))))
 
-(ert-deftest leave-outer-named ()
-  (should (eq 6
-              (loopy
-               outer
-               ((list outer-i (number-sequence 1 10))
-                (expr ret-loop
-                      (loopy inner
-                             ((expr inner-sum (+ outer-i 10))
-                              (when (> inner-sum 15)
-                                (leave-named-loop outer outer-i))
-                              ;; Note: Without explicit return, inner loop is
-                              ;; infinite.
-                              (return)))))))))
+(ert-deftest return-from-outer-loop ()
+  (should
+   (= 6
+      (loopy outer
+             ;; Could use ‘sum’ command, but don’t want dependencies.
+             (with (sum 0))
+             (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
+                   (do (loopy (loop (list i sublist)
+                                    (do (setq sum (+ sum i)))
+                                    (when (> sum 15)
+                                      (return-from outer i))))))))))
 
-(loopy ((seq i (number-sequence 1 20))
-        (when (zerop (mod i 10))
-          (skip))
-        (when (cl-evenp i)
-          (push-into my-collection i)))
-       (finally-return (nreverse my-collection)))
+(ert-deftest skip ()
+  (should (cl-every #'cl-oddp
+                    (loopy ((seq i (number-sequence 1 10))
+                            (when (cl-evenp i)
+                              (skip))
+                            (push-into my-collection i))
+                           (finally-return (nreverse my-collection))))))
 
 ;;; Conditionals
 ;;;; When
 
 (ert-deftest basic-when-parse ()
   (should (equal (loopy--parse-conditional-forms 'when 't '((do (+ 1 1))))
-                 '((loopy--loop-body when t (progn (+ 1 1)))))))
-
-(ert-deftest multi-when-prepend-test ()
-  (should
-   (string=
-    (loopy (with (first-var 2)
-                 (second-var 3))
-           ((seq el [1 2 3 4 5 6 7])
-            ;; Could also use (do (cond ...)).
-            (when (zerop (mod el first-var))
-              (push-into msg-coll (message "Multiple of 2: %d" el)))
-            (when (zerop (mod el second-var))
-              (push-into msg-coll (message "Multiple of 3: %d" el))))
-           (finally-return (string-join (nreverse msg-coll) "\n")))
-    "Multiple of 2: 2
-Multiple of 3: 3
-Multiple of 2: 4
-Multiple of 2: 6
-Multiple of 3: 6")))
+                 '((loopy--main-body when t (progn (+ 1 1)))))))
 
 (ert-deftest recursive-when-test ()
   (should (equal
@@ -199,7 +207,6 @@ Multiple of 3: 6")))
                    (list j '(1 2 3 6 7 8))
                    (when (cl-evenp i)
                      (when (> j i)
-                       (do (message "J > I"))
                        (return (cons j i))))))
            '(6 . 4))))
 
@@ -210,11 +217,10 @@ Multiple of 3: 6")))
                  (second-var 3))
            ((seq el [1 2 3 4 5 6 7])
             ;; Could also use (do (cond ...)).
-            ()
             (when (zerop (mod el first-var))
-              (push-into msg-coll (message "Multiple of 2: %d" el)))
+              (push-into msg-coll (format "Multiple of 2: %d" el)))
             (when (zerop (mod el second-var))
-              (push-into msg-coll (message "Multiple of 3: %d" el))))
+              (push-into msg-coll (format "Multiple of 3: %d" el))))
            (finally-return (string-join (nreverse msg-coll) "\n")))
     "Multiple of 2: 2
 Multiple of 3: 3
@@ -231,9 +237,9 @@ Multiple of 3: 6")))
            ((seq el [1 2 3 4 5 6 7])
             ;; Could also use (do (cond ...)).
             (unless (zerop (mod el first-var))
-              (push-into msg-coll (message "Not multiple of 2: %d" el)))
+              (push-into msg-coll (format "Not multiple of 2: %d" el)))
             (unless (zerop (mod el second-var))
-              (push-into msg-coll (message "Not multiple of 3: %d" el))))
+              (push-into msg-coll (format "Not multiple of 3: %d" el))))
            (finally-return (string-join (nreverse msg-coll) "\n")))
     "Not multiple of 2: 1
 Not multiple of 3: 1
@@ -248,12 +254,12 @@ Not multiple of 3: 7")))
 ;;;; Cond FORMS
 (ert-deftest parse-cond-form ()
   (should (equal (loopy--parse-cond-form '(((= a 1)
-                                             (do (message "hi")))
-                                            ((= b 2)
-                                             (return 5))))
-                 '((loop-body cond
-                              ((= a 1) (progn (message "hi")))
-                              ((= b 2) (cl-return-from nil 5)))))))
+                                            (do (message "hi")))
+                                           ((= b 2)
+                                            (return 5))))
+                 '((loopy--main-body cond
+                                     ((= a 1) (progn (message "hi")))
+                                     ((= b 2) (cl-return-from nil 5)))))))
 
 (ert-deftest parse-cond-loop ()
   (should (equal (loopy ((list i (number-sequence 1 10))
@@ -264,52 +270,41 @@ Not multiple of 3: 7")))
                         (finally-return (list evens odds)))
                  '((10 8 6 4 2) (9 7 5 3 1)))))
 
-;;;; Final Instructions
-(loopy ((list i (number-sequence 1 10)))
-       (finally-do (message "Last i: %d" i)
-                   (message "Less 1: %d" (1- i))))
-
-(loopy ((list i (number-sequence 1 10)))
-       (finally-do 3))
-
-(loopy ((list i (number-sequence 1 10)))
-       (finally-return i))
-
-(loopy ((list i (number-sequence 1 10)))
-       (finally-return i 7))
-
-;;;; Changing the order of commands.
-(loopy ((list i '(1 2 3)))
-       (finally-return (+ i a))
-       (with (a 4)))
-
 ;;;; Accumulation
-(should (equal '(3 2 1)
-               (loopy ((list j '(1 2 3))
-                       (push-into coll j))
-                      (finally-return coll))))
+(ert-deftest push-into ()
+  (should (equal '(3 2 1)
+                 (loopy ((list j '(1 2 3))
+                         (push-into coll j))
+                        (finally-return coll)))))
 
-(should (equal '(1 2 3)
-               (loopy ((list j '(1 2 3))
-                       (collect coll j))
-                      (finally-return coll))))
+(ert-deftest collect ()
+  (should (equal '(1 2 3)
+                 (loopy ((list j '(1 2 3))
+                         (collect coll j))
+                        (finally-return coll)))))
 
-(should (equal "catdog"
-               (loopy ((list j '("cat" "dog"))
-                       (concat coll j))
-                      (finally-return coll))))
+(ert-deftest concat ()
+  (should (equal "catdog"
+                 (loopy ((list j '("cat" "dog"))
+                         (concat coll j))
+                        (finally-return coll)))))
 
-(loopy ((list i '(t nil t nil))
-        (count c i))
-       (return c))
+(ert-deftest count ()
+  (should (= 2
+             (loopy ((list i '(t nil t nil))
+                     (count c i))
+                    (return c)))))
+(ert-deftest sum ()
+  (should (= 6
+             (loopy ((list i '(1 2 3))
+                     (sum s i))
+                    (return s)))))
 
-(loopy ((list i '(1 2 3))
-        (sum s i))
-       (return s))
-
-(loopy ((list i '((1 2 3) (4 5 6)))
-        (nconc l i))
-       (return l))
+(ert-deftest nconc ()
+  (should (equal '(1 2 3 4 5 6)
+                 (loopy ((list i '((1 2 3) (4 5 6)))
+                         (nconc l i))
+                        (return l)))))
 
 ;;; Extensions
 ;;TODO: How to test this?
