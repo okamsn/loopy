@@ -10,94 +10,94 @@
 ;; `before-do' always runs, and occurs before the loop.
 (ert-deftest basic-before-do ()
   (should (= 4
-             (loopy (with (i 3))
-                    (before-do (setq i (1+ i)))
-                    (loop (return i))))))
+             (eval (quote (loopy (with (i 3))
+                                 (before-do (setq i (1+ i)))
+                                 (loop (return i))))))))
 
 ;;;; After Do - runs after loop is loop completed successfully
 (ert-deftest basic-after-do ()
-  (should (and (eq t (loopy (with (my-ret nil))
-                            (loop (list i '(1 2 3 4)))
-                            (after-do (setq my-ret t))
-                            (finally-return my-ret)))
-               (eq nil (loopy (with (my-ret nil))
-                              (loop (list i '(1 2 3 4))
-                                    (leave))
-                              (after-do (setq my-ret t))
-                              (finally-return my-ret))))))
+  (should (and (eq t (eval (quote (loopy (with (my-ret nil))
+                                         (loop (list i '(1 2 3 4)))
+                                         (after-do (setq my-ret t))
+                                         (finally-return my-ret)))))
+               (eq nil (eval (quote (loopy (with (my-ret nil))
+                                           (loop (list i '(1 2 3 4))
+                                                 (leave))
+                                           (after-do (setq my-ret t))
+                                           (finally-return my-ret))))))))
 
 ;;;; Before and After
-  (should (= 3 (loopy (with (i 1))
-                      (before-do (cl-incf i))
-                      (loop (repeat 1))
-                      (after-do (cl-incf i))
-                      (finally-return i)))))
 (ert-deftest basic-before-and-after-test ()
+  (should (= 3 (eval (quote (loopy (with (i 1))
+                                   (before-do (cl-incf i))
+                                   (loop (repeat 1))
+                                   (after-do (cl-incf i))
+                                   (finally-return i)))))))
 
 ;;;; Final Instructions
 (ert-deftest finally-do ()
   (should (= 10
              (let (my-var)
-               (loopy ((list i (number-sequence 1 10)))
-                      (finally-do (setq my-var i)))
+               (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                   (finally-do (setq my-var i)))))
                my-var))))
 
 (ert-deftest finally-do-not-affect-return ()
   (should (eq nil
-              (loopy ((list i (number-sequence 1 10)))
-                     (finally-do 3)))))
+              (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                  (finally-do 3)))))))
 
 (ert-deftest finally-return-single-value ()
   (should (= 10
-             (loopy ((list i (number-sequence 1 10)))
-                    (finally-return i)))))
+             (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                 (finally-return i)))))))
 
 (ert-deftest finally-return-list-of-values ()
   (should (equal '(10 7)
-                 (loopy ((list i (number-sequence 1 10)))
-                        (finally-return i 7)))))
+                 (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                     (finally-return i 7)))))))
 
 ;;;; Changing the order of macro arguments.
 (ert-deftest change-order-of-commands ()
   (should (= 7
-             (loopy ((list i '(1 2 3)))
-                    (finally-return (+ i a))
-                    (with (a 4))))))
+             (eval (quote (loopy ((list i '(1 2 3)))
+                                 (finally-return (+ i a))
+                                 (with (a 4))))))))
 
 ;;; Loop Commands
 ;;;; Generic Evaluation
 ;;;;; Do
 (ert-deftest do ()
   (should
-   (loopy (with (my-val nil))
-          (loop (do (setq my-val t))
-                (leave))
-          (finally-return my-val))))
+   (eval (quote (loopy (with (my-val nil))
+                       (loop (do (setq my-val t))
+                             (leave))
+                       (finally-return my-val))))))
 
 ;;;;; Expr
 (ert-deftest expr-one-value ()
   (should
-   (loopy (with (my-val nil))
-          (loop (expr my-val t)
-                (leave))
-          (finally-return my-val))))
+   (eval (quote (loopy (with (my-val nil))
+                       (loop (expr my-val t)
+                             (leave))
+                       (finally-return my-val))))))
 
 (ert-deftest expr-two-values ()
   (should
    (equal '(1 2 2)
-          (loopy (loop (repeat 3)
-                       (expr my-val 1 2)
-                       (collect my-coll my-val))
-                 (finally-return my-coll)))))
+          (eval (quote (loopy (loop (repeat 3)
+                                    (expr my-val 1 2)
+                                    (collect my-coll my-val))
+                              (finally-return my-coll)))))))
 
 ;; Implementation is different for more than 2 values.
 (ert-deftest expr-five-values ()
   (should
    (equal '(1 2 3 4 5 5 5 5 5 5)
-          (loopy (loop (repeat 10)
-                       (expr my-val 1 2 3 4 5)
-                       (collect my-coll my-val))
-                 (finally-return my-coll)))))
+          (eval (quote (loopy (loop (repeat 10)
+                                    (expr my-val 1 2 3 4 5)
+                                    (collect my-coll my-val))
+                              (finally-return my-coll)))))))
 
 (ert-deftest expr-dont-repeat ()
   "Make sure commands don't repeatedly create/declare the same variable."
@@ -114,136 +114,136 @@
 ;;;;; Array
 (ert-deftest array ()
   (should (equal '(1 2 3)
-                 (loopy (loop (array i [1 2 3])
-                              (collect coll i))
-                        (return coll)))))
+                 (eval (quote (loopy (loop (array i [1 2 3])
+                                           (collect coll i))
+                                     (return coll)))))))
 
 ;;;;; Array Ref
 (ert-deftest array-ref ()
   (should (equal "aaa"
-                 (loopy (with (my-str "cat"))
-                        (loop (array-ref i my-str)
-                              (do (setf i ?a)))
-                        (return my-str)))))
+                 (eval (quote (loopy (with (my-str "cat"))
+                                     (loop (array-ref i my-str)
+                                           (do (setf i ?a)))
+                                     (return my-str)))))))
 
 ;;;; Cons
-  (should (and (equal (loopy ((cons x '(1 2 3 4))
-                              (collect coll x))
-                             (return coll))
 (ert-deftest cons ()
+  (should (and (equal (eval (quote (loopy ((cons x '(1 2 3 4))
+                                           (collect coll x))
+                                          (return coll))))
                       '((1 2 3 4) (2 3 4) (3 4) (4)))
-               (equal (loopy ((cons x '(1 2 3 4) #'cddr)
-                              (collect coll x))
-                             (return coll))
+               (equal (eval (quote (loopy ((cons x '(1 2 3 4) #'cddr)
+                                           (collect coll x))
+                                          (return coll))))
                       '((1 2 3 4) (3 4))))))
 
 ;;;; List
-  (should (= 3 (loopy (loop (list i '(1 2 3)))
-                      ;; Same thing:
-                      ;; (after-do (cl-return i))
-                      (finally-return i)))))
 (ert-deftest list ()
+  (should (= 3 (eval (quote (loopy (loop (list i '(1 2 3)))
+                                   ;; Same thing:
+                                   ;; (after-do (cl-return i))
+                                   (finally-return i)))))))
 
 ;;;; List Ref
 (ert-deftest list-ref ()
   (should (equal  '(7 7 7)
-                  (loopy (with (my-list '(1 2 3)))
-                         (loop (list-ref i my-list)
-                               (do (setf i 7)))
-                         (return my-list)))))
+                  (eval (quote (loopy (with (my-list '(1 2 3)))
+                                      (loop (list-ref i my-list)
+                                            (do (setf i 7)))
+                                      (return my-list)))))))
 
 ;;;; Repeat
-  (should (= 3 (length (loopy (loop (repeat 3)
-                                    (list i (number-sequence 1 10))
-                                    (collect coll i))
-                              (finally-return coll))))))
 (ert-deftest repeat-no-var ()
+  (should (= 3 (length (eval (quote (loopy (loop (repeat 3)
+                                                 (list i (number-sequence 1 10))
+                                                 (collect coll i))
+                                           (finally-return coll))))))))
 
 (ert-deftest repeat-var ()
   "Need to test order of execution and functionality."
   (should (equal '(0 1 2)
-                 (loopy ((collect coll i)
-                         (repeat i 3))
-                        (finally-return coll)))))
+                 (eval (quote (loopy ((collect coll i)
+                                      (repeat i 3))
+                                     (finally-return coll)))))))
 
 ;;;; Seq
-  (should (loopy ((seq l '(1 2 3 4 5))
-                  (seq a [1 2 3 4 5])
-                  (if (/= l a)
-                      (return nil)))
-                 (finally-return t))))
 (ert-deftest seq ()
+  (should (eval (quote (loopy ((seq l '(1 2 3 4 5))
+                               (seq a [1 2 3 4 5])
+                               (if (/= l a)
+                                   (return nil)))
+                              (finally-return t))))))
 
 ;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should
    (equal '(7 7 7 7)
-          (loopy (with (my-seq '(1 2 3 4)))
-                 (loop (seq-ref i my-seq)
-                       (do (setf i 7)))
-                 (return my-seq)))))
+          (eval (quote (loopy (with (my-seq '(1 2 3 4)))
+                              (loop (seq-ref i my-seq)
+                                    (do (setf i 7)))
+                              (return my-seq)))))))
 
 ;;; Accumulation
 (ert-deftest append ()
   (should (equal '(1 2 3 4 5 6)
-                 (loopy ((list i '((1 2 3) (4 5 6)))
-                         (append coll i))
-                        (return coll)))))
+                 (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
+                                      (append coll i))
+                                     (return coll)))))))
 
 (ert-deftest collect ()
   (should (equal '(1 2 3)
-                 (loopy ((list j '(1 2 3))
-                         (collect coll j))
-                        (finally-return coll)))))
+                 (eval (quote (loopy ((list j '(1 2 3))
+                                      (collect coll j))
+                                     (finally-return coll)))))))
 
 (ert-deftest concat ()
   (should (equal "catdog"
-                 (loopy ((list j '("cat" "dog"))
-                         (concat coll j))
-                        (finally-return coll)))))
+                 (eval (quote (loopy ((list j '("cat" "dog"))
+                                      (concat coll j))
+                                     (finally-return coll)))))))
 
 (ert-deftest count ()
   (should (= 2
-             (loopy ((list i '(t nil t nil))
-                     (count c i))
-                    (return c)))))
+             (eval (quote (loopy ((list i '(t nil t nil))
+                                  (count c i))
+                                 (return c)))))))
 
 (ert-deftest max ()
   (should (= 11
-             (loopy ((list i '(1 11 2 10 3 9 4 8 5 7 6))
-                     (max my-max i))
-                    (return my-max)))))
+             (eval (quote (loopy ((list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                  (max my-max i))
+                                 (return my-max)))))))
 
 (ert-deftest min ()
   (should
    (= 0
-      (loopy ((list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-              (min my-min i))
-             (return my-min)))))
+      (eval (quote (loopy ((list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                           (min my-min i))
+                          (return my-min)))))))
 
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
-                 (loopy ((list i '((1 2 3) (4 5 6)))
-                         (nconc l i))
-                        (return l)))))
+                 (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
+                                      (nconc l i))
+                                     (return l)))))))
 
 (ert-deftest push-into ()
   (should (equal '(3 2 1)
-                 (loopy ((list j '(1 2 3))
-                         (push-into coll j))
-                        (finally-return coll)))))
+                 (eval (quote (loopy ((list j '(1 2 3))
+                                      (push-into coll j))
+                                     (finally-return coll)))))))
 
 (ert-deftest sum ()
   (should (= 6
-             (loopy ((list i '(1 2 3))
-                     (sum s i))
-                    (return s)))))
+             (eval (quote (loopy ((list i '(1 2 3))
+                                  (sum s i))
+                                 (return s)))))))
 
 (ert-deftest vconcat ()
   (should (equal [1 2 3 4 5 6]
-                 (loopy ((list i '([1 2 3] [4 5 6]))
-                         (vconcat vector i))
-                        (return vector)))))
+                 (eval (quote (loopy ((list i '([1 2 3] [4 5 6]))
+                                      (vconcat vector i))
+                                     (return vector)))))))
 
 ;;; Control Flow
 ;;;; Conditionals
@@ -254,25 +254,25 @@
 
 (ert-deftest recursive-when-test ()
   (should (equal
-           (loopy ((list i (number-sequence 1 10))
-                   (list j '(1 2 3 6 7 8))
-                   (when (cl-evenp i)
-                     (when (> j i)
-                       (return (cons j i))))))
+           (eval (quote (loopy ((list i (number-sequence 1 10))
+                                (list j '(1 2 3 6 7 8))
+                                (when (cl-evenp i)
+                                  (when (> j i)
+                                    (return (cons j i))))))))
            '(6 . 4))))
 
 (ert-deftest multi-when-prepend-test ()
   (should
    (string=
-    (loopy (with (first-var 2)
-                 (second-var 3))
-           ((seq el [1 2 3 4 5 6 7])
-            ;; Could also use (do (cond ...)).
-            (when (zerop (mod el first-var))
-              (push-into msg-coll (format "Multiple of 2: %d" el)))
-            (when (zerop (mod el second-var))
-              (push-into msg-coll (format "Multiple of 3: %d" el))))
-           (finally-return (string-join (nreverse msg-coll) "\n")))
+    (eval (quote (loopy (with (first-var 2)
+                              (second-var 3))
+                        ((seq el [1 2 3 4 5 6 7])
+                         ;; Could also use (do (cond ...)).
+                         (when (zerop (mod el first-var))
+                           (push-into msg-coll (format "Multiple of 2: %d" el)))
+                         (when (zerop (mod el second-var))
+                           (push-into msg-coll (format "Multiple of 3: %d" el))))
+                        (finally-return (string-join (nreverse msg-coll) "\n")))))
     "Multiple of 2: 2
 Multiple of 3: 3
 Multiple of 2: 4
@@ -283,15 +283,15 @@ Multiple of 3: 6")))
 (ert-deftest multi-unless-prepend-test ()
   (should
    (string=
-    (loopy (with (first-var 2)
-                 (second-var 3))
-           ((seq el [1 2 3 4 5 6 7])
-            ;; Could also use (do (cond ...)).
-            (unless (zerop (mod el first-var))
-              (push-into msg-coll (format "Not multiple of 2: %d" el)))
-            (unless (zerop (mod el second-var))
-              (push-into msg-coll (format "Not multiple of 3: %d" el))))
-           (finally-return (string-join (nreverse msg-coll) "\n")))
+    (eval (quote (loopy (with (first-var 2)
+                              (second-var 3))
+                        ((seq el [1 2 3 4 5 6 7])
+                         ;; Could also use (do (cond ...)).
+                         (unless (zerop (mod el first-var))
+                           (push-into msg-coll (format "Not multiple of 2: %d" el)))
+                         (unless (zerop (mod el second-var))
+                           (push-into msg-coll (format "Not multiple of 3: %d" el))))
+                        (finally-return (string-join (nreverse msg-coll) "\n")))))
     "Not multiple of 2: 1
 Not multiple of 3: 1
 Not multiple of 3: 2
@@ -313,81 +313,81 @@ Not multiple of 3: 7")))
                                      ((= b 2) (cl-return-from nil 5)))))))
 
 (ert-deftest parse-cond-loop ()
-  (should (equal (loopy ((list i (number-sequence 1 10))
-                         (cond
-                          ((cl-evenp i)
-                           (push-into evens i))
-                          (t (push-into odds i))))
-                        (finally-return (list evens odds)))
+  (should (equal (eval (quote (loopy ((list i (number-sequence 1 10))
+                                      (cond
+                                       ((cl-evenp i)
+                                        (push-into evens i))
+                                       (t (push-into odds i))))
+                                     (finally-return (list evens odds)))))
                  '((10 8 6 4 2) (9 7 5 3 1)))))
 
 ;;;; Exiting the Loop Early
 ;;;;; Leave
 (ert-deftest leave ()
   (should (equal '(1 2 3)
-                 (loopy ((list i '(1 2 3 "cat" 4 5 6))
-                         (if (numberp i)
-                             (collect coll i)
-                           (leave)))
-                        (return coll)))))
+                 (eval (quote (loopy ((list i '(1 2 3 "cat" 4 5 6))
+                                      (if (numberp i)
+                                          (collect coll i)
+                                        (leave)))
+                                     (return coll)))))))
 
 ;;;;; Leave From
 (ert-deftest leave-from-single-loop ()
   (should (= 6
-             (loopy my-loop
-                    ((list i (number-sequence 1 10))
-                     (when (> i 5)
-                       (leave-from my-loop)))
-                    (return i)))))
+             (eval (quote (loopy my-loop
+                                 ((list i (number-sequence 1 10))
+                                  (when (> i 5)
+                                    (leave-from my-loop)))
+                                 (return i)))))))
 
 (ert-deftest leave-from-outer-loop ()
   (should
    (= 21
-      (loopy outer
-             ;; Could use ‘sum’ command, but don’t want dependencies.
-             (with (sum 0))
-             (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
-                   (do (loopy (loop (list i sublist)
-                                    (do (setq sum (+ sum i)))
-                                    (when (> sum 15)
-                                      (leave-from outer))))))
-             (finally-return sum)))))
+      (eval (quote (loopy outer
+                          ;; Could use ‘sum’ command, but don’t want dependencies.
+                          (with (sum 0))
+                          (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
+                                (do (loopy (loop (list i sublist)
+                                                 (do (setq sum (+ sum i)))
+                                                 (when (> sum 15)
+                                                   (leave-from outer))))))
+                          (finally-return sum)))))))
 
 ;;;;; Return
 (ert-deftest return ()
-  (should (= 6 (loopy (with  (j 0))
-                      ((do (cl-incf j))
-                       (when (> j 5)
-                         (return j)))))))
+  (should (= 6 (eval (quote (loopy (with  (j 0))
+                                   ((do (cl-incf j))
+                                    (when (> j 5)
+                                      (return j)))))))))
 
 ;;;;; Return From
 (ert-deftest return-from-single-loop ()
   (should (= 6
-             (loopy my-loop
-                    ((list i (number-sequence 1 10))
-                     (when (> i 5)
-                       (return-from my-loop i)))))))
+             (eval (quote (loopy my-loop
+                                 ((list i (number-sequence 1 10))
+                                  (when (> i 5)
+                                    (return-from my-loop i)))))))))
 
 (ert-deftest return-from-outer-loop ()
   (should
    (= 6
-      (loopy outer
-             ;; Could use ‘sum’ command, but don’t want dependencies.
-             (with (sum 0))
-             (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
-                   (do (loopy (loop (list i sublist)
-                                    (do (setq sum (+ sum i)))
-                                    (when (> sum 15)
-                                      (return-from outer i))))))))))
+      (eval (quote (loopy outer
+                          ;; Could use ‘sum’ command, but don’t want dependencies.
+                          (with (sum 0))
+                          (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
+                                (do (loopy (loop (list i sublist)
+                                                 (do (setq sum (+ sum i)))
+                                                 (when (> sum 15)
+                                                   (return-from outer i))))))))))))
 
 ;;;;; Skip
 (ert-deftest skip ()
   (should (cl-every #'cl-oddp
-                    (loopy ((seq i (number-sequence 1 10))
-                            (when (cl-evenp i)
-                              (skip))
-                            (push-into my-collection i))
-                           (finally-return (nreverse my-collection))))))
+                    (eval (quote (loopy ((seq i (number-sequence 1 10))
+                                         (when (cl-evenp i)
+                                           (skip))
+                                         (push-into my-collection i))
+                                        (finally-return (nreverse my-collection))))))))
 
 
 ;;; Custom Commands
@@ -399,22 +399,9 @@ Not multiple of 3: 7")))
   (setq-local loopy-custom-command-parsers
               (list (cons 'target-sum #'my-loopy-sum-command)))
   (should (= 6
-             (loopy ((target-sum my-target 1 2 3)
-                     (leave))
-                    (finally-return my-target)))))
-
-;;TODO: How to test this?
-;; (cl-defun my-loopy-greet-command ((_ first &optional last))
-;;   "Greet one with first name FIRST and optional last name LAST."
-;;   `((loopy--main-body . (if ,last
-;;                             (message "Hello, %s %s" ,first ,last)
-;;                           (message "Hello, %s" ,first)))))
-;;
-;; (push (cons 'greet #'my-loopy-greet-command)
-;;       loopy-custom-command-parsers)
-;;
-;; (loopy ((list name '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
-;;         (greet (car name) (cadr name))))
+             (eval (quote (loopy (loop (target-sum my-target 1 2 3)
+                                       (leave))
+                                 (finally-return my-target)))))))
 
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
