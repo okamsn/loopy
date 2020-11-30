@@ -1277,7 +1277,7 @@ mapping features.
   =unless= command.  This allows for less noise, as we do not need to declare
   variables or fall back to using more Lisp expressions.
 
-  Another good example is the command =selectrum-swiper= from the same page.
+  Another good example is the command =selectrum-outline= from the same page.
   This command is similar to =selectrum-swiper=, but has a slightly more
   complicated processing portion.
 
