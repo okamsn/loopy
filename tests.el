@@ -27,12 +27,12 @@
                               (finally-return my-ret))))))
 
 ;;;; Before and After
-(ert-deftest loopy-basic-before-and-after-test ()
   (should (= 3 (loopy (with (i 1))
                       (before-do (cl-incf i))
                       (loop (repeat 1))
                       (after-do (cl-incf i))
                       (finally-return i)))))
+(ert-deftest basic-before-and-after-test ()
 
 ;;;; Final Instructions
 (ert-deftest finally-do ()
@@ -112,14 +112,14 @@
 
 ;;;; Iteration
 ;;;;; Array
-(ert-deftest loopy-basic-array-test ()
+(ert-deftest array ()
   (should (equal '(1 2 3)
                  (loopy (loop (array i [1 2 3])
                               (collect coll i))
                         (return coll)))))
 
 ;;;;; Array Ref
-(ert-deftest loopy-basic-array-ref-test ()
+(ert-deftest array-ref ()
   (should (equal "aaa"
                  (loopy (with (my-str "cat"))
                         (loop (array-ref i my-str)
@@ -127,10 +127,10 @@
                         (return my-str)))))
 
 ;;;; Cons
-(ert-deftest loopy-basic-cons-test ()
   (should (and (equal (loopy ((cons x '(1 2 3 4))
                               (collect coll x))
                              (return coll))
+(ert-deftest cons ()
                       '((1 2 3 4) (2 3 4) (3 4) (4)))
                (equal (loopy ((cons x '(1 2 3 4) #'cddr)
                               (collect coll x))
@@ -138,14 +138,14 @@
                       '((1 2 3 4) (3 4))))))
 
 ;;;; List
-(ert-deftest loopy-basic-list-test ()
   (should (= 3 (loopy (loop (list i '(1 2 3)))
                       ;; Same thing:
                       ;; (after-do (cl-return i))
                       (finally-return i)))))
+(ert-deftest list ()
 
 ;;;; List Ref
-(ert-deftest loopy-basic-list-ref-test ()
+(ert-deftest list-ref ()
   (should (equal  '(7 7 7)
                   (loopy (with (my-list '(1 2 3)))
                          (loop (list-ref i my-list)
@@ -153,13 +153,13 @@
                          (return my-list)))))
 
 ;;;; Repeat
-(ert-deftest loopy-basic-repeat-test ()
   (should (= 3 (length (loopy (loop (repeat 3)
                                     (list i (number-sequence 1 10))
                                     (collect coll i))
                               (finally-return coll))))))
+(ert-deftest repeat-no-var ()
 
-(ert-deftest loopy-basic-repeat-var-test ()
+(ert-deftest repeat-var ()
   "Need to test order of execution and functionality."
   (should (equal '(0 1 2)
                  (loopy ((collect coll i)
@@ -167,15 +167,15 @@
                         (finally-return coll)))))
 
 ;;;; Seq
-(ert-deftest loopy-basic-seq-test ()
   (should (loopy ((seq l '(1 2 3 4 5))
                   (seq a [1 2 3 4 5])
                   (if (/= l a)
                       (return nil)))
                  (finally-return t))))
+(ert-deftest seq ()
 
 ;;;; Seq Ref
-(ert-deftest loopy-basic-seq-ref-test ()
+(ert-deftest seq-ref ()
   (should
    (equal '(7 7 7 7)
           (loopy (with (my-seq '(1 2 3 4)))
