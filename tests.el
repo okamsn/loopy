@@ -1,3 +1,6 @@
+(push (expand-file-name ".")
+      load-path)
+
 (require 'cl-lib)
 (require 'ert)
 (require 'loopy "./loopy.el")
