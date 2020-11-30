@@ -552,12 +552,13 @@ mapping features.
        non-nil, run the following commands =CMDS=.
 
        #+BEGIN_SRC emacs-lisp
+         ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
          (loopy ((list i '(1 2 3 "cat" 4 5 6 "dog"))
                  (cond
                   ((not (numberp i)) (collect not-numbers i))
                   ((cl-evenp i)      (collect evens i))
                   (t                 (collect odds i))))
-                (return evens odds not-numbers)) ; => '((2 4 6) (1 3 5) ("cat" "dog"))
+                (return evens odds not-numbers))
        #+END_SRC
 
 **** Skipping an Iteration
@@ -592,13 +593,14 @@ mapping features.
          (loopy (with  (j 0))
                 ((do (cl-incf j))
                  (when (> j 5)
-                   (return j))))
+                   (return j)))) ; => 6
        #+END_SRC
 
      - =(return-from NAME EXPR)= :: Leave the loop =NAME=, returning the value
        of =EXPR=.
 
        #+BEGIN_SRC emacs-lisp
+         ;; => 'bad-val?
          (loopy outer-loop
                 ((list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
                  (do (loopy ((list i inner-list)
@@ -609,15 +611,18 @@ mapping features.
      - =(leave|break)= :: Leave the loop, returning =nil=.
 
        #+BEGIN_SRC emacs-lisp
+         ;; => '(1 2 3)
          (loopy ((list i '(1 2 3 "cat" 4 5 6))
                  (if (numberp i)
-                     (do (message "Number: %d" i))
-                   (leave))))
+                     (collect coll i)
+                   (leave)))
+                (return coll))
        #+END_SRC
 
      - =(leave-from|break-from NAME)= :: Leave the loop =NAME=, returning =nil=.
 
        #+BEGIN_SRC emacs-lisp
+         ;; Messages “Failed!".
          (loopy outer
                 (with (failure-condition 'fail)
                       (failed-p nil))
