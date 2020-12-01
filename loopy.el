@@ -133,6 +133,11 @@ or `loopy--explicit-generalized-vars'."
       (memq var-name (mapcar #'car loopy--explicit-generalized-vars))))
 
 ;;;; Custom Commands and Parsing
+(defgroup loopy nil
+  "A looping macro similar to `cl-loop'."
+  :group 'extensions
+  :prefix "loopy-")
+
 ;;;###autoload
 (defcustom loopy-custom-command-parsers nil
   "An alist of pairs of a quoted command name and a parsing function.
