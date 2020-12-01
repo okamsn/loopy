@@ -143,13 +143,24 @@ or `loopy--explicit-generalized-vars'."
   "An alist of pairs of a quoted command name and a parsing function.
 
 The parsing function is chosen based on the command name (such as
-`list' in `(list i my-list)').
+`list' in `(list i my-list)'), not the usage of the command.  That is,
+
+  (my-command var1)
+
+and
+
+  (my-command var1 var2)
+
+are both parsed by the same function, but that parsing function
+is not limited in how it responds to different usages.  If you
+really want, it can return different instructions each time.
+Learn more with `(info \"(emacs)loopy\")'.
 
 For example, to add a `when' command (if one didn't already
 exist), one could do
 
-\(add-to-list \'loopy-custom-command-parsers
-              (cons 'when #'my-loopy-parse-when-command))"
+  (add-to-list \'loopy-custom-command-parsers
+                (cons 'when #'my-loopy-parse-when-command))"
   :group 'loopy
   :type '(alist :key-type sexp :value-type function))
 
