@@ -127,6 +127,16 @@ These run in a `progn'.")
 
 (defvar loopy--skip-used nil
   "Whether a skip/continue command is present in the loop  main body.")
+
+;;;; Errors
+(define-error 'loopy-form
+  "Loopy: Bad form"
+  'loopy-error)
+
+(define-error 'loopy-command-arguments
+  "Loopy: Bad command arguments"
+  'loopy-error)
+
 ;;;; Miscellaneous Functions
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
