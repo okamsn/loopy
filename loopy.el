@@ -228,6 +228,32 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
     (push `(loopy--main-body . ,(cons 'cond (nreverse cond-body))) full-instructions)
     full-instructions))
 
+(cl-defun loopy--parse-early-exit-commands ((name &rest args))
+  "Parse `return', `return-from', `leave', and `leave-from' commands."
+  (setq loopy--early-return-used t)
+  ;; Check arguments.
+  (cl-case name
+    ((return leave-from)
+     (unless (= (length args) 1)
+       (signal 'wrong-number-of-arguments (cons name args))))
+    (leave
+     (unless (= (length args) 0)
+       (signal 'wrong-number-of-arguments (cons name args))))
+    (return-from
+     (unless (= (length args) 2)
+       (signal 'wrong-number-of-arguments (cons name args)))))
+  ;; Parse
+  (cl-case name
+    (return
+     `(loopy--main-body . (cl-return-from nil ,(cl-first args))))
+    (return-from
+     `(loopy--main-body
+       . (cl-return-from ,(cl-first args) ,(cl-second args))))
+    ((leave break)
+     `(loopy--main-body . (cl-return-from nil nil)))
+    ((leave-from break-from)
+     `(loopy--main-body . (cl-return-from ,(cl-first args) nil)))))
+
 (defun loopy--parse-body-forms (forms &optional loop-name)
   "Get update and continue conditions from FORMS.
 Optionally needs LOOP-NAME for block returns."
