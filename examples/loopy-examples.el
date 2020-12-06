@@ -5,6 +5,8 @@
 ;; Author: Earl Hyatt
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
+;; Version: 0.1
+;; Package-Requires: ((emacs "25.1") (selectrum "1.0"))
 
 ;;; Disclaimer:
 ;; This file is not part of GNU Emacs.
@@ -41,7 +43,7 @@
 (autoload 'selectrum-read "ext:selectrum")
 
 
-(defun selectrum-swiper-loopy ()
+(defun loopy-examples-selectrum-swiper ()
   "Search for a matching line and jump to the beginning of its text.
 The default candidate is the line closest to the current one.
 Obeys narrowing."
@@ -92,7 +94,7 @@ Obeys narrowing."
         (beginning-of-line-text 1)))))
 
 
-(defun selectrum-outline-loopy ()
+(defun loopy-examples-selectrum-outline ()
   "Jump to a heading.  Regexps are pre-defined.  Obeys narrowing."
   (interactive)
   ;; Signal a `user-error' if we don't have a regexp for this major mode.
