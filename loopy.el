@@ -119,6 +119,14 @@ These run in a `progn'.")
 (defvar loopy--final-return nil
   "What the macro finally returns.  This overrides any early return value.")
 
+;;;;; Variables for constructing the code
+
+;; These variable affect how the code is expanded.
+(defvar loopy--early-return-used nil
+  "Whether a leave/return is present in the loop main body.")
+
+(defvar loopy--skip-used nil
+  "Whether a skip/continue command is present in the loop  main body.")
 ;;;; Miscellaneous Functions
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
@@ -507,7 +515,14 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--pre-conditions)
         (loopy--main-body)
         (loopy--latter-body)
-        (loopy--post-conditions))
+        (loopy--post-conditions)
+
+        ;; -- Variables for constructing code --
+        (loopy--early-return-used)
+        (loopy--skip-used)
+
+        ;; The expanded code.
+        (result))
 
 ;;;;; Interpreting the macro arguments.
     ;; Check what was passed to the macro.
