@@ -230,8 +230,10 @@ Optionally needs LOOP-NAME for block returns."
         (pcase form
 ;;;;; Generic body clauses
           ;; A DO form for a generic lisp body. Not searched for special forms.
-          (`(do . ,body)
-           (add-instruction `(loopy--main-body . (progn ,@body))))
+          ((or `(do . ,body) `(progn . ,body))
+           (if (= 1 (length body))
+               (add-instruction `(loopy--main-body . ,(car body)))
+             (add-instruction `(loopy--main-body . (progn ,@body)))))
           ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
                `(set ,var . ,rest))
            (let ((arg-length (length rest))
