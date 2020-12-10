@@ -124,9 +124,6 @@ please let me know.
     more.
   - De-structuring can be useful, but this can already be done using repeated
     =expr= commands.
-  - Currently, code is evaluated even if it is unused.  Conditionally building
-    the code that is evaluated would be more efficient, but decreases
-    readability.
 
 * How to Install                                                   :noexport:
   Currently, Loopy must be installed manually.
@@ -778,15 +775,14 @@ please let me know.
      macro, regardless of any early returns in the loop body.  This is
      derived from the =finally-return= macro argument.
 
-   These variables will be substituted into the following list of code, which is
-   returned by the =loopy= macro for evaluation.
+   The structure of the macro’s expanded code depends on the features used
+   (e.g., =loopy= won’t try to declare variables if none exist), but the result
+   will work similar to the below example.
 
    #+BEGIN_SRC emacs-lisp
-     `(cl-symbol-macrolet (,@(or loopy--explicit-generalized-vars
-                                 (list (list (gensym) nil))))
-        (let* (,@(or loopy--with-vars '((_))))
-          (let (,@(or (append loopy--implicit-vars loopy--explicit-vars)
-                      '((_))))
+     `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
+        (let* ,loopy--with-vars
+          (let ,(append loopy--implicit-vars loopy--explicit-vars)
             (let ((loopy--early-return-capture
                    (cl-block ,loopy--name-arg
                      ,@loopy--before-do
@@ -853,22 +849,18 @@ please let me know.
    see that it expands to do what we want, as expected.
 
    #+BEGIN_SRC emacs-lisp
-     (cl-symbol-macrolet ((g3314 nil))
-       (let* ((_))
-         (let ((g3313 '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
-               (name nil))
-           (let ((loopy--early-return-capture
-                  (cl-block nil
-                    (while (consp g3313)
-                      (cl-tagbody
-                       (setq name (car g3313))
-                       (if (cadr name)
-                           (message "Hello, %s %s" (car name) (cadr name))
-                         (message "Hello, %s" (car name)))
-                       loopy--continue-tag
-                       (setq g3313 (cdr g3313))))
-                    nil)))
-             loopy--early-return-capture))))
+     (let ((g815 '(("John" "Deer")
+                   ("Jane" "Doe")
+                   ("Jimmy")))
+           (name nil))
+       (while (consp g815)
+         (setq name (car g815))
+         (if (cadr name)
+             (message "Hello, %s %s"
+                      (car name) (cadr name))
+           (message "Hello, %s" (car name)))
+         (setq g815 (cdr g815)))
+       nil)
    #+END_SRC
 
 ** A Slightly More Complicated Example
