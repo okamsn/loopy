@@ -758,6 +758,12 @@ Returns are always explicit.  See this package's README for more information."
                 ;; result-is-one-expression t
                 ))
 
+        ;; Final check: If `result' is not one expression, then wrap `result' in
+        ;; a `progn'.  Otherwise, the return value of the first expression would
+        ;; be used as a function.
+        (unless result-is-one-expression
+          (push 'progn result))
+
         ;; Return the constructed code.
         result))))
 
