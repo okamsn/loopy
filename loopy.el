@@ -205,6 +205,40 @@ returns."
           full-instructions)
     full-instructions))
 
+(cl-defun loopy--parse-if-command ((name
+                                    condition
+                                    &optional if-true
+                                    &rest if-false))
+  "Parse the `if' loop command.  This takes the entire command.
+
+- NAME is the command name (so `if').
+- CONDITION is a Lisp expression.
+- IF-TRUE is the first sub-command of the `if' command.
+- IF-FALSE are all the other sub-commands."
+  (let (full-instructions
+        if-true-main-body
+        if-false-main-body)
+    (dolist (instruction (loopy--parse-loop-command if-true))
+      (if (eq 'loopy--main-body (car instruction))
+          (push (cdr instruction) if-true-main-body)
+        (push instruction full-instructions)))
+    (dolist (instruction (loopy--parse-loop-commands if-false))
+      (if (eq 'loopy--main-body (car instruction))
+          (push (cdr instruction) if-false-main-body)
+        (push instruction full-instructions)))
+    ;; Push the actual main-body instruction.
+    (setq if-true-main-body
+          (if (= 1 (length if-true-main-body))
+              (car if-true-main-body)
+            (cons 'progn (nreverse if-true-main-body))))
+    (push `(loopy--main-body
+            . (if ,condition
+                  ,if-true-main-body
+                ,@(nreverse if-false-main-body)))
+          full-instructions)
+    ;; Return the list of instructions.
+    full-instructions))
+
 (defun loopy--parse-cond-form (forms &optional loop-name)
   "Parse FORMS where the `car' is a condition.  Use COND forms for IF-ELSE.
 Optionally needs LOOP-NAME for block returns.
@@ -447,9 +481,8 @@ Optionally, take LOOP-NAME for early exiting."
          (mapc #'push-instruction
                (loopy--parse-conditional-forms 'unless cond body loop-name)))
 
-        (`(if ,cond . ,body)
-         (mapc #'push-instruction
-               (loopy--parse-conditional-forms 'if cond body loop-name)))
+        (`(if . ,rest)
+         (mapc #'push-instruction (loopy--parse-if-command command)))
 
         (`(cond . ,body)
          (mapc #'push-instruction
