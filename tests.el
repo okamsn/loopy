@@ -273,6 +273,15 @@
                                     (return (cons j i))))))))
            '(6 . 4))))
 
+(ert-deftest when-multiple-subcommands ()
+  (should (equal '(2 (1 3))
+                  (loopy (with (counter 0))
+                         ((list i '(1 2 3))
+                          (when (cl-oddp i)
+                            (collect odds i)
+                            (do (cl-incf counter))))
+                         (return counter odds)))))
+
 (ert-deftest multi-when-prepend-test ()
   (should
    (string=
