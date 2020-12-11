@@ -338,6 +338,46 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
                             (setq index (1+ index)))
                           (cons 'cond body-code))))
              instructions)))))
+
+(cl-defun loopy--parse-array-command
+    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+  "Parse the `array' command.
+
+- NAME is the name of the command.
+- VAR is a variable name.
+- VAL is an array value.
+- Optional VALUE-HOLDER holds the array value.
+- Optional INDEX-HOLDER holds the index value."
+  `((loopy--implicit-vars  . (,value-holder ,val))
+    (loopy--implicit-vars  . (,index-holder 0))
+    (loopy--explicit-vars  . (,var nil))
+    (loopy--main-body      . (setq ,var (aref ,value-holder ,index-holder)))
+    (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
+    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
+
+(cl-defun loopy--parse-array-ref-command ((name var val))
+  "Parse the `array-ref' command by editing the `array' command's instructions.
+
+- NAME is the name of the command.
+- VAR is a variable name.
+- VAL is an array value."
+  (let (final-instructions
+        (value-holder (gensym))
+        (index-holder (gensym)))
+    (dolist (instruction (loopy--parse-array-command (list name var val)
+                                                     value-holder index-holder))
+      (cl-case (car instruction)
+        ;; Since we're using a symbol macro, we don't need to do any setting in
+        ;; the main body.
+        (loopy--main-body     nil)
+        ;; Replace an explicit initialization with an explicit symbol macro.
+        (loopy--explicit-vars (push `(loopy--explicit-generalized-vars
+                                      . (,var (aref ,value-holder
+                                                    ,index-holder)))
+                                    final-instructions))
+        (t                    (push instruction final-instructions))))
+    final-instructions))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command &optional loop-name)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -362,31 +402,11 @@ Optionally, take LOOP-NAME for early exiting."
         ;; - key-codes/key-bindings and key-seqs?
         ;; - overlays?
         ;; - intervals of constant text properties?
-        (`(array ,var ,val)
-         (let ((val-holder (gensym))
-               (index-holder (gensym)))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
-           (push-instruction `(loopy--explicit-vars . (,var nil)))
-           (push-instruction `(loopy--main-body . (setq ,var
-                                                       (aref ,val-holder
-                                                             ,index-holder))))
-           (push-instruction `(loopy--latter-body . (setq ,index-holder
-                                                         (1+ ,index-holder))))
-           (push-instruction `(loopy--pre-conditions . (< ,index-holder
-                                                         (length ,val-holder))))))
+        (`(array . ,rest)
+         (mapc #'push-instruction (loopy--parse-array-command command)))
 
-        ((or `(array-ref ,var ,val) `(arrayf ,var ,val))
-         (let ((val-holder (gensym))
-               (index-holder (gensym)))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
-           (push-instruction `(loopy--explicit-generalized-vars
-                              . (,var (aref ,val-holder ,index-holder))))
-           (push-instruction `(loopy--latter-body
-                              . (setq ,index-holder (1+ ,index-holder))))
-           (push-instruction `(loopy--pre-conditions
-                              . (< ,index-holder (length ,val-holder))))))
+        ((or `(arrayf ,var ,val) `(array-ref ,var ,val))
+         (mapc #'push-instruction (loopy--parse-array-ref-command command)))
 
         ((or `(cons ,var ,val . ,func) `(conses ,var ,val . ,func))
          (let ((actual-func (cond
