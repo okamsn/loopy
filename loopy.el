@@ -189,19 +189,19 @@ This uses the command name (such as `list' in `(list i my-list)')."
 
 ;;;; Included parsing functions.
 
-(defun loopy--parse-conditional-forms (wrapper condition forms &optional loop-name)
-  "Parse FORMS, wrapping `loopy--main-body' expressions in a conditional form.
-The instructions (e.g., return expressions) are wrapped with a
-WRAPPER with CONDITION.  Optionally needs LOOP-NAME for block
-returns."
-  (let ((full-instructions)
-        (sub-instructions (loopy--parse-body-forms forms loop-name))
-        (conditional-body))
-    (dolist (instruction sub-instructions)
-      (cl-case (car instruction)
-        (loopy--main-body (push (cdr instruction) conditional-body))
-        (t                (push instruction full-instructions))))
-    (push `(loopy--main-body . (,wrapper ,condition ,@conditional-body))
+(cl-defun loopy--parse-when-unless-command ((name condition &rest body))
+  "Parse `when' and `unless' commands.
+
+- NAME is `when' or `unless'.
+- CONDITION is the condition.
+- BODY is the sub-commands."
+  (let (full-instructions
+        conditional-body)
+    (dolist (instruction (loopy--parse-loop-commands body))
+      (if (eq 'loopy--main-body (car instruction))
+          (push (cdr instruction) conditional-body)
+        (push instruction full-instructions)))
+    (push `(loopy--main-body . (,name ,condition ,@(nreverse conditional-body)))
           full-instructions)
     full-instructions))
 
@@ -473,13 +473,8 @@ Optionally, take LOOP-NAME for early exiting."
         ;; Since these can contain other commands/clauses, it's easier if they
         ;; have their own parsing functions, which call back into this one to
         ;; parse sub-clauses.
-        (`(when ,cond . ,body)
-         (mapc #'push-instruction
-               (loopy--parse-conditional-forms 'when cond body loop-name)))
-
-        (`(unless ,cond . ,body)
-         (mapc #'push-instruction
-               (loopy--parse-conditional-forms 'unless cond body loop-name)))
+        ((or `(when . ,rest) `(unless . ,rest))
+         (mapc #'push-instruction (loopy--parse-when-unless-command command)))
 
         (`(if . ,rest)
          (mapc #'push-instruction (loopy--parse-if-command command)))
