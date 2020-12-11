@@ -288,6 +288,56 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
     ((leave-from break-from)
      `(loopy--main-body . (cl-return-from ,(cl-first args) nil)))))
 
+(cl-defun loopy--parse-expr-command ((name var &rest vals))
+  "Parse the `expr' command.
+
+- NAME is the name of the command (so `expr').
+- VAR is the variable to assign.
+- VALS are the values to assign to VAR."
+  (let ((arg-length (length vals))
+        (counter-holder (gensym))
+        instructions)
+    ;; Declare `var'.
+    (push `(loopy--explicit-vars . (,var nil)) instructions)
+    (cl-case arg-length
+      ;; If no values, repeatedly set to `nil'.
+      (0 (push `(loopy--main-body . (setq ,var nil)) instructions))
+      ;; If one value, repeatedly set to that value.
+      (1 (push `(loopy--main-body . (setq ,var ,(car vals))) instructions))
+      ;; If two values, repeatedly check against `counter-holder' to determine
+      ;; if we should assign the first or second value.  This is how `cl-loop'
+      ;; does it.
+      (2
+       (push `(loopy--implicit-vars . (,counter-holder t)) instructions)
+       (push `(loopy--main-body
+                           . (setq ,var (if ,counter-holder
+                                            ,(cl-first vals)
+                                          ,(cl-second vals))))
+             instructions)
+       (push `(loopy--latter-body . (setq ,counter-holder nil)) instructions))
+      (t
+       (push `(loopy--implicit-vars . (,counter-holder 0)) instructions)
+       (push `(loopy--latter-body
+                           . (when (< ,counter-holder (1- ,arg-length))
+                               (setq ,counter-holder (1+ ,counter-holder))))
+             instructions)
+       ;; Assign to var based on the value of counter-holder.  For
+       ;; efficiency, we want to check for the last expression first,
+       ;; since it will probably be true the most times.  To enable
+       ;; that, the condition is whether the counter is greater than
+       ;; the index of EXPR in REST minus one.
+       ;;
+       ;; E.g., for '(a b c),
+       ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
+       (push `(loopy--main-body
+          . (setq ,var ,(let ((body-code nil) (index 0))
+                          (dolist (value vals)
+                            (push `((> ,counter-holder ,(1- index))
+                                    ,value)
+                                  body-code)
+                            (setq index (1+ index)))
+                          (cons 'cond body-code))))
+             instructions)))))
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command &optional loop-name)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -304,43 +354,7 @@ Optionally, take LOOP-NAME for early exiting."
            (push-instruction `(loopy--main-body . (progn ,@body)))))
         ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
              `(set ,var . ,rest))
-         (let ((arg-length (length rest))
-               (counter-holder (gensym)))
-           (push-instruction `(loopy--explicit-vars . (,var nil)))
-           (cond
-            ((= arg-length 0)
-             (push-instruction `(loopy--main-body . (setq ,var nil))))
-            ((= arg-length 1)
-             (push-instruction `(loopy--main-body . (setq ,var ,(car rest)))))
-            ((= arg-length 2)
-             (push-instruction `(loopy--implicit-vars . (,counter-holder t)))
-             (push-instruction `(loopy--main-body
-                                . (setq ,var (if ,counter-holder
-                                                 ,(cl-first rest)
-                                               ,(cl-second rest)))))
-             (push-instruction `(loopy--latter-body . (setq ,counter-holder nil))))
-            (t
-             (push-instruction `(loopy--implicit-vars . (,counter-holder 0)))
-             (push-instruction `(loopy--latter-body
-                                . (when (< ,counter-holder (1- ,arg-length))
-                                    (setq ,counter-holder (1+ ,counter-holder)))))
-             ;; Assign to var based on the value of counter-holder.  For
-             ;; efficiency, we want to check for the last expression first,
-             ;; since it will probably be true the most times.  To enable
-             ;; that, the condition is whether the counter is greater than
-             ;; the index of EXPR in REST minus one.
-             ;;
-             ;; E.g., for '(a b c),
-             ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
-             (push-instruction
-              `(loopy--main-body
-                . (setq ,var ,(let ((body-code nil) (index 0))
-                                (dolist (expr rest)
-                                  (push `((> ,counter-holder ,(1- index))
-                                          ,expr)
-                                        body-code)
-                                  (setq index (1+ index)))
-                                (cons 'cond body-code)))))))))
+         (mapc #'push-instruction (loopy--parse-expr-command command)))
 
 ;;;;; Iteration Clauses
         ;; TODO:
