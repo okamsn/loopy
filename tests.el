@@ -250,6 +250,15 @@
 
 ;;; Control Flow
 ;;;; Conditionals
+;;;;; If
+(ert-deftest if ()
+  (should (equal '((2 4) (1 3))
+                  (loopy ((list i '(1 2 3 4))
+                          (if (cl-evenp i)
+                              (collect evens i)
+                            (collect odds i)))
+                         (return evens odds)))))
+
 ;;;;; When
 ;; (ert-deftest basic-when-parse ()
 ;;   (should (equal (loopy--parse-conditional-forms 'when 't '((do (+ 1 1))))
