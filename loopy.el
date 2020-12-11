@@ -254,266 +254,275 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
     ((leave-from break-from)
      `(loopy--main-body . (cl-return-from ,(cl-first args) nil)))))
 
-(defun loopy--parse-body-forms (forms &optional loop-name)
-  "Get update and continue conditions from FORMS.
-Optionally needs LOOP-NAME for block returns."
-  (let ((instructions))
-    (dolist (form forms instructions)
-      ;; Make a quick function, since we keeping missing the second argument of
-      ;; `push'.
-      (cl-flet ((add-instruction (instr) (push instr instructions)))
-        (pcase form
+;; TODO: Break this up into smaller functions.
+(defun loopy--parse-loop-command (command &optional loop-name)
+  "Parse COMMAND, returning a list of instructions in the same received order.
+
+Optionally, take LOOP-NAME for early exiting."
+  (let (instructions)
+    (cl-flet ((push-instruction (instr) (push instr instructions)))
+      (pcase command
 ;;;;; Generic body clauses
-          ;; A DO form for a generic lisp body. Not searched for special forms.
-          ((or `(do . ,body) `(progn . ,body))
-           (if (= 1 (length body))
-               (add-instruction `(loopy--main-body . ,(car body)))
-             (add-instruction `(loopy--main-body . (progn ,@body)))))
-          ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
-               `(set ,var . ,rest))
-           (let ((arg-length (length rest))
-                 (counter-holder (gensym)))
-             (add-instruction `(loopy--explicit-vars . (,var nil)))
-             (cond
-              ((= arg-length 0)
-               (add-instruction `(loopy--main-body . (setq ,var nil))))
-              ((= arg-length 1)
-               (add-instruction `(loopy--main-body . (setq ,var ,(car rest)))))
-              ((= arg-length 2)
-               (add-instruction `(loopy--implicit-vars . (,counter-holder t)))
-               (add-instruction `(loopy--main-body
-                                  . (setq ,var (if ,counter-holder
-                                                   ,(cl-first rest)
-                                                 ,(cl-second rest)))))
-               (add-instruction `(loopy--latter-body . (setq ,counter-holder nil))))
-              (t
-               (add-instruction `(loopy--implicit-vars . (,counter-holder 0)))
-               (add-instruction `(loopy--latter-body
-                                  . (when (< ,counter-holder (1- ,arg-length))
-                                      (setq ,counter-holder (1+ ,counter-holder)))))
-               ;; Assign to var based on the value of counter-holder.  For
-               ;; efficiency, we want to check for the last expression first,
-               ;; since it will probably be true the most times.  To enable
-               ;; that, the condition is whether the counter is greater than
-               ;; the index of EXPR in REST minus one.
-               ;;
-               ;; E.g., for '(a b c),
-               ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
-               (add-instruction
-                `(loopy--main-body
-                  . (setq ,var ,(let ((body-code nil) (index 0))
-                                  (dolist (expr rest)
-                                    (push `((> ,counter-holder ,(1- index))
-                                            ,expr)
-                                          body-code)
-                                    (setq index (1+ index)))
-                                  (cons 'cond body-code)))))))))
+        ;; A DO form for a generic lisp body. Not searched for special forms.
+        ((or `(do . ,body) `(progn . ,body))
+         (if (= 1 (length body))
+             (push-instruction `(loopy--main-body . ,(car body)))
+           (push-instruction `(loopy--main-body . (progn ,@body)))))
+        ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
+             `(set ,var . ,rest))
+         (let ((arg-length (length rest))
+               (counter-holder (gensym)))
+           (push-instruction `(loopy--explicit-vars . (,var nil)))
+           (cond
+            ((= arg-length 0)
+             (push-instruction `(loopy--main-body . (setq ,var nil))))
+            ((= arg-length 1)
+             (push-instruction `(loopy--main-body . (setq ,var ,(car rest)))))
+            ((= arg-length 2)
+             (push-instruction `(loopy--implicit-vars . (,counter-holder t)))
+             (push-instruction `(loopy--main-body
+                                . (setq ,var (if ,counter-holder
+                                                 ,(cl-first rest)
+                                               ,(cl-second rest)))))
+             (push-instruction `(loopy--latter-body . (setq ,counter-holder nil))))
+            (t
+             (push-instruction `(loopy--implicit-vars . (,counter-holder 0)))
+             (push-instruction `(loopy--latter-body
+                                . (when (< ,counter-holder (1- ,arg-length))
+                                    (setq ,counter-holder (1+ ,counter-holder)))))
+             ;; Assign to var based on the value of counter-holder.  For
+             ;; efficiency, we want to check for the last expression first,
+             ;; since it will probably be true the most times.  To enable
+             ;; that, the condition is whether the counter is greater than
+             ;; the index of EXPR in REST minus one.
+             ;;
+             ;; E.g., for '(a b c),
+             ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
+             (push-instruction
+              `(loopy--main-body
+                . (setq ,var ,(let ((body-code nil) (index 0))
+                                (dolist (expr rest)
+                                  (push `((> ,counter-holder ,(1- index))
+                                          ,expr)
+                                        body-code)
+                                  (setq index (1+ index)))
+                                (cons 'cond body-code)))))))))
 
 ;;;;; Iteration Clauses
-          ;; TODO:
-          ;; - obarrays?
-          ;; - key-codes/key-bindings and key-seqs?
-          ;; - overlays?
-          ;; - intervals of constant text properties?
-          (`(array ,var ,val)
-           (let ((val-holder (gensym))
-                 (index-holder (gensym)))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-             (add-instruction `(loopy--implicit-vars . (,index-holder 0)))
-             (add-instruction `(loopy--explicit-vars . (,var nil)))
-             (add-instruction `(loopy--main-body . (setq ,var
-                                                         (aref ,val-holder
-                                                               ,index-holder))))
-             (add-instruction `(loopy--latter-body . (setq ,index-holder
-                                                           (1+ ,index-holder))))
-             (add-instruction `(loopy--pre-conditions . (< ,index-holder
-                                                           (length ,val-holder))))))
+        ;; TODO:
+        ;; - obarrays?
+        ;; - key-codes/key-bindings and key-seqs?
+        ;; - overlays?
+        ;; - intervals of constant text properties?
+        (`(array ,var ,val)
+         (let ((val-holder (gensym))
+               (index-holder (gensym)))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
+           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
+           (push-instruction `(loopy--explicit-vars . (,var nil)))
+           (push-instruction `(loopy--main-body . (setq ,var
+                                                       (aref ,val-holder
+                                                             ,index-holder))))
+           (push-instruction `(loopy--latter-body . (setq ,index-holder
+                                                         (1+ ,index-holder))))
+           (push-instruction `(loopy--pre-conditions . (< ,index-holder
+                                                         (length ,val-holder))))))
 
-          ((or `(array-ref ,var ,val) `(arrayf ,var ,val))
-           (let ((val-holder (gensym))
-                 (index-holder (gensym)))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-             (add-instruction `(loopy--implicit-vars . (,index-holder 0)))
-             (add-instruction `(loopy--explicit-generalized-vars
-                                . (,var (aref ,val-holder ,index-holder))))
-             (add-instruction `(loopy--latter-body
-                                . (setq ,index-holder (1+ ,index-holder))))
-             (add-instruction `(loopy--pre-conditions
-                                . (< ,index-holder (length ,val-holder))))))
+        ((or `(array-ref ,var ,val) `(arrayf ,var ,val))
+         (let ((val-holder (gensym))
+               (index-holder (gensym)))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
+           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
+           (push-instruction `(loopy--explicit-generalized-vars
+                              . (,var (aref ,val-holder ,index-holder))))
+           (push-instruction `(loopy--latter-body
+                              . (setq ,index-holder (1+ ,index-holder))))
+           (push-instruction `(loopy--pre-conditions
+                              . (< ,index-holder (length ,val-holder))))))
 
-          ((or `(cons ,var ,val . ,func) `(conses ,var ,val . ,func))
-           (let ((actual-func (cond
-                               ((null func)
-                                'cdr)
-                               ((and (consp (car func))
-                                     (memq (caar func) '(quote function)))
-                                (eval (car func)))
-                               (t (car func)))))
-             (add-instruction `(loopy--explicit-vars . (,var ,val)))
-             (add-instruction `(loopy--latter-body
-                                . (setq ,var (,actual-func ,var))))
-             (add-instruction `(loopy--pre-conditions . (consp ,var)))))
+        ((or `(cons ,var ,val . ,func) `(conses ,var ,val . ,func))
+         (let ((actual-func (cond
+                             ((null func)
+                              'cdr)
+                             ((and (consp (car func))
+                                   (memq (caar func) '(quote function)))
+                              (eval (car func)))
+                             (t (car func)))))
+           (push-instruction `(loopy--explicit-vars . (,var ,val)))
+           (push-instruction `(loopy--latter-body
+                              . (setq ,var (,actual-func ,var))))
+           (push-instruction `(loopy--pre-conditions . (consp ,var)))))
 
-          (`(list ,var ,val . ,func)
-           (let ((val-holder (gensym))
-                 ;; The function argument may or may not be quoted. We need it
-                 ;; to be unquoted for the syntax to work.
-                 ;; E.g., "(#'cdr val-holder)" won't work.
-                 (actual-func (cond
-                               ((null func)
-                                'cdr)
-                               ((and (consp (car func))
-                                     (memq (caar func) '(quote function)))
-                                (eval (car func)))
-                               (t (car func)))))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-             (add-instruction `(loopy--explicit-vars . (,var nil)))
-             (add-instruction `(loopy--main-body
-                                . (setq ,var (car ,val-holder))))
-             (add-instruction `(loopy--latter-body
-                                . (setq ,val-holder (,actual-func ,val-holder))))
-             (add-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
+        (`(list ,var ,val . ,func)
+         (let ((val-holder (gensym))
+               ;; The function argument may or may not be quoted. We need it
+               ;; to be unquoted for the syntax to work.
+               ;; E.g., "(#'cdr val-holder)" won't work.
+               (actual-func (cond
+                             ((null func)
+                              'cdr)
+                             ((and (consp (car func))
+                                   (memq (caar func) '(quote function)))
+                              (eval (car func)))
+                             (t (car func)))))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
+           (push-instruction `(loopy--explicit-vars . (,var nil)))
+           (push-instruction `(loopy--main-body
+                              . (setq ,var (car ,val-holder))))
+           (push-instruction `(loopy--latter-body
+                              . (setq ,val-holder (,actual-func ,val-holder))))
+           (push-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
 
-          ((or `(list-ref ,var ,list . ,func) `(listf ,var ,list . ,func))
-           (let ((val-holder (gensym))
-                 (actual-func (cond
-                               ((null func)
-                                'cdr)
-                               ((and (consp (car func))
-                                     (memq (caar func) '(quote function)))
-                                (eval (car func)))
-                               (t (car func)))))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,list)))
-             (add-instruction `(loopy--explicit-generalized-vars
-                                . (,var (car ,val-holder))))
-             (add-instruction `(loopy--latter-body
-                                . (setq ,val-holder (,actual-func ,val-holder))))
-             (add-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
+        ((or `(list-ref ,var ,list . ,func) `(listf ,var ,list . ,func))
+         (let ((val-holder (gensym))
+               (actual-func (cond
+                             ((null func)
+                              'cdr)
+                             ((and (consp (car func))
+                                   (memq (caar func) '(quote function)))
+                              (eval (car func)))
+                             (t (car func)))))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,list)))
+           (push-instruction `(loopy--explicit-generalized-vars
+                              . (,var (car ,val-holder))))
+           (push-instruction `(loopy--latter-body
+                              . (setq ,val-holder (,actual-func ,val-holder))))
+           (push-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
 
-          (`(repeat ,count)
-           (let ((val-holder (gensym)))
-             (add-instruction `(loopy--implicit-vars . (,val-holder 0)))
-             (add-instruction `(loopy--latter-body . (cl-incf ,val-holder)))
-             (add-instruction `(loopy--pre-conditions . (< ,val-holder ,count)))))
+        (`(repeat ,count)
+         (let ((val-holder (gensym)))
+           (push-instruction `(loopy--implicit-vars . (,val-holder 0)))
+           (push-instruction `(loopy--latter-body . (cl-incf ,val-holder)))
+           (push-instruction `(loopy--pre-conditions . (< ,val-holder ,count)))))
 
-          (`(repeat ,var ,count)
-           (add-instruction `(loopy--implicit-vars . (,var 0)))
-           (add-instruction `(loopy--latter-body . (cl-incf ,var)))
-           (add-instruction `(loopy--pre-conditions . (< ,var ,count))))
+        (`(repeat ,var ,count)
+         (push-instruction `(loopy--implicit-vars . (,var 0)))
+         (push-instruction `(loopy--latter-body . (cl-incf ,var)))
+         (push-instruction `(loopy--pre-conditions . (< ,var ,count))))
 
-          (`(seq ,var ,val)
-           ;; Note: `cl-loop' just combines the logic for lists and arrays, and
-           ;;       just checks the type for each iteration, so we do that too.
-           (let ((val-holder (gensym))
-                 (index-holder (gensym)))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-             (add-instruction `(loopy--implicit-vars . (,index-holder 0)))
-             (add-instruction `(loopy--explicit-vars . (,var nil)))
-             (add-instruction
-              `(loopy--main-body . (setq ,var
-                                         (if (consp ,val-holder)
-                                             (pop ,val-holder)
-                                           (aref ,val-holder ,index-holder)))))
-             (add-instruction
-              `(loopy--latter-body . (setq ,index-holder (1+ ,index-holder))))
-             (add-instruction `(loopy--pre-conditions
-                                . (and ,val-holder
-                                       (or (consp ,val-holder)
-                                           (< ,index-holder
-                                              (length ,val-holder))))))))
+        (`(seq ,var ,val)
+         ;; Note: `cl-loop' just combines the logic for lists and arrays, and
+         ;;       just checks the type for each iteration, so we do that too.
+         (let ((val-holder (gensym))
+               (index-holder (gensym)))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
+           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
+           (push-instruction `(loopy--explicit-vars . (,var nil)))
+           (push-instruction
+            `(loopy--main-body . (setq ,var
+                                       (if (consp ,val-holder)
+                                           (pop ,val-holder)
+                                         (aref ,val-holder ,index-holder)))))
+           (push-instruction
+            `(loopy--latter-body . (setq ,index-holder (1+ ,index-holder))))
+           (push-instruction `(loopy--pre-conditions
+                              . (and ,val-holder
+                                     (or (consp ,val-holder)
+                                         (< ,index-holder
+                                            (length ,val-holder))))))))
 
-          ((or `(seq-ref ,var ,val) `(seqf ,var ,val))
-           (let ((val-holder (gensym))
-                 (index-holder (gensym)))
-             (add-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-             (add-instruction `(loopy--implicit-vars . (,index-holder 0)))
-             (add-instruction `(loopy--explicit-generalized-vars
-                                . (,var (elt ,val-holder ,index-holder))))
-             (add-instruction `(loopy--latter-body
-                                . (setq ,index-holder (1+ ,index-holder))))
-             ;; TODO: Length of sequence not changing, so don't have to
-             ;;       recompute each time.
-             (add-instruction `(loopy--pre-conditions
-                                . (< ,index-holder (length ,val-holder))))))
+        ((or `(seq-ref ,var ,val) `(seqf ,var ,val))
+         (let ((val-holder (gensym))
+               (index-holder (gensym)))
+           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
+           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
+           (push-instruction `(loopy--explicit-generalized-vars
+                              . (,var (elt ,val-holder ,index-holder))))
+           (push-instruction `(loopy--latter-body
+                              . (setq ,index-holder (1+ ,index-holder))))
+           ;; TODO: Length of sequence not changing, so don't have to
+           ;;       recompute each time.
+           (push-instruction `(loopy--pre-conditions
+                              . (< ,index-holder (length ,val-holder))))))
 
 ;;;;; Conditional Body Forms
-          ;; Since these can contain other commands/clauses, it's easier if they
-          ;; have their own parsing functions, which call back into this one to
-          ;; parse sub-clauses.
-          (`(when ,cond . ,body)
-           (mapc #'add-instruction
-                 (loopy--parse-conditional-forms 'when cond body loop-name)))
+        ;; Since these can contain other commands/clauses, it's easier if they
+        ;; have their own parsing functions, which call back into this one to
+        ;; parse sub-clauses.
+        (`(when ,cond . ,body)
+         (mapc #'push-instruction
+               (loopy--parse-conditional-forms 'when cond body loop-name)))
 
-          (`(unless ,cond . ,body)
-           (mapc #'add-instruction
-                 (loopy--parse-conditional-forms 'unless cond body loop-name)))
+        (`(unless ,cond . ,body)
+         (mapc #'push-instruction
+               (loopy--parse-conditional-forms 'unless cond body loop-name)))
 
-          (`(if ,cond . ,body)
-           (mapc #'add-instruction
-                 (loopy--parse-conditional-forms 'if cond body loop-name)))
+        (`(if ,cond . ,body)
+         (mapc #'push-instruction
+               (loopy--parse-conditional-forms 'if cond body loop-name)))
 
-          (`(cond . ,body)
-           (mapc #'add-instruction
-                 (loopy--parse-cond-form body loop-name)))
+        (`(cond . ,body)
+         (mapc #'push-instruction
+               (loopy--parse-cond-form body loop-name)))
 
 ;;;;; Exit and Return Clauses
-          ((or '(skip) '(continue))
-           (add-instruction '(loopy--main-body . (go loopy--continue-tag)))
-           (add-instruction '(loopy--skip-used . t)))
-          (`(return ,val)
-           (add-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val)))
-           (add-instruction `(loopy--early-return-used . t)))
-          (`(return-from ,name ,val)
-           (add-instruction `(loopy--main-body . (cl-return-from ,name ,val)))
-           (add-instruction `(loopy--early-return-used . t)))
-          ((or '(leave) '(break))
-           (add-instruction `(loopy--main-body . (cl-return-from ,loop-name nil)))
-           (add-instruction `(loopy--early-return-used . t)))
-          ((or `(leave-from ,name) `(break-from ,name))
-           (add-instruction `(loopy--main-body . (cl-return-from ,name nil)))
-           (add-instruction `(loopy--early-return-used . t)))
+        ((or '(skip) '(continue))
+         (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
+         (push-instruction '(loopy--skip-used . t)))
+        (`(return ,val)
+         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val)))
+         (push-instruction `(loopy--early-return-used . t)))
+        (`(return-from ,name ,val)
+         (push-instruction `(loopy--main-body . (cl-return-from ,name ,val)))
+         (push-instruction `(loopy--early-return-used . t)))
+        ((or '(leave) '(break))
+         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name nil)))
+         (push-instruction `(loopy--early-return-used . t)))
+        ((or `(leave-from ,name) `(break-from ,name))
+         (push-instruction `(loopy--main-body . (cl-return-from ,name nil)))
+         (push-instruction `(loopy--early-return-used . t)))
 
 ;;;;; Accumulation Clauses
-          (`(append ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (setq ,var (append ,var ,val)))))
-          (`(collect ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (setq ,var (append ,var
-                                                                    (list ,val))))))
-          (`(concat ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (setq ,var (concat ,var ,val)))))
-          (`(vconcat ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (setq ,var (vconcat ,var ,val)))))
-          (`(count ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var 0)))
-           (add-instruction `(loopy--main-body . (when ,val (cl-incf ,var)))))
-          ((or `(max ,var ,val) `(maximize ,var ,val))
-           (add-instruction `(loopy--explicit-vars . (,var -1.0e+INF)))
-           (add-instruction `(loopy--main-body . (setq ,var (max ,var ,val)))))
-          ((or `(min ,var ,val) `(minimize ,var ,val))
-           (add-instruction `(loopy--explicit-vars . (,var 1.0e+INF)))
-           (add-instruction `(loopy--main-body . (setq ,var (min ,var ,val)))))
-          (`(nconc ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (setq ,var (nconc ,var ,val)))))
-          ((or `(push-into ,var ,val) `(push ,var ,val))
-           (add-instruction `(loopy--explicit-vars . (,var nil)))
-           (add-instruction `(loopy--main-body . (push ,val ,var))))
-          (`(sum ,var ,val)
-           (add-instruction `(loopy--explicit-vars . (,var 0)))
-           (add-instruction `(loopy--main-body . (setq ,var (+ ,var ,val)))))
+        (`(append ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (setq ,var (append ,var ,val)))))
+        (`(collect ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (setq ,var (append ,var
+                                                                  (list ,val))))))
+        (`(concat ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (setq ,var (concat ,var ,val)))))
+        (`(vconcat ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (setq ,var (vconcat ,var ,val)))))
+        (`(count ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var 0)))
+         (push-instruction `(loopy--main-body . (when ,val (cl-incf ,var)))))
+        ((or `(max ,var ,val) `(maximize ,var ,val))
+         (push-instruction `(loopy--explicit-vars . (,var -1.0e+INF)))
+         (push-instruction `(loopy--main-body . (setq ,var (max ,var ,val)))))
+        ((or `(min ,var ,val) `(minimize ,var ,val))
+         (push-instruction `(loopy--explicit-vars . (,var 1.0e+INF)))
+         (push-instruction `(loopy--main-body . (setq ,var (min ,var ,val)))))
+        (`(nconc ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (setq ,var (nconc ,var ,val)))))
+        ((or `(push-into ,var ,val) `(push ,var ,val))
+         (push-instruction `(loopy--explicit-vars . (,var nil)))
+         (push-instruction `(loopy--main-body . (push ,val ,var))))
+        (`(sum ,var ,val)
+         (push-instruction `(loopy--explicit-vars . (,var 0)))
+         (push-instruction `(loopy--main-body . (setq ,var (+ ,var ,val)))))
 
 ;;;;; Custom commands
-          (_
-           (if-let ((command-parser (loopy--get-custom-command-parser form)))
-               (if-let ((custom-instructions (funcall command-parser form)))
-                   (mapc #'add-instruction custom-instructions)
-                 (error "Loopy: No instructions returned by command parser: %s"
-                        command-parser))
-             (error "Loopy: This form unkown: %s" form))))))))
+        (_
+         (if-let ((command-parser (loopy--get-custom-command-parser form)))
+             (if-let ((custom-instructions (funcall command-parser form)))
+                 (mapc #'push-instruction custom-instructions)
+               (error "Loopy: No instructions returned by command parser: %s"
+                      command-parser))
+           (error "Loopy: This form unkown: %s" form)))))
+    (nreverse instructions)))
+
+(defun loopy--parse-loop-commands (command-list &optional loop-name)
+  "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
+Return a single list of instructions in the same order as
+COMMAND-LIST.  Optionally needs LOOP-NAME for block returns."
+  (let (instructions)
+    (dolist (command command-list instructions)
+      (setq instructions (append instructions
+                                 (loopy--parse-loop-command command))))))
 
 ;;;; The Macro Itself
 ;;;###autoload
@@ -589,10 +598,11 @@ Returns are always explicit.  See this package's README for more information."
         ;; Body forms have the most variety.
         ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
         ;; Things added are expanded in place.
-        (dolist (instruction (loopy--parse-body-forms (if (eq (car-safe arg) 'loop)
-                                                          (cdr arg)
-                                                        arg)
-                                                      loopy--name-arg))
+        (dolist (instruction (loopy--parse-loop-commands
+                              (if (eq (car-safe arg) 'loop)
+                                  (cdr arg)
+                                arg)
+                              loopy--name-arg))
           ;; Do it this way instead of with `set', cause was getting errors
           ;; about void variables.
           (cl-case (car instruction)
@@ -634,6 +644,10 @@ Returns are always explicit.  See this package's README for more information."
              (push (cdr instruction) loopy--final-return))
             (t
              (error "Loopy: Unknown body instruction: %s" instruction)))))))
+
+    ;; Make sure the order-dependent lists are in the correct order.
+    (setq loopy--main-body (nreverse loopy--main-body)
+          loopy--with-vars (nreverse loopy--with-vars))
 
 ;;;;; Constructing/Creating the returned code.
 
