@@ -67,6 +67,12 @@
                                  (finally-return (+ i a))
                                  (with (a 4))))))))
 
+;;;; Default return values.
+(ert-deftest default-return-nil ()
+  (should (not (or (eval (quote (loopy ((list i '(1 2 3))))))
+                   (eval (quote (loopy ((repeat 1))
+                                       (finally-do (1+ 1)))))))))
+
 ;;; Loop Commands
 ;;;; Generic Evaluation
 ;;;;; Do

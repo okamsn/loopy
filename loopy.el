@@ -122,9 +122,6 @@ These run in a `progn'.")
 ;;;;; Variables for constructing the code
 
 ;; These variable affect how the code is expanded.
-(defvar loopy--early-return-used nil
-  "Whether a leave/return is present in the loop main body.")
-
 (defvar loopy--skip-used nil
   "Whether a skip/continue command is present in the loop  main body.")
 
@@ -277,7 +274,6 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
 
 (cl-defun loopy--parse-early-exit-commands ((name &rest args))
   "Parse `return', `return-from', `leave', and `leave-from' commands."
-  (setq loopy--early-return-used t)
   ;; Check arguments.
   (cl-case name
     ((return leave-from)
@@ -526,20 +522,15 @@ Optionally, take LOOP-NAME for early exiting."
 
 ;;;;; Exit and Return Clauses
         ((or '(skip) '(continue))
-         (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
-         (push-instruction '(loopy--skip-used . t)))
+         (push-instruction '(loopy--main-body . (go loopy--continue-tag))))
         (`(return ,val)
-         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val)))
-         (push-instruction `(loopy--early-return-used . t)))
+         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val))))
         (`(return-from ,name ,val)
-         (push-instruction `(loopy--main-body . (cl-return-from ,name ,val)))
-         (push-instruction `(loopy--early-return-used . t)))
+         (push-instruction `(loopy--main-body . (cl-return-from ,name ,val))))
         ((or '(leave) '(break))
-         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name nil)))
-         (push-instruction `(loopy--early-return-used . t)))
+         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name nil))))
         ((or `(leave-from ,name) `(break-from ,name))
-         (push-instruction `(loopy--main-body . (cl-return-from ,name nil)))
-         (push-instruction `(loopy--early-return-used . t)))
+         (push-instruction `(loopy--main-body . (cl-return-from ,name nil))))
 
 ;;;;; Accumulation Clauses
         (`(append ,var ,val)
@@ -641,7 +632,6 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--post-conditions)
 
         ;; -- Variables for constructing code --
-        (loopy--early-return-used)
         (loopy--skip-used))
 
 ;;;;; Interpreting the macro arguments.
@@ -694,9 +684,6 @@ Returns are always explicit.  See this package's README for more information."
              (push (cdr instruction) loopy--post-conditions))
 
             ;; Code for conditionally constructing the loop body.
-            (loopy--early-return-used
-             (setq loopy--early-return-used t))
-
             (loopy--skip-used
              (setq loopy--skip-used t))
 
@@ -807,37 +794,26 @@ Returns are always explicit.  See this package's README for more information."
           (setq result `(,result ,@loopy--after-do)
                 result-is-one-expression nil)))
 
-        ;; Wrap the loop in a `cl-block' when an early return is used, when
-        ;; the loop is named, or when post conditions are used (which exit the
-        ;; loop via `cl-return-from').
-        (when (or loopy--early-return-used loopy--name-arg
-                  loopy--post-conditions)
-          (setq result `(cl-block ,loopy--name-arg
-                          ,@(get-result)
-                          ;; Be sure that the `cl-block' defaults to returning
-                          ;; nil.  This can be overridden by any call to
-                          ;; `cl-return-from'.
-                          nil)
-                ;; Will always be a single expression after wrapping with
-                ;; `cl-block'.
-                result-is-one-expression t
-                using-cl-block t))
+        ;; Always wrap in `cl-block', as any arbitrary Lisp code could call
+        ;; `cl-return-from'.  For example, it's possible that a user is using a
+        ;; loop to change variables, and they might wish to stop changing things
+        ;; at a certain point.
+        (setq result `(cl-block ,loopy--name-arg
+                        ,@(get-result)
+                        ;; Be sure that the `cl-block' defaults to returning
+                        ;; nil.  This can be overridden by any call to
+                        ;; `cl-return-from'.
+                        nil)
+              ;; Will always be a single expression after wrapping with
+              ;; `cl-block'.
+              result-is-one-expression t)
 
-        ;;TODO: Simplify this if-form.
-        ;;
         ;; Try to keep the return value of the expanded code as `nil' by
         ;; default.
         ;; - If final-return is used, then there's no problem, and we just use
         ;;   that.
-        ;; - If there's final-do, then we need to check whether we're using a
-        ;;   `cl-block', which we've set to return `nil' unless `cl-return-from'
-        ;;   is used.
-        ;;   - If there is a block, just use it as the first expression in
-        ;;     `prog1'.
-        ;;   - If there isn't a `cl-block', append `nil' after the final do.
-        ;; - If there's no final-do or final-return, then just append `nil' to
-        ;;   the end of `result' if not using a `cl-block'.
-
+        ;; - If there's final-do, be sure to return the value of the `cl-block'
+        ;;   (which defaults to nil) by using `prog1'.
         (if loopy--final-return
             (if loopy--final-do
                 (setq result `(,@(get-result)
@@ -846,18 +822,9 @@ Returns are always explicit.  See this package's README for more information."
               (setq result `(,@(get-result)
                              ,loopy--final-return)
                     result-is-one-expression nil))
-          ;; If no final-return:
-          (if loopy--final-do
-              (if using-cl-block
-                  (setq result `(prog1 ,result ,@loopy--final-do)
-                        result-is-one-expression t)
-                (setq result `(,@(get-result) ,@loopy--final-do nil)
-                      result-is-one-expression nil))
-            ;; If there is no final-return, no final-do, and no `cl-block', just
-            ;; add `nil' to end of result.
-            (unless using-cl-block
-              (setq result `(,@(get-result) nil)
-                    result-is-one-expression nil))))
+          (when loopy--final-do
+            (setq result `(prog1 ,result ,@loopy--final-do)
+                  result-is-one-expression t)))
 
         ;; Declare the implicit and explicit variables.
         (when (or loopy--implicit-vars loopy--explicit-vars)
