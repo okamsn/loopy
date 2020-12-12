@@ -138,6 +138,10 @@
                (equal (eval (quote (loopy ((cons x '(1 2 3 4) #'cddr)
                                            (collect coll x))
                                           (return coll))))
+                      (eval (quote (loopy ((cons x '(1 2 3 4)
+                                                 (lambda (x) (cddr x)))
+                                           (collect coll x))
+                                          (return coll))))
                       '((1 2 3 4) (3 4))))))
 
 ;;;; List
