@@ -569,12 +569,12 @@ Optionally, take LOOP-NAME for early exiting."
 
 ;;;;; Custom commands
         (_
-         (if-let ((command-parser (loopy--get-custom-command-parser form)))
-             (if-let ((custom-instructions (funcall command-parser form)))
+         (if-let ((command-parser (loopy--get-custom-command-parser command)))
+             (if-let ((custom-instructions (funcall command-parser command)))
                  (mapc #'push-instruction custom-instructions)
                (error "Loopy: No instructions returned by command parser: %s"
                       command-parser))
-           (error "Loopy: This form unkown: %s" form)))))
+           (error "Loopy: This command unknown: %s" command)))))
     (nreverse instructions)))
 
 (defun loopy--parse-loop-commands (command-list &optional loop-name)
