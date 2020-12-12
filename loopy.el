@@ -308,7 +308,7 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let ((arg-length (length vals))
-        (counter-holder (gensym))
+        (value-selector (gensym))
         instructions)
     ;; Declare `var'.
     (push `(loopy--explicit-vars . (,var nil)) instructions)
@@ -317,24 +317,24 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
       (0 (push `(loopy--main-body . (setq ,var nil)) instructions))
       ;; If one value, repeatedly set to that value.
       (1 (push `(loopy--main-body . (setq ,var ,(car vals))) instructions))
-      ;; If two values, repeatedly check against `counter-holder' to determine
+      ;; If two values, repeatedly check against `value-selector' to determine
       ;; if we should assign the first or second value.  This is how `cl-loop'
       ;; does it.
       (2
-       (push `(loopy--implicit-vars . (,counter-holder t)) instructions)
+       (push `(loopy--implicit-vars . (,value-selector t)) instructions)
        (push `(loopy--main-body
-                           . (setq ,var (if ,counter-holder
+                           . (setq ,var (if ,value-selector
                                             ,(cl-first vals)
                                           ,(cl-second vals))))
              instructions)
-       (push `(loopy--latter-body . (setq ,counter-holder nil)) instructions))
+       (push `(loopy--latter-body . (setq ,value-selector nil)) instructions))
       (t
-       (push `(loopy--implicit-vars . (,counter-holder 0)) instructions)
+       (push `(loopy--implicit-vars . (,value-selector 0)) instructions)
        (push `(loopy--latter-body
-                           . (when (< ,counter-holder (1- ,arg-length))
-                               (setq ,counter-holder (1+ ,counter-holder))))
+                           . (when (< ,value-selector (1- ,arg-length))
+                               (setq ,value-selector (1+ ,value-selector))))
              instructions)
-       ;; Assign to var based on the value of counter-holder.  For
+       ;; Assign to var based on the value of value-selector.  For
        ;; efficiency, we want to check for the last expression first,
        ;; since it will probably be true the most times.  To enable
        ;; that, the condition is whether the counter is greater than
@@ -345,7 +345,7 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
        (push `(loopy--main-body
           . (setq ,var ,(let ((body-code nil) (index 0))
                           (dolist (value vals)
-                            (push `((> ,counter-holder ,(1- index))
+                            (push `((> ,value-selector ,(1- index))
                                     ,value)
                                   body-code)
                             (setq index (1+ index)))
