@@ -391,6 +391,16 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
         (t                    (push instruction final-instructions))))
     final-instructions))
 
+(cl-defun loopy--parse-cons-command ((name var val &optional (func #'cdr)))
+  "Parse the `cons' loop command.
+
+NAME is the name of the command.  VAR is a variable name.  VAL
+is a cons cell value.  Optional FUNC is a function by which to update
+VAR (default `cdr')."
+  `((loopy--explicit-vars . (,var ,val))
+    (loopy--latter-body . (setq ,var (,(loopy--get-function-symbol func) ,var)))
+    (loopy--pre-conditions . (consp ,var))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command &optional loop-name)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -421,18 +431,9 @@ Optionally, take LOOP-NAME for early exiting."
         ((or `(arrayf ,var ,val) `(array-ref ,var ,val))
          (mapc #'push-instruction (loopy--parse-array-ref-command command)))
 
-        ((or `(cons ,var ,val . ,func) `(conses ,var ,val . ,func))
-         (let ((actual-func (cond
-                             ((null func)
-                              'cdr)
-                             ((and (consp (car func))
-                                   (memq (caar func) '(quote function)))
-                              (eval (car func)))
-                             (t (car func)))))
-           (push-instruction `(loopy--explicit-vars . (,var ,val)))
-           (push-instruction `(loopy--latter-body
-                              . (setq ,var (,actual-func ,var))))
-           (push-instruction `(loopy--pre-conditions . (consp ,var)))))
+        ((or `(cons . ,rest) `(conses . ,rest))
+         (mapc #'push-instruction
+               (loopy--parse-cons-command command)))
 
         (`(list ,var ,val . ,func)
          (let ((val-holder (gensym))
