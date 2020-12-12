@@ -426,6 +426,9 @@ the list."
 (defun loopy--parse-loop-command (command &optional loop-name)
   "Parse COMMAND, returning a list of instructions in the same received order.
 
+Some commands use specific parsing functions, which are called by
+`loopy--parse-loop-command' (this function) as needed.
+
 Optionally, take LOOP-NAME for early exiting."
   (let (instructions)
     (cl-flet ((push-instruction (instr) (push instr instructions)))
