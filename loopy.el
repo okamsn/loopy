@@ -150,6 +150,19 @@ or `loopy--explicit-generalized-vars'."
       (memq var-name (mapcar #'car loopy--explicit-vars))
       (memq var-name (mapcar #'car loopy--explicit-generalized-vars))))
 
+(defun loopy--get-function-symbol (function-form)
+  "Return the actual symbol described by FUNCTION-FORM.
+
+When a quoted argument is passed to a macro, it can appear
+as `(quote my-var)' or `(function my-func)' inside the body.  For
+expansion, we generally only want the actual symbol."
+  (if (nlistp function-form)
+      function-form
+    (cl-case (car function-form)
+      ((function quote) (cadr function-form))
+      (lambda function-form)
+      (t (error "This function form is unrecognized: %s" function-form)))))
+
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
   "A looping macro similar to `cl-loop'."
