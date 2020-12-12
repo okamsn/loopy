@@ -368,28 +368,20 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
-(cl-defun loopy--parse-array-ref-command ((name var val))
+(cl-defun loopy--parse-array-ref-command
+    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `array-ref' command by editing the `array' command's instructions.
 
-- NAME is the name of the command.
-- VAR is a variable name.
-- VAL is an array value."
-  (let (final-instructions
-        (value-holder (gensym))
-        (index-holder (gensym)))
-    (dolist (instruction (loopy--parse-array-command (list name var val)
-                                                     value-holder index-holder))
-      (cl-case (car instruction)
-        ;; Since we're using a symbol macro, we don't need to do any setting in
-        ;; the main body.
-        (loopy--main-body     nil)
-        ;; Replace an explicit initialization with an explicit symbol macro.
-        (loopy--explicit-vars (push `(loopy--explicit-generalized-vars
-                                      . (,var (aref ,value-holder
-                                                    ,index-holder)))
-                                    final-instructions))
-        (t                    (push instruction final-instructions))))
-    final-instructions))
+NAME is the name of the command.  VAR is a variable name.  VAL is
+an array value.  VALUE-HOLDER holds the array value.
+INDEX-HOLDER holds the index value."
+  `((loopy--explicit-generalized-vars
+     . (,var (aref ,value-holder ,index-holder)))
+    (loopy--implicit-vars  . (,value-holder ,val))
+    (loopy--implicit-vars  . (,index-holder 0))
+    (loopy--explicit-vars  . (,var nil))
+    (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
+    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
 (cl-defun loopy--parse-cons-command ((name var val &optional (func #'cdr)))
   "Parse the `cons' loop command.
