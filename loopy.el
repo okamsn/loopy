@@ -323,16 +323,16 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
       (2
        (push `(loopy--implicit-vars . (,value-selector t)) instructions)
        (push `(loopy--main-body
-                           . (setq ,var (if ,value-selector
-                                            ,(cl-first vals)
-                                          ,(cl-second vals))))
+               . (setq ,var (if ,value-selector
+                                ,(cl-first vals)
+                              ,(cl-second vals))))
              instructions)
        (push `(loopy--latter-body . (setq ,value-selector nil)) instructions))
       (t
        (push `(loopy--implicit-vars . (,value-selector 0)) instructions)
        (push `(loopy--latter-body
-                           . (when (< ,value-selector (1- ,arg-length))
-                               (setq ,value-selector (1+ ,value-selector))))
+               . (when (< ,value-selector (1- ,arg-length))
+                   (setq ,value-selector (1+ ,value-selector))))
              instructions)
        ;; Assign to var based on the value of value-selector.  For
        ;; efficiency, we want to check for the last expression first,
@@ -343,13 +343,13 @@ This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
        ;; E.g., for '(a b c),
        ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
        (push `(loopy--main-body
-          . (setq ,var ,(let ((body-code nil) (index 0))
-                          (dolist (value vals)
-                            (push `((> ,value-selector ,(1- index))
-                                    ,value)
-                                  body-code)
-                            (setq index (1+ index)))
-                          (cons 'cond body-code))))
+               . (setq ,var ,(let ((body-code nil) (index 0))
+                               (dolist (value vals)
+                                 (push `((> ,value-selector ,(1- index))
+                                         ,value)
+                                       body-code)
+                                 (setq index (1+ index)))
+                               (cons 'cond body-code))))
              instructions)))))
 
 (cl-defun loopy--parse-array-command
@@ -492,10 +492,10 @@ Optionally, take LOOP-NAME for early exiting."
            (push-instruction
             `(loopy--latter-body . (setq ,index-holder (1+ ,index-holder))))
            (push-instruction `(loopy--pre-conditions
-                              . (and ,val-holder
-                                     (or (consp ,val-holder)
-                                         (< ,index-holder
-                                            (length ,val-holder))))))))
+                               . (and ,val-holder
+                                      (or (consp ,val-holder)
+                                          (< ,index-holder
+                                             (length ,val-holder))))))))
 
         ((or `(seq-ref ,var ,val) `(seqf ,var ,val))
          (let ((val-holder (gensym))
@@ -503,13 +503,13 @@ Optionally, take LOOP-NAME for early exiting."
            (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
            (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
            (push-instruction `(loopy--explicit-generalized-vars
-                              . (,var (elt ,val-holder ,index-holder))))
+                               . (,var (elt ,val-holder ,index-holder))))
            (push-instruction `(loopy--latter-body
-                              . (setq ,index-holder (1+ ,index-holder))))
+                               . (setq ,index-holder (1+ ,index-holder))))
            ;; TODO: Length of sequence not changing, so don't have to
            ;;       recompute each time.
            (push-instruction `(loopy--pre-conditions
-                              . (< ,index-holder (length ,val-holder))))))
+                               . (< ,index-holder (length ,val-holder))))))
 
 ;;;;; Conditional Body Forms
         ;; Since these can contain other commands/clauses, it's easier if they
@@ -522,8 +522,7 @@ Optionally, take LOOP-NAME for early exiting."
          (mapc #'push-instruction (loopy--parse-if-command command)))
 
         (`(cond . ,body)
-         (mapc #'push-instruction
-               (loopy--parse-cond-form body loop-name)))
+         (mapc #'push-instruction (loopy--parse-cond-form body loop-name)))
 
 ;;;;; Exit and Return Clauses
         ((or '(skip) '(continue))
@@ -549,7 +548,7 @@ Optionally, take LOOP-NAME for early exiting."
         (`(collect ,var ,val)
          (push-instruction `(loopy--explicit-vars . (,var nil)))
          (push-instruction `(loopy--main-body . (setq ,var (append ,var
-                                                                  (list ,val))))))
+                                                                   (list ,val))))))
         (`(concat ,var ,val)
          (push-instruction `(loopy--explicit-vars . (,var nil)))
          (push-instruction `(loopy--main-body . (setq ,var (concat ,var ,val)))))
