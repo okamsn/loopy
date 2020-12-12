@@ -401,6 +401,35 @@ VAR (default `cdr')."
     (loopy--latter-body . (setq ,var (,(loopy--get-function-symbol func) ,var)))
     (loopy--pre-conditions . (consp ,var))))
 
+(cl-defun loopy--parse-list-command
+    ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+  "Parse the `list' loop command.
+
+NAME is the command name.  VAR is a variable name.  VAL is a list
+value.  FUNC is a function used to update VAL (default `cdr').
+VAL-HOLDER is a variable name that holds the list."
+  `((loopy--implicit-vars . (,val-holder ,val))
+    (loopy--explicit-vars . (,var nil))
+    (loopy--main-body
+     . (setq ,var (car ,val-holder)))
+    (loopy--latter-body
+     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
+    (loopy--pre-conditions . (consp ,val-holder))))
+
+(cl-defun loopy--parse-list-ref-command
+    ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+  "Parse the `list-ref' loop command, editing the `list' commands instructions.
+
+NAME is the command name.  VAR is the name of a setf-able place.
+VAL is a list value.  FUNC is a function used to update
+VAL (default `cdr').  VAL-HOLDER is a variable name that holds
+the list."
+  `((loopy--implicit-vars . (,val-holder ,val))
+    (loopy--explicit-generalized-vars . (,var (car ,val-holder)))
+    (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
+                                             ,val-holder)))
+    (loopy--pre-conditions . (consp ,val-holder))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command &optional loop-name)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -435,41 +464,11 @@ Optionally, take LOOP-NAME for early exiting."
          (mapc #'push-instruction
                (loopy--parse-cons-command command)))
 
-        (`(list ,var ,val . ,func)
-         (let ((val-holder (gensym))
-               ;; The function argument may or may not be quoted. We need it
-               ;; to be unquoted for the syntax to work.
-               ;; E.g., "(#'cdr val-holder)" won't work.
-               (actual-func (cond
-                             ((null func)
-                              'cdr)
-                             ((and (consp (car func))
-                                   (memq (caar func) '(quote function)))
-                              (eval (car func)))
-                             (t (car func)))))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-           (push-instruction `(loopy--explicit-vars . (,var nil)))
-           (push-instruction `(loopy--main-body
-                              . (setq ,var (car ,val-holder))))
-           (push-instruction `(loopy--latter-body
-                              . (setq ,val-holder (,actual-func ,val-holder))))
-           (push-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
+        (`(list . ,rest)
+         (mapc #'push-instruction (loopy--parse-list-command command)))
 
-        ((or `(list-ref ,var ,list . ,func) `(listf ,var ,list . ,func))
-         (let ((val-holder (gensym))
-               (actual-func (cond
-                             ((null func)
-                              'cdr)
-                             ((and (consp (car func))
-                                   (memq (caar func) '(quote function)))
-                              (eval (car func)))
-                             (t (car func)))))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,list)))
-           (push-instruction `(loopy--explicit-generalized-vars
-                              . (,var (car ,val-holder))))
-           (push-instruction `(loopy--latter-body
-                              . (setq ,val-holder (,actual-func ,val-holder))))
-           (push-instruction `(loopy--pre-conditions . (consp ,val-holder)))))
+        ((or `(list-ref . ,rest) `(listf . ,rest))
+         (mapc #'push-instruction (loopy--parse-list-ref-command command)))
 
         (`(repeat ,count)
          (let ((val-holder (gensym)))
