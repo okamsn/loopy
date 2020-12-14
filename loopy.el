@@ -431,6 +431,23 @@ the list."
                                              ,val-holder)))
     (loopy--pre-conditions . (consp ,val-holder))))
 
+(cl-defun loopy--parse-repeat-command ((name var-or-count &optional count))
+  "Parse the `repeat' loop command.
+
+The command can be of the form (repeat VAR  COUNT) or (repeat COUNT).
+
+NAME is the name of the command.  VAR-OR-COUNT is a variable name
+or an integer.  Optional COUNT is an integer, to be used if a
+variable name is provided."
+  (if count
+      `((loopy--implicit-vars . (,var-or-count 0))
+        (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
+        (loopy--pre-conditions . (< ,var-or-count ,count)))
+    (let ((value-holder (gensym)))
+      `((loopy--implicit-vars . (,value-holder 0))
+        (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
+        (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -472,16 +489,8 @@ Some commands use specific parsing functions, which are called by
         ((or `(list-ref . ,rest) `(listf . ,rest))
          (mapc #'push-instruction (loopy--parse-list-ref-command command)))
 
-        (`(repeat ,count)
-         (let ((val-holder (gensym)))
-           (push-instruction `(loopy--implicit-vars . (,val-holder 0)))
-           (push-instruction `(loopy--latter-body . (cl-incf ,val-holder)))
-           (push-instruction `(loopy--pre-conditions . (< ,val-holder ,count)))))
-
-        (`(repeat ,var ,count)
-         (push-instruction `(loopy--implicit-vars . (,var 0)))
-         (push-instruction `(loopy--latter-body . (cl-incf ,var)))
-         (push-instruction `(loopy--pre-conditions . (< ,var ,count))))
+        (`(repeat . ,rest)
+         (mapc #'push-instruction (loopy--parse-repeat-command command)))
 
         (`(seq ,var ,val)
          ;; Note: `cl-loop' just combines the logic for lists and arrays, and
