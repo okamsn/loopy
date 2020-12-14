@@ -131,11 +131,18 @@ These run in a `progn'.")
   "Whether a skip/continue command is present in the loop  main body.")
 
 ;;;; Errors
-(define-error 'loopy-form
-  "Loopy: Bad form"
+(define-error 'loopy-error
+  "Error in `loopy' macro")
+
+(define-error 'loopy-unknown-command
+  "Loopy: Unknown command"
   'loopy-error)
 
-(define-error 'loopy-command-arguments
+(define-error 'loopy-wrong-number-of-command-arguments
+  "Loopy: Wrong number of command arguments"
+  '(loopy-error wrong-number-of-arguments))
+
+(define-error 'loopy-bad-command-arguments
   "Loopy: Bad command arguments"
   'loopy-error)
 
