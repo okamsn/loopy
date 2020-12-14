@@ -43,7 +43,12 @@
 (require 'subr-x)
 
 ;;;; Important Variables
-;; These are only ever set locally.
+;; These only set in the `loopy' macro, but that might change in the future.  It
+;; might be cleaner code to modify from the parsing function, after the macro
+;; has already set them to nil.
+
+(defvar loopy--loop-name nil
+  "A symbol that names the loop, appropriate for use in `cl-block'.")
 
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
@@ -420,13 +425,11 @@ the list."
     (loopy--pre-conditions . (consp ,val-holder))))
 
 ;; TODO: Break this up into smaller functions.
-(defun loopy--parse-loop-command (command &optional loop-name)
+(defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
 
 Some commands use specific parsing functions, which are called by
-`loopy--parse-loop-command' (this function) as needed.
-
-Optionally, take LOOP-NAME for early exiting."
+`loopy--parse-loop-command' (this function) as needed."
   (let (instructions)
     (cl-flet ((push-instruction (instr) (push instr instructions)))
       (pcase command
@@ -526,11 +529,11 @@ Optionally, take LOOP-NAME for early exiting."
          (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
          (push-instruction '(loopy--skip-used . t)))
         (`(return ,val)
-         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val))))
+         (push-instruction `(loopy--main-body . (cl-return-from ,loopy--loop-name ,val))))
         (`(return-from ,name ,val)
          (push-instruction `(loopy--main-body . (cl-return-from ,name ,val))))
         ((or '(leave) '(break))
-         (push-instruction `(loopy--main-body . (cl-return-from ,loop-name nil))))
+         (push-instruction `(loopy--main-body . (cl-return-from ,loopy--loop-name nil))))
         ((or `(leave-from ,name) `(break-from ,name))
          (push-instruction `(loopy--main-body . (cl-return-from ,name nil))))
 
@@ -577,10 +580,10 @@ Optionally, take LOOP-NAME for early exiting."
            (error "Loopy: This command unknown: %s" command)))))
     (nreverse instructions)))
 
-(defun loopy--parse-loop-commands (command-list &optional loop-name)
+(defun loopy--parse-loop-commands (command-list)
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
-COMMAND-LIST.  Optionally needs LOOP-NAME for block returns."
+COMMAND-LIST."
   (let (instructions)
     (dolist (command command-list instructions)
       (setq instructions (append instructions
@@ -617,14 +620,14 @@ Returns are always explicit.  See this package's README for more information."
                    ([&or "finally-do" "finally-progn"] body)
                    ([&or "finally-return" "return"] form &optional [&rest form]))))
   (let (;; -- Top-level expressions other than loop body --
-        (loopy--name-arg)
+        (loopy--loop-name)
         (loopy--with-vars)
         (loopy--before-do)
         (loopy--after-do)
         (loopy--final-do)
         (loopy--final-return)
 
-        ;; -- Vars for processing loop clauses --
+        ;; -- Vars for processing loop commands --
         (loopy--implicit-vars)
         (loopy--explicit-vars)
         (loopy--explicit-generalized-vars)
@@ -641,7 +644,7 @@ Returns are always explicit.  See this package's README for more information."
     (dolist (arg body)
       (cond
        ((symbolp arg)
-        (setq loopy--name-arg arg))
+        (setq loopy--loop-name arg))
        ((memq (car-safe arg) '(with let*))
         (setq loopy--with-vars (cdr arg)))
        ((memq (car-safe arg) '(before-do before))
@@ -662,8 +665,7 @@ Returns are always explicit.  See this package's README for more information."
         (dolist (instruction (loopy--parse-loop-commands
                               (if (eq (car-safe arg) 'loop)
                                   (cdr arg)
-                                arg)
-                              loopy--name-arg))
+                                arg)))
           ;; Do it this way instead of with `set', cause was getting errors
           ;; about void variables.
           (cl-case (car instruction)
@@ -719,7 +721,7 @@ Returns are always explicit.  See this package's README for more information."
     ;;        ;; If we need to, capture early return, those that has less
     ;;        ;; priority than a final return.
     ;;        (let ((loopy--early-return-capture
-    ;;               (cl-block ,loopy--name-arg
+    ;;               (cl-block ,loopy--loop-name
     ;;                 ,@loopy--before-do
     ;;                 (while ,(cl-case (length loopy--pre-conditions)
     ;;                           (0 t)
@@ -769,7 +771,7 @@ Returns are always explicit.  See this package's README for more information."
                                      (0 t)
                                      (1 (car loopy--post-conditions))
                                      (t (cons 'and loopy--post-conditions)))
-                            (cl-return-from ,loopy--name-arg nil))))))
+                            (cl-return-from ,loopy--loop-name nil))))))
 
         ;; Now wrap loop body in the `while' form.
         (setq result `(while ,(cl-case (length loopy--pre-conditions)
@@ -800,7 +802,7 @@ Returns are always explicit.  See this package's README for more information."
         ;; `cl-return-from'.  For example, it's possible that a user is using a
         ;; loop to change variables, and they might wish to stop changing things
         ;; at a certain point.
-        (setq result `(cl-block ,loopy--name-arg
+        (setq result `(cl-block ,loopy--loop-name
                         ,@(get-result)
                         ;; Be sure that the `cl-block' defaults to returning
                         ;; nil.  This can be overridden by any call to
