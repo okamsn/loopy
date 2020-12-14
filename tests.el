@@ -347,13 +347,15 @@ Not multiple of 3: 7")))
 ;;                                      ((= b 2) (cl-return-from nil 5)))))))
 
 (ert-deftest cond ()
-  (should (equal (eval (quote (loopy ((list i (number-sequence 1 10))
-                                      (cond
-                                       ((cl-evenp i)
-                                        (push-into evens i))
-                                       (t (push-into odds i))))
-                                     (finally-return (list evens odds)))))
-                 '((10 8 6 4 2) (9 7 5 3 1)))))
+  (should (equal (eval
+                  (quote
+                   (loopy ((list i (number-sequence 0 5))
+                           (cond ((cl-evenp i)
+                                  (push-into evens i)
+                                  (push-into holding-list evens))
+                                 (t (push-into odds i))))
+                          (finally-return (list evens odds holding-list)))))
+                 '((4 2 0) (5 3 1) ((4 2 0) (2 0) (0))))))
 
 ;;;; Exiting the Loop Early
 ;;;;; Leave
