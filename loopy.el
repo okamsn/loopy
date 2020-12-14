@@ -249,28 +249,29 @@ This uses the command name (such as `list' in `(list i my-list)')."
     ;; Return the list of instructions.
     full-instructions))
 
-(defun loopy--parse-cond-form (forms &optional loop-name)
-  "Parse FORMS where the `car' is a condition.  Use COND forms for IF-ELSE.
-Optionally needs LOOP-NAME for block returns.
-Wrapped forms are things that would occur in the loop body, including returns.
+(cl-defun loopy--parse-cond-command ((name &rest clauses))
+  "Parse the `cond' command.  This works like the `cond' special form.
 
-This takes the `cdr' of the COND form (i.e., doesn't start with \"cond\")."
-  (let ((full-instructions)
-        (cond-body))
-    (dolist (cond-and-body forms)
-      (let ((condition (car cond-and-body))
-            (sub-instructions (loopy--parse-loop-commands (cdr cond-and-body)
-                                                          loop-name))
-            (instructions-for-wrapping))
-        (dolist (instruction sub-instructions)
-          (cl-case (car instruction)
-            (loopy--main-body
-             (push (cdr instruction) instructions-for-wrapping))
-            (t (push instruction full-instructions))))
-        (push (cons condition instructions-for-wrapping)
-              cond-body)))
-    (push `(loopy--main-body . ,(cons 'cond (nreverse cond-body))) full-instructions)
-    full-instructions))
+NAME is the name of the command.  CLAUSES are lists of a Lisp
+expression followed by one or more loop commands.
+
+The Lisp expression and the loopy-body instructions from each
+command are inserted into a `cond' special form."
+  (let (full-instructions actual-cond-clauses)
+    (dolist (clause clauses)
+      (let ((instructions (loopy--parse-loop-commands (cl-rest clause)))
+            clause-body)
+        (dolist (instruction instructions)
+          (if (eq (car instruction) 'loopy--main-body)
+              (push (cdr instruction) clause-body)
+            (push instruction full-instructions)))
+        ;; Create a list of the condition and the loop-body code.
+        (push (cons (cl-first clause) (nreverse clause-body))
+              actual-cond-clauses)))
+    ;; Wrap the `actual-cond-clauses' in a `cond' special form, and return all
+    ;; instructions.
+    (cons `(loopy--main-body . ,(cons 'cond (nreverse actual-cond-clauses)))
+          full-instructions)))
 
 (cl-defun loopy--parse-early-exit-commands ((name &rest args))
   "Parse `return', `return-from', `leave', and `leave-from' commands."
@@ -517,8 +518,8 @@ Optionally, take LOOP-NAME for early exiting."
         (`(if . ,rest)
          (mapc #'push-instruction (loopy--parse-if-command command)))
 
-        (`(cond . ,body)
-         (mapc #'push-instruction (loopy--parse-cond-form body loop-name)))
+        (`(cond . ,rest)
+         (mapc #'push-instruction (loopy--parse-cond-command command)))
 
 ;;;;; Exit and Return Clauses
         ((or '(skip) '(continue))
