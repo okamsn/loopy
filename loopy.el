@@ -523,7 +523,8 @@ Optionally, take LOOP-NAME for early exiting."
 
 ;;;;; Exit and Return Clauses
         ((or '(skip) '(continue))
-         (push-instruction '(loopy--main-body . (go loopy--continue-tag))))
+         (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
+         (push-instruction '(loopy--skip-used . t)))
         (`(return ,val)
          (push-instruction `(loopy--main-body . (cl-return-from ,loop-name ,val))))
         (`(return-from ,name ,val)
