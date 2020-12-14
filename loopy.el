@@ -448,6 +448,37 @@ variable name is provided."
         (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
+(cl-defun loopy--parse-seq-command
+    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+  "Parse the `seq' loop command.
+
+NAME is the name of the command.  VAR is a variable name.  VAL is
+a sequence value."
+  ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
+  ;;       just checks the type for each iteration, so we do that too.
+  `((loopy--implicit-vars . (,value-holder ,val))
+    (loopy--implicit-vars . (,index-holder 0))
+    (loopy--explicit-vars . (,var nil))
+    (loopy--main-body     . (setq ,var (if (consp ,value-holder)
+                                           (pop ,value-holder)
+                                         (aref ,value-holder ,index-holder))))
+    (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
+    (loopy--pre-conditions
+     . (and ,value-holder (or (consp ,value-holder)
+                              (< ,index-holder (length ,value-holder)))))))
+
+(cl-defun loopy--parse-seq-ref-command
+    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+  "Parse the `seq-ref' loop command.
+
+NAME is the name of the command.  VAR is a variable name.  VAL is
+a sequence value."
+  `((loopy--implicit-vars . (,value-holder ,val))
+    (loopy--implicit-vars . (,index-holder 0))
+    (loopy--explicit-generalized-vars . (,var (elt ,value-holder ,index-holder)))
+    (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
+    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -492,40 +523,11 @@ Some commands use specific parsing functions, which are called by
         (`(repeat . ,rest)
          (mapc #'push-instruction (loopy--parse-repeat-command command)))
 
-        (`(seq ,var ,val)
-         ;; Note: `cl-loop' just combines the logic for lists and arrays, and
-         ;;       just checks the type for each iteration, so we do that too.
-         (let ((val-holder (gensym))
-               (index-holder (gensym)))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
-           (push-instruction `(loopy--explicit-vars . (,var nil)))
-           (push-instruction
-            `(loopy--main-body . (setq ,var
-                                       (if (consp ,val-holder)
-                                           (pop ,val-holder)
-                                         (aref ,val-holder ,index-holder)))))
-           (push-instruction
-            `(loopy--latter-body . (setq ,index-holder (1+ ,index-holder))))
-           (push-instruction `(loopy--pre-conditions
-                               . (and ,val-holder
-                                      (or (consp ,val-holder)
-                                          (< ,index-holder
-                                             (length ,val-holder))))))))
+        (`(seq . ,rest)
+         (mapc #'push-instruction (loopy--parse-seq-command command)))
 
-        ((or `(seq-ref ,var ,val) `(seqf ,var ,val))
-         (let ((val-holder (gensym))
-               (index-holder (gensym)))
-           (push-instruction `(loopy--implicit-vars . (,val-holder ,val)))
-           (push-instruction `(loopy--implicit-vars . (,index-holder 0)))
-           (push-instruction `(loopy--explicit-generalized-vars
-                               . (,var (elt ,val-holder ,index-holder))))
-           (push-instruction `(loopy--latter-body
-                               . (setq ,index-holder (1+ ,index-holder))))
-           ;; TODO: Length of sequence not changing, so don't have to
-           ;;       recompute each time.
-           (push-instruction `(loopy--pre-conditions
-                               . (< ,index-holder (length ,val-holder))))))
+        ((or `(seq-ref . ,rest) `(seqf . ,rest))
+         (mapc #'push-instruction (loopy--parse-seq-ref-command command)))
 
 ;;;;; Conditional Body Forms
         ;; Since these can contain other commands/clauses, it's easier if they
