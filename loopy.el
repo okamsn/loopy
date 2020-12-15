@@ -554,91 +554,70 @@ a loop name, a return value, or a list of both."
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
 
-Some commands use specific parsing functions, which are called by
-`loopy--parse-loop-command' (this function) as needed."
-  (let (instructions)
-    (cl-flet ((push-instruction (instr) (push instr instructions)))
-      (pcase command
-;;;;; Generic body clauses
-        ;; A DO form for a generic lisp body. Not searched for special forms.
-        ((or `(do . ,rest) `(progn . ,rest))
-         (mapc #'push-instruction (loopy--parse-do-command command)))
-        ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
-             `(set ,var . ,rest))
-         (mapc #'push-instruction (loopy--parse-expr-command command)))
+This function gets the parser, and passes the command to that parser."
+  (let ((parser (loopy--get-command-parser command)))
+    (if-let ((instructions (funcall parser command)))
+        instructions
+      (error "Loopy: No instructions returned by command parser: %s"
+             parser))))
 
-;;;;; Iteration Clauses
-        ;; TODO:
-        ;; - obarrays?
-        ;; - key-codes/key-bindings and key-seqs?
-        ;; - overlays?
-        ;; - intervals of constant text properties?
-        (`(array . ,rest)
-         (mapc #'push-instruction (loopy--parse-array-command command)))
+(defun loopy--get-command-parser (command)
+  "Get the parsing function for COMMAND, based on the command name.
 
-        ((or `(arrayf ,var ,val) `(array-ref ,var ,val))
-         (mapc #'push-instruction (loopy--parse-array-ref-command command)))
+First check in `loopy--builtin-command-parsers', then
+`loopy-custom-command-parsers'."
 
-        ((or `(cons . ,rest) `(conses . ,rest))
-         (mapc #'push-instruction
-               (loopy--parse-cons-command command)))
-
-        (`(list . ,rest)
-         (mapc #'push-instruction (loopy--parse-list-command command)))
-
-        ((or `(list-ref . ,rest) `(listf . ,rest))
-         (mapc #'push-instruction (loopy--parse-list-ref-command command)))
-
-        (`(repeat . ,rest)
-         (mapc #'push-instruction (loopy--parse-repeat-command command)))
-
-        (`(seq . ,rest)
-         (mapc #'push-instruction (loopy--parse-seq-command command)))
-
-        ((or `(seq-ref . ,rest) `(seqf . ,rest))
-         (mapc #'push-instruction (loopy--parse-seq-ref-command command)))
-
-;;;;; Conditional Body Forms
-        ;; Since these can contain other commands/clauses, it's easier if they
-        ;; have their own parsing functions, which call back into this one to
-        ;; parse sub-clauses.
-        ((or `(when . ,rest) `(unless . ,rest))
-         (mapc #'push-instruction (loopy--parse-when-unless-command command)))
-
-        (`(if . ,rest)
-         (mapc #'push-instruction (loopy--parse-if-command command)))
-
-        (`(cond . ,rest)
-         (mapc #'push-instruction (loopy--parse-cond-command command)))
-
-;;;;; Exit and Return Clauses
-        ((or '(skip) '(continue))
-         (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
-         (push-instruction '(loopy--skip-used . t)))
-        ((guard (memq (car command) '(return return-from leave leave-from)))
-         (mapc #'push-instruction (loopy--parse-early-exit-commands command)))
-
-;;;;; Accumulation Clauses
-        ((guard (memq (car command) '(append collect concat vconcat
-                                             count max maximize min minimize nconc
-                                             push-into push sum)))
-         (mapc #'push-instruction (loopy--parse-accumulation-comands command)))
-
-;;;;; Custom commands
-        (_
-         (if-let ((command-parser (loopy--get-custom-command-parser command)))
-             (if-let ((custom-instructions (funcall command-parser command)))
-                 (mapc #'push-instruction custom-instructions)
-               (error "Loopy: No instructions returned by command parser: %s"
-                      command-parser))
-           (error "Loopy: This command unknown: %s" command)))))
-    (nreverse instructions)))
+  (or (alist-get (car command) loopy--builtin-command-parsers)
+      (alist-get (car command) loopy-custom-command-parsers)
+      (signal 'loopy-unknown-command command)))
 
 (defun loopy--parse-loop-commands (command-list)
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
 COMMAND-LIST."
   (mapcan #'loopy--parse-loop-command command-list))
+
+;; TODO: Is there a cleaner way than this?  Symbol properties?
+(defconst loopy--builtin-command-parsers
+  ;; A few of these are just aliases.
+  '((append      . loopy--parse-accumulation-comands)
+    (array       . loopy--parse-array-command)
+    (array-ref   . loopy--parse-array-ref-command)
+    (arrayf      . loopy--parse-array-ref-command)
+    (collect     . loopy--parse-accumulation-comands)
+    (concat      . loopy--parse-accumulation-comands)
+    (cond        . loopy--parse-cond-command)
+    (cons        . loopy--parse-cons-command)
+    (conses      . loopy--parse-cons-command)
+    (continue    . loopy--parse-skip-command)
+    (count       . loopy--parse-accumulation-comands)
+    (do          . loopy--parse-do-command)
+    (expr        . loopy--parse-expr-command)
+    (if          . loopy--parse-if-command)
+    (leave       . loopy--parse-early-exit-commands)
+    (leave-from  . loopy--parse-early-exit-commands)
+    (list        . loopy--parse-list-command)
+    (list-ref    . loopy--parse-list-ref-command)
+    (max         . loopy--parse-accumulation-comands)
+    (maximize    . loopy--parse-accumulation-comands)
+    (min         . loopy--parse-accumulation-comands)
+    (minimize    . loopy--parse-accumulation-comands)
+    (nconc       . loopy--parse-accumulation-comands)
+    (progn       . loopy--parse-do-command)
+    (push        . loopy--parse-accumulation-comands)
+    (push-into   . loopy--parse-accumulation-comands)
+    (repeat      . loopy--parse-repeat-command)
+    (return      . loopy--parse-early-exit-commands)
+    (return-from . loopy--parse-early-exit-commands)
+    (seq         . loopy--parse-seq-command)
+    (seq-ref     . loopy--parse-seq-ref-command)
+    (seqf        . loopy--parse-seq-ref-command)
+    (skip        . loopy--parse-skip-command)
+    (sum         . loopy--parse-accumulation-comands)
+    (unless      . loopy--parse-when-unless-command)
+    (vconcat     . loopy--parse-accumulation-comands)
+    (when        . loopy--parse-when-unless-command))
+  "An alist of pairs of command names and built-in parser functions.")
 
 ;;;; The Macro Itself
 ;;;###autoload
