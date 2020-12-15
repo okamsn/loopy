@@ -172,6 +172,12 @@ expansion, we generally only want the actual symbol."
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
 
+(defun loopy--create-as-nil (place &rest vars)
+  "Return a pair of a variable name and nil for each name in VARS.
+
+This is to simplify creating instructions for PLACE."
+  (mapcar (lambda (var) (cons place `(,var nil))) vars))
+
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
   "A looping macro similar to `cl-loop'."
