@@ -412,16 +412,41 @@ VAR (default `cdr')."
     ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
   "Parse the `list' loop command.
 
-NAME is the command name.  VAR is a variable name.  VAL is a list
-value.  FUNC is a function used to update VAL (default `cdr').
-VAL-HOLDER is a variable name that holds the list."
-  `((loopy--implicit-vars . (,val-holder ,val))
-    (loopy--explicit-vars . (,var nil))
-    (loopy--main-body
-     . (setq ,var (car ,val-holder)))
-    (loopy--latter-body
-     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
-    (loopy--pre-conditions . (consp ,val-holder))))
+NAME is the command name.  VAR is a variable name or a list of
+such names (dotted pair or normal).  VAL is a list value.  FUNC
+is a function used to update VAL (default `cdr').  VAL-HOLDER is
+a variable name that holds the list."
+  (let ((instructions
+         `((loopy--implicit-vars . (,val-holder ,val))
+           (loopy--latter-body
+            . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
+           (loopy--pre-conditions . (consp ,val-holder)))))
+    (if (nlistp var)
+        (cl-return-from loopy--parse-list-command
+          (append instructions
+                  `((loopy--explicit-vars . (,var nil))
+                    (loopy--main-body . (setq ,var (car ,val-holder))))))
+      (if (consp (cdr var))
+          (cl-return-from loopy--parse-list-command
+            (append instructions
+                    (apply #'loopy--create-as-nil 'loopy--explicit-vars var)
+                    `((loopy--main-body
+                       . (setq
+                          ,@(cl-mapcan (lambda (symbol index)
+                                         `(,symbol (nth ,index
+                                                        (car ,val-holder))))
+                                       var
+                                       (number-sequence 0 (length var))))))))
+        (let ((first (cl-first var))
+              (rest  (cl-rest var)))
+          (cl-return-from loopy--parse-list-command
+            (append instructions
+                    (loopy--create-as-nil 'loopy--explicit-vars first rest)
+                    `(;; NOTE: The `pop' method seems to be used by `cl-loop',
+                      ;;       instead of `caar' and `cdar'.  Maybe because it
+                      ;;       is more generic?
+                      (loopy--main-body     . (setq ,rest (car ,val-holder)))
+                      (loopy--main-body     . (setq ,first (pop ,rest)))))))))))
 
 (cl-defun loopy--parse-list-ref-command
     ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))

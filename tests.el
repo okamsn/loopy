@@ -163,6 +163,20 @@
                                    ;; (after-do (cl-return i))
                                    (finally-return i)))))))
 
+(ert-deftest list-destructuring ()
+  (should (and (equal '(5 6)
+                       (eval (quote (loopy ((list (a . b)
+                                                  '((1 . 2) (3 . 4) (5 . 6))))
+                                           (finally-return a b)))))
+               (equal '(5 (6))
+                       (eval (quote (loopy ((list (a . b)
+                                                  '((1 2) (3 4) (5 6))))
+                                           (finally-return a b)))))
+               (equal '(4 5 6)
+                       (eval (quote (loopy ((list (a b c)
+                                                  '((1 2 3) (4 5 6))))
+                                           (finally-return a b c))))))))
+
 ;;;; List Ref
 (ert-deftest list-ref ()
   (should (equal  '(7 7 7)
