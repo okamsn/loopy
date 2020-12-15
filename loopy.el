@@ -482,10 +482,10 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   ;;       just checks the type for each iteration, so we do that too.
   `((loopy--implicit-vars . (,value-holder ,val))
     (loopy--implicit-vars . (,index-holder 0))
-    (loopy--explicit-vars . (,var nil))
-    (loopy--main-body     . (setq ,var (if (consp ,value-holder)
-                                           (pop ,value-holder)
-                                         (aref ,value-holder ,index-holder))))
+    ,@(loopy--create-destructured-assignment
+       var `(if (consp ,value-holder)
+                (pop ,value-holder)
+              (aref ,value-holder ,index-holder)))
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions
      . (and ,value-holder (or (consp ,value-holder)
