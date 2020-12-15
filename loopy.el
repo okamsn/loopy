@@ -323,6 +323,14 @@ command are inserted into a `cond' special form."
     (cons `(loopy--main-body . ,(cons 'cond (nreverse actual-cond-clauses)))
           full-instructions)))
 
+(cl-defun loopy--parse-do-command ((_ &rest expressions))
+  "Parse the `do' loop command.
+
+Expressions are normal Lisp expressions, which are inserted into
+the loop literally (not even in a `progn')."
+  (mapcar (lambda (expr) (cons 'loopy--main-body expr))
+          expressions))
+
 (cl-defun loopy--parse-expr-command ((_ var &rest vals))
   "Parse the `expr' command.
 
@@ -548,10 +556,8 @@ Some commands use specific parsing functions, which are called by
       (pcase command
 ;;;;; Generic body clauses
         ;; A DO form for a generic lisp body. Not searched for special forms.
-        ((or `(do . ,body) `(progn . ,body))
-         (if (= 1 (length body))
-             (push-instruction `(loopy--main-body . ,(car body)))
-           (push-instruction `(loopy--main-body . (progn ,@body)))))
+        ((or `(do . ,rest) `(progn . ,rest))
+         (mapc #'push-instruction (loopy--parse-do-command command)))
         ((or `(expr ,var . ,rest) `(exprs ,var . ,rest)
              `(set ,var . ,rest))
          (mapc #'push-instruction (loopy--parse-expr-command command)))

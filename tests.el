@@ -78,10 +78,13 @@
 ;;;;; Do
 (ert-deftest do ()
   (should
-   (eval (quote (loopy (with (my-val nil))
-                       (loop (do (setq my-val t))
-                             (leave))
-                       (finally-return my-val))))))
+   (equal '(t nil)
+           (eval (quote (loopy (with (my-val nil)
+                                     (this-nil? t))
+                               (loop (do (setq my-val t)
+                                         (setq this-nil? (not my-val)))
+                                     (leave))
+                               (finally-return my-val this-nil?)))))))
 
 ;;;;; Expr
 (ert-deftest expr-one-value ()
