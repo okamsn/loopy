@@ -483,7 +483,8 @@ an integer, to be used if a variable name is provided."
     ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `seq' loop command.
 
-VAR is a variable name.  VAL is a sequence value."
+VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
+holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
   ;;       just checks the type for each iteration, so we do that too.
   `((loopy--implicit-vars . (,value-holder ,val))
@@ -501,7 +502,8 @@ VAR is a variable name.  VAL is a sequence value."
     ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `seq-ref' loop command.
 
-VAR is a variable name.  VAL is a sequence value."
+VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
+holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   `((loopy--implicit-vars . (,value-holder ,val))
     (loopy--implicit-vars . (,index-holder 0))
     (loopy--explicit-generalized-vars . (,var (elt ,value-holder ,index-holder)))
