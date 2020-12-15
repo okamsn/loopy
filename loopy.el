@@ -146,7 +146,7 @@ These run in a `progn'.")
   "Loopy: Bad command arguments"
   'loopy-error)
 
-;;;; Miscellaneous Functions
+;;;; Miscellaneous and Utility Functions
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
 
@@ -177,6 +177,39 @@ expansion, we generally only want the actual symbol."
 
 This is to simplify creating instructions for PLACE."
   (mapcar (lambda (var) (cons place `(,var nil))) vars))
+
+(defun loopy--create-destructured-assignment (var value-expression)
+  "If needed, use destructuring to initialize and assign to variables.
+
+VAR is a symbol for a variable name, or a list of such
+symbols (as a dotted pair or as a normal list).  VALUE-EXPRESSION is the
+value expression to be assigned and maybe destructured, such as an
+expression meaning the head of a list or an element in an array."
+  (cond
+   ;; Check if `var' is a single symbol.
+   ((nlistp var)
+    `((loopy--main-body     . (setq ,var ,value-expression))
+      (loopy--explicit-vars . (,var nil))))
+   ;; Check if `var' is a normal list.
+   ((consp (cdr var))
+    (cons `(loopy--main-body
+            ;; Create just a single `setq' call.
+            . (setq
+               ,@(cl-mapcan (lambda (symbol index)
+                              `(,symbol (nth ,index ,value-expression)))
+                            var
+                            (number-sequence 0 (length var)))))
+          (apply #'loopy--create-as-nil 'loopy--explicit-vars var)))
+   ;; Check if `var' is a dotted pair.
+   (t
+    (let ((first (cl-first var))
+          (rest  (cl-rest var)))
+      ;; NOTE: The `pop' method seems to be used by `cl-loop',
+      ;;       instead of `caar' and `cdar'.  Maybe because it
+      ;;       is more generic?
+      (cons `(loopy--main-body     . (setq ,rest ,value-expression
+                                           ,first (pop ,rest)))
+            (loopy--create-as-nil 'loopy--explicit-vars first rest))))))
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
@@ -416,37 +449,11 @@ NAME is the command name.  VAR is a variable name or a list of
 such names (dotted pair or normal).  VAL is a list value.  FUNC
 is a function used to update VAL (default `cdr').  VAL-HOLDER is
 a variable name that holds the list."
-  (let ((instructions
-         `((loopy--implicit-vars . (,val-holder ,val))
-           (loopy--latter-body
-            . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
-           (loopy--pre-conditions . (consp ,val-holder)))))
-    (if (nlistp var)
-        (cl-return-from loopy--parse-list-command
-          (append instructions
-                  `((loopy--explicit-vars . (,var nil))
-                    (loopy--main-body . (setq ,var (car ,val-holder))))))
-      (if (consp (cdr var))
-          (cl-return-from loopy--parse-list-command
-            (append instructions
-                    (apply #'loopy--create-as-nil 'loopy--explicit-vars var)
-                    `((loopy--main-body
-                       . (setq
-                          ,@(cl-mapcan (lambda (symbol index)
-                                         `(,symbol (nth ,index
-                                                        (car ,val-holder))))
-                                       var
-                                       (number-sequence 0 (length var))))))))
-        (let ((first (cl-first var))
-              (rest  (cl-rest var)))
-          (cl-return-from loopy--parse-list-command
-            (append instructions
-                    (loopy--create-as-nil 'loopy--explicit-vars first rest)
-                    `(;; NOTE: The `pop' method seems to be used by `cl-loop',
-                      ;;       instead of `caar' and `cdar'.  Maybe because it
-                      ;;       is more generic?
-                      (loopy--main-body     . (setq ,rest (car ,val-holder)))
-                      (loopy--main-body     . (setq ,first (pop ,rest)))))))))))
+  `((loopy--implicit-vars . (,val-holder ,val))
+    (loopy--latter-body
+     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
+    (loopy--pre-conditions . (consp ,val-holder))
+    ,@(loopy--create-destructured-assignment var `(car ,val-holder))))
 
 (cl-defun loopy--parse-list-ref-command
     ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
