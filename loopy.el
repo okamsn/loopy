@@ -443,11 +443,10 @@ the loop literally (not even in a `progn')."
 
 VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
 holds the array value.  INDEX-HOLDER holds the index value."
-  `((loopy--explicit-generalized-vars
-     . (,var (aref ,value-holder ,index-holder)))
+  `(,@(loopy--create-destructured-assignment
+       var `(aref ,value-holder ,index-holder) 'generalized)
     (loopy--implicit-vars  . (,value-holder ,val))
     (loopy--implicit-vars  . (,index-holder 0))
-    (loopy--explicit-vars  . (,var nil))
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 

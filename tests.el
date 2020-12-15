@@ -152,6 +152,22 @@
                                            (do (setf i ?a)))
                                      (return my-str)))))))
 
+
+(ert-deftest array-ref-destructuring ()
+  (should (and (equal [(7 8 9) (7 8 9)]
+                      (eval (quote (loopy (with (my-array [(1 2 3) (4 5 6)]))
+                                          ((array-ref (i j k) my-array)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-array)))))
+               (equal [(7 8 9 10) (7 8 9 10)]
+                      (eval (quote (loopy (with (my-array [(1 2 3 4) (4 5 6 8)]))
+                                          ((array-ref (i j . k) my-array)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-array))))))))
 ;;;; Cons
 (ert-deftest cons ()
   (should
