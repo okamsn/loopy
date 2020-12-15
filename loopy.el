@@ -195,10 +195,19 @@ expression meaning the head of a list or an element in an array."
     (cons `(loopy--main-body
             ;; Create just a single `setq' call.
             . (setq
-               ,@(cl-mapcan (lambda (symbol index)
-                              `(,symbol (nth ,index ,value-expression)))
-                            var
-                            (number-sequence 0 (length var)))))
+               ;; For a list (A B C D):
+               ;; 1. Set D to the `value-expression'.
+               ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
+               ;; 3. Now that D is a list of one element, set D to its
+               ;;    own `car'.
+               ,@(let* ((last-var (car (last var))) ; `last' returns a list.
+                        (set-list (list (list last-var
+                                              value-expression))))
+                   (dolist (symbol (butlast var))
+                     (push (list symbol `(pop ,last-var))
+                           set-list))
+                   (push `(,last-var (car ,last-var)) set-list)
+                   (apply #'append (nreverse set-list)))))
           (apply #'loopy--create-as-nil 'loopy--explicit-vars var)))
    ;; Assume `var' is a dotted pair.
    (t
