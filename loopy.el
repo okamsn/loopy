@@ -545,6 +545,11 @@ a loop name, a return value, or a list of both."
                            ((leave-from break-from)
                             `(cl-return-from ,(cl-first args) nil))))))
 
+(cl-defun loopy--parse-skip-command (_)
+  "Parse the `skip' loop command."
+  '((loopy--skip-used . t)
+    (loopy--main-body . (go loopy--continue-tag))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
