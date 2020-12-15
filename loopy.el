@@ -323,31 +323,6 @@ command are inserted into a `cond' special form."
     (cons `(loopy--main-body . ,(cons 'cond (nreverse actual-cond-clauses)))
           full-instructions)))
 
-(cl-defun loopy--parse-early-exit-commands ((name &rest args))
-  "Parse `return', `return-from', `leave', and `leave-from' commands."
-  ;; Check arguments.
-  (cl-case name
-    ((return leave-from)
-     (unless (= (length args) 1)
-       (signal 'wrong-number-of-arguments (cons name args))))
-    (leave
-     (unless (= (length args) 0)
-       (signal 'wrong-number-of-arguments (cons name args))))
-    (return-from
-     (unless (= (length args) 2)
-       (signal 'wrong-number-of-arguments (cons name args)))))
-  ;; Parse
-  (cl-case name
-    (return
-     `(loopy--main-body . (cl-return-from nil ,(cl-first args))))
-    (return-from
-     `(loopy--main-body
-       . (cl-return-from ,(cl-first args) ,(cl-second args))))
-    ((leave break)
-     `(loopy--main-body . (cl-return-from nil nil)))
-    ((leave-from break-from)
-     `(loopy--main-body . (cl-return-from ,(cl-first args) nil)))))
-
 (cl-defun loopy--parse-expr-command ((_ var &rest vals))
   "Parse the `expr' command.
 
@@ -533,6 +508,35 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                ((push-into push) `(push ,val ,var))
                (sum              `(setq ,var (+ ,var ,val)))))))
 
+(cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
+  "Parse the  `return', `return-from', `leave', and `leave-from' loop commands.
+
+COMMAND is the whole command.  NAME is the command name.  ARGS is
+a loop name, a return value, or a list of both."
+  ;; Check arguments.  Really, the whole reason to have these commands is to not
+  ;; mess the arguments to `cl-return-from' or `cl-return', and to provide a
+  ;; clearer meaning.
+  (cl-case name
+    ((return leave-from)
+     (unless (= (length args) 1)
+       (signal 'loopy-wrong-number-of-arguments command)))
+    (leave
+     (unless (= (length args) 0)
+       (signal 'loopy-wrong-number-of-arguments command)))
+    (return-from
+     (unless (= (length args) 2)
+       (signal 'loopy-wrong-number-of-arguments command))))
+  ;; Parse
+  `((loopy--main-body . ,(cl-case name
+                           (return
+                            `(cl-return-from nil ,(cl-first args)))
+                           (return-from
+                            `(cl-return-from ,(cl-first args) ,(cl-second args)))
+                           ((leave break)
+                            `(cl-return-from nil nil))
+                           ((leave-from break-from)
+                            `(cl-return-from ,(cl-first args) nil))))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -600,14 +604,8 @@ Some commands use specific parsing functions, which are called by
         ((or '(skip) '(continue))
          (push-instruction '(loopy--main-body . (go loopy--continue-tag)))
          (push-instruction '(loopy--skip-used . t)))
-        (`(return ,val)
-         (push-instruction `(loopy--main-body . (cl-return-from ,loopy--loop-name ,val))))
-        (`(return-from ,name ,val)
-         (push-instruction `(loopy--main-body . (cl-return-from ,name ,val))))
-        ((or '(leave) '(break))
-         (push-instruction `(loopy--main-body . (cl-return-from ,loopy--loop-name nil))))
-        ((or `(leave-from ,name) `(break-from ,name))
-         (push-instruction `(loopy--main-body . (cl-return-from ,name nil))))
+        ((guard (memq (car command) '(return return-from leave leave-from)))
+         (mapc #'push-instruction (loopy--parse-early-exit-commands command)))
 
 ;;;;; Accumulation Clauses
         ((guard (memq (car command) '(append collect concat vconcat
