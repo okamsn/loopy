@@ -814,11 +814,7 @@ Returns are always explicit.  See this package's README for more information."
           ;; Need a variable to track whether `result' is currently one
           ;; expression, as that affects how it should be built.  For example,
           ;; `(progn (thing1) (thing2))' vs `((thing1) (thing2))'
-          result-is-one-expression
-          ;; Note whether we're using a `cl-block', which we default to
-          ;; returning `nil'.  If not present, try to ensure that the macro
-          ;; defaults to returning `nil'.
-          using-cl-block)
+          result-is-one-expression)
 
       ;; This temporary function is just for convenience.  Since it checks the
       ;; structure of `result', it should always be used like:
