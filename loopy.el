@@ -266,13 +266,12 @@ This uses the command name (such as `list' in `(list i my-list)')."
           full-instructions)
     full-instructions))
 
-(cl-defun loopy--parse-if-command ((name
+(cl-defun loopy--parse-if-command ((_
                                     condition
                                     &optional if-true
                                     &rest if-false))
   "Parse the `if' loop command.  This takes the entire command.
 
-- NAME is the command name (so `if').
 - CONDITION is a Lisp expression.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
@@ -300,11 +299,11 @@ This uses the command name (such as `list' in `(list i my-list)')."
     ;; Return the list of instructions.
     full-instructions))
 
-(cl-defun loopy--parse-cond-command ((name &rest clauses))
+(cl-defun loopy--parse-cond-command ((_ &rest clauses))
   "Parse the `cond' command.  This works like the `cond' special form.
 
-NAME is the name of the command.  CLAUSES are lists of a Lisp
-expression followed by one or more loop commands.
+CLAUSES are lists of a Lisp expression followed by one or more
+loop commands.
 
 The Lisp expression and the loopy-body instructions from each
 command are inserted into a `cond' special form."
@@ -349,10 +348,9 @@ command are inserted into a `cond' special form."
     ((leave-from break-from)
      `(loopy--main-body . (cl-return-from ,(cl-first args) nil)))))
 
-(cl-defun loopy--parse-expr-command ((name var &rest vals))
+(cl-defun loopy--parse-expr-command ((_ var &rest vals))
   "Parse the `expr' command.
 
-- NAME is the name of the command (so `expr').
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let ((arg-length (length vals))
@@ -401,10 +399,9 @@ command are inserted into a `cond' special form."
              instructions)))))
 
 (cl-defun loopy--parse-array-command
-    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `array' command.
 
-- NAME is the name of the command.
 - VAR is a variable name.
 - VAL is an array value.
 - Optional VALUE-HOLDER holds the array value.
@@ -417,12 +414,11 @@ command are inserted into a `cond' special form."
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
 (cl-defun loopy--parse-array-ref-command
-    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `array-ref' command by editing the `array' command's instructions.
 
-NAME is the name of the command.  VAR is a variable name.  VAL is
-an array value.  VALUE-HOLDER holds the array value.
-INDEX-HOLDER holds the index value."
+VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
+holds the array value.  INDEX-HOLDER holds the index value."
   `((loopy--explicit-generalized-vars
      . (,var (aref ,value-holder ,index-holder)))
     (loopy--implicit-vars  . (,value-holder ,val))
@@ -431,24 +427,23 @@ INDEX-HOLDER holds the index value."
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
-(cl-defun loopy--parse-cons-command ((name var val &optional (func #'cdr)))
+(cl-defun loopy--parse-cons-command ((_ var val &optional (func #'cdr)))
   "Parse the `cons' loop command.
 
-NAME is the name of the command.  VAR is a variable name.  VAL
-is a cons cell value.  Optional FUNC is a function by which to update
-VAR (default `cdr')."
+VAR is a variable name.  VAL is a cons cell value.  Optional FUNC
+is a function by which to update VAR (default `cdr')."
   `((loopy--explicit-vars . (,var ,val))
     (loopy--latter-body . (setq ,var (,(loopy--get-function-symbol func) ,var)))
     (loopy--pre-conditions . (consp ,var))))
 
 (cl-defun loopy--parse-list-command
-    ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym)))
   "Parse the `list' loop command.
 
-NAME is the command name.  VAR is a variable name or a list of
-such names (dotted pair or normal).  VAL is a list value.  FUNC
-is a function used to update VAL (default `cdr').  VAL-HOLDER is
-a variable name that holds the list."
+VAR is a variable name or a list of such names (dotted pair or
+normal).  VAL is a list value.  FUNC is a function used to update
+VAL (default `cdr').  VAL-HOLDER is a variable name that holds
+the list."
   `((loopy--implicit-vars . (,val-holder ,val))
     (loopy--latter-body
      . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
@@ -456,27 +451,25 @@ a variable name that holds the list."
     ,@(loopy--create-destructured-assignment var `(car ,val-holder))))
 
 (cl-defun loopy--parse-list-ref-command
-    ((name var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym)))
   "Parse the `list-ref' loop command, editing the `list' commands instructions.
 
-NAME is the command name.  VAR is the name of a setf-able place.
-VAL is a list value.  FUNC is a function used to update
-VAL (default `cdr').  VAL-HOLDER is a variable name that holds
-the list."
+VAR is the name of a setf-able place.  VAL is a list value.  FUNC
+is a function used to update VAL (default `cdr').  VAL-HOLDER is
+a variable name that holds the list."
   `((loopy--implicit-vars . (,val-holder ,val))
     (loopy--explicit-generalized-vars . (,var (car ,val-holder)))
     (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
                                              ,val-holder)))
     (loopy--pre-conditions . (consp ,val-holder))))
 
-(cl-defun loopy--parse-repeat-command ((name var-or-count &optional count))
+(cl-defun loopy--parse-repeat-command ((_ var-or-count &optional count))
   "Parse the `repeat' loop command.
 
 The command can be of the form (repeat VAR  COUNT) or (repeat COUNT).
 
-NAME is the name of the command.  VAR-OR-COUNT is a variable name
-or an integer.  Optional COUNT is an integer, to be used if a
-variable name is provided."
+VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
+an integer, to be used if a variable name is provided."
   (if count
       `((loopy--implicit-vars . (,var-or-count 0))
         (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
@@ -487,11 +480,10 @@ variable name is provided."
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
 (cl-defun loopy--parse-seq-command
-    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `seq' loop command.
 
-NAME is the name of the command.  VAR is a variable name.  VAL is
-a sequence value."
+VAR is a variable name.  VAL is a sequence value."
   ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
   ;;       just checks the type for each iteration, so we do that too.
   `((loopy--implicit-vars . (,value-holder ,val))
@@ -506,11 +498,10 @@ a sequence value."
                               (< ,index-holder (length ,value-holder)))))))
 
 (cl-defun loopy--parse-seq-ref-command
-    ((name var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
   "Parse the `seq-ref' loop command.
 
-NAME is the name of the command.  VAR is a variable name.  VAL is
-a sequence value."
+VAR is a variable name.  VAL is a sequence value."
   `((loopy--implicit-vars . (,value-holder ,val))
     (loopy--implicit-vars . (,index-holder 0))
     (loopy--explicit-generalized-vars . (,var (elt ,value-holder ,index-holder)))
