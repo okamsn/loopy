@@ -282,6 +282,36 @@
                                                 '((1 2 3 4) (4 5 6 7))))
                                           (finally-return a b c d))))))))
 
+(ert-deftest seq-ref-destructuring ()
+  (should (and (equal [(7 8 9) (7 8 9)]
+                      (eval (quote (loopy (with (my-seq [(1 2 3) (4 5 6)]))
+                                          ((seq-ref (i j k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-seq)))))
+               (equal [(7 8 9 10) (7 8 9 10)]
+                      (eval (quote (loopy (with (my-seq [(1 2 3 4) (4 5 6 8)]))
+                                          ((seq-ref (i j . k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-seq)))))
+               (equal '((7 8 9) (7 8 9))
+                      (eval (quote (loopy (with (my-seq '((1 2 3) (4 5 6))))
+                                          ((seq-ref (i j k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-seq)))))
+               (equal '((7 8 9 10) (7 8 9 10))
+                      (eval (quote (loopy (with (my-seq '((1 2 3 4) (4 5 6 8))))
+                                          ((seq-ref (i j . k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-seq))))))))
+
 ;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should

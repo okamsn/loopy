@@ -529,7 +529,8 @@ VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   `((loopy--implicit-vars . (,value-holder ,val))
     (loopy--implicit-vars . (,index-holder 0))
-    (loopy--explicit-generalized-vars . (,var (elt ,value-holder ,index-holder)))
+    ,@(loopy--create-destructured-assignment
+       var `(elt ,value-holder ,index-holder) 'generalized)
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
