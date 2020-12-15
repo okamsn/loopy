@@ -197,17 +197,24 @@ variable."
        ((nlistp var)
         `((loopy--explicit-generalized-vars . (,var ,value-expression))))
        ;; Check if `var' is a normal list.
-       ((consp (cdr (last var)))
+       ((proper-list-p var)
         (seq-map-indexed (lambda (elt index)
                            (cons 'loopy--explicit-generalized-vars
                                  `(,elt (nth ,index ,value-expression))))
                          var))
        ;; Assume `var' is a list where the last element is a dotted pair.
        (t
-        (let ((first (cl-first var))
-              (rest  (cl-rest var)))
-          `((loopy--explicit-generalized-vars . (,first (car ,value-expression)))
-            (loopy--explicit-generalized-vars . (,rest (cdr ,value-expression)))))))
+        (let ((set-list)
+              (index 0))
+          (while (car-safe var)
+            (push `(loopy--explicit-generalized-vars
+                    . (,(pop var) (nth ,index ,value-expression)))
+                  set-list)
+            (cl-incf index))
+          (push `(loopy--explicit-generalized-vars
+                  . (,var (nthcdr ,index ,value-expression)))
+                set-list)
+          set-list)))
 
     ;; Otherwise assigning normal variables:
     (if (nlistp var)
