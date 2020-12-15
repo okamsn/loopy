@@ -482,7 +482,7 @@ VAR is the name of a setf-able place.  VAL is a list value.  FUNC
 is a function used to update VAL (default `cdr').  VAL-HOLDER is
 a variable name that holds the list."
   `((loopy--implicit-vars . (,val-holder ,val))
-    (loopy--explicit-generalized-vars . (,var (car ,val-holder)))
+    ,@(loopy--create-destructured-assignment var `(car ,val-holder) 'generalized)
     (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
                                              ,val-holder)))
     (loopy--pre-conditions . (consp ,val-holder))))

@@ -202,6 +202,22 @@
                                             (do (setf i 7)))
                                       (return my-list)))))))
 
+(ert-deftest list-ref-destructuring ()
+  (should (and (equal '((7 8 9) (7 8 9))
+                      (eval (quote (loopy (with (my-list '((1 2 3) (4 5 6))))
+                                          ((list-ref (i j k) my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-list)))))
+               (equal '((7 8 9 10) (7 8 9 10))
+                      (eval (quote (loopy (with (my-list '((1 2 3 4) (4 5 6 8))))
+                                          ((list-ref (i j . k) my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-list))))))))
+
 ;;;; Repeat
 (ert-deftest repeat-no-var ()
   (should (= 3 (length (eval (quote (loopy (loop (repeat 3)
