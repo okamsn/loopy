@@ -550,7 +550,6 @@ a loop name, a return value, or a list of both."
   '((loopy--skip-used . t)
     (loopy--main-body . (go loopy--continue-tag))))
 
-;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
 
@@ -561,16 +560,8 @@ This function gets the parser, and passes the command to that parser."
       (error "Loopy: No instructions returned by command parser: %s"
              parser))))
 
-(defun loopy--get-command-parser (command)
-  "Get the parsing function for COMMAND, based on the command name.
-
-First check in `loopy--builtin-command-parsers', then
-`loopy-custom-command-parsers'."
-
-  (or (alist-get (car command) loopy--builtin-command-parsers)
-      (alist-get (car command) loopy-custom-command-parsers)
-      (signal 'loopy-unknown-command command)))
-
+;; TODO: Allow for commands to return single instructions, instead of requiring
+;; list of instructions.
 (defun loopy--parse-loop-commands (command-list)
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
@@ -618,6 +609,16 @@ COMMAND-LIST."
     (vconcat     . loopy--parse-accumulation-comands)
     (when        . loopy--parse-when-unless-command))
   "An alist of pairs of command names and built-in parser functions.")
+
+(defun loopy--get-command-parser (command)
+  "Get the parsing function for COMMAND, based on the command name.
+
+First check in `loopy--builtin-command-parsers', then
+`loopy-custom-command-parsers'."
+
+  (or (alist-get (car command) loopy--builtin-command-parsers)
+      (alist-get (car command) loopy-custom-command-parsers)
+      (signal 'loopy-unknown-command command)))
 
 ;;;; The Macro Itself
 ;;;###autoload
