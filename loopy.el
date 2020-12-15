@@ -510,6 +510,29 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
+(cl-defun loopy--parse-accumulation-comands ((name var val))
+  "Parse the accumulation loop commands, like `collect', `append', etc.
+
+NAME is the name of the command.  VAR is a variable name.  VAL is a value."
+  (list `(loopy--explicit-vars
+          ;;  Not all commands can have the variable initialized to nil.
+          . (,var ,(cl-case name
+                     ((sum count)    0)
+                     ((max maximize) -1.0e+INF)
+                     ((min minimize) +1.0e+INF))))
+        `(loopy--main-body
+          . ,(cl-ecase name
+               (append           `(setq ,var (append  ,var ,val)))
+               (collect          `(setq ,var (append  ,var (list ,val))))
+               (concat           `(setq ,var (concat  ,var ,val)))
+               (vconcat          `(setq ,var (vconcat ,var ,val)))
+               (count            `(if   ,val (setq    ,var (1+ ,var))))
+               ((max maximize)   `(setq ,var (max     ,var ,val)))
+               ((min minimize)   `(setq ,var (min     ,var ,val)))
+               (nconc            `(setq ,var (nconc   ,var ,val)))
+               ((push-into push) `(push ,val ,var))
+               (sum              `(setq ,var (+ ,var ,val)))))))
+
 ;; TODO: Break this up into smaller functions.
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -587,37 +610,10 @@ Some commands use specific parsing functions, which are called by
          (push-instruction `(loopy--main-body . (cl-return-from ,name nil))))
 
 ;;;;; Accumulation Clauses
-        (`(append ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (setq ,var (append ,var ,val)))))
-        (`(collect ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (setq ,var (append ,var
-                                                                   (list ,val))))))
-        (`(concat ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (setq ,var (concat ,var ,val)))))
-        (`(vconcat ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (setq ,var (vconcat ,var ,val)))))
-        (`(count ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var 0)))
-         (push-instruction `(loopy--main-body . (when ,val (cl-incf ,var)))))
-        ((or `(max ,var ,val) `(maximize ,var ,val))
-         (push-instruction `(loopy--explicit-vars . (,var -1.0e+INF)))
-         (push-instruction `(loopy--main-body . (setq ,var (max ,var ,val)))))
-        ((or `(min ,var ,val) `(minimize ,var ,val))
-         (push-instruction `(loopy--explicit-vars . (,var 1.0e+INF)))
-         (push-instruction `(loopy--main-body . (setq ,var (min ,var ,val)))))
-        (`(nconc ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (setq ,var (nconc ,var ,val)))))
-        ((or `(push-into ,var ,val) `(push ,var ,val))
-         (push-instruction `(loopy--explicit-vars . (,var nil)))
-         (push-instruction `(loopy--main-body . (push ,val ,var))))
-        (`(sum ,var ,val)
-         (push-instruction `(loopy--explicit-vars . (,var 0)))
-         (push-instruction `(loopy--main-body . (setq ,var (+ ,var ,val)))))
+        ((guard (memq (car command) '(append collect concat vconcat
+                                             count max maximize min minimize nconc
+                                             push-into push sum)))
+         (mapc #'push-instruction (loopy--parse-accumulation-comands command)))
 
 ;;;;; Custom commands
         (_
