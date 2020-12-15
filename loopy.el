@@ -178,48 +178,69 @@ expansion, we generally only want the actual symbol."
 This is to simplify creating instructions for PLACE."
   (mapcar (lambda (var) (cons place `(,var nil))) vars))
 
-(defun loopy--create-destructured-assignment (var value-expression)
+(defun loopy--create-destructured-assignment
+    (var value-expression &optional generalized)
   "If needed, use destructuring to initialize and assign to variables.
 
 VAR is a symbol for a variable name, or a list of such
-symbols (as a dotted pair or as a normal list).  VALUE-EXPRESSION is the
-value expression to be assigned and maybe destructured, such as an
-expression meaning the head of a list or an element in an array."
-  (cond
-   ;; Check if `var' is a single symbol.
-   ((nlistp var)
-    `((loopy--main-body     . (setq ,var ,value-expression))
-      (loopy--explicit-vars . (,var nil))))
-   ;; Check if `var' is a normal list.
-   ((consp (cdr var))
-    (cons `(loopy--main-body
-            ;; Create just a single `setq' call.
-            . (setq
-               ;; For a list (A B C D):
-               ;; 1. Set D to the `value-expression'.
-               ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
-               ;; 3. Now that D is a list of one element, set D to its
-               ;;    own `car'.
-               ,@(let* ((last-var (car (last var))) ; `last' returns a list.
-                        (set-list (list (list last-var
-                                              value-expression))))
-                   (dolist (symbol (butlast var))
-                     (push (list symbol `(pop ,last-var))
-                           set-list))
-                   (push `(,last-var (car ,last-var)) set-list)
-                   (apply #'append (nreverse set-list)))))
-          (apply #'loopy--create-as-nil 'loopy--explicit-vars var)))
-   ;; Assume `var' is a dotted pair.
-   (t
-    (let ((first (cl-first var))
-          (rest  (cl-rest var)))
-      ;; NOTE: The `pop' method seems to be used by `cl-loop', instead of `caar'
-      ;;       and `cdar'.  Maybe because it is more generic?  Maybe to evaluate
-      ;;       `value-expression' only once (but that currently doesn't apply to
-      ;;       us)?
-      (cons `(loopy--main-body     . (setq ,rest ,value-expression
-                                           ,first (pop ,rest)))
-            (loopy--create-as-nil 'loopy--explicit-vars first rest))))))
+symbols (as a dotted pair or as a normal list).  VALUE-EXPRESSION
+is the value expression to be assigned and maybe destructured,
+such as an expression meaning the head of a list or an element in
+an array.
+
+Optional GENERALIZED means to create a generalized variable in
+`loopy--explicit-generalized-vars'."
+  (if generalized
+      (cond
+       ;; Check if `var' is a single symbol.
+       ((nlistp var)
+        `((loopy--explicit-generalized-vars . (,var ,value-expression))))
+       ;; Check if `var' is a normal list.
+       ((consp (cdr var))
+        (seq-map-indexed (lambda (elt index)
+                           (cons 'loopy--explicit-generalized-vars
+                                 `(,elt (nth ,index ,value-expression))))
+                         var))
+       ;; Assume `var' is a dotted pair.
+       (t
+        (let ((first (cl-first var))
+              (rest  (cl-rest var)))
+          `((loopy--explicit-generalized-vars . (,first (car ,value-expression)))
+            (loopy--explicit-generalized-vars . (,rest (cdr ,value-expression)))))))
+    (cond
+     ;; Check if `var' is a single symbol.
+     ((nlistp var)
+      `((loopy--main-body     . (setq ,var ,value-expression))
+        (loopy--explicit-vars . (,var nil))))
+     ;; Check if `var' is a normal list.
+     ((consp (cdr var))
+      (cons `(loopy--main-body
+              ;; Create just a single `setq' call.
+              . (setq
+                 ;; For a list (A B C D):
+                 ;; 1. Set D to the `value-expression'.
+                 ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
+                 ;; 3. Now that D is a list of one element, set D to its
+                 ;;    own `car'.
+                 ,@(let* ((last-var (car (last var))) ; `last' returns a list.
+                          (set-list (list (list last-var
+                                                value-expression))))
+                     (dolist (symbol (butlast var))
+                       (push (list symbol `(pop ,last-var))
+                             set-list))
+                     (push `(,last-var (car ,last-var)) set-list)
+                     (apply #'append (nreverse set-list)))))
+            (apply #'loopy--create-as-nil 'loopy--explicit-vars var)))
+     ;; Assume `var' is a dotted pair.
+     (t
+      (let ((first (cl-first var))
+            (rest  (cl-rest var)))
+        ;; NOTE: The `pop' method seems to be used by `cl-loop', instead of `caar'
+        ;;       and `cdar'.  Maybe to evaluate `value-expression' only once, but
+        ;;       I'm not sure if that applies to how we're doing it.
+        (cons `(loopy--main-body     . (setq ,rest ,value-expression
+                                             ,first (pop ,rest)))
+              (loopy--create-as-nil 'loopy--explicit-vars first rest)))))))
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
