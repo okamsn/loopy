@@ -629,10 +629,7 @@ Some commands use specific parsing functions, which are called by
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
 COMMAND-LIST."
-  (let (instructions)
-    (dolist (command command-list instructions)
-      (setq instructions (append instructions
-                                 (loopy--parse-loop-command command))))))
+  (mapcan #'loopy--parse-loop-command command-list))
 
 ;;;; The Macro Itself
 ;;;###autoload
