@@ -200,13 +200,14 @@ expression meaning the head of a list or an element in an array."
                             var
                             (number-sequence 0 (length var)))))
           (apply #'loopy--create-as-nil 'loopy--explicit-vars var)))
-   ;; Check if `var' is a dotted pair.
+   ;; Assume `var' is a dotted pair.
    (t
     (let ((first (cl-first var))
           (rest  (cl-rest var)))
-      ;; NOTE: The `pop' method seems to be used by `cl-loop',
-      ;;       instead of `caar' and `cdar'.  Maybe because it
-      ;;       is more generic?
+      ;; NOTE: The `pop' method seems to be used by `cl-loop', instead of `caar'
+      ;;       and `cdar'.  Maybe because it is more generic?  Maybe to evaluate
+      ;;       `value-expression' only once (but that currently doesn't apply to
+      ;;       us)?
       (cons `(loopy--main-body     . (setq ,rest ,value-expression
                                            ,first (pop ,rest)))
             (loopy--create-as-nil 'loopy--explicit-vars first rest))))))
@@ -391,8 +392,8 @@ the loop literally (not even in a `progn')."
 - Optional INDEX-HOLDER holds the index value."
   `((loopy--implicit-vars  . (,value-holder ,val))
     (loopy--implicit-vars  . (,index-holder 0))
-    (loopy--explicit-vars  . (,var nil))
-    (loopy--main-body      . (setq ,var (aref ,value-holder ,index-holder)))
+    ,@(loopy--create-destructured-assignment var
+                                             `(aref ,value-holder ,index-holder))
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 

@@ -130,6 +130,20 @@
                                            (collect coll i))
                                      (return coll)))))))
 
+(ert-deftest array-destructuring ()
+  (should (and (equal '(5 6)
+                      (eval (quote (loopy ((array (a . b)
+                                                  [(1 . 2) (3 . 4) (5 . 6)]))
+                                          (finally-return a b)))))
+               (equal '(5 (6))
+                      (eval (quote (loopy ((array (a . b)
+                                                  [(1 2) (3 4) (5 6)]))
+                                          (finally-return a b)))))
+               (equal '(4 5 6)
+                      (eval (quote (loopy ((array (a b c)
+                                                  [(1 2 3) (4 5 6)]))
+                                          (finally-return a b c))))))))
+
 ;;;;; Array Ref
 (ert-deftest array-ref ()
   (should (equal "aaa"
