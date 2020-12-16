@@ -211,7 +211,12 @@ variable."
              (push `(loopy--explicit-generalized-vars
                      . (,var (nthcdr ,index ,value-expression)))
                    set-list))
-           set-list)))
+           set-list))
+        (array
+         (seq-map-indexed (lambda (symbol index)
+                            `(loopy--explicit-generalized-vars
+                              . (,symbol (aref ,value-expression ,index))))
+                          var)))
 
     ;; Otherwise assigning normal variables:
     (cl-typecase var
@@ -249,7 +254,21 @@ variable."
                                 set-list))
                         (apply #'append (nreverse set-list)))))
                (apply #'loopy--create-as-nil
-                      'loopy--explicit-vars normalized-reverse-var)))))))
+                      'loopy--explicit-vars normalized-reverse-var))))
+      (array
+       (let ((value-holder (gensym)))
+         ;; We need a value holder so that `value-expression' is only evaluated
+         ;; once.
+         `(,@(apply #'loopy--create-as-nil
+                    'loopy--implicit-vars
+                    value-holder (cl-coerce var 'list))
+           (loopy--main-body
+            . (setq ,value-holder ,value-expression
+                    ,@(apply #'append
+                             (seq-map-indexed
+                              (lambda (symbol index)
+                                `(,symbol (aref ,value-holder ,index)))
+                              var))))))))))
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
