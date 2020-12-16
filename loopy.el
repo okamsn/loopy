@@ -192,65 +192,64 @@ Optional GENERALIZED means to create a generalized variable in
 `loopy--explicit-generalized-vars' instead of creating a normal
 variable."
   (if generalized
-      (cond
-       ;; Check if `var' is a single symbol.
-       ((nlistp var)
-        `((loopy--explicit-generalized-vars . (,var ,value-expression))))
-       ;; Check if `var' is a normal list.
-       ((proper-list-p var)
-        (seq-map-indexed (lambda (elt index)
-                           (cons 'loopy--explicit-generalized-vars
-                                 `(,elt (nth ,index ,value-expression))))
-                         var))
-       ;; Assume `var' is a list where the last element is a dotted pair.
-       (t
-        (let ((set-list)
-              (index 0))
-          (while (car-safe var)
-            (push `(loopy--explicit-generalized-vars
-                    . (,(pop var) (nth ,index ,value-expression)))
-                  set-list)
-            (cl-incf index))
-          (push `(loopy--explicit-generalized-vars
-                  . (,var (nthcdr ,index ,value-expression)))
-                set-list)
-          set-list)))
+      (cl-typecase var
+        ;; Check if `var' is a single symbol.
+        (symbol
+         `((loopy--explicit-generalized-vars . (,var ,value-expression))))
+        (list
+         ;; If `var' is not proper, then the end of `var' can't be `car'-ed
+         ;; safely, as it is just a symbol and not a list.  Therefore, if `var'
+         ;; is still non-nil after the `pop'-ing, we know to set the remaining
+         ;; symbol that is now `var' to some Nth `cdr'.
+         (let ((set-list) (index 0))
+           (while (car-safe var)
+             (push `(loopy--explicit-generalized-vars
+                     . (,(pop var) (nth ,index ,value-expression)))
+                   set-list)
+             (cl-incf index))
+           (when var
+             (push `(loopy--explicit-generalized-vars
+                     . (,var (nthcdr ,index ,value-expression)))
+                   set-list))
+           set-list)))
 
     ;; Otherwise assigning normal variables:
-    (if (nlistp var)
-        `((loopy--main-body     . (setq ,var ,value-expression))
-          (loopy--explicit-vars . (,var nil)))
-      ;; If `var' is not a single symbol, make a note of what kind of list it
-      ;; is.  Always create a "normalized" variable list, since proper lists are
-      ;; easier to work with.
-      (let ((proper-list-p (proper-list-p var))
-            (normalized-reverse-var))
-        (while (car-safe var)
-          (push (pop var) normalized-reverse-var))
-        ;; If the last element in `var' was a dotted pair, then `var' is now a
-        ;; single symbol, which must still be added to the normalized `var'
-        ;; list.
-        (when var (push var normalized-reverse-var))
-        (cons `(loopy--main-body
-                ;; Create just a single `setq' call.
-                . (setq
-                   ;; For a list (A B C D):
-                   ;; 1. Set D to the `value-expression'.
-                   ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
-                   ;; 3. If using a normal var list, now that D is a list
-                   ;;    of one element, set D to its own `car'.
-                   ,@(let* ((last-var (car normalized-reverse-var))
-                            (set-list `((,last-var
-                                         ,value-expression))))
-                       (dolist (symbol (reverse (cl-rest normalized-reverse-var)))
-                         (push `(,symbol (pop ,last-var))
-                               set-list))
-                       (when proper-list-p
-                         (push `(,last-var (car ,last-var))
-                               set-list))
-                       (apply #'append (nreverse set-list)))))
-              (apply #'loopy--create-as-nil
-                     'loopy--explicit-vars normalized-reverse-var))))))
+    (cl-typecase var
+      (symbol
+       `((loopy--main-body     . (setq ,var ,value-expression))
+         (loopy--explicit-vars . (,var nil))))
+      (list
+       ;; If `var' is not a single symbol, make a note of what kind of list it
+       ;; is.  Always create a "normalized" variable list, since proper lists are
+       ;; easier to work with (many looping/mapping functions expect them).
+       (let ((proper-list-p (proper-list-p var))
+             (normalized-reverse-var))
+         (while (car-safe var)
+           (push (pop var) normalized-reverse-var))
+         ;; If the last element in `var' was a dotted pair, then `var' is now a
+         ;; single symbol, which must still be added to the normalized `var'
+         ;; list.
+         (when var (push var normalized-reverse-var))
+         (cons `(loopy--main-body
+                 ;; Create just a single `setq' call.
+                 . (setq
+                    ;; For a list (A B C D):
+                    ;; 1. Set D to the `value-expression'.
+                    ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
+                    ;; 3. If using a normal var list, now that D is a list
+                    ;;    of one element, set D to its own `car'.
+                    ,@(let* ((last-var (car normalized-reverse-var))
+                             (set-list `((,last-var
+                                          ,value-expression))))
+                        (dolist (symbol (reverse (cl-rest normalized-reverse-var)))
+                          (push `(,symbol (pop ,last-var))
+                                set-list))
+                        (when proper-list-p
+                          (push `(,last-var (car ,last-var))
+                                set-list))
+                        (apply #'append (nreverse set-list)))))
+               (apply #'loopy--create-as-nil
+                      'loopy--explicit-vars normalized-reverse-var)))))))
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
