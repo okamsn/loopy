@@ -122,8 +122,6 @@ please let me know.
   - Add equivalent features for all that =cl-loop= can do.  Many things are
     already covered, but not everything.  See [[#translating-from-cl-loop][Translating from =cl-loop=]] for
     more.
-  - De-structuring can be useful, but this can already be done using repeated
-    =expr= commands.
 
 * How to Install                                                   :noexport:
   Currently, Loopy must be installed manually.
@@ -266,6 +264,49 @@ please let me know.
      expression, and =[CMD]= is an optional command.  By extension,
      =[EXPRS]= is equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to
      =[CMD [CMD [...]]]=.
+
+   Some of the loop commands that assign values to variables can “de-structure”
+   lists, somewhat similar to the functions ~seq-let~, ~cl-destructuring-bind~,
+   and ~pcase-let~.  The current list of commands that support destructuring are
+   - =list=, =array=, and =seq=
+   - =list-ref=, =array-ref=, and =seq-ref= (though it is probably inefficient
+     for these commands)
+
+   There is no reason that the other assigning commands can’t also use
+   destructuring, though it might not make much sense in all cases (such as the
+   accumulation commands).  That can be added in time.
+
+   To use destructuring, use an unquoted list of symbols for =VAR=.  This can be
+   shorter than the destructured list, /but never longer/.  If shorter, the
+   unassigned elements of the list are simply ignored.  To assign the final
+   ~cdr~ of the destructured list, use dotted notation.
+
+   #+begin_src emacs-lisp
+     (cl-assert
+      (and
+       (equal [(9 10 11 4) (9 10 11 8)]
+              (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
+                     ((array-ref (i j k) my-array)
+                      ;; NOTE: The remaining elements are ignored.
+                      (do (setf i 9)
+                          (setf j 10)
+                          (setf k 11)))
+                     (return my-array)))
+       (equal [(7 8 (9 10) 4) (7 8 (9 10) 8)]
+              (loopy (with (my-array [(1 2 3 4) (4 5 6 8)]))
+                     ((array-ref (i j k) my-array)
+                      (do (setf i 7)
+                          (setf j 8)
+                          (setf k '(9 10))))
+                     (return my-array)))
+       (equal [(7 8 9 10) (7 8 9 10)]
+              (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
+                     ((array-ref (i j . k) my-array)
+                      (do (setf i 7)
+                          (setf j 8)
+                          (setf k '(9 10))))
+                     (return my-array)))))
+   #+end_src
 
 *** Commands for Generic Evaluation
     :PROPERTIES:
