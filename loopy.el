@@ -216,7 +216,9 @@ variable."
          (seq-map-indexed (lambda (symbol index)
                             `(loopy--explicit-generalized-vars
                               . (,symbol (aref ,value-expression ,index))))
-                          var)))
+                          var))
+        (t
+         (error "Don't know how to destructure this: %s" var)))
 
     ;; Otherwise assigning normal variables:
     (cl-typecase var
@@ -268,7 +270,9 @@ variable."
                              (seq-map-indexed
                               (lambda (symbol index)
                                 `(,symbol (aref ,value-holder ,index)))
-                              var))))))))))
+                              var)))))))
+      (t
+       (error "Don't know how to destructure this: %s" var)))))
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
