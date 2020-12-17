@@ -265,20 +265,14 @@ please let me know.
      =[EXPRS]= is equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to
      =[CMD [CMD [...]]]=.
 
-   Some of the loop commands that assign values to variables can “de-structure”
-   lists and arrays, somewhat similar to the functions ~seq-let~,
-   ~cl-destructuring-bind~, and ~pcase-let~.  The current list of commands that
-   support destructuring are
-   - =list=, =array=, and =seq=
-   - =list-ref=, =array-ref=, and =seq-ref= (though it is probably inefficient
-     for these commands)
+   Generally, =VAR= is initialized to ~nil~, but not always.  This document
+   tries to note when that is not the case.
 
-   There is no reason that the other assigning commands can’t also use
-   destructuring, though it might not make much sense in all cases (such as the
-   accumulation commands).  That can be added in time.
-
-   To use destructuring, use an unquoted list or array of symbols for =VAR=.
-   This can be shorter than the destructured sequence, /but never longer/.  If
+   For convenience, =VAR= can be a sequence (either a list or a vector (as a
+   stand-in for an array)) of symbols instead of a single symbol.  This tells
+   the command to “de-structure” the value of =EXPR=, similar to the functions
+   ~seq-let~, ~cl-destructuring-bind~, and ~pcase-let~.  This sequence of
+   symbols can be shorter than the destructured sequence, /but not longer/.  If
    shorter, the unassigned elements of the list are simply ignored.  To assign
    the final ~cdr~ of a destructured list, use dotted notation.
 
@@ -317,6 +311,15 @@ please let me know.
              (do (setf j '(22))))
             (return my-array))
    #+end_src
+
+   The current list of commands that support destructuring are
+   - =list=, =array=, and =seq=
+   - =list-ref=, =array-ref=, and =seq-ref= (though it is probably inefficient
+     for these commands)
+
+   There is no reason that the other assigning commands can’t also use
+   destructuring, though it might not make much sense in all cases (such as the
+   accumulation commands).  That can be added in time.
 
 *** Commands for Generic Evaluation
     :PROPERTIES:
@@ -381,6 +384,9 @@ please let me know.
 
     - =(cons|conses VAR EXPR [FUNC])= :: Loop through the cons cells of =EXPR=.
       Optionally, find the cons cells via =FUNC= instead of =cdr=.
+
+      To avoid unneeded variables, when not destructuring, =VAR= is initialized
+      to =EXPR= instead of ~nil~.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (loop (cons i '(1 2 3))
