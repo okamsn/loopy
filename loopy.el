@@ -172,10 +172,10 @@ expansion, we generally only want the actual symbol."
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
 
-(defun loopy--create-as-nil (place &rest vars)
-  "Return a pair of a variable name and nil for each name in VARS.
+(defun loopy--initialize-vars (place vars &optional value)
+  "Create instructions for initializing variables in VARS to VALUE in PLACE.
 
-This is to simplify creating instructions for PLACE."
+PLACE should be `loopy--explicit-vars' or `loopy--implicit-vars'."
   (mapcar (lambda (var) (cons place `(,var nil))) vars))
 
 (defun loopy--create-destructured-assignment
@@ -253,15 +253,15 @@ variable."
                           (push `(,last-var (car ,last-var))
                                 set-list))
                         (apply #'append (nreverse set-list)))))
-               (apply #'loopy--create-as-nil
-                      'loopy--explicit-vars normalized-reverse-var))))
+               (loopy--initialize-vars 'loopy--explicit-vars
+                                       normalized-reverse-var))))
       (array
        (let ((value-holder (gensym)))
          ;; We need a value holder so that `value-expression' is only evaluated
          ;; once.
-         `(,@(apply #'loopy--create-as-nil
-                    'loopy--implicit-vars
-                    value-holder (cl-coerce var 'list))
+         `(,@(loopy--initialize-vars
+              'loopy--explicit-vars
+              (cons value-holder (cl-coerce var 'list)))
            (loopy--main-body
             . (setq ,value-holder ,value-expression
                     ,@(apply #'append
