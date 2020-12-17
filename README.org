@@ -266,8 +266,9 @@ please let me know.
      =[CMD [CMD [...]]]=.
 
    Some of the loop commands that assign values to variables can “de-structure”
-   lists, somewhat similar to the functions ~seq-let~, ~cl-destructuring-bind~,
-   and ~pcase-let~.  The current list of commands that support destructuring are
+   lists and arrays, somewhat similar to the functions ~seq-let~,
+   ~cl-destructuring-bind~, and ~pcase-let~.  The current list of commands that
+   support destructuring are
    - =list=, =array=, and =seq=
    - =list-ref=, =array-ref=, and =seq-ref= (though it is probably inefficient
      for these commands)
@@ -276,36 +277,45 @@ please let me know.
    destructuring, though it might not make much sense in all cases (such as the
    accumulation commands).  That can be added in time.
 
-   To use destructuring, use an unquoted list of symbols for =VAR=.  This can be
-   shorter than the destructured list, /but never longer/.  If shorter, the
-   unassigned elements of the list are simply ignored.  To assign the final
-   ~cdr~ of the destructured list, use dotted notation.
+   To use destructuring, use an unquoted list or array of symbols for =VAR=.
+   This can be shorter than the destructured sequence, /but never longer/.  If
+   shorter, the unassigned elements of the list are simply ignored.  To assign
+   the final ~cdr~ of a destructured list, use dotted notation.
 
    #+begin_src emacs-lisp
-     (cl-assert
-      (and
-       (equal [(9 10 11 4) (9 10 11 8)]
-              (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
-                     ((array-ref (i j k) my-array)
-                      ;; NOTE: The remaining elements are ignored.
-                      (do (setf i 9)
-                          (setf j 10)
-                          (setf k 11)))
-                     (return my-array)))
-       (equal [(7 8 (9 10) 4) (7 8 (9 10) 8)]
-              (loopy (with (my-array [(1 2 3 4) (4 5 6 8)]))
-                     ((array-ref (i j k) my-array)
-                      (do (setf i 7)
-                          (setf j 8)
-                          (setf k '(9 10))))
-                     (return my-array)))
-       (equal [(7 8 9 10) (7 8 9 10)]
-              (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
-                     ((array-ref (i j . k) my-array)
-                      (do (setf i 7)
-                          (setf j 8)
-                          (setf k '(9 10))))
-                     (return my-array)))))
+     ;; => [(9 10 11 4) (9 10 11 8)]
+     (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
+            ((array-ref (i j k) my-array)
+             ;; NOTE: The remaining elements are ignored.
+             (do (setf i 9)
+                 (setf j 10)
+                 (setf k 11)))
+            (return my-array))
+
+     ;; => ([9 10 11 4] [9 10 11 8])
+     (loopy (with (my-list '([1 2 3 4 ] [5 6 7 8])))
+            ((list-ref [i j k] my-list)
+             ;; NOTE: The remaining elements are ignored.
+             (do (setf i 9)
+                 (setf j 10)
+                 (setf k 11)))
+            (return my-list))
+
+     ;; => (1 (2 3))
+     (loopy ((list (i . j) '((1 2 3))))
+            (return i j))
+
+     ;; => ((1 22))
+     (loopy (with (my-list '((1 2 3))))
+            ((list-ref (_ . j) my-list)
+             (do (setf j '(22))))
+            (return my-list))
+
+     ;; => [(1 22)]
+     (loopy (with (my-array [(1 2 3)]))
+            ((array-ref (_ . j) my-array)
+             (do (setf j '(22))))
+            (return my-array))
    #+end_src
 
 *** Commands for Generic Evaluation
