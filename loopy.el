@@ -398,47 +398,42 @@ the loop literally (not even in a `progn')."
   (let ((arg-length (length vals))
         (value-selector (gensym))
         instructions)
-    ;; Declare `var'.
-    (push `(loopy--explicit-vars . (,var nil)) instructions)
     (cl-case arg-length
       ;; If no values, repeatedly set to `nil'.
-      (0 (push `(loopy--main-body . (setq ,var nil)) instructions))
+      (0 (loopy--create-destructured-assignment
+          var nil))
       ;; If one value, repeatedly set to that value.
-      (1 (push `(loopy--main-body . (setq ,var ,(car vals))) instructions))
-      ;; If two values, repeatedly check against `value-selector' to determine
-      ;; if we should assign the first or second value.  This is how `cl-loop'
-      ;; does it.
+      (1 (loopy--create-destructured-assignment
+          var (car vals)))
+      ;; If two values, repeatedly check against `value-selector' to
+      ;; determine if we should assign the first or second value.  This is
+      ;; how `cl-loop' does it.
       (2
-       (push `(loopy--implicit-vars . (,value-selector t)) instructions)
-       (push `(loopy--main-body
-               . (setq ,var (if ,value-selector
-                                ,(cl-first vals)
-                              ,(cl-second vals))))
-             instructions)
-       (push `(loopy--latter-body . (setq ,value-selector nil)) instructions))
+       `((loopy--implicit-vars . (,value-selector t))
+         ,@(loopy--create-destructured-assignment
+            var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
+         (loopy--latter-body . (setq ,value-selector nil))))
       (t
-       (push `(loopy--implicit-vars . (,value-selector 0)) instructions)
-       (push `(loopy--latter-body
-               . (when (< ,value-selector (1- ,arg-length))
-                   (setq ,value-selector (1+ ,value-selector))))
-             instructions)
-       ;; Assign to var based on the value of value-selector.  For
-       ;; efficiency, we want to check for the last expression first,
-       ;; since it will probably be true the most times.  To enable
-       ;; that, the condition is whether the counter is greater than
-       ;; the index of EXPR in REST minus one.
-       ;;
-       ;; E.g., for '(a b c),
-       ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
-       (push `(loopy--main-body
-               . (setq ,var ,(let ((body-code nil) (index 0))
-                               (dolist (value vals)
-                                 (push `((> ,value-selector ,(1- index))
-                                         ,value)
-                                       body-code)
-                                 (setq index (1+ index)))
-                               (cons 'cond body-code))))
-             instructions)))))
+       `((loopy--implicit-vars . (,value-selector 0))
+         (loopy--latter-body
+          . (when (< ,value-selector (1- ,arg-length))
+              (setq ,value-selector (1+ ,value-selector))))
+         ;; Assign to var based on the value of value-selector.  For
+         ;; efficiency, we want to check for the last expression first,
+         ;; since it will probably be true the most times.  To enable
+         ;; that, the condition is whether the counter is greater than
+         ;; the index of EXPR in REST minus one.
+         ;;
+         ;; E.g., for '(a b c),
+         ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
+         ,@(loopy--create-destructured-assignment
+            var (let ((body-code nil) (index 0))
+                  (dolist (value vals)
+                    (push `((> ,value-selector ,(1- index))
+                            ,value)
+                          body-code)
+                    (setq index (1+ index)))
+                  (cons 'cond body-code))))))))
 
 (cl-defun loopy--parse-array-command
     ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))

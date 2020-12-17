@@ -89,27 +89,42 @@
 ;;;;; Expr
 (ert-deftest expr-one-value ()
   (should
-   (eval (quote (loopy (with (my-val nil))
-                       (loop (expr my-val t)
-                             (leave))
-                       (finally-return my-val))))))
+   (and (eval (quote (loopy (with (my-val nil))
+                            (loop (expr my-val t)
+                                  (leave))
+                            (finally-return my-val))))
+        (equal '(t t) (eval (quote (loopy ((expr (i j) '(t t))
+                                           (leave))
+                                          (return i j))))))))
 
 (ert-deftest expr-two-values ()
   (should
-   (equal '(1 2 2)
-          (eval (quote (loopy (loop (repeat 3)
-                                    (expr my-val 1 2)
-                                    (collect my-coll my-val))
-                              (finally-return my-coll)))))))
+   (and
+    (equal '(1 2 2)
+            (eval (quote (loopy (loop (repeat 3)
+                                      (expr my-val 1 2)
+                                      (collect my-coll my-val))
+                                (finally-return my-coll)))))
+    (equal '((1 1) (2 2) (2 2))
+            (eval (quote (loopy (loop (repeat 3)
+                                      (expr (i j) '(1 1) '(2 2))
+                                      (collect my-coll (list i j)))
+                                (finally-return my-coll))))))))
 
 ;; Implementation is different for more than 2 values.
 (ert-deftest expr-five-values ()
   (should
-   (equal '(1 2 3 4 5 5 5 5 5 5)
-          (eval (quote (loopy (loop (repeat 10)
-                                    (expr my-val 1 2 3 4 5)
-                                    (collect my-coll my-val))
-                              (finally-return my-coll)))))))
+   (and (equal '(1 2 3 4 5 5 5 5 5 5)
+                (eval (quote (loopy (loop (repeat 10)
+                                          (expr my-val 1 2 3 4 5)
+                                          (collect my-coll my-val))
+                                    (finally-return my-coll)))))
+        (equal '((1 1) (2 2) (3 3) (4 4) (5 5) (5 5) (5 5) (5 5) (5 5) (5 5))
+                (eval (quote (loopy (loop (repeat 10)
+                                          (expr (i j) '(1 1) '(2 2)
+                                                '(3 3) '(4 4) '(5 5))
+                                          (collect my-coll (list i j)))
+                                    (finally-return my-coll))))))))
 
 (ert-deftest expr-dont-repeat ()
   "Make sure commands don't repeatedly create/declare the same variable."
