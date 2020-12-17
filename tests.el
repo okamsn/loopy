@@ -212,7 +212,16 @@
                         (eval (quote (loopy ((cons x '(1 2 3 4)
                                                    (lambda (x) (cddr x)))
                                              (collect coll x))
-                                            (return coll)))))))))
+                                            (return coll))))))
+        (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
+               (eval (quote (loopy ((cons (i . j) '(1 2 3 4))
+                                    (collect coll (list i j)))
+                                   (return coll)))))
+        (equal '((1 (2 3 4)) (3 (4)))
+               (eval (quote (loopy ((cons (i . j) '(1 2 3 4) #'cddr)
+                                    (collect coll (list i j)))
+                                   (return coll))))))))
+
 
 ;;;; List
 (ert-deftest list ()

@@ -468,9 +468,19 @@ holds the array value.  INDEX-HOLDER holds the index value."
 
 VAR is a variable name.  VAL is a cons cell value.  Optional FUNC
 is a function by which to update VAR (default `cdr')."
-  `((loopy--explicit-vars . (,var ,val))
-    (loopy--latter-body . (setq ,var (,(loopy--get-function-symbol func) ,var)))
-    (loopy--pre-conditions . (consp ,var))))
+  (if (symbolp var)
+      `((loopy--explicit-vars . (,var ,val))
+        (loopy--latter-body
+         . (setq ,var (,(loopy--get-function-symbol func) ,var)))
+        (loopy--pre-conditions . (consp ,var)))
+    ;; TODO: For destructuring, do we actually need the extra variable?
+    (let ((value-holder (gensym)))
+      `((loopy--implicit-vars . (,value-holder ,val))
+        ,@(loopy--create-destructured-assignment var value-holder)
+        (loopy--latter-body
+         . (setq ,value-holder (,(loopy--get-function-symbol func)
+                                ,value-holder)))
+        (loopy--pre-conditions . (consp ,value-holder))))))
 
 (cl-defun loopy--parse-list-command
     ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym)))
