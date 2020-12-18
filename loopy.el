@@ -567,24 +567,49 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
-  (list `(loopy--explicit-vars
-          ;;  Not all commands can have the variable initialized to nil.
-          . (,var ,(cl-case name
-                     ((sum count)    0)
-                     ((max maximize) -1.0e+INF)
-                     ((min minimize) +1.0e+INF))))
-        `(loopy--main-body
-          . ,(cl-ecase name
-               (append           `(setq ,var (append  ,var ,val)))
-               (collect          `(setq ,var (append  ,var (list ,val))))
-               (concat           `(setq ,var (concat  ,var ,val)))
-               (vconcat          `(setq ,var (vconcat ,var ,val)))
-               (count            `(if   ,val (setq    ,var (1+ ,var))))
-               ((max maximize)   `(setq ,var (max     ,var ,val)))
-               ((min minimize)   `(setq ,var (min     ,var ,val)))
-               (nconc            `(setq ,var (nconc   ,var ,val)))
-               ((push-into push) `(push ,val ,var))
-               (sum              `(setq ,var (+ ,var ,val)))))))
+  (let ((value-holder (gensym)))
+    (cl-etypecase var
+      (symbol
+       (list `(loopy--explicit-vars
+               ;;  Not all commands can have the variable initialized to nil.
+               . (,var ,(cl-case name
+                          ((sum count)    0)
+                          ((max maximize) -1.0e+INF)
+                          ((min minimize) +1.0e+INF))))
+             `(loopy--main-body
+               . ,(cl-ecase name
+                    (append           `(setq ,var (append  ,var ,val)))
+                    (collect          `(setq ,var (append  ,var (list ,val))))
+                    (concat           `(setq ,var (concat  ,var ,val)))
+                    (vconcat          `(setq ,var (vconcat ,var ,val)))
+                    (count            `(if   ,val (setq    ,var (1+ ,var))))
+                    ((max maximize)   `(setq ,var (max     ,var ,val)))
+                    ((min minimize)   `(setq ,var (min     ,var ,val)))
+                    (nconc            `(setq ,var (nconc   ,var ,val)))
+                    ((push-into push) `(push ,val ,var))
+                    (sum              `(setq ,var (+ ,var ,val)))))))
+      (list
+       `((loopy--implicit-vars . (,value-holder nil))
+         (loopy--main-body . (setq ,value-holder ,val))
+         ,@(let ((value-expressions) (normalized-var-list))
+             (while (car-safe var)
+               (push `(pop ,value-holder) value-expressions)
+               (push (pop var) normalized-var-list))
+             (when var
+               (push value-holder value-expressions)
+               (push var normalized-var-list))
+             (cl-mapcan (lambda (symbol expression)
+                          (loopy--parse-accumulation-comands
+                           (list name symbol expression)))
+                        (nreverse normalized-var-list)
+                        (nreverse value-expressions)))))
+      (array
+       `((loopy--implicit-vars . (,value-holder nil))
+         (loopy--main-body . (setq ,value-holder ,val))
+         ,@(cl-mapcan (lambda (symbol index)
+                        (loopy--parse-accumulation-comands
+                         (list name symbol `(aref ,value-holder ,index))))
+                      var (number-sequence 0 (length var))))))))
 
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
   "Parse the  `return', `return-from', `leave', and `leave-from' loop commands.
