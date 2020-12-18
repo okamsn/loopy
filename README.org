@@ -453,6 +453,11 @@ please let me know.
     :CUSTOM_ID: accumulation-commands
     :END:
 
+    Accumulation commands are used to repeatedly update a variable using a
+    value.  In that way, they are something like shortcuts for several different
+    ways of using the =expr= command.  For example, =(sum my-sum my-var)= is
+    really just another way of saying =(expr my-sum my-var (+ my-sum my-var))=.
+
     If needed, you can refer to the same variable in multiple accumulation
     commands, such as in the following.
 
@@ -463,10 +468,36 @@ please let me know.
              (return coll)) ; => (1 6 2 7 3 8)
     #+end_src
 
-    Importantly, unlike in =cl-loop=, the presence of an accumulation command
-    does not imply a return value.  You must provide a variable in which to
-    store the accumulated value, which you can return using an [[#exiting-the-loop-early][exiting command]]
-    or the =finally-return= macro argument.
+    Using a “destructuring” =VAR= argument in accumulation commands works a bit
+    differently than how it would in iteration commands.  While iteration
+    commands just assign variables the values that make up the destructured
+    =EXPR=, accumulation commands accumulate each of those values into their
+    respective variable in the sequence =VAR=.
+
+    #+begin_src emacs-lisp
+      ;; => ((1 4) (2 5) (3 6))
+      (loopy ((list elem '((1 2 3) (4 5 6)))
+              (collect (coll1 coll2 coll3) elem))
+             (return coll1 coll2 coll3))
+
+      ;; => (5 7 9)
+      (loopy ((list elem '((1 2 3) (4 5 6)))
+              (sum (sum1 sum2 sum3) elem))
+             (return sum1 sum2 sum3))
+
+      ;; Returns the same values as above.
+      (loopy ((list elem '((1 2 3) (4 5 6)))
+              (expr sum1 (cl-first elem)  (+ sum1 (cl-first elem)))
+              (expr sum2 (cl-second elem) (+ sum2 (cl-second elem)))
+              (expr sum3 (cl-third elem)  (+ sum3 (cl-third elem))))
+             (return sum1 sum2 sum3))
+    #+end_src
+
+    _Importantly_, and unlike in =cl-loop=, the presence of an accumulation
+    command does not imply a return value (though I am open to adding this
+    later).  You must provide a variable in which to store the accumulated
+    value, which you can return using an [[#exiting-the-loop-early][exiting command]] or the =finally-return=
+    macro argument.
 
     - =(append VAR EXPR)= :: Repeatedly =append= the value of =EXPR= to =VAR=.
       =VAR= starts as =nil=.
