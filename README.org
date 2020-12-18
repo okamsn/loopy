@@ -312,14 +312,9 @@ please let me know.
             (return my-array))
    #+end_src
 
-   The current list of commands that support destructuring are
-   - =list=, =array=, and =seq=
-   - =list-ref=, =array-ref=, and =seq-ref= (though it is probably inefficient
-     for these commands)
-
-   There is no reason that the other assigning commands can’t also use
-   destructuring, though it might not make much sense in all cases (such as the
-   accumulation commands).  That can be added in time.
+   Most commands that assign variables (even the =-ref= commands, which use
+   ~setf~-able places instead of actual variables) can use destructuring, but
+   not all kinds of destructuring make sense in all situations.
 
 *** Commands for Generic Evaluation
     :PROPERTIES:
@@ -365,6 +360,11 @@ please let me know.
     Iteration commands bind local variables and determine when the loop ends.
     If no command sets that condition, then the loop runs forever.
 
+    The =-ref= (as in “reference”) commands create ~setf~-able places instead of
+    true variables.  Like other commands, they can also use destructuring.  In
+    such cases, the variables in the sequence =VAR= are also ~setf~-able places
+    instead of true variables.
+
     - =(array VAR EXPR)= :: Loop through the elements of the array =EXPR=.
 
       #+BEGIN_SRC emacs-lisp
@@ -373,7 +373,7 @@ please let me know.
       #+END_SRC
 
     - =(array-ref|arrayf VAR EXPR)= :: Loop through the elements of the array
-      =EXPR=, binding =VAR= as a =setf=-able place.
+      =EXPR=, binding =VAR= as a ~setf~-able place.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (with (my-str "cat"))
@@ -403,7 +403,7 @@ please let me know.
       #+END_SRC
 
     - =(list-ref|listf VAR EXPR [FUNC])= :: Loop through the elements of the
-      list =EXPR=, binding =VAR= as a =setf=-able place.  Optionally, update the
+      list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update the
       list by =FUNC= instead of =cdr=.
 
       #+BEGIN_SRC emacs-lisp
@@ -439,7 +439,7 @@ please let me know.
       #+END_SRC
 
     - =(seq-ref|seqf VAR EXPR)= :: Loop through the elements of the sequence
-      =val=, binding =var= as a =setf=-able place.
+      =val=, binding =var= as a ~setf~-able place.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (with (my-seq '(1 2 3 4)))
@@ -809,7 +809,7 @@ please let me know.
 
    - =loopy--explicit-generalized-vars= :: Lists of a symbol and a macro
      expansion that will be given to =cl-symbol-macrolet=.  This is used to
-     create named =setf=-able places.  The expansion you use depends on the kind
+     create named ~setf~-able places.  The expansion you use depends on the kind
      of sequence and how the it is updated.
 
      For example, =(list-ref i my-list)= declares =i= to be a symbol which
