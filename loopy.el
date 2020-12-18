@@ -176,7 +176,9 @@ expansion, we generally only want the actual symbol."
   "Create instructions for initializing variables in VARS to VALUE in PLACE.
 
 PLACE should be `loopy--explicit-vars' or `loopy--implicit-vars'."
-  (mapcar (lambda (var) (cons place `(,var nil))) vars))
+  ;; Just make sure it's always a sequence.
+  (when (symbolp vars) (setq vars (list vars)))
+  (mapcar (lambda (var) (cons place `(,var ,value))) vars))
 
 (defun loopy--create-destructured-assignment
     (var value-expression &optional generalized)
