@@ -117,11 +117,37 @@ please let me know.
      (finally-return (list found-evens found-odds)))
   #+END_SRC
 
-  Loopy is not yet feature complete.  Here are some things that would be nice to
-  add/have:
-  - Add equivalent features for all that =cl-loop= can do.  Many things are
-    already covered, but not everything.  See [[#translating-from-cl-loop][Translating from =cl-loop=]] for
-    more.
+  Loopy is not the only Lisp library that uses expressions instead of keyword
+  clauses (like in =cl-loop=).  [[https://common-lisp.net/project/iterate/][=iterate=]] and [[https://github.com/Shinmera/for/][=for=]] are two examples in Common
+  Lisp.  I know of no examples for Emacs Lisp.
+
+  Though I am not familiar with either, it seems to me that the =loopy= macro is
+  more like =for= than it is like =iterate=.  I suspect that, given it’s youth,
+  Loopy is much simpler than both.
+
+  #+begin_src emacs-lisp
+    ;; Collecting 10 random numbers:
+    ;; cl-loop, iter, for, loopy
+
+    (cl-loop repeat 10 collect (random 10))
+
+    (iter (repeat 10) (collect (random 10)))
+
+    (for:for ((i repeat 10) (randoms collecting (random 10))))
+
+    (loopy ((repeat 10) (collect randoms (random 10)))
+           (return randoms))
+  #+end_src
+
+  Generally, I’d expect that all of the packages handle basic use cases in
+  similar ways.  While =iterate= can apparently embed its looping constructs in
+  arbitrary code, I don’t think that either =loopy= or =for= allow that.  The
+  most apparent difference to me is that Loopy doesn’t currently have implicit
+  return values.
+
+  However, Loopy is not yet feature complete.  Please request features or report
+  problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
+  full feature parity with =cl-loop= is still being worked on.
 
 * How to Install                                                   :noexport:
   Currently, Loopy must be installed manually.
