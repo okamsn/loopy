@@ -589,16 +589,40 @@
                                       (vconcat (v1 v2) elem))
                                      (return v1 v2)))))))
 
+(ert-deftest accumulation-recursive-destructuring ()
+  (should
+   (and
+    (equal '(4 6 8)
+           (eval (quote (loopy ((list i '((1 (2 3)) (3 (4 5))))
+                                (sum (s1 (s2 s3)) i))
+                               (return s1 s2 s3)))))
+    (equal '(4 6 8)
+           (eval (quote (loopy ((list i '((1 (2 . 3)) (3 (4 . 5))))
+                                (sum (s1 (s2 . s3)) i))
+                               (return s1 s2 s3)))))
+    (equal '(4 6 8)
+           (eval (quote (loopy ((array i [[1 [2 3]] [3 [4 5]]])
+                                (sum [s1 [s2 s3]] i))
+                               (return s1 s2 s3)))))
+    (equal '(4 6 8 10)
+           (eval (quote (loopy ((list i '((1 (2 . [3 4])) (3 (4 . [5 6]))))
+                                (sum (s1 (s2 . [s3 s4])) i))
+                               (return s1 s2 s3 s4)))))
+    (equal '((1 3) (2 4) (3 5) (4 6))
+           (eval (quote (loopy ((list i '((1 (2 . [3 4])) (3 (4 . [5 6]))))
+                                (collect (c1 (c2 . [c3 c4])) i))
+                               (return c1 c2 c3 c4))))))))
+
 ;;; Control Flow
 ;;;; Conditionals
 ;;;;; If
 (ert-deftest if ()
   (should (equal '((2 4) (1 3))
-                  (loopy ((list i '(1 2 3 4))
-                          (if (cl-evenp i)
-                              (collect evens i)
-                            (collect odds i)))
-                         (return evens odds)))))
+                 (loopy ((list i '(1 2 3 4))
+                         (if (cl-evenp i)
+                             (collect evens i)
+                           (collect odds i)))
+                        (return evens odds)))))
 
 ;;;;; When
 ;; (ert-deftest basic-when-parse ()
