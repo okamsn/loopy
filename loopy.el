@@ -124,6 +124,9 @@ These run in a `progn'.")
 (defvar loopy--final-return nil
   "What the macro finally returns.  This overrides any early return value.")
 
+(defvar loopy--implicit-return nil
+  "The implicit return value of loops that use accumulation commands.")
+
 ;;;;; Variables for constructing the code
 
 ;; These variable affect how the code is expanded.
@@ -158,6 +161,13 @@ or `loopy--explicit-generalized-vars'."
   (or (memq var-name (mapcar #'car loopy--with-vars))
       (memq var-name (mapcar #'car loopy--explicit-vars))
       (memq var-name (mapcar #'car loopy--explicit-generalized-vars))))
+
+(defun loopy--already-implicit-return (var-name)
+  "Check whether a variable is already in the list of implied return values.
+
+Accumulation commands can operate on the same variable, and we
+  don't want that variable to appear more than once as an implied return."
+  (memq var-name loopy--implicit-return))
 
 (defun loopy--get-function-symbol (function-form)
   "Return the actual symbol described by FUNCTION-FORM.
@@ -601,75 +611,119 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
-(cl-defun loopy--parse-accumulation-comands ((name var val))
+(cl-defun loopy--parse-accumulation-comands ((name var-or-val &optional val))
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
-  (cl-etypecase var
-    (symbol
-     `((loopy--explicit-vars
-        ;;  Not all commands can have the variable initialized to nil.
-        . (,var ,(cl-case name
-                   ((sum count)    0)
-                   ((max maximize) -1.0e+INF)
-                   ((min minimize) +1.0e+INF))))
-       (loopy--main-body
-        . ,(cl-ecase name
-             (append           `(setq ,var (append  ,var ,val)))
-             (collect          `(setq ,var (append  ,var (list ,val))))
-             (concat           `(setq ,var (concat  ,var ,val)))
-             (vconcat          `(setq ,var (vconcat ,var ,val)))
-             (count            `(if   ,val (setq    ,var (1+ ,var))))
-             ((max maximize)   `(setq ,var (max     ,var ,val)))
-             ((min minimize)   `(setq ,var (min     ,var ,val)))
-             (nconc            `(setq ,var (nconc   ,var ,val)))
-             ((push-into push) `(push ,val ,var))
-             (sum              `(setq ,var (+ ,var ,val)))))))
-    (list
-     (let ((value-holder (gensym))
-           (is-proper-list (proper-list-p var))
-           (normalized-reverse-var))
-       (let ((instructions `(((loopy--implicit-vars . (,value-holder nil))
-                              (loopy--main-body . (setq ,value-holder ,val))))))
-         ;; If `var' is a list, always create a "normalized" variable list,
-         ;; since proper lists are easier to work with, as many looping/mapping
-         ;; functions expect them.
-         (while (car-safe var)
-           (push (pop var) normalized-reverse-var))
-         ;; If the last element in `var' was a dotted pair, then `var' is now a
-         ;; single symbol, which must still be added to the normalized `var'
-         ;; list.
-         (when var (push var normalized-reverse-var))
+  (if val
+      (cl-etypecase var-or-val
+        (symbol
+         `((loopy--explicit-vars
+            ;;  Not all commands can have the variable initialized to nil.
+            . (,var-or-val ,(cl-case name
+                              ((sum count)    0)
+                              ((max maximize) -1.0e+INF)
+                              ((min minimize) +1.0e+INF))))
+           (loopy--main-body
+            . ,(cl-ecase name
+                 (append
+                  `(setq ,var-or-val (append ,var-or-val ,val)))
+                 (collect
+                  `(setq ,var-or-val (append ,var-or-val (list ,val))))
+                 (concat
+                  `(setq ,var-or-val (concat ,var-or-val ,val)))
+                 (vconcat
+                  `(setq ,var-or-val (vconcat ,var-or-val ,val)))
+                 (count
+                  `(if ,val (setq ,var-or-val (1+ ,var-or-val))))
+                 ((max maximize)
+                  `(setq ,var-or-val (max ,var-or-val ,val)))
+                 ((min minimize)
+                  `(setq ,var-or-val (min ,var-or-val ,val)))
+                 (nconc
+                  `(setq ,var-or-val (nconc ,var-or-val ,val)))
+                 ((push-into push)
+                  `(push ,val ,var-or-val))
+                 (sum
+                  `(setq ,var-or-val (+ ,var-or-val ,val)))))
+           (loopy--implicit-return . ,var-or-val)))
+        (list
+         (let ((value-holder (gensym))
+               (is-proper-list (proper-list-p var-or-val))
+               (normalized-reverse-var))
+           (let ((instructions `(((loopy--implicit-vars . (,value-holder nil))
+                                  (loopy--main-body . (setq ,value-holder ,val))))))
+             ;; If `var-or-val' is a list, always create a "normalized" variable
+             ;; list, since proper lists are easier to work with, as many
+             ;; looping/mapping functions expect them.
+             (while (car-safe var-or-val)
+               (push (pop var-or-val) normalized-reverse-var))
+             ;; If the last element in `var-or-val' was a dotted pair, then
+             ;; `var-or-val' is now a single symbol, which must still be added
+             ;; to the normalized `var-or-val' list.
+             (when var-or-val (push var-or-val normalized-reverse-var))
 
-         (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
-           (push (loopy--parse-accumulation-comands
-                  (list name symbol-or-seq `(pop ,value-holder)))
-                 instructions))
+             (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
+               (push (loopy--parse-accumulation-comands
+                      (list name symbol-or-seq `(pop ,value-holder)))
+                     instructions))
 
-         ;; Decide what to do for final assignment.
-         (push (loopy--parse-accumulation-comands
-                (list name (cl-first normalized-reverse-var)
-                      (if is-proper-list
-                          `(pop ,value-holder)
-                        value-holder)))
-               instructions)
+             ;; Decide what to do for final assignment.
+             (push (loopy--parse-accumulation-comands
+                    (list name (cl-first normalized-reverse-var)
+                          (if is-proper-list
+                              `(pop ,value-holder)
+                            value-holder)))
+                   instructions)
 
-         (apply #'append (nreverse instructions)))))
+             (apply #'append (nreverse instructions)))))
 
-    (array
-     (let* ((value-holder (gensym))
-            (instructions `(((loopy--implicit-vars . (,value-holder nil))
-                             (loopy--main-body . (setq ,value-holder ,val))))))
-       (cl-loop for symbol-or-seq across var
-                for index from 0
-                do (push (loopy--parse-accumulation-comands
-                          (list
-                           name symbol-or-seq `(aref ,value-holder ,index)))
-                         instructions))
-       (apply #'append (nreverse instructions))))))
+        (array
+         (let* ((value-holder (gensym))
+                (instructions
+                 `(((loopy--implicit-vars . (,value-holder nil))
+                    (loopy--main-body . (setq ,value-holder ,val))))))
+           (cl-loop for symbol-or-seq across var-or-val
+                    for index from 0
+                    do (push (loopy--parse-accumulation-comands
+                              (list
+                               name symbol-or-seq `(aref ,value-holder ,index)))
+                             instructions))
+           (apply #'append (nreverse instructions)))))
+
+    ;; If not `val' given, then `var-or-val' is the value expression.  There is
+    ;; no destructuring in this case.
+    (let ((value-holder (gensym)))
+      `((loopy--implicit-vars . (,value-holder ,(cl-case name
+                                                  ((sum count)    0)
+                                                  ((max maximize) -1.0e+INF)
+                                                  ((min minimize) +1.0e+INF))))
+        (loopy--main-body
+         . ,(cl-ecase name
+              (append
+               `(setq ,value-holder (append ,value-holder ,var-or-val)))
+              (collect
+               `(setq ,value-holder (append ,value-holder (list ,var-or-val))))
+              (concat
+               `(setq ,value-holder (concat ,value-holder ,var-or-val)))
+              (vconcat
+               `(setq ,value-holder (vconcat ,value-holder ,var-or-val)))
+              (count
+               `(if ,var-or-val (setq ,value-holder (1+ ,value-holder))))
+              ((max maximize)
+               `(setq ,value-holder (max ,value-holder ,var-or-val)))
+              ((min minimize)
+               `(setq ,value-holder (min ,value-holder ,var-or-val)))
+              (nconc
+               `(setq ,value-holder (nconc ,value-holder ,var-or-val)))
+              ((push-into push)
+               `(push ,var-or-val ,value-holder))
+              (sum
+               `(setq ,value-holder (+ ,value-holder ,var-or-val)))))
+        (loopy--implicit-return . ,value-holder)))))
 
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
-  "Parse the  `return', `return-from', `leave', and `leave-from' loop commands.
+  "Parse the  `return' and `return-from' loop commands.
 
 COMMAND is the whole command.  NAME is the command name.  ARGS is
 a loop name, a return value, or a list of both."
@@ -677,25 +731,14 @@ a loop name, a return value, or a list of both."
   ;; mess the arguments to `cl-return-from' or `cl-return', and to provide a
   ;; clearer meaning.
   (cl-case name
-    ((return leave-from)
+    (return
      (unless (= (length args) 1)
-       (signal 'loopy-wrong-number-of-arguments command)))
-    (leave
-     (unless (= (length args) 0)
-       (signal 'loopy-wrong-number-of-arguments command)))
+       (signal 'loopy-wrong-number-of-arguments command))
+     `((loopy--main-body . (cl-return-from nil ,(cl-first args)))))
     (return-from
      (unless (= (length args) 2)
-       (signal 'loopy-wrong-number-of-arguments command))))
-  ;; Parse
-  `((loopy--main-body . ,(cl-case name
-                           (return
-                            `(cl-return-from nil ,(cl-first args)))
-                           (return-from
-                            `(cl-return-from ,(cl-first args) ,(cl-second args)))
-                           ((leave break)
-                            `(cl-return-from nil nil))
-                           ((leave-from break-from)
-                            `(cl-return-from ,(cl-first args) nil))))))
+       (signal 'loopy-wrong-number-of-arguments command))
+     `((loopy--main-body . (cl-return-from ,(cl-first args) ,(cl-second args)))))))
 
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
@@ -737,8 +780,6 @@ COMMAND-LIST."
     (do          . loopy--parse-do-command)
     (expr        . loopy--parse-expr-command)
     (if          . loopy--parse-if-command)
-    (leave       . loopy--parse-early-exit-commands)
-    (leave-from  . loopy--parse-early-exit-commands)
     (list        . loopy--parse-list-command)
     (list-ref    . loopy--parse-list-ref-command)
     (max         . loopy--parse-accumulation-comands)
@@ -818,6 +859,7 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--main-body)
         (loopy--latter-body)
         (loopy--post-conditions)
+        (loopy--implicit-return)
 
         ;; -- Variables for constructing code --
         (loopy--skip-used))
@@ -869,6 +911,9 @@ Returns are always explicit.  See this package's README for more information."
              (push (cdr instruction) loopy--latter-body))
             (loopy--post-conditions
              (push (cdr instruction) loopy--post-conditions))
+            (loopy--implicit-return
+             (unless (loopy--already-implicit-return (cdr instruction))
+               (push (cdr instruction) loopy--implicit-return)))
 
             ;; Code for conditionally constructing the loop body.
             (loopy--skip-used
@@ -986,7 +1031,9 @@ Returns are always explicit.  See this package's README for more information."
                         ;; Be sure that the `cl-block' defaults to returning
                         ;; nil.  This can be overridden by any call to
                         ;; `cl-return-from'.
-                        nil)
+                        ,(if (= 1 (length loopy--implicit-return))
+                             (car loopy--implicit-return)
+                           `(list ,@(nreverse loopy--implicit-return))))
               ;; Will always be a single expression after wrapping with
               ;; `cl-block'.
               result-is-one-expression t)

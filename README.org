@@ -127,23 +127,21 @@ please let me know.
 
   #+begin_src emacs-lisp
     ;; Collecting 10 random numbers:
-    ;; cl-loop, iter, for, loopy
+    ;; cl-loop, iterate, for, loopy
 
     (cl-loop repeat 10 collect (random 10))
 
-    (iter (repeat 10) (collect (random 10)))
+    (iterate (repeat 10) (collect (random 10)))
 
     (for:for ((i repeat 10) (randoms collecting (random 10))))
 
-    (loopy ((repeat 10) (collect randoms (random 10)))
-           (return randoms))
+    (loopy ((repeat 10) (collect (random 10))))
   #+end_src
 
   Generally, I’d expect that all of the packages handle basic use cases in
   similar ways.  While =iterate= can apparently embed its looping constructs in
-  arbitrary code, I don’t think that either =loopy= or =for= allow that.  The
-  most apparent difference to me is that Loopy doesn’t currently have implicit
-  return values.
+  arbitrary code, =loopy= doesn’t allow that, and I believe that the same is
+  true of =for=.
 
   However, Loopy is not yet feature complete.  Please request features or report
   problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
@@ -169,11 +167,12 @@ please let me know.
 
   The loop ends when any condition required by a loop command evaluates to
   false.  If no conditions are needed, the loop runs infinitely until a =return=
-  or =leave= command is reached.  See the section [[#exiting-the-loop-early][Exiting the Loop Early]].
+  or =return-from= command is reached.  See the section [[#exiting-the-loop-early][Exiting the Loop Early]].
 
-  Return values must be stated explicitly, either as an early return in the loop
-  body via the =return= or =return-from= commands, or as part of the
-  =finally-return= macro argument.  =nil= is returned by default.
+  Except when using [[#accumulation-commands][accumulating loop commands]], return values must be stated
+  explicitly, either as an early return in the loop body via the =return= or
+  =return-from= commands, or as part of the =finally-return= macro argument.
+  =nil= is returned by default.
 
 ** Macro Arguments
    :PROPERTIES:
@@ -482,7 +481,7 @@ please let me know.
     Accumulation commands are used to repeatedly update a variable using a
     value.  In that way, they are something like shortcuts for several different
     ways of using the =expr= command.  For example, =(sum my-sum my-var)= is
-    really just another way of saying =(expr my-sum my-var (+ my-sum my-var))=.
+    really just another way of saying =(expr my-sum 0 (+ my-sum my-var))=.
 
     If needed, you can refer to the same variable in multiple accumulation
     commands, such as in the following.
@@ -519,11 +518,30 @@ please let me know.
              (return sum1 sum2 sum3))
     #+end_src
 
-    _Importantly_, and unlike in =cl-loop=, the presence of an accumulation
-    command does not imply a return value (though I am open to adding this
-    later).  You must provide a variable in which to store the accumulated
-    value, which you can return using an [[#exiting-the-loop-early][exiting command]] or the =finally-return=
-    macro argument.
+    Using an accumulation command implies a return value.  If there are multiple
+    accumulations, or destructured accumulations, than the implied return value
+    of the loop is a list of those accumulated values in the order that their
+    respective command occurs in the loop body.  This implied return value can
+    be overridden by using the =return= and =return-from= loop commands or a
+    =finally-return= macro argument.
+
+    #+begin_src emacs-lisp
+      ;; Note that `my-collection' is the first value in the implied return,
+      ;; even though the collection happens after the first summation step.
+      ;;
+      ;; => (((4 5 6)) 5 7 9), for `my-collection', `sum1', `sum2', `sum3'
+      (loopy ((list elem '((1 2 3) (4 5 6)))
+              (when (equal elem '(4 5 6))
+                (collect my-collection elem))
+              (sum (my-sum1 my-sum2 my-sum3) elem)))
+    #+end_src
+
+    Like ~cl-loop~, you do not need to supply a variable name to accumulation
+    commands.  With only one argument, they accumulate values into a generated
+    variable and use that variable as an implicit return value.  Unlike
+    ~cl-loop~, this generation means that if you want accumulation commands to
+    act on the same variable, you must supply the same =VAR= as the first
+    argument to each command.
 
     - =(append VAR EXPR)= :: Repeatedly =append= the value of =EXPR= to =VAR=.
       =VAR= starts as =nil=.
@@ -725,36 +743,6 @@ please let me know.
                  (do (loopy ((list i inner-list)
                              (when (eq i 'bad-val?)
                                (return-from outer-loop 'bad-val?)))))))
-       #+END_SRC
-
-     - =(leave|break)= :: Leave the loop, returning =nil=.
-
-       #+BEGIN_SRC emacs-lisp
-         ;; => '(1 2 3)
-         (loopy ((list i '(1 2 3 "cat" 4 5 6))
-                 (if (numberp i)
-                     (collect coll i)
-                   (leave)))
-                (return coll))
-       #+END_SRC
-
-     - =(leave-from|break-from NAME)= :: Leave the loop =NAME=, returning =nil=.
-
-       #+BEGIN_SRC emacs-lisp
-         ;; Messages “Failed!".
-         (loopy outer
-                (with (failure-condition 'fail)
-                      (failed-p nil))
-                ((list i '((1 2 3) (4 5 6) (7 fail 8)))
-                 (do (loopy ((list j i)
-                             (when (eq j failure-condition)
-                               ;; Note: Can't do (expr failed-p t), since
-                               ;;       `expr' is local to its own loop.
-                               (do (setq failed-p t))
-                               (break-from outer))))))
-                (finally-do (if failed-p
-                                (message "Failed!")
-                              (message "Success!"))))
        #+END_SRC
 
 * Adding Custom Commands
@@ -1047,7 +1035,6 @@ please let me know.
     keep the same logic that =cl-loop= uses.
   - It has more flexible control-flow commands, under which you can easily group
     sub-commands, including assignments.
-  - Using an accumulation command does not imply a return value.
   - It has a =skip= command to skip the rest of the loop body and immediately
     start the next iteration.  Of course, a similar effect could be achieved
     using the =when= or =unless= commands.
@@ -1206,12 +1193,12 @@ please let me know.
     :CUSTOM_ID: iteration-clauses
     :END:
 
-    | =cl-loop=          | =loopy=                 |
-    |--------------------+-------------------------|
-    | =repeat INT=       | =(repeat INT)=          |
-    | =while COND=       | =(unless COND (leave))= |
-    | =until COND=       | =(when COND (leave))=   |
-    | =iter-by iterator= | None so far.            |
+    | =cl-loop=          | =loopy=                      |
+    |--------------------+------------------------------|
+    | =repeat INT=       | =(repeat INT)=               |
+    | =while COND=       | =(unless COND (return nil))= |
+    | =until COND=       | =(when COND (return nil))=   |
+    | =iter-by iterator= | None so far.                 |
 
     The clauses =always=, =never=, and =thereis= can be replaced by a
     combination of an exiting command and the =after-do= (also written
@@ -1248,9 +1235,9 @@ please let me know.
     :CUSTOM_ID: accumulation-clauses
     :END:
 
-    *NOTE*: In =loopy=, accumulation commands do not imply a return value.  You
-    cannot simply do =(collect EXPR)=; you must always give a variable into which
-    to accumulate the value of the expression.
+    In =loopy=, when accumulation commands are not given a =VAR=, they
+    accumulate into different variables.  If you want accumulations to act on
+    the same variable, you must give the same =VAR=.
 
     | =cl-loop=                | =loopy=              |
     |--------------------------+----------------------|

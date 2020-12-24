@@ -25,7 +25,7 @@
                                          (finally-return my-ret)))))
                (eq nil (eval (quote (loopy (with (my-ret nil))
                                            (loop (list i '(1 2 3 4))
-                                                 (leave))
+                                                 (return nil))
                                            (after-do (setq my-ret t))
                                            (finally-return my-ret))))))))
 
@@ -79,22 +79,22 @@
 (ert-deftest do ()
   (should
    (equal '(t nil)
-           (eval (quote (loopy (with (my-val nil)
-                                     (this-nil? t))
-                               (loop (do (setq my-val t)
-                                         (setq this-nil? (not my-val)))
-                                     (leave))
-                               (finally-return my-val this-nil?)))))))
+          (eval (quote (loopy (with (my-val nil)
+                                    (this-nil? t))
+                              (loop (do (setq my-val t)
+                                        (setq this-nil? (not my-val)))
+                                    (return nil))
+                              (finally-return my-val this-nil?)))))))
 
 ;;;;; Expr
 (ert-deftest expr-one-value ()
   (should
    (and (eval (quote (loopy (with (my-val nil))
                             (loop (expr my-val t)
-                                  (leave))
+                                  (return nil))
                             (finally-return my-val))))
         (equal '(t t) (eval (quote (loopy ((expr (i j) '(t t))
-                                           (leave))
+                                           (return nil))
                                           (return i j))))))))
 
 (ert-deftest expr-two-values ()
@@ -613,6 +613,14 @@
                                 (collect (c1 (c2 . [c3 c4])) i))
                                (return c1 c2 c3 c4))))))))
 
+(ert-deftest accumulation-implicit-returns ()
+  (should
+   (and
+    (= 6 (loopy ((list i '(1 2 3)) (sum s i))))
+    (equal '(1 2 3) (eval (quote (loopy ((list i '(1 2 3)) (collect c i))))))
+    (equal '(2 4)
+           (eval (quote (loopy ((list i '((1 4) (2 3))) (max (m1 m2) i)))))))))
+
 ;;; Control Flow
 ;;;; Conditionals
 ;;;;; If
@@ -709,38 +717,7 @@ Not multiple of 3: 7")))
                           (finally-return (list evens odds holding-list)))))
                  '((4 2 0) (5 3 1) ((4 2 0) (2 0) (0))))))
 
-;;;; Exiting the Loop Early
-;;;;; Leave
-(ert-deftest leave ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy ((list i '(1 2 3 "cat" 4 5 6))
-                                      (if (numberp i)
-                                          (collect coll i)
-                                        (leave)))
-                                     (return coll)))))))
-
-;;;;; Leave From
-(ert-deftest leave-from-single-loop ()
-  (should (= 6
-             (eval (quote (loopy my-loop
-                                 ((list i (number-sequence 1 10))
-                                  (when (> i 5)
-                                    (leave-from my-loop)))
-                                 (return i)))))))
-
-(ert-deftest leave-from-outer-loop ()
-  (should
-   (= 21
-      (eval (quote (loopy outer
-                          ;; Could use ‘sum’ command, but don’t want dependencies.
-                          (with (sum 0))
-                          (loop (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
-                                (do (loopy (loop (list i sublist)
-                                                 (do (setq sum (+ sum i)))
-                                                 (when (> sum 15)
-                                                   (leave-from outer))))))
-                          (finally-return sum)))))))
-
+;; ;; Exiting the Loop Early
 ;;;;; Return
 (ert-deftest return ()
   (should (= 6 (eval (quote (loopy (with  (j 0))
@@ -788,7 +765,7 @@ Not multiple of 3: 7")))
               (list (cons 'target-sum #'my-loopy-sum-command)))
   (should (= 6
              (eval (quote (loopy (loop (target-sum my-target 1 2 3)
-                                       (leave))
+                                       (return nil))
                                  (finally-return my-target)))))))
 
 ;; NOTE: Also tests that post-conditions work as expected.
