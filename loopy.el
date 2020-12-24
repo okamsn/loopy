@@ -180,7 +180,7 @@ PLACE should be `loopy--explicit-vars' or `loopy--implicit-vars'."
   (when (symbolp vars) (setq vars (list vars)))
   (mapcar (lambda (var) (cons place `(,var ,value))) vars))
 
-(defun loopy--create-destructured-assignment
+(cl-defun loopy--create-destructured-assignment
     (var value-expression &optional generalized)
   "If needed, use destructuring to initialize and assign to variables.
 
@@ -197,82 +197,120 @@ variable."
       (cl-typecase var
         ;; Check if `var' is a single symbol.
         (symbol
+         ;; Most functions expect a list of instructions, not one.
          `((loopy--explicit-generalized-vars . (,var ,value-expression))))
         (list
          ;; If `var' is not proper, then the end of `var' can't be `car'-ed
          ;; safely, as it is just a symbol and not a list.  Therefore, if `var'
          ;; is still non-nil after the `pop'-ing, we know to set the remaining
          ;; symbol that is now `var' to some Nth `cdr'.
-         (let ((set-list) (index 0))
+         (let ((instructions) (index 0))
            (while (car-safe var)
-             (push `(loopy--explicit-generalized-vars
-                     . (,(pop var) (nth ,index ,value-expression)))
-                   set-list)
-             (cl-incf index))
+             (push (loopy--create-destructured-assignment
+                    (pop var) `(nth ,index ,value-expression) 'generalized)
+                   instructions)
+             (setq index (1+ index)))
            (when var
-             (push `(loopy--explicit-generalized-vars
-                     . (,var (nthcdr ,index ,value-expression)))
-                   set-list))
-           set-list))
+             (push (loopy--create-destructured-assignment
+                    var `(nthcdr ,index ,value-expression) 'generalized)
+                   instructions))
+           (apply #'append (nreverse instructions))))
         (array
-         (seq-map-indexed (lambda (symbol index)
-                            `(loopy--explicit-generalized-vars
-                              . (,symbol (aref ,value-expression ,index))))
-                          var))
+         (cl-loop for symbol-or-seq across var
+                  for index from 0
+                  append (loopy--create-destructured-assignment
+                          symbol-or-seq `(aref ,value-expression ,index)
+                          'generalized)))
         (t
          (error "Don't know how to destructure this: %s" var)))
 
     ;; Otherwise assigning normal variables:
     (cl-typecase var
       (symbol
-       `((loopy--main-body     . (setq ,var ,value-expression))
-         (loopy--explicit-vars . (,var nil))))
+       `((loopy--explicit-vars . (,var nil))
+         (loopy--main-body     . (setq ,var ,value-expression))))
       (list
-       ;; If `var' is not a single symbol, make a note of what kind of list it
-       ;; is.  Always create a "normalized" variable list, since proper lists are
-       ;; easier to work with (many looping/mapping functions expect them).
-       (let ((proper-list-p (proper-list-p var))
-             (normalized-reverse-var))
+       ;; NOTE: (A . (B C)) is really just (A B C), so you can't have a
+       ;;       non-proper list with a list as the last element.  However, the
+       ;;       last element can be an array.
+       ;;
+       (let* ((is-proper-list (proper-list-p var))
+              (normalized-reverse-var nil))
+         ;; If `var' is a list, always create a "normalized" variable list,
+         ;; since proper lists are easier to work with, as many looping/mapping
+         ;; functions expect them.
          (while (car-safe var)
            (push (pop var) normalized-reverse-var))
          ;; If the last element in `var' was a dotted pair, then `var' is now a
          ;; single symbol, which must still be added to the normalized `var'
          ;; list.
          (when var (push var normalized-reverse-var))
-         (cons `(loopy--main-body
-                 ;; Create just a single `setq' call.
-                 . (setq
-                    ;; For a list (A B C D):
-                    ;; 1. Set D to the `value-expression'.
-                    ;; 2. Set A, B, and C (in that order) by `pop'-ing D.
-                    ;; 3. If using a normal var list, now that D is a list
-                    ;;    of one element, set D to its own `car'.
-                    ,@(let* ((last-var (car normalized-reverse-var))
-                             (set-list `((,last-var
-                                          ,value-expression))))
-                        (dolist (symbol (reverse (cl-rest normalized-reverse-var)))
-                          (push `(,symbol (pop ,last-var))
-                                set-list))
-                        (when proper-list-p
-                          (push `(,last-var (car ,last-var))
-                                set-list))
-                        (apply #'append (nreverse set-list)))))
-               (loopy--initialize-vars 'loopy--explicit-vars
-                                       normalized-reverse-var))))
+
+         ;; The `last' of (A B . C) is (B . C), but we actually want C, so we
+         ;; check the "normalized" var list.
+         (let* ((last-var (cl-first normalized-reverse-var))
+                (last-var-is-symbol (symbolp last-var))
+                ;; To only evaluate `value-expression' once, we bind it's value
+                ;; to last declared element/variable in `var', and set the
+                ;; remaining variables by `pop'-ing that lastly listed, firstly
+                ;; set variable.  However, if that variable is actually a
+                ;; sequence, then we need to use a `value-holder' instead.
+                (value-holder (if last-var-is-symbol last-var (gensym)))
+                (instructions
+                 `(((,(if last-var-is-symbol    ; We're going to append lists
+                          'loopy--explicit-vars ; of instructions, so we make
+                        'loopy--implicit-vars)  ; a list of 1 element, and
+                     . (,value-holder nil))     ; in that element place two
+                    (loopy--main-body           ; instructions.
+                     . (setq ,value-holder ,value-expression))))))
+
+           (let ((passed-value-expression `(pop ,value-holder)))
+             (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
+               (push (loopy--create-destructured-assignment
+                      symbol-or-seq passed-value-expression)
+                     instructions)))
+
+           ;; Now come back to end.  If `var' is not a proper list and
+           ;; `last-var' is a symbol (as with the B in '(A . B)) , then B is now
+           ;; already the correct value (which is the ending `cdr' of the list),
+           ;; and we don't have to do anything else.
+           (if (and last-var-is-symbol is-proper-list)
+               ;; Otherwise, if `var' is a proper list and `last-var' is a
+               ;; symbol, then we need to take the `car' of that `cdr'.
+               (push `((loopy--main-body
+                        . (setq ,last-var (car ,last-var))))
+                     instructions)
+             ;; Otherwise, `last-var' is a sequence.
+             (if is-proper-list
+                 ;; If `var' is a proper list, then we now have a list like ((C
+                 ;; D)) from (A B (C D)).  We only want to pass in the (C D).
+                 (push (loopy--create-destructured-assignment
+                        last-var `(car ,value-holder))
+                       instructions)
+               ;; Otherwise, we might have something like [C D] from
+               ;; (A B . [C D]), where we don't need to take the `car'.
+               (push (loopy--create-destructured-assignment
+                      last-var value-holder)
+                     instructions)))
+
+           ;; Return the list of instructions.
+           (apply #'append (nreverse instructions)))))
+
       (array
-       (let ((value-holder (gensym)))
-         ;; We need a value holder so that `value-expression' is only evaluated
-         ;; once.
-         `(,@(loopy--initialize-vars
-              'loopy--explicit-vars
-              (cons value-holder (cl-coerce var 'list)))
-           (loopy--main-body
-            . (setq ,value-holder ,value-expression
-                    ,@(apply #'append
-                             (seq-map-indexed
-                              (lambda (symbol index)
-                                `(,symbol (aref ,value-holder ,index)))
-                              var)))))))
+       ;; For arrays, we always need a value holder so that `value-expression'
+       ;; is evaluated only once.
+       (let* ((value-holder (gensym))
+              (instructions
+               `(((loopy--implicit-vars . (,value-holder nil))
+                  (loopy--main-body . (setq ,value-holder ,value-expression))))))
+         (cl-loop for symbol-or-seq across var
+                  for index from 0
+                  do (push (loopy--create-destructured-assignment
+                            symbol-or-seq `(aref ,value-holder ,index))
+                           instructions))
+
+         ;; Return the list of instructions.
+         (apply #'append (nreverse instructions))))
       (t
        (error "Don't know how to destructure this: %s" var)))))
 

@@ -162,6 +162,29 @@
                       (eval (quote (loopy ((array [i j k] [[1 2 3] [4 5 6]]))
                                           (return i j k))))))))
 
+
+(ert-deftest array-recursive-destructuring ()
+  (should
+   (and
+    (equal '(5 5 6)
+           (eval (quote (loopy ((array (a [b c]) [(1 [1 2]) (5 [5 6])]))
+                               (finally-return (list a b c))))))
+    (equal '(4 5 6)
+           (eval
+            (quote
+             (loopy ((array [a [b c]] [[1 [2 3]] [4 [5 6]]]))
+                    (return a b c)))))
+    (equal '(4 5 6)
+           (eval
+            (quote
+             (loopy ((array [a [b [c]]] [[1 [2 [3]]] [4 [5 [6]]]]))
+                    (return a b c)))))
+    (equal '(4 5 6)
+           (eval
+            (quote
+             (loopy ((array [a (b c)] [[1 (2 3)] [4 (5 6)]]))
+                    (return a b c))))))))
+
 ;;;;; Array Ref
 (ert-deftest array-ref ()
   (should (equal "aaa"
@@ -193,6 +216,23 @@
                                                (setf j 8)
                                                (setf k 9)))
                                           (return my-array))))))))
+
+(ert-deftest array-ref-recursive-destructuring ()
+  (should (and (equal [(7 [8 9]) (7 [8 9])]
+                      (eval (quote (loopy (with (my-array [(1 [2 3]) (4 [5 6])]))
+                                          ((array-ref (i [j k]) my-array)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-array)))))
+               (equal [[7 [8 9] 4] [7 [8 9] 8]]
+                      (eval (quote (loopy (with (my-array [[1 [2 3] 4] [4 [5 6] 8]]))
+                                          ((array-ref [i [j k]] my-array)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-array))))))))
+
 ;;;; Cons
 (ert-deftest cons ()
   (should
@@ -247,6 +287,23 @@
                       (eval (quote (loopy ((list [i j k] '([1 2 3] [4 5 6])))
                                           (return i j k))))))))
 
+(ert-deftest list-recursive-destructuring ()
+  (should
+   (and
+    (equal '(5 5 6)
+           (eval (quote (loopy ((list (a (b c)) '((1 (1 2)) (5 (5 6)))))
+                               (finally-return (list a b c))))))
+    (equal '(5 5 6)
+           ;; This is more of an evaluation-time test.
+           (eval (quote (loopy ((list (a . (b c)) '((1 . (1 2)) (5 . (5 6)))))
+                               (finally-return (list a b c))))))
+    (equal '(4 5 6)
+           (loopy ((list (a . [b c]) '((1 . [2 3]) (4 . [5 6]))))
+                  (return a b c)))
+    (equal '(5 5 6)
+           (eval (quote (loopy ((list (a (b (c))) '((1 (1 (2))) (5 (5 (6))))))
+                               (finally-return (list a b c)))))))))
+
 ;;;; List Ref
 (ert-deftest list-ref ()
   (should (equal  '(7 7 7)
@@ -257,26 +314,42 @@
 
 (ert-deftest list-ref-destructuring ()
   (should (and (equal '((7 8 9) (7 8 9))
-                       (eval (quote (loopy (with (my-list '((1 2 3) (4 5 6))))
-                                           ((list-ref (i j k) my-list)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k 9)))
-                                           (return my-list)))))
+                      (eval (quote (loopy (with (my-list '((1 2 3) (4 5 6))))
+                                          ((list-ref (i j k) my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-list)))))
                (equal '((7 8 9 10) (7 8 9 10))
-                       (eval (quote (loopy (with (my-list '((1 2 3 4) (4 5 6 8))))
-                                           ((list-ref (i j . k) my-list)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k '(9 10))))
-                                           (return my-list)))))
+                      (eval (quote (loopy (with (my-list '((1 2 3 4) (4 5 6 8))))
+                                          ((list-ref (i j . k) my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-list)))))
                (equal '([7 8 9 4] [7 8 9 8])
-                       (eval (quote (loopy (with (my-list '([1 2 3 4] [4 5 6 8])))
-                                           ((list-ref [i j k] my-list)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k 9)))
-                                           (return my-list))))))))
+                      (eval (quote (loopy (with (my-list '([1 2 3 4] [4 5 6 8])))
+                                          ((list-ref [i j k] my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-list))))))))
+
+(ert-deftest list-ref-recursive-destructuring ()
+  (should (and (equal '((7 (8 9)) (7 (8 9)))
+                      (eval (quote (loopy (with (my-list '((1 (2 3)) (4 (5 6)))))
+                                          ((list-ref (i (j k)) my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-list)))))
+               (equal '([7 (8 9) 4] [7 (8 9) 8])
+                      (eval (quote (loopy (with (my-list '([1 (2 3) 4] [4 (5 6) 8])))
+                                          ((list-ref [i (j k) l] my-list)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-list))))))))
 
 ;;;; Repeat
 (ert-deftest repeat-no-var ()
