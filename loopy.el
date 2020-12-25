@@ -726,19 +726,28 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
   "Parse the  `return' and `return-from' loop commands.
 
 COMMAND is the whole command.  NAME is the command name.  ARGS is
-a loop name, a return value, or a list of both."
+a loop name, return values, or a list of both."
   ;; Check arguments.  Really, the whole reason to have these commands is to not
   ;; mess the arguments to `cl-return-from' or `cl-return', and to provide a
   ;; clearer meaning.
-  (cl-case name
-    (return
-     (unless (= (length args) 1)
-       (signal 'loopy-wrong-number-of-arguments command))
-     `((loopy--main-body . (cl-return-from nil ,(cl-first args)))))
-    (return-from
-     (unless (= (length args) 2)
-       (signal 'loopy-wrong-number-of-arguments command))
-     `((loopy--main-body . (cl-return-from ,(cl-first args) ,(cl-second args)))))))
+  (let ((arg-length (length args)))
+    (cl-case name
+      (return
+       `((loopy--main-body
+          . (cl-return-from nil ,(cond
+                                  ((zerop arg-length) nil)
+                                  ((= 1 arg-length)  (car args))
+                                  (t                 `(list ,@args)))))))
+      (return-from
+       (let ((arg-length (length args)))
+         (when (zerop arg-length) ; Need at least 1 arg.
+           (signal 'loopy-wrong-number-of-arguments command))
+         `((loopy--main-body
+            . (cl-return-from ,(cl-first args)
+                ,(cond
+                  ((= 1 arg-length) nil)
+                  ((= 2 arg-length) (cl-second args))
+                  (t                `(list ,@(cl-rest args))))))))))))
 
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."

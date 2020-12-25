@@ -724,7 +724,11 @@ please let me know.
      of =cl-return-from= underneath.  Indeed, you could use =(do (cl-return-from
      NAME [EXPR]))= to achieve the same effect.
 
-     - =(return EXPR)= :: Leave the current loop, returning the value of =EXPR=.
+     If multiple =EXPR= are passes to the =return= or =return-from=, these
+     commands will return a list of those =EXPR=.  If not =EXPR= is given, =nil=
+     is returned.
+
+     - =(return [EXPRS])= :: Leave the current loop, returning =[EXPRS]=.
 
        #+BEGIN_SRC emacs-lisp
          (loopy (with  (j 0))
@@ -733,8 +737,7 @@ please let me know.
                    (return j)))) ; => 6
        #+END_SRC
 
-     - =(return-from NAME EXPR)= :: Leave the loop =NAME=, returning the value
-       of =EXPR=.
+     - =(return-from NAME [EXPRS])= :: Leave the loop =NAME=, returning =[EXPRS]=.
 
        #+BEGIN_SRC emacs-lisp
          ;; => 'bad-val?

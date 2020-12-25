@@ -745,6 +745,14 @@ Not multiple of 3: 7")))
                                                  (when (> sum 15)
                                                    (return-from outer i))))))))))))
 
+(ert-deftest return-commands-multiple-values ()
+  (should
+   (and
+    (equal '(1 2 3 4)
+           (eval (quote (loopy ((return 1 2 3 4))))))
+    (equal '(1 2 3 4)
+           (eval (quote (loopy my-loop ((return-from my-loop 1 2 3 4)))))))))
+
 ;;;;; Skip
 (ert-deftest skip ()
   (should (cl-every #'cl-oddp
