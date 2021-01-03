@@ -265,13 +265,13 @@ please let me know.
    collecting =i= into =coll=.
 
    For convenience and understanding, the same command can have multiple names
-   (such as =do= having the alias =progn=), and some commands can take optional
-   arguments (such as =list=).
+   (such as =expr= having the alias =exprs=), and some commands can take
+   optional arguments (such as =list=).
 
    For simplicity, the commands are described using the following notation:
 
    - If a command has multiple names, the names are separated by a vertical
-     bar, such as in =do|progn=.
+     bar, such as in =expr|exprs=.
    - =VAR= is an unquoted symbol that will be used as a variable name, such as
      =i= in =(list i my-list)=.
    - =FUNC= is a Lisp function name, such as =my-func=, =#'my-func= or
@@ -346,8 +346,7 @@ please let me know.
     :CUSTOM_ID: commands-for-generic-evaluation
     :END:
 
-    - =(do|progn EXPRS)= :: Evaluate multiple Lisp expressions, like a
-      =progn=.
+    - =(do EXPRS)= :: Evaluate multiple Lisp expressions, like a =progn=.
 
       You cannot include arbitrary code in the loop body.  Trying to do so will
       result in errors, as the macro will attempt to interpret such code as a

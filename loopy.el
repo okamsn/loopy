@@ -811,7 +811,6 @@ COMMAND-LIST."
     (min         . loopy--parse-accumulation-comands)
     (minimize    . loopy--parse-accumulation-comands)
     (nconc       . loopy--parse-accumulation-comands)
-    (progn       . loopy--parse-do-command)
     (push        . loopy--parse-accumulation-comands)
     (push-into   . loopy--parse-accumulation-comands)
     (repeat      . loopy--parse-repeat-command)
