@@ -379,6 +379,20 @@ This uses the command name (such as `list' in `(list i my-list)')."
           full-instructions)
     full-instructions))
 
+(cl-defun loopy--parse-group-command ((_ &rest body))
+  "Parse the `group' loop command.
+
+BODY is one or more commands to be grouped by a `progn' form."
+  (let ((full-instructions) (progn-body))
+    (dolist (instruction (loopy--parse-loop-commands body))
+      (if (eq (car instruction) 'loopy--main-body)
+          (push (cdr instruction) progn-body)
+        (push instruction full-instructions)))
+    (push (cons 'loopy--main-body
+                (cons 'progn (nreverse progn-body)))
+          full-instructions)
+    full-instructions))
+
 (cl-defun loopy--parse-if-command ((_
                                     condition
                                     &optional if-true
@@ -788,6 +802,7 @@ COMMAND-LIST."
     (count       . loopy--parse-accumulation-comands)
     (do          . loopy--parse-do-command)
     (expr        . loopy--parse-expr-command)
+    (group       . loopy--parse-group-command)
     (if          . loopy--parse-if-command)
     (list        . loopy--parse-list-command)
     (list-ref    . loopy--parse-list-ref-command)

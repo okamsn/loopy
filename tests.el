@@ -137,6 +137,16 @@
           (goto-char (point-min))
           (how-many "(j nil)")))))
 
+;;;;; Group
+(ert-deftest group ()
+  (should
+   (equal '((2 4 6) (2 4 6))
+          (eval (quote (loopy ((list i '(1 2 3 4 5 6))
+                               (if (cl-evenp i)
+                                   (group (collect c1 i)
+                                          (collect c2 i))))
+                              (return c1 c2)))))))
+
 ;;;; Iteration
 ;;;;; Array
 (ert-deftest array ()

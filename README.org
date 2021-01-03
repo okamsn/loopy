@@ -377,6 +377,11 @@ please let me know.
                (return coll)) ; => '(0 1 2 3 4)
       #+END_SRC
 
+    - =(group [CMDS])= :: Evaluate multiple loop commands, as if in a =progn=.
+      This is similar to =do=, but runs commands instead of normal Lisp
+      expressions.  Currently, this command is only useful when used with the
+      =if= command.
+
 *** Iteration and Looping Commands
     :PROPERTIES:
     :CUSTOM_ID: iteration-and-looping-commands
