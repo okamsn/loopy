@@ -556,19 +556,30 @@ please let me know.
                (return coll)) ; => '(1 2 3 4 5 6)
       #+END_SRC
 
-    - =(collect VAR EXPR)= :: Repeatedly =append= a list containing the value of
-      =EXPR= to =VAR=.  =VAR= starts as =nil=.
+    - =(collect VAR EXPR)= :: Collect the value of =EXPR= into a list.  To
+      better performance, =collect= behaves differently depending on whether
+      =VAR= is provided.
+
+      When provided, repeatedly =append= a list containing the value of =EXPR=
+      to =VAR=.  When not provided, repeatedly =push= the value of =EXPR= into a
+      list, and =nreverse= the list at the end of the loop.
+
+      =VAR= starts as =nil=.
 
       #+BEGIN_SRC emacs-lisp
-        (loopy ((seq i [1 2 3])
-                (collect coll i))
-               (finally-return coll)) ; => '(1 2 3)
+        ;; => '(1 2 3)
+        (loopy ((list i '(1 2 3))
+                (collect i)))
+
+        ;; => '((1 2 3) ((1) (1 2) (1 2 3)))
+        (loopy ((list i '(1 2 3))
+                (collect coll1 i)
+                (collect coll1)))
       #+END_SRC
 
-      In =cl-loop=, =collect EXPR= means to repeatedly =push= the value of
-      =EXPR= into the accumulated list, and then =nreverse= that list for a
-      return value.  If you specifically want this behavior, then you should use
-      the =push-into= command like in its respective example below.
+      If you want to =push= values into a provided variable (instead of
+      repeatedly appending a list of one element), use the =push-into= command
+      (see below).
 
     - =(concat VAR EXPR)= :: Repeatedly =concat= the value of =EXPR= onto the
       end of =VAR=.  =VAR= starts as =nil=.  See the =vconcat= command for

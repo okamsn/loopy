@@ -481,6 +481,16 @@
                                       (collect coll j))
                                      (finally-return coll)))))))
 
+(ert-deftest collect-nreverse ()
+  (should
+   (= 1 (with-temp-buffer
+          (prin1 (macroexpand '(loopy ((list i '(1 2 3))
+                                       (collect i))))
+                 (current-buffer))
+          (goto-char (point-min))
+          (how-many "(nreverse")))))
+
+
 (ert-deftest collect-destructuring ()
   (should (and (equal '((1 4) ((2 3) (5 6)))
                       (eval (quote (loopy ((list j '((1 2 3) (4 5 6)))

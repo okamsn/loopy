@@ -717,7 +717,10 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
               (append
                `(setq ,value-holder (append ,value-holder ,var-or-val)))
               (collect
-               `(setq ,value-holder (append ,value-holder (list ,var-or-val))))
+               ;; NOTE: This is different from the behavior where a variable is
+               ;;       specified.  To be more like other libraries, we push
+               ;;       into `value-holder' and `nreverse' the implicit return.
+               `(setq ,value-holder (cons ,var-or-val ,value-holder)))
               (concat
                `(setq ,value-holder (concat ,value-holder ,var-or-val)))
               (vconcat
@@ -734,7 +737,9 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                `(push ,var-or-val ,value-holder))
               (sum
                `(setq ,value-holder (+ ,value-holder ,var-or-val)))))
-        (loopy--implicit-return . ,value-holder)))))
+        (loopy--implicit-return . ,(if (eq name 'collect)
+                                       `(nreverse ,value-holder)
+                                     value-holder))))))
 
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
   "Parse the  `return' and `return-from' loop commands.
