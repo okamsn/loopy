@@ -19,6 +19,10 @@ keywords.
 (2) and CL (3) libraries (including ‘cl-loop’) and Emacs’s regular
 looping and mapping features.
 
+              *NOTE*: Loopy is still in its early stages.
+Constructive criticism is welcome. If you see a place for improvement,
+                          please let me know.
+
 * Menu:
 
 * Introduction::
@@ -146,16 +150,36 @@ optional, but having a loop without a body wouldn’t be useful.
       ;; numbers.
       (finally-return (list found-evens found-odds)))
 
-   Loopy is not yet feature complete.  Here are some things that would
-be nice to add/have:
-   • Add equivalent features for all that ‘cl-loop’ can do.  Many things
-     are already covered, but not everything.  See *note Translating
-     from cl-loop:: for more.
-   • De-structuring can be useful, but this can already be done using
-     repeated ‘expr’ commands.
-   • Currently, code is evaluated even if it is unused.  Conditionally
-     building the code that is evaluated would be more efficient, but
-     decreases readability.
+   Loopy is not the only Lisp library that uses expressions instead of
+keyword clauses (like in ‘cl-loop’).  ‘iterate’
+(https://common-lisp.net/project/iterate/) and ‘for’
+(https://github.com/Shinmera/for/) are two examples in Common Lisp.  I
+know of no examples for Emacs Lisp.
+
+   Though I am not familiar with either, it seems to me that the ‘loopy’
+macro is more like ‘for’ than it is like ‘iterate’.  I suspect that,
+given it’s youth, Loopy is much simpler than both.
+
+     ;; Collecting 10 random numbers:
+     ;; cl-loop, iterate, for, loopy
+
+     (cl-loop repeat 10 collect (random 10))
+
+     (iterate (repeat 10) (collect (random 10)))
+
+     (for:for ((i repeat 10) (randoms collecting (random 10))))
+
+     (loopy ((repeat 10) (collect (random 10))))
+
+   Generally, I’d expect that all of the packages handle basic use cases
+in similar ways.  While ‘iterate’ can apparently embed its looping
+constructs in arbitrary code, ‘loopy’ doesn’t allow that, and I believe
+that the same is true of ‘for’.
+
+   However, Loopy is not yet feature complete.  Please request features
+or report problems in this project’s issues tracker
+(https://github.com/okamsn/loopy/issues).  While most things are
+covered, full feature parity with ‘cl-loop’ is still being worked on.
 
    ---------- Footnotes ----------
 
@@ -182,12 +206,14 @@ Loop Commands::.
 
    The loop ends when any condition required by a loop command evaluates
 to false.  If no conditions are needed, the loop runs infinitely until a
-‘return’ or ‘leave’ command is reached.  See the section *note Exiting
-the Loop Early::.
+‘return’ or ‘return-from’ command is reached.  See the section *note
+Exiting the Loop Early::.
 
-   Return values must be stated explicitly, either as an early return in
-the loop body via the ‘return’ or ‘return-from’ commands, or as part of
-the ‘finally-return’ macro argument.  ‘nil’ is returned by default.
+   Except when using *note accumulating loop commands: Accumulation
+Commands, return values must be stated explicitly, either as an early
+return in the loop body via the ‘return’ or ‘return-from’ commands, or
+as part of the ‘finally-return’ macro argument.  ‘nil’ is returned by
+default.
 
 * Menu:
 
@@ -282,14 +308,14 @@ order.  This means that attempting to do something like
 list after collecting ‘i’ into ‘coll’.
 
    For convenience and understanding, the same command can have multiple
-names (such as ‘do’ having the alias ‘progn’), and some commands can
+names (such as ‘expr’ having the alias ‘exprs’), and some commands can
 take optional arguments (such as ‘list’).
 
    For simplicity, the commands are described using the following
 notation:
 
    • If a command has multiple names, the names are separated by a
-     vertical bar, such as in ‘do|progn’.
+     vertical bar, such as in ‘expr|exprs’.
    • ‘VAR’ is an unquoted symbol that will be used as a variable name,
      such as ‘i’ in ‘(list i my-list)’.
    • ‘FUNC’ is a Lisp function name, such as ‘my-func’, ‘#'my-func’ or
@@ -308,6 +334,57 @@ notation:
      extension, ‘[EXPRS]’ is equivalent to ‘[EXPR [EXPR [...]]]’, and
      ‘[CMDS]’ to ‘[CMD [CMD [...]]]’.
 
+   Generally, ‘VAR’ is initialized to ‘nil’, but not always.  This
+document tries to note when that is not the case.
+
+   For convenience, ‘VAR’ can be a sequence (either a list or a vector
+(as a stand-in for an array)) of symbols instead of a single symbol.
+This tells the command to “de-structure” the value of ‘EXPR’, similar to
+the functions ‘seq-let’, ‘cl-destructuring-bind’, and ‘pcase-let’.  This
+sequence of symbols can be shorter than the destructured sequence, _but
+not longer_.  If shorter, the unassigned elements of the list are simply
+ignored.  To assign the final ‘cdr’ of a destructured list, use dotted
+notation.
+
+     ;; => [(9 10 11 4) (9 10 11 8)]
+     (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
+            ((array-ref (i j k) my-array)
+             ;; NOTE: The remaining elements are ignored.
+             (do (setf i 9)
+                 (setf j 10)
+                 (setf k 11)))
+            (return my-array))
+
+     ;; => ([9 10 11 4] [9 10 11 8])
+     (loopy (with (my-list '([1 2 3 4 ] [5 6 7 8])))
+            ((list-ref [i j k] my-list)
+             ;; NOTE: The remaining elements are ignored.
+             (do (setf i 9)
+                 (setf j 10)
+                 (setf k 11)))
+            (return my-list))
+
+     ;; => (1 (2 3))
+     (loopy ((list (i . j) '((1 2 3))))
+            (return i j))
+
+     ;; => ((1 22))
+     (loopy (with (my-list '((1 2 3))))
+            ((list-ref (_ . j) my-list)
+             (do (setf j '(22))))
+            (return my-list))
+
+     ;; => [(1 22)]
+     (loopy (with (my-array [(1 2 3)]))
+            ((array-ref (_ . j) my-array)
+             (do (setf j '(22))))
+            (return my-array))
+
+   Most commands that assign variables (even the ‘-ref’ commands, which
+use ‘setf’-able places instead of actual variables) can use
+destructuring, but not all kinds of destructuring make sense in all
+situations.
+
 * Menu:
 
 * Commands for Generic Evaluation::
@@ -321,7 +398,7 @@ File: loopy.info,  Node: Commands for Generic Evaluation,  Next: Iteration and L
 2.2.1 Commands for Generic Evaluation
 -------------------------------------
 
-‘(do|progn EXPRS)’
+‘(do EXPRS)’
      Evaluate multiple Lisp expressions, like a ‘progn’.
 
      You cannot include arbitrary code in the loop body.  Trying to do
@@ -349,6 +426,12 @@ File: loopy.info,  Node: Commands for Generic Evaluation,  Next: Iteration and L
                   (collect coll i))
                  (return coll)) ; => '(0 1 2 3 4)
 
+‘(group [CMDS])’
+     Evaluate multiple loop commands, as if in a ‘progn’.  This is
+     similar to ‘do’, but runs commands instead of normal Lisp
+     expressions.  Currently, this command is only useful when used with
+     the ‘if’ command.
+
 
 File: loopy.info,  Node: Iteration and Looping Commands,  Next: Accumulation Commands,  Prev: Commands for Generic Evaluation,  Up: Loop Commands
 
@@ -357,6 +440,11 @@ File: loopy.info,  Node: Iteration and Looping Commands,  Next: Accumulation Com
 
 Iteration commands bind local variables and determine when the loop
 ends.  If no command sets that condition, then the loop runs forever.
+
+   The ‘-ref’ (as in “reference”) commands create ‘setf’-able places
+instead of true variables.  Like other commands, they can also use
+destructuring.  In such cases, the variables in the sequence ‘VAR’ are
+also ‘setf’-able places instead of true variables.
 
 ‘(array VAR EXPR)’
      Loop through the elements of the array ‘EXPR’.
@@ -376,6 +464,9 @@ ends.  If no command sets that condition, then the loop runs forever.
 ‘(cons|conses VAR EXPR [FUNC])’
      Loop through the cons cells of ‘EXPR’.  Optionally, find the cons
      cells via ‘FUNC’ instead of ‘cdr’.
+
+     To avoid unneeded variables, when not destructuring, ‘VAR’ is
+     initialized to ‘EXPR’ instead of ‘nil’.
 
           (loopy (loop (cons i '(1 2 3))
                        (collect coll i))
@@ -433,19 +524,65 @@ File: loopy.info,  Node: Accumulation Commands,  Next: Control Flow,  Prev: Iter
 2.2.3 Accumulation Commands
 ---------------------------
 
-If needed, you can refer to the same variable in multiple accumulation
-commands, such as in the following.
+Accumulation commands are used to repeatedly update a variable using a
+value.  In that way, they are something like shortcuts for several
+different ways of using the ‘expr’ command.  For example, ‘(sum my-sum
+my-var)’ is really just another way of saying ‘(expr my-sum 0 (+ my-sum
+my-var))’.
+
+   If needed, you can refer to the same variable in multiple
+accumulation commands, such as in the following.
 
      (loopy ((list i '(1 2 3))
              (collect coll i)
              (collect coll (+ i 5)))
             (return coll)) ; => (1 6 2 7 3 8)
 
-   Importantly, unlike in ‘cl-loop’, the presence of an accumulation
-command does not imply a return value.  You must provide a variable in
-which to store the accumulated value, which you can return using an
-*note exiting command: Exiting the Loop Early. or the ‘finally-return’
-macro argument.
+   Using a “destructuring” ‘VAR’ argument in accumulation commands works
+a bit differently than how it would in iteration commands.  While
+iteration commands just assign variables the values that make up the
+destructured ‘EXPR’, accumulation commands accumulate each of those
+values into their respective variable in the sequence ‘VAR’.
+
+     ;; => ((1 4) (2 5) (3 6))
+     (loopy ((list elem '((1 2 3) (4 5 6)))
+             (collect (coll1 coll2 coll3) elem))
+            (return coll1 coll2 coll3))
+
+     ;; => (5 7 9)
+     (loopy ((list elem '((1 2 3) (4 5 6)))
+             (sum (sum1 sum2 sum3) elem))
+            (return sum1 sum2 sum3))
+
+     ;; Returns the same values as above.
+     (loopy ((list elem '((1 2 3) (4 5 6)))
+             (expr sum1 (cl-first elem)  (+ sum1 (cl-first elem)))
+             (expr sum2 (cl-second elem) (+ sum2 (cl-second elem)))
+             (expr sum3 (cl-third elem)  (+ sum3 (cl-third elem))))
+            (return sum1 sum2 sum3))
+
+   Using an accumulation command implies a return value.  If there are
+multiple accumulations, or destructured accumulations, than the implied
+return value of the loop is a list of those accumulated values in the
+order that their respective command occurs in the loop body.  This
+implied return value can be overridden by using the ‘return’ and
+‘return-from’ loop commands or a ‘finally-return’ macro argument.
+
+     ;; Note that `my-collection' is the first value in the implied return,
+     ;; even though the collection happens after the first summation step.
+     ;;
+     ;; => (((4 5 6)) 5 7 9), for `my-collection', `sum1', `sum2', `sum3'
+     (loopy ((list elem '((1 2 3) (4 5 6)))
+             (when (equal elem '(4 5 6))
+               (collect my-collection elem))
+             (sum (my-sum1 my-sum2 my-sum3) elem)))
+
+   Like ‘cl-loop’, you do not need to supply a variable name to
+accumulation commands.  With only one argument, they accumulate values
+into a generated variable and use that variable as an implicit return
+value.  Unlike ‘cl-loop’, this generation means that if you want
+accumulation commands to act on the same variable, you must supply the
+same ‘VAR’ as the first argument to each command.
 
 ‘(append VAR EXPR)’
      Repeatedly ‘append’ the value of ‘EXPR’ to ‘VAR’.  ‘VAR’ starts as
@@ -456,18 +593,28 @@ macro argument.
                  (return coll)) ; => '(1 2 3 4 5 6)
 
 ‘(collect VAR EXPR)’
-     Repeatedly ‘append’ a list containing the value of ‘EXPR’ to ‘VAR’.
+     Collect the value of ‘EXPR’ into a list.  To better performance,
+     ‘collect’ behaves differently depending on whether ‘VAR’ is
+     provided.
+
+     When provided, repeatedly ‘append’ a list containing the value of
+     ‘EXPR’ to ‘VAR’.  When not provided, repeatedly ‘push’ the value of
+     ‘EXPR’ into a list, and ‘nreverse’ the list at the end of the loop.
+
      ‘VAR’ starts as ‘nil’.
 
-          (loopy ((seq i [1 2 3])
-                  (collect coll i))
-                 (finally-return coll)) ; => '(1 2 3)
+          ;; => '(1 2 3)
+          (loopy ((list i '(1 2 3))
+                  (collect i)))
 
-     In ‘cl-loop’, ‘collect EXPR’ means to repeatedly ‘push’ the value
-     of ‘EXPR’ into the accumulated list, and then ‘nreverse’ that list
-     for a return value.  If you specifically want this behavior, then
-     you should use the ‘push-into’ command like in its respective
-     example below.
+          ;; => '((1 2 3) ((1) (1 2) (1 2 3)))
+          (loopy ((list i '(1 2 3))
+                  (collect coll1 i)
+                  (collect coll1)))
+
+     If you want to ‘push’ values into a provided variable (instead of
+     repeatedly appending a list of one element), use the ‘push-into’
+     command (see below).
 
 ‘(concat VAR EXPR)’
      Repeatedly ‘concat’ the value of ‘EXPR’ onto the end of ‘VAR’.
@@ -588,12 +735,13 @@ command as used in ‘cl-loop’.
      For the first ‘EXPR’ to evaluate to non-nil, run the following
      commands ‘CMDS’.
 
+          ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
           (loopy ((list i '(1 2 3 "cat" 4 5 6 "dog"))
                   (cond
                    ((not (numberp i)) (collect not-numbers i))
                    ((cl-evenp i)      (collect evens i))
                    (t                 (collect odds i))))
-                 (return evens odds not-numbers)) ; => '((2 4 6) (1 3 5) ("cat" "dog"))
+                 (return evens odds not-numbers))
 
 
 File: loopy.info,  Node: Skipping an Iteration,  Next: Exiting the Loop Early,  Prev: Conditionals,  Up: Control Flow
@@ -622,47 +770,27 @@ The loop is contained in a ‘cl-block’, and these forms are all
 variations of ‘cl-return-from’ underneath.  Indeed, you could use ‘(do
 (cl-return-from NAME [EXPR]))’ to achieve the same effect.
 
-‘(return EXPR)’
-     Leave the current loop, returning the value of ‘EXPR’.
+   If multiple ‘EXPR’ are passes to the ‘return’ or ‘return-from’, these
+commands will return a list of those ‘EXPR’.  If not ‘EXPR’ is given,
+‘nil’ is returned.
+
+‘(return [EXPRS])’
+     Leave the current loop, returning ‘[EXPRS]’.
 
           (loopy (with  (j 0))
                  ((do (cl-incf j))
                   (when (> j 5)
-                    (return j))))
+                    (return j)))) ; => 6
 
-‘(return-from NAME EXPR)’
-     Leave the loop ‘NAME’, returning the value of ‘EXPR’.
+‘(return-from NAME [EXPRS])’
+     Leave the loop ‘NAME’, returning ‘[EXPRS]’.
 
+          ;; => 'bad-val?
           (loopy outer-loop
                  ((list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
                   (do (loopy ((list i inner-list)
                               (when (eq i 'bad-val?)
                                 (return-from outer-loop 'bad-val?)))))))
-
-‘(leave|break)’
-     Leave the loop, returning ‘nil’.
-
-          (loopy ((list i '(1 2 3 "cat" 4 5 6))
-                  (if (numberp i)
-                      (do (message "Number: %d" i))
-                    (leave))))
-
-‘(leave-from|break-from NAME)’
-     Leave the loop ‘NAME’, returning ‘nil’.
-
-          (loopy outer
-                 (with (failure-condition 'fail)
-                       (failed-p nil))
-                 ((list i '((1 2 3) (4 5 6) (7 fail 8)))
-                  (do (loopy ((list j i)
-                              (when (eq j failure-condition)
-                                ;; Note: Can't do (expr failed-p t), since
-                                ;;       `expr' is local to its own loop.
-                                (do (setq failed-p t))
-                                (break-from outer))))))
-                 (finally-do (if failed-p
-                                 (message "Failed!")
-                               (message "Success!"))))
 
 
 File: loopy.info,  Node: Adding Custom Commands,  Next: How does it compare to cl-loop?,  Prev: How to use,  Up: Top
@@ -813,14 +941,13 @@ exits/completes.
      any early returns in the loop body.  This is derived from the
      ‘finally-return’ macro argument.
 
-   These variables will be substituted into the following list of code,
-which is returned by the ‘loopy’ macro for evaluation.
+   The structure of the macro’s expanded code depends on the features
+used (e.g., ‘loopy’ won’t try to declare variables if none exist), but
+the result will work similar to the below example.
 
-     `(cl-symbol-macrolet (,@(or loopy--explicit-generalized-vars
-                                 (list (list (gensym) nil))))
-        (let* (,@(or loopy--with-vars '((_))))
-          (let (,@(or (append loopy--implicit-vars loopy--explicit-vars)
-                      '((_))))
+     `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
+        (let* ,loopy--with-vars
+          (let ,(append loopy--implicit-vars loopy--explicit-vars)
             (let ((loopy--early-return-capture
                    (cl-block ,loopy--name-arg
                      ,@loopy--before-do
@@ -881,22 +1008,18 @@ function, and expects back a list of instructions.
    By running ‘M-x pp-macroexpand-last-sexp’ on the above expression,
 you can see that it expands to do what we want, as expected.
 
-     (cl-symbol-macrolet ((g3314 nil))
-       (let* ((_))
-         (let ((g3313 '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
-               (name nil))
-           (let ((loopy--early-return-capture
-                  (cl-block nil
-                    (while (consp g3313)
-                      (cl-tagbody
-                       (setq name (car g3313))
-                       (if (cadr name)
-                           (message "Hello, %s %s" (car name) (cadr name))
-                         (message "Hello, %s" (car name)))
-                       loopy--continue-tag
-                       (setq g3313 (cdr g3313))))
-                    nil)))
-             loopy--early-return-capture))))
+     (let ((g815 '(("John" "Deer")
+                   ("Jane" "Doe")
+                   ("Jimmy")))
+           (name nil))
+       (while (consp g815)
+         (setq name (car g815))
+         (if (cadr name)
+             (message "Hello, %s %s"
+                      (car name) (cadr name))
+           (message "Hello, %s" (car name)))
+         (setq g815 (cdr g815)))
+       nil)
 
 
 File: loopy.info,  Node: A Slightly More Complicated Example,  Prev: A Small Example,  Up: Adding Custom Commands
@@ -967,7 +1090,6 @@ mind the following:
      trying to keep the same logic that ‘cl-loop’ uses.
    • It has more flexible control-flow commands, under which you can
      easily group sub-commands, including assignments.
-   • Using an accumulation command does not imply a return value.
    • It has a ‘skip’ command to skip the rest of the loop body and
      immediately start the next iteration.  Of course, a similar effect
      could be achieved using the ‘when’ or ‘unless’ commands.
@@ -1133,10 +1255,10 @@ File: loopy.info,  Node: Iteration Clauses,  Next: Accumulation Clauses,  Prev: 
 -----------------------
 
 ‘cl-loop’            ‘loopy’
------------------------------------------------
+----------------------------------------------------
 ‘repeat INT’         ‘(repeat INT)’
-‘while COND’         ‘(unless COND (leave))’
-‘until COND’         ‘(when COND (leave))’
+‘while COND’         ‘(unless COND (return nil))’
+‘until COND’         ‘(when COND (return nil))’
 ‘iter-by iterator’   None so far.
 
    The clauses ‘always’, ‘never’, and ‘thereis’ can be replaced by a
@@ -1174,9 +1296,9 @@ File: loopy.info,  Node: Accumulation Clauses,  Next: Other Clauses,  Prev: Iter
 4.1.3 Accumulation Clauses
 --------------------------
 
-*NOTE*: In ‘loopy’, accumulation commands do not imply a return value.
-You cannot simply do ‘(collect EXPR)’; you must always give a variable
-into which to accumulate the value of the expression.
+In ‘loopy’, when accumulation commands are not given a ‘VAR’, they
+accumulate into different variables.  If you want accumulations to act
+on the same variable, you must give the same ‘VAR’.
 
 ‘cl-loop’                  ‘loopy’
 --------------------------------------------------
@@ -1319,7 +1441,7 @@ ensure that those variables are locally scoped.
 the ‘unless’ command.  This allows for less noise, as we do not need to
 declare variables or fall back to using more Lisp expressions.
 
-   Another good example is the command ‘selectrum-swiper’ from the same
+   Another good example is the command ‘selectrum-outline’ from the same
 page.  This command is similar to ‘selectrum-swiper’, but has a slightly
 more complicated processing portion.
 
@@ -1504,33 +1626,33 @@ commands: Adding Custom Commands.
 
 Tag Table:
 Node: Top190
-Ref: Top-Footnote-11425
-Ref: Top-Footnote-21524
-Ref: Top-Footnote-31652
-Node: Introduction1746
-Ref: Introduction-Footnote-15586
-Node: How to use5726
-Node: Macro Arguments6966
-Node: Loop Commands8731
-Node: Commands for Generic Evaluation12270
-Node: Iteration and Looping Commands13489
-Node: Accumulation Commands16289
-Node: Control Flow20359
-Node: Conditionals20569
-Node: Skipping an Iteration22460
-Node: Exiting the Loop Early23003
-Node: Adding Custom Commands24962
-Node: Background Information25230
-Node: A Small Example32661
-Node: A Slightly More Complicated Example35093
-Node: How does it compare to cl-loop?37370
-Node: Translating from cl-loop42424
-Node: For Clauses42673
-Node: Iteration Clauses44915
-Node: Accumulation Clauses46654
-Node: Other Clauses47623
-Node: Real-World Examples49127
-Ref: Real-World Examples-Footnote-161862
+Ref: Top-Footnote-11601
+Ref: Top-Footnote-21700
+Ref: Top-Footnote-31828
+Node: Introduction1922
+Ref: Introduction-Footnote-16527
+Node: How to use6667
+Node: Macro Arguments7988
+Node: Loop Commands9753
+Node: Commands for Generic Evaluation15221
+Node: Iteration and Looping Commands16694
+Node: Accumulation Commands19898
+Node: Control Flow26500
+Node: Conditionals26710
+Node: Skipping an Iteration28612
+Node: Exiting the Loop Early29155
+Node: Adding Custom Commands30321
+Node: Background Information30589
+Node: A Small Example37969
+Node: A Slightly More Complicated Example40091
+Node: How does it compare to cl-loop?42368
+Node: Translating from cl-loop47354
+Node: For Clauses47603
+Node: Iteration Clauses49845
+Node: Accumulation Clauses51599
+Node: Other Clauses52566
+Node: Real-World Examples54070
+Ref: Real-World Examples-Footnote-166806
 
 End Tag Table
 
