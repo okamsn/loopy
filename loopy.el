@@ -1059,9 +1059,12 @@ Returns are always explicit.  See this package's README for more information."
                         ;; Be sure that the `cl-block' defaults to returning
                         ;; nil.  This can be overridden by any call to
                         ;; `cl-return-from'.
-                        ,(if (= 1 (length loopy--implicit-return))
-                             (car loopy--implicit-return)
-                           `(list ,@(nreverse loopy--implicit-return))))
+                        ,(cond
+                          ((null loopy--implicit-return) nil)
+                          ((= 1 (length loopy--implicit-return))
+                           (car loopy--implicit-return))
+                          (t
+                           `(list ,@(nreverse loopy--implicit-return)))))
               ;; Will always be a single expression after wrapping with
               ;; `cl-block'.
               result-is-one-expression t)
