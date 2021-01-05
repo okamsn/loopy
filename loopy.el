@@ -625,6 +625,9 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
+;; TODO: Some of the accumulations commands can be made more
+;;       efficient/complicated depending on how the variables are being used.
+;;       See `cl--parse-loop-clause' for examples.
 (cl-defun loopy--parse-accumulation-commands ((name var-or-val &optional val))
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
