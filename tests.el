@@ -475,21 +475,16 @@
                                       (append coll i))
                                      (return coll)))))))
 
+(ert-deftest append-implicit ()
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
+                                      (append i))))))))
+
 (ert-deftest collect ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy ((list j '(1 2 3))
                                       (collect coll j))
                                      (finally-return coll)))))))
-
-(ert-deftest collect-nreverse ()
-  (should
-   (= 1 (with-temp-buffer
-          (prin1 (macroexpand '(loopy ((list i '(1 2 3))
-                                       (collect i))))
-                 (current-buffer))
-          (goto-char (point-min))
-          (how-many "(nreverse")))))
-
 
 (ert-deftest collect-destructuring ()
   (should (and (equal '((1 4) ((2 3) (5 6)))
@@ -506,6 +501,10 @@
                       (eval (quote (loopy ((list j '([1 2 3] [4 5 6]))
                                            (collect [coll1 coll2 coll3] j))
                                           (return coll1 coll2 coll3))))))))
+(ert-deftest collect-implicit ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy ((list j '(1 2 3))
+                                      (collect j))))))))
 
 (ert-deftest concat ()
   (should (equal "catdog"
@@ -524,6 +523,11 @@
                                            (concat [coll1 coll2 coll3] j))
                                           (return coll1 coll2 coll3))))))))
 
+(ert-deftest concat-implict ()
+  (should (equal "catdog"
+                 (eval (quote (loopy ((list j '("cat" "dog"))
+                                      (concat j))))))))
+
 (ert-deftest count ()
   (should (= 2
              (eval (quote (loopy ((list i '(t nil t nil))
@@ -537,6 +541,11 @@
                                (count (c1 c2) elem))
                               (return c1 c2)))))))
 
+(ert-deftest count-implict ()
+  (should (= 2
+             (eval (quote (loopy ((list i '(t nil t nil))
+                                  (count i))))))))
+
 (ert-deftest max ()
   (should (= 11
              (eval (quote (loopy ((list i '(1 11 2 10 3 9 4 8 5 7 6))
@@ -549,6 +558,11 @@
           (eval (quote (loopy ((list elem '((1 11) (9 4)))
                                (max (m1 m2) elem))
                               (return m1 m2)))))))
+
+(ert-deftest max-implict ()
+  (should (= 11
+             (eval (quote (loopy ((list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                  (max i))))))))
 
 (ert-deftest min ()
   (should
@@ -564,6 +578,12 @@
                                (min (m1 m2) elem))
                               (return m1 m2)))))))
 
+(ert-deftest min-implict ()
+  (should
+   (= 0
+      (eval (quote (loopy ((list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                           (min i))))))))
+
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
@@ -577,6 +597,10 @@
                                (nconc (n1 . n2) elem))
                               (return n1 n2)))))))
 
+(ert-deftest nconc-implict ()
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
+                                      (nconc l i))))))))
 
 (ert-deftest push-into ()
   (should (equal '(3 2 1)
@@ -590,6 +614,11 @@
                                       (push-into (p1 p2) elem))
                                      (return p1 p2)))))))
 
+(ert-deftest push-into-implict ()
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy ((list j '(1 2 3))
+                                      (push-into j))))))))
+
 (ert-deftest sum ()
   (should (= 6
              (eval (quote (loopy ((list i '(1 2 3))
@@ -602,12 +631,30 @@
                          (sum (sum1 sum2 sum3) elem))
                         (return sum1 sum2 sum3)))))
 
+(ert-deftest sum-implict ()
+  (should (= 6
+             (eval (quote (loopy ((list i '(1 2 3))
+                                  (sum i))))))))
+
 (ert-deftest vconcat ()
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy ((list elem '([1 2 3 4 5 6]
+                                                   [7 8 9 10 11 12]))
+                                      (vconcat v elem))
+                                     (return v)))))))
+
+(ert-deftest vconcat-destructuring ()
   (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
                  (eval (quote (loopy ((list elem '(([1 2 3] [4 5 6])
                                                    ([7 8 9] [10 11 12])))
                                       (vconcat (v1 v2) elem))
                                      (return v1 v2)))))))
+
+(ert-deftest vconcat-implict ()
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy ((list elem '([1 2 3 4 5 6]
+                                                   [7 8 9 10 11 12]))
+                                      (vconcat elem))))))))
 
 (ert-deftest accumulation-recursive-destructuring ()
   (should
@@ -632,14 +679,6 @@
            (eval (quote (loopy ((list i '((1 (2 . [3 4])) (3 (4 . [5 6]))))
                                 (collect (c1 (c2 . [c3 c4])) i))
                                (return c1 c2 c3 c4))))))))
-
-(ert-deftest accumulation-implicit-returns ()
-  (should
-   (and
-    (= 6 (loopy ((list i '(1 2 3)) (sum s i))))
-    (equal '(1 2 3) (eval (quote (loopy ((list i '(1 2 3)) (collect c i))))))
-    (equal '(2 4)
-           (eval (quote (loopy ((list i '((1 4) (2 3))) (max (m1 m2) i)))))))))
 
 ;;; Control Flow
 ;;;; Conditionals
