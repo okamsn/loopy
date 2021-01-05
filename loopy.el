@@ -265,7 +265,9 @@ variable."
                 ;; remaining variables by `pop'-ing that lastly listed, firstly
                 ;; set variable.  However, if that variable is actually a
                 ;; sequence, then we need to use a `value-holder' instead.
-                (value-holder (if last-var-is-symbol last-var (gensym)))
+                (value-holder (if last-var-is-symbol
+                                  last-var
+                                (gensym "destructuring-list-")))
                 (instructions
                  `(((,(if last-var-is-symbol    ; We're going to append lists
                           'loopy--explicit-vars ; of instructions, so we make
@@ -309,7 +311,7 @@ variable."
       (array
        ;; For arrays, we always need a value holder so that `value-expression'
        ;; is evaluated only once.
-       (let* ((value-holder (gensym))
+       (let* ((value-holder (gensym "destructuring-array-"))
               (instructions
                `(((loopy--implicit-vars . (,value-holder nil))
                   (loopy--main-body . (setq ,value-holder ,value-expression))))))
@@ -464,7 +466,7 @@ the loop literally (not even in a `progn')."
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let ((arg-length (length vals))
-        (value-selector (gensym))
+        (value-selector (gensym "expr-value-selector-"))
         instructions)
     (cl-case arg-length
       ;; If no values, repeatedly set to `nil'.
@@ -504,7 +506,9 @@ the loop literally (not even in a `progn')."
                   (cons 'cond body-code))))))))
 
 (cl-defun loopy--parse-array-command
-    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val)
+     &optional
+     (value-holder (gensym "array-")) (index-holder (gensym "index-")))
   "Parse the `array' command.
 
 - VAR is a variable name.
@@ -519,7 +523,9 @@ the loop literally (not even in a `progn')."
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
 (cl-defun loopy--parse-array-ref-command
-    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val)
+     &optional
+     (value-holder (gensym "array-ref-")) (index-holder (gensym "index-")))
   "Parse the `array-ref' command by editing the `array' command's instructions.
 
 VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
@@ -542,7 +548,7 @@ is a function by which to update VAR (default `cdr')."
          . (setq ,var (,(loopy--get-function-symbol func) ,var)))
         (loopy--pre-conditions . (consp ,var)))
     ;; TODO: For destructuring, do we actually need the extra variable?
-    (let ((value-holder (gensym)))
+    (let ((value-holder (gensym "cons-")))
       `((loopy--implicit-vars . (,value-holder ,val))
         ,@(loopy--create-destructured-assignment var value-holder)
         (loopy--latter-body
@@ -551,7 +557,7 @@ is a function by which to update VAR (default `cdr')."
         (loopy--pre-conditions . (consp ,value-holder))))))
 
 (cl-defun loopy--parse-list-command
-    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-")))
   "Parse the `list' loop command.
 
 VAR is a variable name or a list of such names (dotted pair or
@@ -565,7 +571,7 @@ the list."
     ,@(loopy--create-destructured-assignment var `(car ,val-holder))))
 
 (cl-defun loopy--parse-list-ref-command
-    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym)))
+    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-ref-")))
   "Parse the `list-ref' loop command, editing the `list' commands instructions.
 
 VAR is the name of a setf-able place.  VAL is a list value.  FUNC
@@ -588,13 +594,14 @@ an integer, to be used if a variable name is provided."
       `((loopy--implicit-vars . (,var-or-count 0))
         (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
         (loopy--pre-conditions . (< ,var-or-count ,count)))
-    (let ((value-holder (gensym)))
+    (let ((value-holder (gensym "repeat-limit-")))
       `((loopy--implicit-vars . (,value-holder 0))
         (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
 (cl-defun loopy--parse-seq-command
-    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val)
+     &optional (value-holder (gensym "seq-")) (index-holder (gensym "index-")))
   "Parse the `seq' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
@@ -613,7 +620,8 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
                               (< ,index-holder (length ,value-holder)))))))
 
 (cl-defun loopy--parse-seq-ref-command
-    ((_ var val) &optional (value-holder (gensym)) (index-holder (gensym)))
+    ((_ var val)
+     &optional (value-holder (gensym "seq-ref-")) (index-holder (gensym "index-")))
   "Parse the `seq-ref' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
@@ -665,7 +673,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                   `(setq ,var-or-val (+ ,var-or-val ,val)))))
            (loopy--implicit-return . ,var-or-val)))
         (list
-         (let ((value-holder (gensym))
+         (let ((value-holder (gensym (concat (symbol-name name) "-destructuring-list-")))
                (is-proper-list (proper-list-p var-or-val))
                (normalized-reverse-var))
            (let ((instructions `(((loopy--implicit-vars . (,value-holder nil))
@@ -696,7 +704,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
              (apply #'append (nreverse instructions)))))
 
         (array
-         (let* ((value-holder (gensym))
+         (let* ((value-holder (gensym (concat (symbol-name name) "-destructuring-array-")))
                 (instructions
                  `(((loopy--implicit-vars . (,value-holder nil))
                     (loopy--main-body . (setq ,value-holder ,val))))))
@@ -710,7 +718,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
 
     ;; If not `val' given, then `var-or-val' is the value expression.  There is
     ;; no destructuring in this case.
-    (let ((value-holder (gensym)))
+    (let ((value-holder (gensym (concat (symbol-name name) "-implicit-"))))
       `((loopy--implicit-vars . (,value-holder ,(cl-case name
                                                   ((sum count)    0)
                                                   ((max maximize) -1.0e+INF)
