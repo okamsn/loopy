@@ -726,7 +726,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
              ;;       into `value-holder' and `nreverse' the implicit return.
              `((loopy--main-body
                 . (setq ,value-holder (cons ,var-or-val ,value-holder)))
-               (loopy--implicit-return . (nreverse value-holder))))
+               (loopy--implicit-return . (nreverse ,value-holder))))
             (concat
              `((loopy--main-body
                 . (setq ,value-holder (concat ,value-holder ,var-or-val)))
