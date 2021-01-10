@@ -207,8 +207,11 @@ variable."
       (cl-typecase var
         ;; Check if `var' is a single symbol.
         (symbol
-         ;; Most functions expect a list of instructions, not one.
-         `((loopy--explicit-generalized-vars . (,var ,value-expression))))
+         (if (eq var '_)
+             `((loopy--explicit-generalized-vars
+                . (,(gensym "destructuring-ref-") ,value-expression)))
+           ;; Most functions expect a list of instructions, not one.
+           `((loopy--explicit-generalized-vars . (,var ,value-expression)))))
         (list
          ;; If `var' is not proper, then the end of `var' can't be `car'-ed
          ;; safely, as it is just a symbol and not a list.  Therefore, if `var'
@@ -237,8 +240,12 @@ variable."
     ;; Otherwise assigning normal variables:
     (cl-typecase var
       (symbol
-       `((loopy--explicit-vars . (,var nil))
-         (loopy--main-body     . (setq ,var ,value-expression))))
+       (if (eq var '_)
+           (let ((value-holder (gensym "discarded-value-")))
+             `((loopy--explicit-vars . (,value-holder nil))
+               (loopy--main-body     . (setq ,value-holder ,value-expression))))
+         `((loopy--explicit-vars . (,var nil))
+           (loopy--main-body     . (setq ,var ,value-expression)))))
       (list
        ;; NOTE: (A . (B C)) is really just (A B C), so you can't have a
        ;;       non-proper list with a list as the last element.  However, the
@@ -266,7 +273,9 @@ variable."
                 ;; set variable.  However, if that variable is actually a
                 ;; sequence, then we need to use a `value-holder' instead.
                 (value-holder (if last-var-is-symbol
-                                  last-var
+                                  (if (eq '_ last-var)
+                                      (gensym "discarded-value-")
+                                    last-var)
                                 (gensym "destructuring-list-")))
                 (instructions
                  `(((,(if last-var-is-symbol    ; We're going to append lists
@@ -290,7 +299,7 @@ variable."
                ;; Otherwise, if `var' is a proper list and `last-var' is a
                ;; symbol, then we need to take the `car' of that `cdr'.
                (push `((loopy--main-body
-                        . (setq ,last-var (car ,last-var))))
+                        . (setq ,value-holder (car ,value-holder))))
                      instructions)
              ;; Otherwise, `last-var' is a sequence.
              (if is-proper-list
