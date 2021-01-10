@@ -142,7 +142,13 @@ please let me know.
   full feature parity with =cl-loop= is still being worked on.
 
 * How to Install                                                   :noexport:
-  Currently, Loopy must be installed manually.
+  Currently, Loopy must be installed manually.  Here is how one could use
+  ~straight.el~ with ~use-package~
+
+  #+begin_src emacs-lisp
+    (use-package loopy
+      :straight (loopy :type git :host github :repo "okamsn/loopy"))
+  #+end_src
 
 * How to use
   :PROPERTIES:
