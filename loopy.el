@@ -1058,7 +1058,13 @@ Returns are always explicit.  See this package's README for more information."
                                      (0 t)
                                      (1 (car loopy--post-conditions))
                                      (t (cons 'and loopy--post-conditions)))
-                            (cl-return-from ,loopy--loop-name nil))))))
+                            (cl-return-from ,loopy--loop-name
+                              ,(cond
+                                ((null loopy--implicit-return) nil)
+                                ((= 1 (length loopy--implicit-return))
+                                 (car loopy--implicit-return))
+                                (t
+                                 `(list ,@(nreverse loopy--implicit-return))))))))))
 
         ;; Now wrap loop body in the `while' form.
         (setq result `(while ,(cl-case (length loopy--pre-conditions)
