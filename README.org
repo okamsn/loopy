@@ -727,12 +727,12 @@ please let me know.
      :CUSTOM_ID: exiting-the-loop-early
      :END:
 
-     The loop is contained in a =cl-block=, and these forms are all variations
-     of =cl-return-from= underneath.  Indeed, you could use =(do (cl-return-from
-     NAME [EXPR]))= to achieve the same effect.
+     The loop is contained in a =cl-block=, meaning that one can use
+     =cl-return-from= to exit the loop early.  The =return= commands are just
+     wrappers around that function.
 
      If multiple =EXPR= are passes to the =return= or =return-from=, these
-     commands will return a list of those =EXPR=.  If not =EXPR= is given, =nil=
+     commands will return a list of those =EXPR=.  If no =EXPR= is given, =nil=
      is returned.
 
      - =(return [EXPRS])= :: Leave the current loop, returning =[EXPRS]=.
@@ -754,6 +754,33 @@ please let me know.
                              (when (eq i 'bad-val?)
                                (return-from outer-loop 'bad-val?)))))))
        #+END_SRC
+
+     For conditionally exiting the loop without affecting the return value, one
+     can use the ~leave~, ~while~, and ~until~ commands.  The ~while~ and
+     ~until~ commands evaluate their conditions wherever the commands occur in
+     the loop body.
+
+     - =(leave)= :: Leave the loop.
+
+     - =(while [EXPRS])= :: Leave the loop unless each =EXPR= is non-nil.  This
+       is the same as =(unless (and [EXRPS]) (leave))=.
+
+       #+begin_src emacs-lisp
+         ;; => (1 2)
+         (loopy ((list i '(1 2 3 4 5 6))
+                 (while (< i 3))
+                 (collect i)))
+       #+end_src
+
+     - =(until [EXPRS])= :: Leave the loop unless each =EXPR= is nil.  This
+       is the same as =(when (and [EXRPS]) (leave))=.
+
+       #+begin_src emacs-lisp
+         ;; => (1 2 3)
+         (loopy ((list i '(1 2 3 4 5 6))
+                 (until (> i 3))
+                 (collect i)))
+       #+end_src
 
 * Adding Custom Commands
   :PROPERTIES:

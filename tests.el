@@ -776,7 +776,14 @@ Not multiple of 3: 7")))
                           (finally-return (list evens odds holding-list)))))
                  '((4 2 0) (5 3 1) ((4 2 0) (2 0) (0))))))
 
-;; ;; Exiting the Loop Early
+;;;; Exiting the Loop Early
+;;;;; Leave
+(ert-deftest leave ()
+  (should (equal '(1)
+                 (eval (quote (loopy ((list i '(1))
+                                      (collect i)
+                                      (leave))))))))
+
 ;;;;; Return
 (ert-deftest return ()
   (should (= 6 (eval (quote (loopy (with  (j 0))
@@ -821,6 +828,19 @@ Not multiple of 3: 7")))
                                          (push-into my-collection i))
                                         (finally-return (nreverse my-collection))))))))
 
+;;;;; While
+(ert-deftest while ()
+  (should (equal '(1 2)
+                 (eval (quote (loopy ((list i '(1 2 3 4 5 6))
+                                      (while (< i 3))
+                                      (collect i))))))))
+
+;;;;; Until
+(ert-deftest until ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy ((list i '(1 2 3 4 5 6))
+                                      (until (> i 3))
+                                      (collect i))))))))
 
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()

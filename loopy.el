@@ -131,7 +131,10 @@ These run in a `progn'.")
 
 ;; These variable affect how the code is expanded.
 (defvar loopy--skip-used nil
-  "Whether a skip/continue command is present in the loop  main body.")
+  "Whether a skip/continue command is present in the loop main body.")
+
+(defvar loopy--tagbody-exit-used nil
+  "Whether a command uses a tag-body to jump to the end of the `cl-block'.")
 
 ;;;; Errors
 (define-error 'loopy-error
@@ -803,10 +806,23 @@ a loop name, return values, or a list of both."
                   ((= 2 arg-length) (cl-second args))
                   (t                `(list ,@(cl-rest args))))))))))))
 
+(cl-defun loopy--parse-leave-command (_)
+  "Parse the `leave' command."
+  '((loopy--tagbody-exit-used . t)
+    (loopy--main-body . (go loopy--non-returning-exit-tag))))
+
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
   '((loopy--skip-used . t)
     (loopy--main-body . (go loopy--continue-tag))))
+
+(cl-defun loopy--parse-while-until-commands ((name &rest conditions))
+  "Parse the `while' and `until' commands."
+  `((loopy--tagbody-exit-used . t)
+    (loopy--main-body
+     . ,(cl-ecase name
+          (until `(if (and ,@conditions) (go loopy--non-returning-exit-tag)))
+          (while `(if (or  ,@conditions) nil (go loopy--non-returning-exit-tag)))))))
 
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
@@ -842,6 +858,7 @@ COMMAND-LIST."
     (count       . loopy--parse-accumulation-commands)
     (do          . loopy--parse-do-command)
     (expr        . loopy--parse-expr-command)
+    (leave       . loopy--parse-leave-command)
     (group       . loopy--parse-group-command)
     (if          . loopy--parse-if-command)
     (list        . loopy--parse-list-command)
@@ -862,6 +879,8 @@ COMMAND-LIST."
     (skip        . loopy--parse-skip-command)
     (sum         . loopy--parse-accumulation-commands)
     (unless      . loopy--parse-when-unless-command)
+    (until       . loopy--parse-while-until-commands)
+    (while       . loopy--parse-while-until-commands)
     (vconcat     . loopy--parse-accumulation-commands)
     (when        . loopy--parse-when-unless-command))
   "An alist of pairs of command names and built-in parser functions.")
@@ -925,7 +944,8 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--implicit-return)
 
         ;; -- Variables for constructing code --
-        (loopy--skip-used))
+        (loopy--skip-used)
+        (loopy--tagbody-exit-used))
 
 ;;;;; Interpreting the macro arguments.
     ;; Check what was passed to the macro.
@@ -981,6 +1001,8 @@ Returns are always explicit.  See this package's README for more information."
             ;; Code for conditionally constructing the loop body.
             (loopy--skip-used
              (setq loopy--skip-used t))
+            (loopy--tagbody-exit-used
+             (setq loopy--tagbody-exit-used t))
 
             ;; Places users probably shouldn't push to, but can if they want:
             (loopy--with-vars
@@ -1090,6 +1112,12 @@ Returns are always explicit.  See this package's README for more information."
          (loopy--after-do
           (setq result `(,result ,@loopy--after-do)
                 result-is-one-expression nil)))
+
+        (when loopy--tagbody-exit-used
+          (setq result `(cl-tagbody
+                         ,@(get-result)
+                         loopy--non-returning-exit-tag)
+                result-is-one-expression t))
 
         ;; Always wrap in `cl-block', as any arbitrary Lisp code could call
         ;; `cl-return-from'.  For example, it's possible that a user is using a
