@@ -1,0 +1,281 @@
+Feel free to add custom loop commands that you find useful.
+
+-----
+
+* Table of Contents                                                     :TOC:
+- [[#how-loopy-expands-to-code][How =loopy= expands to code]]
+- [[#an-example][An Example]]
+  - [[#a-small-example][A Small Example]]
+  - [[#a-slightly-more-complicated-example][A Slightly More Complicated Example]]
+
+* How =loopy= expands to code
+
+   The core working of =loopy= is taking a command and generating code that is
+   substituted into or around a loop body.
+
+   For example, parsing the command =(list i '(1 2 3))= produces the following
+   list of instructions.  Some commands require the creation of unique temporary
+   variables, such as =g3019= in the below output. Such variables are called
+   “implicit", as opposed to the explicitly named variable =i= in the command.
+
+   #+BEGIN_SRC emacs-lisp
+     ((loopy--implicit-vars g3019 '(1 2 3))
+      (loopy--explicit-vars i nil)
+      (loopy--pre-conditions consp g3019)
+      (loopy--main-body setq i (car g3019))
+      (loopy--latter-body setq g3019 (cdr g3019)))
+   #+END_SRC
+
+   The ~car~ of an instruction is the place to put code and the ~cdr~ of the
+   instruction is said code to put.  You can see that not all of the code to be
+   inserted is a valid Lisp form.  Instead of being evaluated as an expression,
+   some instructions insert pairs of names and values into variable lists like
+   in ~let~ and ~let*~ .
+
+   | Place                     | Code                         |
+   |---------------------------+------------------------------|
+   | =loopy--implicit-vars=    | =(g3019 '(1 2 3))=           |
+   | =loopy--explicit-vars=    | =(i nil)=                    |
+   | =loopy--pre-conditions=   | =(consp g3019)=              |
+   | =loopy--main-body=        | =(setq i (car g3019))=       |
+   | =loopy--latter-body=      | =(setq g3019 (cdr g3019))=   |
+
+   Commands are parsed by =loopy--parse-body-forms=, which receives a list of
+   commands and returns a list of instructions.  For commands that take
+   sub-commands as arguments (such as =cond=, =if=, and =when=), more specific
+   parsing functions are called in a mutually recursive fashion (e.g.,
+   Function-1 uses Function-2 which uses Function-1, and so on).
+
+   For example, consider the function =loopy--parse-conditional-forms=, which
+   parses the =if=, =when=, and =unless= commands.  It needs to be able to group
+   any code going to the loop body under its respective conditional control
+   structure.  To do this, it uses =loopy--parse-body-forms= to turn its
+   sub-commands into a list of instructions, and then checks the =car= of each
+   instruction.
+
+   #+BEGIN_SRC emacs-lisp
+     (defun loopy--parse-conditional-forms (wrapper condition forms &optional loop-name)
+       "Parse FORMS, wrapping `loopy--main-body' expressions in a conditional form.
+     The instructions (e.g., return expressions) are wrapped with a
+     WRAPPER with CONDITION.  Optionally needs LOOP-NAME for block
+     returns."
+       (let ((full-instructions)
+             (sub-instructions (loopy--parse-body-forms forms loop-name))
+             (conditional-body))
+         (dolist (instruction sub-instructions)
+           (cl-case (car instruction)
+             (loopy--main-body (push (cdr instruction) conditional-body))
+             (t                (push instruction full-instructions))))
+         (push `(loopy--main-body . (,wrapper ,condition ,@conditional-body))
+               full-instructions)
+         full-instructions))
+   #+END_SRC
+
+   The hardest part of this exchange is making sure the inserted code ends up in
+   the correct order.
+
+   A loop body command has 7 main places to put code:
+
+   - =loopy--explicit-generalized-vars= :: Lists of a symbol and a macro
+     expansion that will be given to =cl-symbol-macrolet=.  This is used to
+     create named ~setf~-able places.  The expansion you use depends on the kind
+     of sequence and how the it is updated.
+
+     For example, =(list-ref i my-list)= declares =i= to be a symbol which
+     expands to =(car TEMP-VAR)=, in which =TEMP-VAR= holds the value of
+     =my-list=.  At the end of the loop body, =TEMP-VAR= is set to its =cdr=,
+     ensuring that the next call to =car= returns the correct value.
+
+   - =loopy--implicit-vars= :: Lists of a symbol and an expression that will be
+     given to =let=.  This is used for creating variables that are not named but
+     must exist, such as for holding ='(1 2 3)= in =(list i '(1 2 3))=.
+
+   - =loopy--explicit-vars= :: Lists of a symbol and an expression that will be
+     given to =let=.  This is needed to ensure that variables explicitly named
+     in commands are locally scoped, such as the =i= in =(list i '(1 2 3))=.
+
+   - =loopy--pre-conditions= :: Expressions that determine if the =while=
+     loop runs/continues, such as whether a list still has elements in it.
+     If there is more than one expression, than all expressions are used in
+     an =and= special form.
+
+   - =loopy--main-body= :: Expressions that make up the main body of the
+     loop.
+
+   - =loopy--latter-body= :: Expressions that need to be run after the main
+     body, such as updating implicit variables.
+
+   - =loopy--post-conditions= :: Expressions that determine whether the
+     =while= loop continues, but checked after the loop body has run.  The
+     code from this is ultimately appended to the latter body before being
+     substituted in.
+
+   There are 5 more variables a loop command can push to, but they are derived
+   from the macro's arguments.  Adding to them after using a macro argument
+   might lead to unintended behavior.  You might wish to use them if, for
+   example, you are concerned with what happens after the loop exits/completes.
+
+   - =loopy--with-vars= :: Lists of a symbol and an expression that will be
+     given to =let*=.  These are derived from the =with= macro argument.
+
+   - =loopy--before-do= :: Expressions to evaluate before the loop.  These are
+     derived from the =before-do= macro argument.
+
+   - =loopy--after-do= :: Expressions to evaluate after the loop completes
+     successfully.  These are derived from the =after-do= macro argument.
+
+   - =loopy--final-do= :: Expressions to evaluate after the loop completes,
+     regardless of success.  These are derived from the =finally-do= macro
+     argument.
+
+   - =loopy--final-return= :: An expression that is always returned by the
+     macro, regardless of any early returns in the loop body.  This is
+     derived from the =finally-return= macro argument.
+
+   The structure of the macro’s expanded code depends on the features used
+   (e.g., =loopy= won’t try to declare variables if none exist), but the result
+   will work similar to the below example.
+
+   #+BEGIN_SRC emacs-lisp
+     `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
+        (let* ,loopy--with-vars
+          (let ,(append loopy--implicit-vars loopy--explicit-vars)
+            (let ((loopy--early-return-capture
+                   (cl-block ,loopy--name-arg
+                     ,@loopy--before-do
+                     (while ,(cl-case (length loopy--pre-conditions)
+                               (0 t)
+                               (1 (car loopy--pre-conditions))
+                               (t (cons 'and loopy--pre-conditions)))
+                       (cl-tagbody
+                        ,@loopy--main-body
+                        loopy--continue-tag
+                        ,@loopy--latter-body))
+                     ,@loopy--after-do
+                     nil)))
+              ,@loopy--final-do
+              ,(if loopy--final-return
+                   loopy--final-return
+                 'loopy--early-return-capture)))))
+   #+END_SRC
+
+
+* An Example
+** A Small Example
+
+   To implement a custom loop body command, =loopy= needs two pieces of
+   information:
+   1. The keyword that names your command
+   2. The parsing function that can turn uses of your command into instructions.
+
+   Importantly, your custom commands cannot share a name.
+
+   For example, say that you're tired of typing out
+   =(do (message "Hello, %s" first last))= and would prefer to instead use
+   =(greet FIRST [LAST])=.  This only requires pushing code into the main
+   loopy body, so the definition of the parsing function is quite simple.
+
+   #+BEGIN_SRC emacs-lisp
+     (cl-defun my-loopy-greet-command-parser ((_ first &optional last))
+       "Greet one with first name FIRST and optional last name LAST."
+       `((loopy--main-body . (if ,last
+                                 (message "Hello, %s %s" ,first ,last)
+                               (message "Hello, %s" ,first)))))
+   #+END_SRC
+
+   =loopy= will pass the entire command expression to the parsing function, and
+   expects back a list of instructions.
+
+   To tell =loopy= about this function, add it and the command name =greet= to
+   the variable =loopy-custom-command-parsers=.
+
+   #+BEGIN_SRC emacs-lisp
+     (add-to-list 'loopy-custom-command-parsers
+                  '(greet . my-loopy-greet-command-parser))
+   #+END_SRC
+
+   After that, you can use your custom command in the loop body.
+
+   #+BEGIN_SRC emacs-lisp
+     (loopy ((list name '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
+             (greet (car name) (cadr name))))
+   #+END_SRC
+
+   By running =M-x pp-macroexpand-last-sexp= on the above expression, you can
+   see that it expands to do what we want, as expected.
+
+   #+BEGIN_SRC emacs-lisp
+     (let ((g815 '(("John" "Deer")
+                   ("Jane" "Doe")
+                   ("Jimmy")))
+           (name nil))
+       (while (consp g815)
+         (setq name (car g815))
+         (if (cadr name)
+             (message "Hello, %s %s"
+                      (car name) (cadr name))
+           (message "Hello, %s" (car name)))
+         (setq g815 (cdr g815)))
+       nil)
+   #+END_SRC
+
+** A Slightly More Complicated Example
+   :PROPERTIES:
+   :CUSTOM_ID: a-slightly-more-complicated-example
+   :END:
+
+   Lets say we want to emulate =cl-loop='s =always= clause, which causes the
+   loop to return =nil= if an expression evaluates to =nil= and =t= otherwise.
+
+   Here is an example:
+
+   #+BEGIN_SRC emacs-lisp
+     (cl-loop for i in (number-sequence 1 9) always (< i 10)) ; => t
+   #+END_SRC
+
+   Without a custom command, you could translate this using the following.
+
+   #+BEGIN_SRC emacs-lisp
+     (loopy ((list i (number-sequence 1 9))
+             (unless (< i 10) (return nil)))
+            (else-do (cl-return t)))
+   #+END_SRC
+
+   While its meaning is clear, this approach is certainly wordier.  Here's how
+   you could do it with a custom command:
+
+   #+BEGIN_SRC emacs-lisp
+     (cl-defun my--loopy-always-command-parser ((_ &rest conditions))
+       "Parse a command of the form `(always [CONDITIONS])'.
+     If any condition is `nil', `loopy' should immediately return nil.
+     Otherwise, `loopy' should return t."
+       (let (instructions)
+         ;; Return t if loop completes successfully.
+         (push `(loopy--after-do . (cl-return t)) instructions)
+         ;; Check all conditions at the end of the loop body, forcing an exit if any
+         ;; evaluate to nil.  Since the default return value of the macro is nil, we
+         ;; don’t need to do anything else.
+         ;;
+         ;; NOTE: We must not add anything to `loopy--final-return', since that
+         ;;       would override the value of any early returns.
+         (dolist (condition conditions)
+           (push `(loopy--post-conditions . ,condition) instructions))
+         instructions))
+
+     (add-to-list 'loopy-custom-command-parsers
+                  (cons 'always #'my--loopy-always-command-parser))
+
+     ;; One condition: => t
+     (loopy ((list i (number-sequence 1 9)) (always (< i 10))))
+
+     ;; Two conditions: => nil
+     (loopy ((list i (number-sequence 1 9))
+             (list j '(2 4 6 8 9))
+             (always (< i 10) (cl-evenp j))))
+   #+END_SRC
+
+   This command (and equivalents of the =never= and =thereis= clauses) aren’t
+   provided by default on the assumption that modifying values normally derived
+   from macro arguments might prove confusing and unexpected.
+
+
