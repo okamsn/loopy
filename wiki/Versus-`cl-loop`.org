@@ -1,4 +1,16 @@
-* How does it compare to =cl-loop=?
+* Table of Contents :TOC:
+- [[#why-loopy][Why =loopy=?]]
+- [[#translating-from-cl-loop][Translating from =cl-loop=]]
+  - [[#for-clauses][For Clauses]]
+  - [[#iteration-clauses][Iteration Clauses]]
+  - [[#accumulation-clauses][Accumulation Clauses]]
+  - [[#other-clauses][Other Clauses]]
+- [[#speed-comparisons][Speed Comparisons]]
+  - [[#iteration-clauses-1][Iteration Clauses]]
+  - [[#accumulation-clauses-1][Accumulation Clauses]]
+  - [[#destructuring][Destructuring]]
+
+* Why =loopy=?
   :PROPERTIES:
   :CUSTOM_ID: how-does-it-compare-to-other-approaches
   :END:
@@ -45,6 +57,10 @@
               (expr twice (* 2 i))
               (collect together (list once twice))))
            (finally-return together))
+
+    ;; Though you are more likely to write this as:
+    (loopy ((list i (number-sequence 1 10))
+            (when (cl-evenp i) (collect (list i (* 2 i))))))
   #+END_SRC
 
   In my experience, =cl-loop= does not allow the easy grouping of assignment
@@ -101,9 +117,10 @@
 
                 ;; … Further processing now that data is named …
 
-                (collect line-nums line-num)
-                (collect data-nums datum-num)))
-             (finally-return line-nums data-nums)))
+                ;; Each accumulation command implicitly returns what is collected,
+                ;; so `loopy' automatically returns a list of two sub-lists.
+                (collect line-num)
+                (collect datum-num)))))
   #+END_SRC
 
   I believe that the value of the macro increases for longer loop bodies with
@@ -116,141 +133,325 @@
 
   #+BEGIN_SRC emacs-lisp
     ;; Returns even numbers that aren't multiples of 10.
+    ;; => (2 4 6 8 12 14 16 18)
     (loopy ((list i (number-sequence 1 20))
-            (when (zerop (mod i 10))
-              (skip))
-            (when (cl-evenp i)
-              (push-into my-collection i)))
-           (finally-return (nreverse my-collection))) ; => (2 4 6 8 12 14 16 18)
+            (when (zerop (mod i 10)) (skip))
+            (when (cl-evenp i)       (collect i))))
   #+END_SRC
 
-** Translating from =cl-loop=
+* Translating from =cl-loop=
+  :PROPERTIES:
+  :CUSTOM_ID: translating-from-cl-loop
+  :END:
+
+** For Clauses
    :PROPERTIES:
-   :CUSTOM_ID: translating-from-cl-loop
+   :CUSTOM_ID: for-clauses
    :END:
 
-*** For Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: for-clauses
-    :END:
+   As Emacs has many functions that return lists, there is no need to implement
+   an exact equivalent for every =for=-clause that =cl-loop= has.  Instead, one
+   can just iterate through the return value of the appropriate function using
+   the =list= command.
 
-    As Emacs has many functions that return lists, there is no need to implement
-    an exact equivalent for every =for=-clause that =cl-loop= has.  Instead, one
-    can just iterate through the return value of the appropriate function using
-    the =list= command.
+   | =cl-loop=                                     | =loopy=                                          |
+   |-----------------------------------------------+--------------------------------------------------|
+   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
+   | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
+   | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
+   | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
+   | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                              |
+   | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                          |
+   | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                             |
+   | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                         |
+   | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.                    |
+   | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=        |
+   | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))=      |
+   | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.                  |
+   | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.                  |
+   | =for VAR being the key-seqs of KEYMAP=        | None so far.                                     |
+   | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.               |
+   | =for VAR being the intervals [of BUFFER]=     | None so far.                                     |
+   | =for VAR being the frames=                    | =(list VAR (frame-list))=                        |
+   | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=                 |
+   | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                       |
+   | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                         |
 
-    | =cl-loop=                                     | =loopy=                                          |
-    |-----------------------------------------------+--------------------------------------------------|
-    | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
-    | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
-    | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
-    | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
-    | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                              |
-    | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                          |
-    | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                             |
-    | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                         |
-    | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.                    |
-    | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=        |
-    | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))=      |
-    | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.                  |
-    | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.                  |
-    | =for VAR being the key-seqs of KEYMAP=        | None so far.                                     |
-    | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.               |
-    | =for VAR being the intervals [of BUFFER]=     | None so far.                                     |
-    | =for VAR being the frames=                    | =(list VAR (frame-list))=                        |
-    | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=                 |
-    | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                       |
-    | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                         |
+** Iteration Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: iteration-clauses
+   :END:
 
-*** Iteration Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: iteration-clauses
-    :END:
+   In ~loopy~, =while= and =until= use a ~cl-tagbody~ to leave the loop without
+   affecting ~loopy~'s return value.  Conditions are evaluated in place, and the
+   commands operate like other normal commands.
 
-    | =cl-loop=          | =loopy=                      |
-    |--------------------+------------------------------|
-    | =repeat INT=       | =(repeat INT)=               |
-    | =while COND=       | =(unless COND (return nil))= |
-    | =until COND=       | =(when COND (return nil))=   |
-    | =iter-by iterator= | None so far.                 |
+   | =cl-loop=          | =loopy=        |
+   |--------------------+----------------|
+   | =repeat INT=       | =(repeat INT)= |
+   | =while COND=       | =(while COND)= |
+   | =until COND=       | =(until COND)= |
+   | =iter-by iterator= | None so far.   |
 
-    The clauses =always=, =never=, and =thereis= can be replaced by a
-    combination of an exiting command and the =after-do= (also written
-    =else-do=) macro argument.  Below is an example from the CL Lib manual.
+   The clauses =always=, =never=, and =thereis= can be replaced by a
+   combination of an exiting command and the =after-do= (also written
+   =else-do=) macro argument.  Below is an example from the CL Lib manual.
 
-    #+BEGIN_SRC emacs-lisp
-      ;; With `cl-loop':
-      (if (cl-loop for size in size-list always (> size 10))
-          (only-big-sizes)
-        (some-small-sizes))
+   #+BEGIN_SRC emacs-lisp
+     ;; With `cl-loop':
+     (if (cl-loop for size in size-list always (> size 10))
+         (only-big-sizes)
+       (some-small-sizes))
 
-      ;; With `loopy':
-      ;; Depends on whether the functions have return values.
-      (loopy ((list size size-list)
-              ;; `return` is just a wrapper for `cl-return`.
-              (when (< size 10) (return (some-small-sizes))))
-             ;; Only runs if loop doesn't exit early.
-             (else-do (cl-return (only-big-sizes))))
-    #+END_SRC
+     ;; With `loopy':
+     ;; Depends on whether the functions have return values.
+     (loopy ((list size size-list)
+             ;; `return` is just a wrapper for `cl-return`.
+             (when (< size 10) (return (some-small-sizes))))
+            ;; Only runs if loop doesn't exit early.
+            (else-do (cl-return (only-big-sizes))))
+   #+END_SRC
 
-    A seen in the above example, =loopy= does not always have a one-to-one
-    translation to =cl-loop= ([[#a-slightly-more-complicated-example][though you could try a custom command]]).
+   A seen in the above example, =loopy= does not always have a one-to-one
+   translation to =cl-loop= ([[https://github.com/okamsn/loopy/wiki/Custom-Commands][though you could implement a custom command]]).
 
-    It is not an explicit goal to be able to replace all uses of =cl-loop= with
-    =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
-    not be enough, instead of forcing =loopy= into places where =cl-loop=
-    already works well.
+   It is not an explicit goal to be able to replace all uses of =cl-loop= with
+   =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
+   not be enough, instead of forcing =loopy= into places where =cl-loop=
+   already works well.
 
-    Other options in the above example include using =cl-every=,
-    =seq-every-p=, Dash’s =-all?=, etc.
+   Other options in the above example include using =cl-every=,
+   =seq-every-p=, Dash’s =-all?=, etc.
 
-*** Accumulation Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: accumulation-clauses
-    :END:
+** Accumulation Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: accumulation-clauses
+   :END:
 
-    In =loopy=, when accumulation commands are not given a =VAR=, they
-    accumulate into different variables.  If you want accumulations to act on
-    the same variable, you must give the same =VAR=.
+   In =loopy=, when accumulation commands are not given a =VAR=, they
+   accumulate into different variables.  If you want accumulations to act on
+   the same variable, you must give the same =VAR=.
 
-    | =cl-loop=                | =loopy=              |
-    |--------------------------+----------------------|
-    | =append EXPR into VAR=   | =(append VAR EXPR)=  |
-    | =collect EXPR into VAR=  | =(collect VAR EXPR)= |
-    | =concat EXPR into VAR=   | =(concat VAR EXPR)=  |
-    | =count EXPR into VAR=    | =(count VAR EXPR)=   |
-    | =maximize EXPR into VAR= | =(max VAR EXPR)=     |
-    | =minimize EXPR into VAR= | =(min VAR EXPR)=     |
-    | =nconc EXPR into VAR=    | =(nconc VAR EXPR)=   |
-    | =sum EXPR into VAR=      | =(sum VAR EXPR)=     |
-    | =vconcat EXPR into VAR=  | =(vconcat VAR EXPR)= |
+   | =cl-loop=                | =loopy=              |
+   |--------------------------+----------------------|
+   | =append EXPR into VAR=   | =(append VAR EXPR)=  |
+   | =collect EXPR into VAR=  | =(collect VAR EXPR)= |
+   | =concat EXPR into VAR=   | =(concat VAR EXPR)=  |
+   | =count EXPR into VAR=    | =(count VAR EXPR)=   |
+   | =maximize EXPR into VAR= | =(max VAR EXPR)=     |
+   | =minimize EXPR into VAR= | =(min VAR EXPR)=     |
+   | =nconc EXPR into VAR=    | =(nconc VAR EXPR)=   |
+   | =sum EXPR into VAR=      | =(sum VAR EXPR)=     |
+   | =vconcat EXPR into VAR=  | =(vconcat VAR EXPR)= |
 
-*** Other Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: other-clauses
-    :END:
+** Other Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: other-clauses
+   :END:
 
-    In =loopy=, =if=, =when=, and =unless= can take multiple loop commands as
-    arguments, and operate more like their Lisp counterparts.
+   In =loopy=, =if=, =when=, and =unless= can take multiple loop commands as
+   arguments, and operate more like their Lisp counterparts.
 
-    This means that =if= is not a synonym for =when=.  Just like the normal Lisp
-    special form =if=, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
-    evaluates to non-nil, and only runs commands =cmd2= and =cmd3= if =COND=
-    evaluates to =nil=.
+   This means that =if= is not a synonym for =when=.  Just like the normal Lisp
+   special form =if=, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
+   evaluates to non-nil, and only runs commands =cmd2= and =cmd3= if =COND=
+   evaluates to =nil=.
 
-    =loopy= also provides the command =cond=, which works like the normal Lisp
-    special form =cond=.
+   =loopy= also provides the command =cond=, which works like the normal Lisp
+   special form =cond=.
 
-    | =cl-loop=              | =loopy=                                     |
-    |------------------------+---------------------------------------------|
-    | =with var = value=     | =(with (VAR VALUE))= as a macro argument    |
-    | =if COND clause=       | =(if COND CMDS)= as a loop command          |
-    | =when COND clause=     | =(when COND CMDS)= as a loop command        |
-    | =unless COND clause=   | =(unless COND CMDS)= as a loop command      |
-    | =named NAME=           | =NAME= as a macro argument                  |
-    | =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument     |
-    | =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument    |
-    | =finally return EXPR=  | =(finally-return EXPR)= as a macro argument |
-    | =do EXPRS=             | =(do EXPRS)= as a loop command              |
-    | =return EXPR=          | =(return EXPR)= as a loop command           |
+   | =cl-loop=              | =loopy=                                     |
+   |------------------------+---------------------------------------------|
+   | =with var = value=     | =(with (VAR VALUE))= as a macro argument    |
+   | =if COND clause=       | =(if COND CMDS)= as a loop command          |
+   | =when COND clause=     | =(when COND CMDS)= as a loop command        |
+   | =unless COND clause=   | =(unless COND CMDS)= as a loop command      |
+   | =named NAME=           | =NAME= as a macro argument                  |
+   | =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument     |
+   | =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument    |
+   | =finally return EXPR=  | =(finally-return EXPR)= as a macro argument |
+   | =do EXPRS=             | =(do EXPRS)= as a loop command              |
+   | =return EXPR=          | =(return EXPR)= as a loop command           |
 
+* Speed Comparisons
+
+  #+begin_center
+  *NOTE*: This section is still a work in progress.
+  #+end_center
+
+  =loopy= tries to follow the same logic as =cl-loop=, but in being more
+  flexible in some cases, it cannot always implement concepts as efficiently as
+  =cl-loop=.  However, for general cases, they should be more or less the same.
+
+  These comparisons are made using macros listed in user Alphapapa’s useful
+  [[https://github.com/alphapapa/emacs-package-dev-handbook#benchmarking][Emacs Package Dev Handbook]].  For completeness, they are copied below.
+
+  #+begin_src emacs-lisp :result silent
+    (require 'cl-lib)
+
+    ;;;###autoload
+    (cl-defmacro bench (&optional (times 100000) &rest body)
+      "Call `benchmark-run-compiled' on BODY with TIMES iterations, returning list suitable for Org source block evaluation.
+    Garbage is collected before calling `benchmark-run-compiled' to
+    avoid counting existing garbage which needs collection."
+      (declare (indent defun))
+      `(progn
+         (garbage-collect)
+         (list '("Total runtime" "# of GCs" "Total GC runtime")
+               'hline
+               (benchmark-run-compiled ,times
+                 (progn
+                   ,@body)))))
+
+    ;; TODO: Consider not using `-on' here to avoid the extra dependency.
+    (require 'dash-functional)
+
+    ;;;###autoload
+    (cl-defmacro bench-multi (&key (times 1) forms ensure-equal raw)
+      "Return Org table as a list with benchmark results for FORMS.
+    Runs FORMS with `benchmark-run-compiled' for TIMES iterations.
+
+    When ENSURE-EQUAL is non-nil, the results of FORMS are compared,
+    and an error is raised if they aren't `equal'. If the results are
+    sequences, the difference between them is shown with
+    `seq-difference'.
+
+    When RAW is non-nil, the raw results from
+    `benchmark-run-compiled' are returned instead of an Org table
+    list.
+
+    If the first element of a form is a string, it's used as the
+    form's description in the bench-multi-results; otherwise, forms
+    are numbered from 0.
+
+    Before each form is run, `garbage-collect' is called."
+      ;; MAYBE: Since `bench-multi-lexical' byte-compiles the file, I'm not sure if
+      ;; `benchmark-run-compiled' is necessary over `benchmark-run', or if it matters.
+      (declare (indent defun))
+      (let*((keys (gensym "keys"))
+            (result-times (gensym "result-times"))
+            (header '(("Form" "x faster than next" "Total runtime" "# of GCs" "Total GC runtime")
+                      hline))
+            ;; Copy forms so that a subsequent call of the macro will get the original forms.
+            (forms (cl-copy-list forms))
+            (descriptions (cl-loop for form in forms
+                                   for i from 0
+                                   collect (if (stringp (car form))
+                                               (prog1 (car form)
+                                                 (setf (nth i forms) (cadr (nth i forms))))
+                                             i))))
+        `(unwind-protect
+             (progn
+               (defvar bench-multi-results nil)
+               (let* ((bench-multi-results (make-hash-table))
+                      (,result-times (sort (list ,@(cl-loop for form in forms
+                                                            for i from 0
+                                                            for description = (nth i descriptions)
+                                                            collect `(progn
+                                                                       (garbage-collect)
+                                                                       (cons ,description
+                                                                             (benchmark-run-compiled ,times
+                                                                               ,(if ensure-equal
+                                                                                    `(puthash ,description ,form bench-multi-results)
+                                                                                  form))))))
+                                           (lambda (a b)
+                                             (< (cl-second a) (cl-second b))))))
+                 ,(when ensure-equal
+                    `(cl-loop with ,keys = (hash-table-keys bench-multi-results)
+                              for i from 0 to (- (length ,keys) 2)
+                              unless (equal (gethash (nth i ,keys) bench-multi-results)
+                                            (gethash (nth (1+ i) ,keys) bench-multi-results))
+                              do (if (sequencep (gethash (car (hash-table-keys bench-multi-results)) bench-multi-results))
+                                     (let* ((k1) (k2)
+                                            ;; If the difference in one order is nil, try in other order.
+                                            (difference (or (setq k1 (nth i ,keys)
+                                                                  k2 (nth (1+ i) ,keys)
+                                                                  difference (seq-difference (gethash k1 bench-multi-results)
+                                                                                             (gethash k2 bench-multi-results)))
+                                                            (setq k1 (nth (1+ i) ,keys)
+                                                                  k2 (nth i ,keys)
+                                                                  difference (seq-difference (gethash k1 bench-multi-results)
+                                                                                             (gethash k2 bench-multi-results))))))
+                                       (user-error "Forms' bench-multi-results not equal: difference (%s - %s): %S"
+                                                   k1 k2 difference))
+                                   ;; Not a sequence
+                                   (user-error "Forms' bench-multi-results not equal: %s:%S %s:%S"
+                                               (nth i ,keys) (nth (1+ i) ,keys)
+                                               (gethash (nth i ,keys) bench-multi-results)
+                                               (gethash (nth (1+ i) ,keys) bench-multi-results)))))
+                 ;; Add factors to times and return table
+                 (if ,raw
+                     ,result-times
+                   (append ',header
+                           (bench-multi-process-results ,result-times)))))
+           (unintern 'bench-multi-results nil))))
+
+    (defun bench-multi-process-results (results)
+      "Return sorted RESULTS with factors added."
+      (setq results (sort results (-on #'< #'cl-second)))
+      (cl-loop with length = (length results)
+               for i from 0 to (1- length)
+               for description = (car (nth i results))
+               for factor = (if (< i (1- length))
+                                (format "%.2f" (/ (cl-second (nth (1+ i) results))
+                                                  (cl-second (nth i results))))
+                              "slowest")
+               collect (append (list description factor)
+                               (list (format "%.6f" (cl-second (nth i results)))
+                                     (cl-third (nth i results))
+                                     (if (> (cl-fourth (nth i results)) 0)
+                                         (format "%.6f" (cl-fourth (nth i results)))
+                                       0)))))
+  #+end_src
+
+** Iteration Clauses
+
+
+** Accumulation Clauses
+
+   ~cl-loop~ uses special considerations for =append= and =collect=, using
+   ~append~, ~nconc~, or a combination of ~push~ and ~nreverse~ depending on how
+   variables are being declared and used.  ~loopy~ is currently much simpler,
+   using ~push~ and ~nreverse~ when no explicitly variable is given (as in
+   ~(collect some-val)~) and the using the named function otherwise.
+
+   #+begin_src emacs-lisp
+     (let ((l (number-sequence 1 100)))
+       (bench-multi
+         :times 1000
+         :forms (("cl-loop" (cl-loop for i in l
+                                     collect i))
+                 ("loopy" (loopy ((list i l)
+                                  (collect i)))))))
+   #+end_src
+
+   #+RESULTS:
+   | Form    | x faster than next | Total runtime | # of GCs | Total GC runtime |
+   |---------+--------------------+---------------+----------+------------------|
+   | loopy   | 1.03               |      0.005255 |        0 |                0 |
+   | cl-loop | slowest            |      0.005410 |        0 |                0 |
+
+** Destructuring
+
+   #+begin_src emacs-lisp
+     (bench-multi
+       :times 1000
+       :forms (("cl-loop" (cl-loop for (i . j) in '((1 2 3) (4 5 6))
+                                   collect i
+                                   collect j))
+               ;; NOTE: In `loopy', using "(collect i) (collect j)" would collect
+               ;;       into two different implicit return variables.  If you want to
+               ;;       use the same variable, you need to give it explicitly.
+               ;;       Therefore, to do the same thing as `cl-loop' in this case, we
+               ;;       need to use `push-into' instead of `collect'.
+               ("loopy" (loopy ((list (i . j) '((1 2 3) (4 5 6)))
+                                (push-into my-coll i)
+                                (push-into my-coll j))
+                               (return (nreverse my-coll))))))
+   #+end_src
+
+   #+RESULTS:
+   | Form    | x faster than next | Total runtime | # of GCs | Total GC runtime |
+   |---------+--------------------+---------------+----------+------------------|
+   | loopy   | 1.02               |      0.000441 |        0 |                0 |
+   | cl-loop | slowest            |      0.000450 |        0 |                0 |
