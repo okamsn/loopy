@@ -816,13 +816,19 @@ a loop name, return values, or a list of both."
   '((loopy--skip-used . t)
     (loopy--main-body . (go loopy--continue-tag))))
 
-(cl-defun loopy--parse-while-until-commands ((name &rest conditions))
+(cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
   "Parse the `while' and `until' commands."
   `((loopy--tagbody-exit-used . t)
     (loopy--main-body
      . ,(cl-ecase name
-          (until `(if (and ,@conditions) (go loopy--non-returning-exit-tag)))
-          (while `(if (or  ,@conditions) nil (go loopy--non-returning-exit-tag)))))))
+          (until `(if ,(if (zerop (length conditions))
+                           condition
+                         `(and ,condition ,@conditions))
+                      (go loopy--non-returning-exit-tag)))
+          (while `(if ,(if (zerop (length conditions))
+                           condition
+                         `(or ,condition ,@conditions))
+                      nil (go loopy--non-returning-exit-tag)))))))
 
 (defun loopy--parse-loop-command (command)
   "Parse COMMAND, returning a list of instructions in the same received order.
