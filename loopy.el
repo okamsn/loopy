@@ -633,17 +633,20 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
 
 (cl-defun loopy--parse-seq-ref-command
     ((_ var val)
-     &optional (value-holder (gensym "seq-ref-")) (index-holder (gensym "index-")))
+     &optional
+     (value-holder (gensym "seq-ref-")) (index-holder (gensym "index-"))
+     (length-holder (gensym "seq-ref-length-")))
   "Parse the `seq-ref' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   `((loopy--implicit-vars . (,value-holder ,val))
+    (loopy--implicit-vars . (,length-holder (length ,value-holder)))
     (loopy--implicit-vars . (,index-holder 0))
     ,@(loopy--create-destructured-assignment
        var `(elt ,value-holder ,index-holder) 'generalized)
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
-    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
+    (loopy--pre-conditions . (< ,index-holder ,length-holder))))
 
 ;; TODO: Some of the accumulations commands can be made more
 ;;       efficient/complicated depending on how the variables are being used.
@@ -1163,8 +1166,15 @@ Returns are always explicit.  See this package's README for more information."
                   result-is-one-expression t)))
 
         ;; Declare the implicit and explicit variables.
-        (when (or loopy--implicit-vars loopy--explicit-vars)
-          (setq result `(let ,(append loopy--implicit-vars loopy--explicit-vars)
+        ;; Implicit variables must be in a `let*' in case one refers to another,
+        ;; like in `seq-ref'.
+        (when loopy--implicit-vars
+          (setq result `(let* ,(nreverse loopy--implicit-vars)
+                          ,@(get-result))
+                result-is-one-expression t))
+
+        (when loopy--explicit-vars
+          (setq result `(let ,loopy--explicit-vars
                           ,@(get-result))
                 result-is-one-expression t))
 
