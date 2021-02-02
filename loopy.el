@@ -166,7 +166,7 @@ or `loopy--explicit-generalized-vars'."
       (memq var-name (mapcar #'car loopy--explicit-generalized-vars))))
 
 (defun loopy--already-implicit-return (var-name)
-  "Check whether a variable is already in the list of implied return values.
+  "Check whether variable VAR-NAME is in the list of implied return values.
 
 Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
@@ -478,8 +478,7 @@ the loop literally (not even in a `progn')."
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let ((arg-length (length vals))
-        (value-selector (gensym "expr-value-selector-"))
-        instructions)
+        (value-selector (gensym "expr-value-selector-")))
     (cl-case arg-length
       ;; If no values, repeatedly set to `nil'.
       (0 (loopy--create-destructured-assignment
@@ -639,7 +638,9 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   "Parse the `seq-ref' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
-holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
+holds VAL.  INDEX-HOLDER holds an index that point into
+VALUE-HOLDER.  LENGTH-HOLDER holds than length of the value of
+VALUE-HOLDER, once VALUE-HOLDER is initialized."
   `((loopy--implicit-vars . (,value-holder ,val))
     (loopy--implicit-vars . (,length-holder (length ,value-holder)))
     (loopy--implicit-vars . (,index-holder 0))
@@ -820,7 +821,10 @@ a loop name, return values, or a list of both."
     (loopy--main-body . (go loopy--continue-tag))))
 
 (cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
-  "Parse the `while' and `until' commands."
+  "Parse the `while' and `until' commands.
+
+NAME is `while' or `until'.  CONDITION is a required condition.
+CONDITIONS is the remaining optional conditions."
   `((loopy--tagbody-exit-used . t)
     (loopy--main-body
      . ,(cl-ecase name
