@@ -24,11 +24,10 @@
 @top Loopy: A Looping and Iteration Macro
 
 @samp{loopy} is a macro meant for iterating and looping.  It is similar in usage to
-@samp{cl-loop} @footnote{@uref{https://www.gnu.org/software/emacs/manual/html_node/cl/Loop-Facility.html#Loop-Facility}} but uses symbolic expressions rather than keywords.
+@samp{cl-loop} @footnote{@ref{Loop Facility,info:cl#Loop Facility,,cl,}} but uses symbolic expressions rather than keywords.
 
-@samp{loopy} should be complementary to the features provided by the Seq @footnote{@uref{https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequence-Functions.html},
-@ref{Sequence Functions,,,elisp,}} and
-CL @footnote{@uref{https://www.gnu.org/software/emacs/manual/html_node/cl/index.html}, @ref{Top,,,cl,}} libraries (including @samp{cl-loop}) and Emacs's regular looping and
+@samp{loopy} should be complementary to the features provided by the Seq @footnote{@ref{Sequence Functions,,,elisp,}} and
+CL @footnote{@ref{Top,,,cl,}} libraries (including @samp{cl-loop}) and Emacs's regular looping and
 mapping features.
 @end ifnottex
 
@@ -38,6 +37,9 @@ mapping features.
 * Adding Custom Commands::
 * How does it compare to @samp{cl-loop}?::
 * Real-World Examples::
+* Keyword and Command Index::
+* Variable Index::
+* Concept Index::
 
 @detailmenu
 --- The Detailed Node Listing ---
@@ -112,8 +114,7 @@ For example,
 
 @itemize
 @item
-To iterate through a sequence @footnote{@uref{https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html},
-@ref{Sequences Arrays Vectors,,,elisp,}}, use @samp{(seq elem [1 2 3])} (for
+To iterate through a sequence @footnote{@ref{Sequences Arrays Vectors,,,elisp,}}, use @samp{(seq elem [1 2 3])} (for
 efficiency, there are also more specific commands, like @samp{list}).
 @item
 To collect values into a list, use @samp{(collect my-collection collected-value)}.
@@ -222,26 +223,51 @@ Calling the @samp{loopy} macro without arguments creates an infinite loop that
 does nothing.
 
 You can name a loop by passing @samp{loopy} an unquoted symbol.  All other
-arguments are expressions that begin with a keyword from the table below.
+arguments are expressions that begin with a keyword from the list below.
 For clarity and convenience, some keywords have multiple names and the @samp{loop}
 keyword can be excluded.
 
-@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
-@headitem Keyword
-@tab Usage
+@findex with, let*
+@table @asis
 @item @samp{with}, @samp{let*}
-@tab Declare variables before the loop.
+Declare variables before the loop.
+@end table
+
+@findex before-do, before
+@table @asis
 @item @samp{before-do}, @samp{before}
-@tab Run Lisp expressions before loop starts.
-@item @samp{loop}, or excluded
-@tab Add expressions to the loop body and perform setup.
+Run Lisp expressions before the loop starts.
+@end table
+
+@findex loop
+@table @asis
+@item @samp{loop} (or no keyword)
+Add expressions to the loop body, perform any
+setup like initializing variables or adding exit conditions.
+@end table
+
+@findex after-do, after, else-do, else
+@table @asis
 @item @samp{after-do}, @samp{after}, @samp{else-do}, @samp{else}
-@tab Run Lisp expressions after loop successfully completes.
+Run Lisp expressions after the
+loop successfully completes.  This is similar to Python’s @code{else} loop
+clause.
+@end table
+
+@findex finally-do, finally
+@table @asis
 @item @samp{finally-do}, @samp{finally}
-@tab Always run Lisp expressions after loop exits.
+Always run Lisp expressions after the loop
+exits.
+@end table
+
+@findex finally-return, return macro argument
+@table @asis
 @item @samp{finally-return}, @samp{return}
-@tab Return a value, regardless of how the loop completes.
-@end multitable
+Return a value, regardless of how the loop
+completes.  Accumulation commands have an implicit return value, but this
+overrides them.
+@end table
 
 The loop body and any expressions that are part of the @samp{before-do} and
 @samp{after-do} arguments are contained in a single @samp{cl-block}.  Naming the loop
@@ -270,6 +296,10 @@ Therefore, these are valid:
 (loopy ((list i '(1 2 3))
         (collect coll i))
        (return coll))
+
+;; Implicit accumulation variable and implicit return value:
+(loopy ((list i '(1 2 3))
+        (collect i)))
 @end lisp
 
 and this is not:
@@ -353,6 +383,7 @@ expression, and @samp{[CMD]} is an optional command.  By extension,
 Generally, @samp{VAR} is initialized to @code{nil}, but not always.  This document
 tries to note when that is not the case.
 
+@cindex variable destructuring
 For convenience, @samp{VAR} can be a sequence (either a list or a vector (as a
 stand-in for an array)) of symbols instead of a single symbol.  This tells
 the command to “de-structure” the value of @samp{EXPR}, similar to the functions
@@ -411,6 +442,7 @@ not all kinds of destructuring make sense in all situations.
 @node Commands for Generic Evaluation
 @subsection Commands for Generic Evaluation
 
+@findex do
 @table @asis
 @item @samp{(do EXPRS)}
 Evaluate multiple Lisp expressions, like a @samp{progn}.
@@ -423,14 +455,18 @@ command.
 (loopy ((list i '(1 2 3))
         (do (message "%d" i))))
 @end lisp
+@end table
 
+@findex expr, exprs, set
+@table @asis
 @item @samp{(expr|exprs|set VAR [EXPRS])}
 Bind @samp{VAR} to each @samp{EXPR} in order.
 Once the last @samp{EXPR} is reached, it is used repeatedly for the rest of the
 loop.  With no @samp{EXPR}, @samp{VAR} is repeatedly bound to @samp{nil}.
 
 @strong{NOTE}: Loops are locally scoped, so using this command does not always
-have the same effect as using @samp{(do (setq VAR EXPR))}.
+have the same effect as using @samp{(do (setq VAR EXPR))}, as @samp{VAR} is
+initialized to @samp{nil} before the loop starts.
 
 @lisp
 (loopy ((repeat 5)
@@ -443,7 +479,10 @@ have the same effect as using @samp{(do (setq VAR EXPR))}.
         (collect coll i))
        (return coll)) ; => '(0 1 2 3 4)
 @end lisp
+@end table
 
+@findex group
+@table @asis
 @item @samp{(group [CMDS])}
 Evaluate multiple loop commands, as if in a @samp{progn}.
 This is similar to @samp{do}, but runs commands instead of normal Lisp
@@ -462,6 +501,7 @@ true variables.  Like other commands, they can also use destructuring.  In
 such cases, the variables in the sequence @samp{VAR} are also @code{setf}-able places
 instead of true variables.
 
+@findex array
 @table @asis
 @item @samp{(array VAR EXPR)}
 Loop through the elements of the array @samp{EXPR}.
@@ -470,7 +510,10 @@ Loop through the elements of the array @samp{EXPR}.
 (loopy ((array i [1 2 3])
         (do (message "%d" i))))
 @end lisp
+@end table
 
+@findex array-ref, arrayf
+@table @asis
 @item @samp{(array-ref|arrayf VAR EXPR)}
 Loop through the elements of the array
 @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.
@@ -481,7 +524,10 @@ Loop through the elements of the array
              (do (setf i ?a)))
        (return my-str)) ; => "aaa"
 @end lisp
+@end table
 
+@findex cons, conses
+@table @asis
 @item @samp{(cons|conses VAR EXPR [FUNC])}
 Loop through the cons cells of @samp{EXPR}.
 Optionally, find the cons cells via @samp{FUNC} instead of @samp{cdr}.
@@ -494,7 +540,10 @@ to @samp{EXPR} instead of @code{nil}.
              (collect coll i))
        (finally-return coll)) ; => ((1 2 3) (2 3) (3))
 @end lisp
+@end table
 
+@findex list
+@table @asis
 @item @samp{(list VAR EXPR [FUNC])}
 Loop through the elements of the list @samp{EXPR}.
 Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
@@ -503,7 +552,10 @@ Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 (loopy ((list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
         (do (message "%d" i))))
 @end lisp
+@end table
 
+@findex list-ref, listf
+@table @asis
 @item @samp{(list-ref|listf VAR EXPR [FUNC])}
 Loop through the elements of the
 list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update the
@@ -515,7 +567,10 @@ list by @samp{FUNC} instead of @samp{cdr}.
              (do (setf i 7)))
        (finally-return my-list)) ; Returns '(7 7 7).
 @end lisp
+@end table
 
+@findex repeat
+@table @asis
 @item @samp{(repeat EXPR)}
 Add a condition that the loop should stop after
 @samp{EXPR} iterations.
@@ -534,7 +589,10 @@ end of the loop.
 (loopy ((repeat i 3)
         (do (message "%d" i))))
 @end lisp
+@end table
 
+@findex seq
+@table @asis
 @item @samp{(seq VAR EXPR)}
 Loop through the sequence @samp{val}, binding @samp{var} to
 the elements of the sequence.
@@ -543,7 +601,10 @@ the elements of the sequence.
 (loopy ((seq i [1 2 3]) (collect coll i))
        (return coll)) ; => (1 2 3)
 @end lisp
+@end table
 
+@findex seq-ref, seqf
+@table @asis
 @item @samp{(seq-ref|seqf VAR EXPR)}
 Loop through the elements of the sequence
 @samp{val}, binding @samp{var} as a @code{setf}-able place.
@@ -574,6 +635,7 @@ commands, such as in the following.
        (return coll)) ; => (1 6 2 7 3 8)
 @end lisp
 
+@cindex accumulation destructuring
 Using a “destructuring” @samp{VAR} argument in accumulation commands works a bit
 differently than how it would in iteration commands.  While iteration
 commands just assign variables the values that make up the destructured
@@ -599,6 +661,7 @@ respective variable in the sequence @samp{VAR}.
        (return sum1 sum2 sum3))
 @end lisp
 
+@cindex implied/implicit return values
 Using an accumulation command implies a return value.  If there are multiple
 accumulations, or destructured accumulations, than the implied return value
 of the loop is a list of those accumulated values in the order that their
@@ -617,6 +680,7 @@ be overridden by using the @samp{return} and @samp{return-from} loop commands or
         (sum (my-sum1 my-sum2 my-sum3) elem)))
 @end lisp
 
+@cindex implied/implicit accumulation variables
 Like @code{cl-loop}, you do not need to supply a variable name to accumulation
 commands.  With only one argument, they accumulate values into a generated
 variable and use that variable as an implicit return value.  Unlike
@@ -628,6 +692,7 @@ The commands @samp{collect}, @samp{append}, and @samp{nconc} are more efficient 
 is provided, constructing the accumulated value backwards and then reversing
 it, which is usually faster.
 
+@findex append
 @table @asis
 @item @samp{(append VAR EXPR)}
 Repeatedly @code{append} the value of @samp{EXPR} to @samp{VAR}.
@@ -642,7 +707,10 @@ value at the end of the loop.
         (append coll i))
        (return coll)) ; => '(1 2 3 4 5 6)
 @end lisp
+@end table
 
+@findex collect
+@table @asis
 @item @samp{(collect VAR EXPR)}
 Collect the value of @samp{EXPR} into a list.  If @samp{VAR}
 is not provided, repeatedly @code{push} the value of @samp{EXPR} into he implicit
@@ -665,7 +733,10 @@ the loop.
 If you want to @code{push} values into a provided variable (instead of
 repeatedly appending a list of one element), use the @samp{push-into} command
 (see below).
+@end table
 
+@findex concat
+@table @asis
 @item @samp{(concat VAR EXPR)}
 Repeatedly @samp{concat} the value of @samp{EXPR} onto the
 end of @samp{VAR}.  @samp{VAR} starts as @samp{nil}.  See the @samp{vconcat} command for
@@ -676,7 +747,10 @@ vectors.
         (concat str i))
        (return str)) ; => "abc"
 @end lisp
+@end table
 
+@findex count
+@table @asis
 @item @samp{(count VAR EXPR)}
 Count the number of times that @samp{EXPR} evaluates to a
 non-nil value, adding 1 to @samp{VAR} each time.  @samp{VAR} starts at 0.
@@ -686,7 +760,10 @@ non-nil value, adding 1 to @samp{VAR} each time.  @samp{VAR} starts at 0.
         (count non-nil-count i))
        (return non-nil-count)) ; => 3
 @end lisp
+@end table
 
+@findex max, maximize
+@table @asis
 @item @samp{(max|maximize VAR EXPR)}
 Repeatedly set @samp{VAR} to the greater of @samp{VAR}
 and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{-1.0e+INF}, so that any other
@@ -697,7 +774,10 @@ value should be greater that it.
         (max my-max i))
        (return my-max)) ; => 11
 @end lisp
+@end table
 
+@findex min, minimize
+@table @asis
 @item @samp{(min|minimize VAR EXPR)}
 Repeatedly set @samp{VAR} to the lesser of @samp{VAR}
 and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{1.0e+INF}, so that any other
@@ -708,7 +788,10 @@ value should be less than it.
         (min my-min i))
        (return my-min)) ; => 0
 @end lisp
+@end table
 
+@findex nconc
+@table @asis
 @item @samp{(nconc VAR EXPR)}
 Repeatedly concatenate the value of @samp{EXPR} onto
 @samp{VAR} with @samp{nconc}.  If @samp{VAR} is not provided, repeatedly @code{nconc} the
@@ -723,7 +806,10 @@ modifies @samp{VAR} directly.
              (nconc my-new-list i))
        (return my-new-list)) ; => '(1 2 3 4 5 6 7 8)
 @end lisp
+@end table
 
+@findex push, push-into
+@table @asis
 @item @samp{(push|push-into VAR EXPR)}
 Repeatedly @samp{push} @samp{EXPR} into @samp{VAR}.  @samp{VAR}
 stars as @samp{nil}.
@@ -733,7 +819,10 @@ stars as @samp{nil}.
         (push reversed i))
        (finally-return (nreverse reversed))) ; => '(1 2 3)
 @end lisp
+@end table
 
+@findex sum
+@table @asis
 @item @samp{(sum VAR EXPR)}
 Repeatedly set @samp{VAR} to the sum of the value of @samp{EXPR}
 and @samp{VAR}.  @samp{VAR} starts at 0.
@@ -743,7 +832,10 @@ and @samp{VAR}.  @samp{VAR} starts at 0.
         (sum my-sum i))
        (return my-sum)) ; => 10
 @end lisp
+@end table
 
+@findex vconcat
+@table @asis
 @item @samp{(vconcat VAR EXPR)}
 Repeatedly @samp{vconcat} the value of @samp{EXPR} onto
 @samp{VAR}.  @samp{VAR} starts as @samp{nil}.
@@ -771,6 +863,7 @@ Conditional commands in @samp{loopy} can take multiple sub-commands, and work
 like their Lisp counterparts.  There is therefore no need for an @samp{and}
 command as used in @samp{cl-loop}.
 
+@findex when
 @table @asis
 @item @samp{(when EXPR CMDS)}
 Run @samp{CMDS} only if @samp{EXPR} is non-nil.
@@ -786,7 +879,10 @@ Run @samp{CMDS} only if @samp{EXPR} is non-nil.
           (collect only-evens i)))
        (finally-return only-evens))
 @end lisp
+@end table
 
+@findex if
+@table @asis
 @item @samp{(if EXPR CMDS)}
 Run the first command if @samp{EXPR} is non-nil.
 Otherwise, run the remaining commands.
@@ -802,7 +898,10 @@ Otherwise, run the remaining commands.
                              reversed-evens
                              some-threes)))
 @end lisp
+@end table
 
+@findex cond
+@table @asis
 @item @samp{(cond [(EXPR CMDS) [...]])}
 For the first @samp{EXPR} to evaluate to
 non-nil, run the following commands @samp{CMDS}.
@@ -821,6 +920,7 @@ non-nil, run the following commands @samp{CMDS}.
 @node Skipping an Iteration
 @subsubsection Skipping an Iteration
 
+@findex skip, continue
 @table @asis
 @item @samp{(skip|continue)}
 Go to next loop iteration.
@@ -847,6 +947,7 @@ If multiple @samp{EXPR} are passes to the @samp{return} or @samp{return-from}, t
 commands will return a list of those @samp{EXPR}.  If not @samp{EXPR} is given, @samp{nil}
 is returned.
 
+@findex return loop command
 @table @asis
 @item @samp{(return [EXPRS])}
 Leave the current loop, returning @samp{[EXPRS]}.
@@ -857,7 +958,10 @@ Leave the current loop, returning @samp{[EXPRS]}.
         (when (> j 5)
           (return j)))) ; => 6
 @end lisp
+@end table
 
+@findex return-from
+@table @asis
 @item @samp{(return-from NAME [EXPRS])}
 Leave the loop @samp{NAME}, returning @samp{[EXPRS]}.
 
@@ -956,6 +1060,7 @@ the correct order.
 
 A loop body command has 7 main places to put code:
 
+@vindex loopy--explicit-generalized-vars
 @table @asis
 @item @samp{loopy--explicit-generalized-vars}
 Lists of a symbol and a macro
@@ -967,31 +1072,49 @@ For example, @samp{(list-ref i my-list)} declares @samp{i} to be a symbol which
 expands to @samp{(car TEMP-VAR)}, in which @samp{TEMP-VAR} holds the value of
 @samp{my-list}.  At the end of the loop body, @samp{TEMP-VAR} is set to its @samp{cdr},
 ensuring that the next call to @samp{car} returns the correct value.
+@end table
 
+@vindex loopy--implicit-vars
+@table @asis
 @item @samp{loopy--implicit-vars}
 Lists of a symbol and an expression that will be
 given to @samp{let}.  This is used for creating variables that are not named but
 must exist, such as for holding @samp{'(1 2 3)} in @samp{(list i '(1 2 3))}.
+@end table
 
+@vindex loopy--explicit-vars
+@table @asis
 @item @samp{loopy--explicit-vars}
 Lists of a symbol and an expression that will be
 given to @samp{let}.  This is needed to ensure that variables explicitly named
 in commands are locally scoped, such as the @samp{i} in @samp{(list i '(1 2 3))}.
+@end table
 
+@vindex loopy--pre-conditions
+@table @asis
 @item @samp{loopy--pre-conditions}
 Expressions that determine if the @samp{while}
 loop runs/continues, such as whether a list still has elements in it.
 If there is more than one expression, than all expressions are used in
 an @samp{and} special form.
+@end table
 
+@vindex loopy--main-body
+@table @asis
 @item @samp{loopy--main-body}
 Expressions that make up the main body of the
 loop.
+@end table
 
+@vindex loopy--latter-body
+@table @asis
 @item @samp{loopy--latter-body}
 Expressions that need to be run after the main
 body, such as updating implicit variables.
+@end table
 
+@vindex loopy--post-conditions
+@table @asis
 @item @samp{loopy--post-conditions}
 Expressions that determine whether the
 @samp{while} loop continues, but checked after the loop body has run.  The
@@ -1004,24 +1127,37 @@ from the macro's arguments.  Adding to them after using a macro argument
 might lead to unintended behavior.  You might wish to use them if, for
 example, you are concerned with what happens after the loop exits/completes.
 
+@vindex loopy--with-vars
 @table @asis
 @item @samp{loopy--with-vars}
 Lists of a symbol and an expression that will be
 given to @samp{let*}.  These are derived from the @samp{with} macro argument.
+@end table
 
+@vindex loopy--before-do
+@table @asis
 @item @samp{loopy--before-do}
 Expressions to evaluate before the loop.  These are
 derived from the @samp{before-do} macro argument.
+@end table
 
+@vindex loopy--after-do
+@table @asis
 @item @samp{loopy--after-do}
 Expressions to evaluate after the loop completes
 successfully.  These are derived from the @samp{after-do} macro argument.
+@end table
 
+@vindex loopy--final-do
+@table @asis
 @item @samp{loopy--final-do}
 Expressions to evaluate after the loop completes,
 regardless of success.  These are derived from the @samp{finally-do} macro
 argument.
+@end table
 
+@vindex loopy--final-return
+@table @asis
 @item @samp{loopy--final-return}
 An expression that is always returned by the
 macro, regardless of any early returns in the loop body.  This is
@@ -1085,8 +1221,12 @@ loopy body, so the definition of the parsing function is quite simple.
 @samp{loopy} will pass the entire command expression to the parsing function, and
 expects back a list of instructions.
 
+@vindex loopy-custom-command-parsers
 To tell @samp{loopy} about this function, add it and the command name @samp{greet} to
-the variable @samp{loopy-custom-command-parsers}.
+the variable @samp{loopy-custom-command-parsers}.  When @code{loopy} doesn’t recognize
+a command, it will search in this alist for a matching symbol.  The function
+that is paired with the symbol receives the entire command expressions, and
+should produce a list of valid instructions.
 
 @lisp
 (add-to-list 'loopy-custom-command-parsers
@@ -1762,5 +1902,20 @@ clarity.
 
 If one were writing code like this often (say, in a library), then the loop
 body could be simplified even further with @ref{Adding Custom Commands, , custom commands}.
+
+@node Keyword and Command Index
+@chapter Keyword and Command Index
+
+@printindex fn
+
+@node Variable Index
+@chapter Variable Index
+
+@printindex vr
+
+@node Concept Index
+@chapter Concept Index
+
+@printindex cp
 
 @bye
