@@ -46,7 +46,8 @@ mapping features.
     - [[#accumulation-clauses][Accumulation Clauses]]
     - [[#other-clauses][Other Clauses]]
 -  [[#real-world-examples][Real-World Examples]]
-- [[#function-index][Function Index]]
+- [[#keyword-and-command-index][Keyword and Command Index]]
+- [[#variable-index][Variable Index]]
 - [[#footnotes][Footnotes]]
 
 * Introduction
@@ -884,6 +885,7 @@ mapping features.
 
    A loop body command has 7 main places to put code:
 
+   #+vindex: loopy--explicit-generalized-vars
    - =loopy--explicit-generalized-vars= :: Lists of a symbol and a macro
      expansion that will be given to =cl-symbol-macrolet=.  This is used to
      create named ~setf~-able places.  The expansion you use depends on the kind
@@ -894,25 +896,31 @@ mapping features.
      =my-list=.  At the end of the loop body, =TEMP-VAR= is set to its =cdr=,
      ensuring that the next call to =car= returns the correct value.
 
+   #+vindex: loopy--implicit-vars
    - =loopy--implicit-vars= :: Lists of a symbol and an expression that will be
      given to =let=.  This is used for creating variables that are not named but
      must exist, such as for holding ='(1 2 3)= in =(list i '(1 2 3))=.
 
+   #+vindex: loopy--explicit-vars
    - =loopy--explicit-vars= :: Lists of a symbol and an expression that will be
      given to =let=.  This is needed to ensure that variables explicitly named
      in commands are locally scoped, such as the =i= in =(list i '(1 2 3))=.
 
+   #+vindex: loopy--pre-conditions
    - =loopy--pre-conditions= :: Expressions that determine if the =while=
      loop runs/continues, such as whether a list still has elements in it.
      If there is more than one expression, than all expressions are used in
      an =and= special form.
 
+   #+vindex: loopy--main-body
    - =loopy--main-body= :: Expressions that make up the main body of the
      loop.
 
+   #+vindex: loopy--latter-body
    - =loopy--latter-body= :: Expressions that need to be run after the main
      body, such as updating implicit variables.
 
+   #+vindex: loopy--post-conditions
    - =loopy--post-conditions= :: Expressions that determine whether the
      =while= loop continues, but checked after the loop body has run.  The
      code from this is ultimately appended to the latter body before being
@@ -923,19 +931,24 @@ mapping features.
    might lead to unintended behavior.  You might wish to use them if, for
    example, you are concerned with what happens after the loop exits/completes.
 
+   #+vindex: loopy--with-vars
    - =loopy--with-vars= :: Lists of a symbol and an expression that will be
      given to =let*=.  These are derived from the =with= macro argument.
 
+   #+vindex: loopy--before-do
    - =loopy--before-do= :: Expressions to evaluate before the loop.  These are
      derived from the =before-do= macro argument.
 
+   #+vindex: loopy--after-do
    - =loopy--after-do= :: Expressions to evaluate after the loop completes
      successfully.  These are derived from the =after-do= macro argument.
 
+   #+vindex: loopy--final-do
    - =loopy--final-do= :: Expressions to evaluate after the loop completes,
      regardless of success.  These are derived from the =finally-do= macro
      argument.
 
+   #+vindex: loopy--final-return
    - =loopy--final-return= :: An expression that is always returned by the
      macro, regardless of any early returns in the loop body.  This is
      derived from the =finally-return= macro argument.
@@ -995,8 +1008,12 @@ mapping features.
    =loopy= will pass the entire command expression to the parsing function, and
    expects back a list of instructions.
 
+   #+vindex: loopy-custom-command-parsers
    To tell =loopy= about this function, add it and the command name =greet= to
-   the variable =loopy-custom-command-parsers=.
+   the variable =loopy-custom-command-parsers=.  When ~loopy~ doesn’t recognize
+   a command, it will search in this alist for a matching symbol.  The function
+   that is paired with the symbol receives the entire command expressions, and
+   should produce a list of valid instructions.
 
    #+BEGIN_SRC emacs-lisp
      (add-to-list 'loopy-custom-command-parsers
@@ -1622,6 +1639,11 @@ mapping features.
 * Keyword and Command Index
   :PROPERTIES:
   :INDEX: fn
+  :END:
+
+* Variable Index
+  :PROPERTIES:
+  :INDEX: vr
   :END:
 
 * Footnotes
