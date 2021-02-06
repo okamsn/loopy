@@ -209,7 +209,7 @@ please let me know.
    value.
 
    Below are a few basic examples.  The entire list of commands can be read at
-   the section [[file:~/Projects/elisp-loopy/doc/loopy.org::#loop-commands][Loop Commands]] in the documentation.
+   the section [[file:doc/loopy.org::#loop-commands][Loop Commands]] in the documentation.
 
     #+begin_src emacs-lisp
       ;; Note that `my-collection' is the first value in the implied return,
@@ -431,3 +431,7 @@ please let me know.
 [fn:sequence]
 [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html]],
 [[info:elisp#Sequences Arrays Vectors]]
+
+# Local Variables:
+# org-link-file-path-type: relative
+# End:
