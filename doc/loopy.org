@@ -1659,19 +1659,13 @@ mapping features.
 
 * Footnotes
 
-[fn:cl-loop]
-[[https://www.gnu.org/software/emacs/manual/html_node/cl/Loop-Facility.html#Loop-Facility]]
+[fn:cl-loop] [[info:cl#Loop Facility][info:cl#Loop Facility]]
 
-[fn:seq]
-[[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequence-Functions.html]],
-[[info:elisp#Sequence Functions]]
+[fn:seq] [[info:elisp#Sequence Functions]]
 
-[fn:cl-lib]
-[[https://www.gnu.org/software/emacs/manual/html_node/cl/index.html]], [[info:cl]]
+[fn:cl-lib] [[info:cl]]
 
-[fn:sequence]
-[[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html]],
-[[info:elisp#Sequences Arrays Vectors]]
+[fn:sequence] [[info:elisp#Sequences Arrays Vectors]]
 
 [fn:sel-wiki]
 https://github.com/raxod502/selectrum/wiki/Useful-Commands#jumping-to-lines
