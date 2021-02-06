@@ -540,7 +540,15 @@ mapping features.
     act on the same variable, you must supply the same =VAR= as the first
     argument to each command.
 
-    - =(append VAR EXPR)= :: Repeatedly =append= the value of =EXPR= to =VAR=.
+    The commands =collect=, =append=, and =nconc= are more efficient if no =VAR=
+    is provided, constructing the accumulated value backwards and then reversing
+    it, which is usually faster.
+
+    - =(append VAR EXPR)= :: Repeatedly ~append~ the value of =EXPR= to =VAR=.
+      If =VAR= is not provided, repeatedly ~nconc~ the ~reverse~ of =EXPR= onto
+      the front of the implicit return value, and then ~nreverse~ the implicit
+      value at the end of the loop.
+
       =VAR= starts as =nil=.
 
       #+BEGIN_SRC emacs-lisp
@@ -549,13 +557,10 @@ mapping features.
                (return coll)) ; => '(1 2 3 4 5 6)
       #+END_SRC
 
-    - =(collect VAR EXPR)= :: Collect the value of =EXPR= into a list.  To
-      better performance, =collect= behaves differently depending on whether
-      =VAR= is provided.
-
-      When provided, repeatedly =append= a list containing the value of =EXPR=
-      to =VAR=.  When not provided, repeatedly =push= the value of =EXPR= into a
-      list, and =nreverse= the list at the end of the loop.
+    - =(collect VAR EXPR)= :: Collect the value of =EXPR= into a list.  If =VAR=
+      is not provided, repeatedly ~push~ the value of =EXPR= into he implicit
+      return value, and then ~nreverse~ the implicit return value at the end of
+      the loop.
 
       =VAR= starts as =nil=.
 
@@ -570,7 +575,7 @@ mapping features.
                 (collect coll1)))
       #+END_SRC
 
-      If you want to =push= values into a provided variable (instead of
+      If you want to ~push~ values into a provided variable (instead of
       repeatedly appending a list of one element), use the =push-into= command
       (see below).
 
@@ -614,8 +619,12 @@ mapping features.
       #+END_SRC
 
     - =(nconc VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto
-      =VAR= with =nconc=.  Unlike =append=, =nconc= does not concatenate copies
-      of the lists, but modifies =VAR= directly.
+      =VAR= with =nconc=.  If =VAR= is not provided, repeatedly ~nconc~ the
+      ~nreverse~ of =EXPR= onto the front of the implicit return value, and then
+      ~nreverse~ that implicit return value at the end of the loop.
+
+      Unlike ~append~, ~nconc~ does not concatenate copies of the lists, but
+      modifies =VAR= directly.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (loop (list i '((1 2 3 4) (5 6 7 8)))

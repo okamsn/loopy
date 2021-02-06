@@ -19,10 +19,6 @@ keywords.
 (2) and CL (3) libraries (including ‘cl-loop’) and Emacs’s regular
 looping and mapping features.
 
-              *NOTE*: Loopy is still in its early stages.
-Constructive criticism is welcome. If you see a place for improvement,
-                          please let me know.
-
 * Menu:
 
 * Introduction::
@@ -584,22 +580,27 @@ value.  Unlike ‘cl-loop’, this generation means that if you want
 accumulation commands to act on the same variable, you must supply the
 same ‘VAR’ as the first argument to each command.
 
+   The commands ‘collect’, ‘append’, and ‘nconc’ are more efficient if
+no ‘VAR’ is provided, constructing the accumulated value backwards and
+then reversing it, which is usually faster.
+
 ‘(append VAR EXPR)’
-     Repeatedly ‘append’ the value of ‘EXPR’ to ‘VAR’.  ‘VAR’ starts as
-     ‘nil’.
+     Repeatedly ‘append’ the value of ‘EXPR’ to ‘VAR’.  If ‘VAR’ is not
+     provided, repeatedly ‘nconc’ the ‘reverse’ of ‘EXPR’ onto the front
+     of the implicit return value, and then ‘nreverse’ the implicit
+     value at the end of the loop.
+
+     ‘VAR’ starts as ‘nil’.
 
           (loopy ((list i '((1 2 3) (4 5 6)))
                   (append coll i))
                  (return coll)) ; => '(1 2 3 4 5 6)
 
 ‘(collect VAR EXPR)’
-     Collect the value of ‘EXPR’ into a list.  To better performance,
-     ‘collect’ behaves differently depending on whether ‘VAR’ is
-     provided.
-
-     When provided, repeatedly ‘append’ a list containing the value of
-     ‘EXPR’ to ‘VAR’.  When not provided, repeatedly ‘push’ the value of
-     ‘EXPR’ into a list, and ‘nreverse’ the list at the end of the loop.
+     Collect the value of ‘EXPR’ into a list.  If ‘VAR’ is not provided,
+     repeatedly ‘push’ the value of ‘EXPR’ into he implicit return
+     value, and then ‘nreverse’ the implicit return value at the end of
+     the loop.
 
      ‘VAR’ starts as ‘nil’.
 
@@ -652,6 +653,10 @@ same ‘VAR’ as the first argument to each command.
 
 ‘(nconc VAR EXPR)’
      Repeatedly concatenate the value of ‘EXPR’ onto ‘VAR’ with ‘nconc’.
+     If ‘VAR’ is not provided, repeatedly ‘nconc’ the ‘nreverse’ of
+     ‘EXPR’ onto the front of the implicit return value, and then
+     ‘nreverse’ that implicit return value at the end of the loop.
+
      Unlike ‘append’, ‘nconc’ does not concatenate copies of the lists,
      but modifies ‘VAR’ directly.
 
@@ -1626,33 +1631,33 @@ commands: Adding Custom Commands.
 
 Tag Table:
 Node: Top190
-Ref: Top-Footnote-11601
-Ref: Top-Footnote-21700
-Ref: Top-Footnote-31828
-Node: Introduction1922
-Ref: Introduction-Footnote-16527
-Node: How to use6667
-Node: Macro Arguments7988
-Node: Loop Commands9753
-Node: Commands for Generic Evaluation15221
-Node: Iteration and Looping Commands16694
-Node: Accumulation Commands19898
-Node: Control Flow26500
-Node: Conditionals26710
-Node: Skipping an Iteration28612
-Node: Exiting the Loop Early29155
-Node: Adding Custom Commands30321
-Node: Background Information30589
-Node: A Small Example37969
-Node: A Slightly More Complicated Example40091
-Node: How does it compare to cl-loop?42368
-Node: Translating from cl-loop47354
-Node: For Clauses47603
-Node: Iteration Clauses49845
-Node: Accumulation Clauses51599
-Node: Other Clauses52566
-Node: Real-World Examples54070
-Ref: Real-World Examples-Footnote-166806
+Ref: Top-Footnote-11425
+Ref: Top-Footnote-21524
+Ref: Top-Footnote-31652
+Node: Introduction1746
+Ref: Introduction-Footnote-16351
+Node: How to use6491
+Node: Macro Arguments7812
+Node: Loop Commands9577
+Node: Commands for Generic Evaluation15045
+Node: Iteration and Looping Commands16518
+Node: Accumulation Commands19722
+Node: Control Flow26805
+Node: Conditionals27015
+Node: Skipping an Iteration28917
+Node: Exiting the Loop Early29460
+Node: Adding Custom Commands30626
+Node: Background Information30894
+Node: A Small Example38274
+Node: A Slightly More Complicated Example40396
+Node: How does it compare to cl-loop?42673
+Node: Translating from cl-loop47659
+Node: For Clauses47908
+Node: Iteration Clauses50150
+Node: Accumulation Clauses51904
+Node: Other Clauses52871
+Node: Real-World Examples54375
+Ref: Real-World Examples-Footnote-167111
 
 End Tag Table
 

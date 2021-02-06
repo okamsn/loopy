@@ -30,10 +30,6 @@
 @ref{Sequence Functions,,,elisp,}} and
 CL @footnote{@uref{https://www.gnu.org/software/emacs/manual/html_node/cl/index.html}, @ref{Top,,,cl,}} libraries (including @samp{cl-loop}) and Emacs's regular looping and
 mapping features.
-
-@center @strong{NOTE}: Loopy is still in its early stages.@*
-@center Constructive criticism is welcome.  If you see a place for improvement,
-@center please let me know.
 @end ifnottex
 
 @menu
@@ -628,9 +624,17 @@ variable and use that variable as an implicit return value.  Unlike
 act on the same variable, you must supply the same @samp{VAR} as the first
 argument to each command.
 
+The commands @samp{collect}, @samp{append}, and @samp{nconc} are more efficient if no @samp{VAR}
+is provided, constructing the accumulated value backwards and then reversing
+it, which is usually faster.
+
 @table @asis
 @item @samp{(append VAR EXPR)}
-Repeatedly @samp{append} the value of @samp{EXPR} to @samp{VAR}.
+Repeatedly @code{append} the value of @samp{EXPR} to @samp{VAR}.
+If @samp{VAR} is not provided, repeatedly @code{nconc} the @code{reverse} of @samp{EXPR} onto
+the front of the implicit return value, and then @code{nreverse} the implicit
+value at the end of the loop.
+
 @samp{VAR} starts as @samp{nil}.
 
 @lisp
@@ -640,13 +644,10 @@ Repeatedly @samp{append} the value of @samp{EXPR} to @samp{VAR}.
 @end lisp
 
 @item @samp{(collect VAR EXPR)}
-Collect the value of @samp{EXPR} into a list.  To
-better performance, @samp{collect} behaves differently depending on whether
-@samp{VAR} is provided.
-
-When provided, repeatedly @samp{append} a list containing the value of @samp{EXPR}
-to @samp{VAR}.  When not provided, repeatedly @samp{push} the value of @samp{EXPR} into a
-list, and @samp{nreverse} the list at the end of the loop.
+Collect the value of @samp{EXPR} into a list.  If @samp{VAR}
+is not provided, repeatedly @code{push} the value of @samp{EXPR} into he implicit
+return value, and then @code{nreverse} the implicit return value at the end of
+the loop.
 
 @samp{VAR} starts as @samp{nil}.
 
@@ -661,7 +662,7 @@ list, and @samp{nreverse} the list at the end of the loop.
         (collect coll1)))
 @end lisp
 
-If you want to @samp{push} values into a provided variable (instead of
+If you want to @code{push} values into a provided variable (instead of
 repeatedly appending a list of one element), use the @samp{push-into} command
 (see below).
 
@@ -710,8 +711,12 @@ value should be less than it.
 
 @item @samp{(nconc VAR EXPR)}
 Repeatedly concatenate the value of @samp{EXPR} onto
-@samp{VAR} with @samp{nconc}.  Unlike @samp{append}, @samp{nconc} does not concatenate copies
-of the lists, but modifies @samp{VAR} directly.
+@samp{VAR} with @samp{nconc}.  If @samp{VAR} is not provided, repeatedly @code{nconc} the
+@code{nreverse} of @samp{EXPR} onto the front of the implicit return value, and then
+@code{nreverse} that implicit return value at the end of the loop.
+
+Unlike @code{append}, @code{nconc} does not concatenate copies of the lists, but
+modifies @samp{VAR} directly.
 
 @lisp
 (loopy (loop (list i '((1 2 3 4) (5 6 7 8)))
