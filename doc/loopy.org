@@ -143,9 +143,6 @@ mapping features.
   problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
   full feature parity with =cl-loop= is still being worked on.
 
-* How to Install                                                   :noexport:
-  Currently, Loopy must be installed manually.
-
 * How to use
   :PROPERTIES:
   :CUSTOM_ID: how-to-use
