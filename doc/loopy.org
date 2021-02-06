@@ -182,20 +182,26 @@ mapping features.
    For clarity and convenience, some keywords have multiple names and the =loop=
    keyword can be excluded.
 
+   #+findex: with, let*
    - =with=, =let*= :: Declare variables before the loop.
 
+   #+findex: before-do, before
    - =before-do=, =before= :: Run Lisp expressions before the loop starts.
 
+   #+findex: loop
    - =loop= (or no keyword) :: Add expressions to the loop body, perform any
      setup like initializing variables or adding exit conditions.
 
+   #+findex: after-do, after, else-do, else
    - =after-do=, =after=, =else-do=, =else= :: Run Lisp expressions after the
      loop successfully completes.  This is similar to Python’s ~else~ loop
      clause.
 
+   #+findex: finally-do, finally
    - =finally-do=, =finally= :: Always run Lisp expressions after the loop
      exits.
 
+   #+findex: finally-return, return macro argument
    - =finally-return=, =return= :: Return a value, regardless of how the loop
      completes.  Accumulation commands have an implicit return value, but this
      overrides them.
@@ -1613,7 +1619,7 @@ mapping features.
   If one were writing code like this often (say, in a library), then the loop
   body could be simplified even further with [[#adding-custom-commands][custom commands]].
 
-* Function Index
+* Keyword and Command Index
   :PROPERTIES:
   :INDEX: fn
   :END:
