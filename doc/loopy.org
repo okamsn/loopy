@@ -48,6 +48,7 @@ mapping features.
 -  [[#real-world-examples][Real-World Examples]]
 - [[#keyword-and-command-index][Keyword and Command Index]]
 - [[#variable-index][Variable Index]]
+- [[#concept-index][Concept Index]]
 - [[#footnotes][Footnotes]]
 
 * Introduction
@@ -303,6 +304,7 @@ mapping features.
    Generally, =VAR= is initialized to ~nil~, but not always.  This document
    tries to note when that is not the case.
 
+   #+cindex: variable destructuring
    For convenience, =VAR= can be a sequence (either a list or a vector (as a
    stand-in for an array)) of symbols instead of a single symbol.  This tells
    the command to “de-structure” the value of =EXPR=, similar to the functions
@@ -519,6 +521,7 @@ mapping features.
              (return coll)) ; => (1 6 2 7 3 8)
     #+end_src
 
+    #+cindex: accumulation destructuring
     Using a “destructuring” =VAR= argument in accumulation commands works a bit
     differently than how it would in iteration commands.  While iteration
     commands just assign variables the values that make up the destructured
@@ -544,6 +547,7 @@ mapping features.
              (return sum1 sum2 sum3))
     #+end_src
 
+    #+cindex: implied/implicit return values
     Using an accumulation command implies a return value.  If there are multiple
     accumulations, or destructured accumulations, than the implied return value
     of the loop is a list of those accumulated values in the order that their
@@ -562,6 +566,7 @@ mapping features.
               (sum (my-sum1 my-sum2 my-sum3) elem)))
     #+end_src
 
+    #+cindex: implied/implicit accumulation variables
     Like ~cl-loop~, you do not need to supply a variable name to accumulation
     commands.  With only one argument, they accumulate values into a generated
     variable and use that variable as an implicit return value.  Unlike
@@ -1645,6 +1650,11 @@ mapping features.
 * Variable Index
   :PROPERTIES:
   :INDEX: vr
+  :END:
+
+* Concept Index
+  :PROPERTIES:
+  :INDEX: cp
   :END:
 
 * Footnotes
