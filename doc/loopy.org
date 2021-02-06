@@ -229,6 +229,10 @@ mapping features.
      (loopy ((list i '(1 2 3))
              (collect coll i))
             (return coll))
+
+     ;; Implicit accumulation variable and implicit return value:
+     (loopy ((list i '(1 2 3))
+             (collect i)))
    #+END_SRC
 
    and this is not:
