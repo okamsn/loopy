@@ -46,6 +46,7 @@ mapping features.
     - [[#accumulation-clauses][Accumulation Clauses]]
     - [[#other-clauses][Other Clauses]]
 -  [[#real-world-examples][Real-World Examples]]
+- [[#function-index][Function Index]]
 - [[#footnotes][Footnotes]]
 
 * Introduction
@@ -339,6 +340,7 @@ mapping features.
     :CUSTOM_ID: commands-for-generic-evaluation
     :END:
 
+    #+findex: do
     - =(do EXPRS)= :: Evaluate multiple Lisp expressions, like a =progn=.
 
       You cannot include arbitrary code in the loop body.  Trying to do so will
@@ -350,6 +352,7 @@ mapping features.
                 (do (message "%d" i))))
       #+END_SRC
 
+    #+findex: expr, exprs, set
     - =(expr|exprs|set VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.
       Once the last =EXPR= is reached, it is used repeatedly for the rest of the
       loop.  With no =EXPR=, =VAR= is repeatedly bound to =nil=.
@@ -369,6 +372,7 @@ mapping features.
                (return coll)) ; => '(0 1 2 3 4)
       #+END_SRC
 
+    #+findex: group
     - =(group [CMDS])= :: Evaluate multiple loop commands, as if in a =progn=.
       This is similar to =do=, but runs commands instead of normal Lisp
       expressions.  Currently, this command is only useful when used with the
@@ -387,6 +391,7 @@ mapping features.
     such cases, the variables in the sequence =VAR= are also ~setf~-able places
     instead of true variables.
 
+    #+findex: array
     - =(array VAR EXPR)= :: Loop through the elements of the array =EXPR=.
 
       #+BEGIN_SRC emacs-lisp
@@ -394,6 +399,7 @@ mapping features.
                 (do (message "%d" i))))
       #+END_SRC
 
+    #+findex: array-ref, arrayf
     - =(array-ref|arrayf VAR EXPR)= :: Loop through the elements of the array
       =EXPR=, binding =VAR= as a ~setf~-able place.
 
@@ -404,6 +410,7 @@ mapping features.
                (return my-str)) ; => "aaa"
       #+END_SRC
 
+    #+findex: cons, conses
     - =(cons|conses VAR EXPR [FUNC])= :: Loop through the cons cells of =EXPR=.
       Optionally, find the cons cells via =FUNC= instead of =cdr=.
 
@@ -416,6 +423,7 @@ mapping features.
                (finally-return coll)) ; => ((1 2 3) (2 3) (3))
       #+END_SRC
 
+    #+findex: list
     - =(list VAR EXPR [FUNC])= :: Loop through the elements of the list =EXPR=.
       Optionally, update the list by =FUNC= instead of =cdr=.
 
@@ -424,6 +432,7 @@ mapping features.
                 (do (message "%d" i))))
       #+END_SRC
 
+    #+findex: list-ref, listf
     - =(list-ref|listf VAR EXPR [FUNC])= :: Loop through the elements of the
       list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update the
       list by =FUNC= instead of =cdr=.
@@ -435,6 +444,7 @@ mapping features.
                (finally-return my-list)) ; Returns '(7 7 7).
       #+END_SRC
 
+    #+findex: repeat
     - =(repeat EXPR)= :: Add a condition that the loop should stop after
       =EXPR= iterations.
 
@@ -452,6 +462,7 @@ mapping features.
                 (do (message "%d" i))))
       #+END_SRC
 
+    #+findex: seq
     - =(seq VAR EXPR)= :: Loop through the sequence =val=, binding =var= to
       the elements of the sequence.
 
@@ -460,6 +471,7 @@ mapping features.
                (return coll)) ; => (1 2 3)
       #+END_SRC
 
+    #+findex: seq-ref, seqf
     - =(seq-ref|seqf VAR EXPR)= :: Loop through the elements of the sequence
       =val=, binding =var= as a ~setf~-able place.
 
@@ -544,6 +556,7 @@ mapping features.
     is provided, constructing the accumulated value backwards and then reversing
     it, which is usually faster.
 
+    #+findex: append
     - =(append VAR EXPR)= :: Repeatedly ~append~ the value of =EXPR= to =VAR=.
       If =VAR= is not provided, repeatedly ~nconc~ the ~reverse~ of =EXPR= onto
       the front of the implicit return value, and then ~nreverse~ the implicit
@@ -557,6 +570,7 @@ mapping features.
                (return coll)) ; => '(1 2 3 4 5 6)
       #+END_SRC
 
+    #+findex: collect
     - =(collect VAR EXPR)= :: Collect the value of =EXPR= into a list.  If =VAR=
       is not provided, repeatedly ~push~ the value of =EXPR= into he implicit
       return value, and then ~nreverse~ the implicit return value at the end of
@@ -579,6 +593,7 @@ mapping features.
       repeatedly appending a list of one element), use the =push-into= command
       (see below).
 
+    #+findex: concat
     - =(concat VAR EXPR)= :: Repeatedly =concat= the value of =EXPR= onto the
       end of =VAR=.  =VAR= starts as =nil=.  See the =vconcat= command for
       vectors.
@@ -589,6 +604,7 @@ mapping features.
                (return str)) ; => "abc"
       #+END_SRC
 
+    #+findex: count
     - =(count VAR EXPR)= :: Count the number of times that =EXPR= evaluates to a
       non-nil value, adding 1 to =VAR= each time.  =VAR= starts at 0.
 
@@ -598,6 +614,7 @@ mapping features.
                (return non-nil-count)) ; => 3
       #+END_SRC
 
+    #+findex: max, maximize
     - =(max|maximize VAR EXPR)= :: Repeatedly set =VAR= to the greater of =VAR=
       and the value of =EXPR=.  =VAR= starts at =-1.0e+INF=, so that any other
       value should be greater that it.
@@ -608,6 +625,7 @@ mapping features.
                (return my-max)) ; => 11
       #+END_SRC
 
+    #+findex: min, minimize
     - =(min|minimize VAR EXPR)= :: Repeatedly set =VAR= to the lesser of =VAR=
       and the value of =EXPR=.  =VAR= starts at =1.0e+INF=, so that any other
       value should be less than it.
@@ -618,6 +636,7 @@ mapping features.
                (return my-min)) ; => 0
       #+END_SRC
 
+    #+findex: nconc
     - =(nconc VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto
       =VAR= with =nconc=.  If =VAR= is not provided, repeatedly ~nconc~ the
       ~nreverse~ of =EXPR= onto the front of the implicit return value, and then
@@ -632,6 +651,7 @@ mapping features.
                (return my-new-list)) ; => '(1 2 3 4 5 6 7 8)
       #+END_SRC
 
+    #+findex: push, push-into
     - =(push|push-into VAR EXPR)= :: Repeatedly =push= =EXPR= into =VAR=.  =VAR=
       stars as =nil=.
 
@@ -641,6 +661,7 @@ mapping features.
                (finally-return (nreverse reversed))) ; => '(1 2 3)
       #+END_SRC
 
+    #+findex: sum
     - =(sum VAR EXPR)= :: Repeatedly set =VAR= to the sum of the value of =EXPR=
       and =VAR=.  =VAR= starts at 0.
 
@@ -650,6 +671,7 @@ mapping features.
                (return my-sum)) ; => 10
       #+END_SRC
 
+    #+findex: vconcat
     - =(vconcat VAR EXPR)= :: Repeatedly =vconcat= the value of =EXPR= onto
       =VAR=.  =VAR= starts as =nil=.
 
@@ -673,6 +695,7 @@ mapping features.
      like their Lisp counterparts.  There is therefore no need for an =and=
      command as used in =cl-loop=.
 
+    #+findex: when
      - =(when EXPR CMDS)= :: Run =CMDS= only if =EXPR= is non-nil.
 
        #+BEGIN_SRC emacs-lisp
@@ -687,6 +710,7 @@ mapping features.
                 (finally-return only-evens))
        #+END_SRC
 
+    #+findex: if
      - =(if EXPR CMDS)= :: Run the first command if =EXPR= is non-nil.
        Otherwise, run the remaining commands.
 
@@ -702,6 +726,7 @@ mapping features.
                                       some-threes)))
        #+END_SRC
 
+    #+findex: cond
      - =(cond [(EXPR CMDS) [...]])= :: For the first =EXPR= to evaluate to
        non-nil, run the following commands =CMDS=.
 
@@ -720,6 +745,7 @@ mapping features.
      :CUSTOM_ID: skipping-an-iteration
      :END:
 
+    #+findex: skip, continue
      - =(skip|continue)= :: Go to next loop iteration.
 
        #+BEGIN_SRC emacs-lisp
@@ -745,6 +771,7 @@ mapping features.
      commands will return a list of those =EXPR=.  If not =EXPR= is given, =nil=
      is returned.
 
+    #+findex: return loop command
      - =(return [EXPRS])= :: Leave the current loop, returning =[EXPRS]=.
 
        #+BEGIN_SRC emacs-lisp
@@ -754,6 +781,7 @@ mapping features.
                    (return j)))) ; => 6
        #+END_SRC
 
+    #+findex: return-from
      - =(return-from NAME [EXPRS])= :: Leave the loop =NAME=, returning =[EXPRS]=.
 
        #+BEGIN_SRC emacs-lisp
@@ -1576,6 +1604,10 @@ mapping features.
   If one were writing code like this often (say, in a library), then the loop
   body could be simplified even further with [[#adding-custom-commands][custom commands]].
 
+* Function Index
+  :PROPERTIES:
+  :INDEX: fn
+  :END:
 
 * Footnotes
 
