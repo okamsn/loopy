@@ -374,7 +374,8 @@ mapping features.
       loop.  With no =EXPR=, =VAR= is repeatedly bound to =nil=.
 
       *NOTE*: Loops are locally scoped, so using this command does not always
-      have the same effect as using =(do (setq VAR EXPR))=.
+      have the same effect as using =(do (setq VAR EXPR))=, as =VAR= is
+      initialized to =nil= before the loop starts.
 
       #+BEGIN_SRC emacs-lisp
         (loopy ((repeat 5)
