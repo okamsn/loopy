@@ -966,8 +966,8 @@ Returns are always explicit.  See this package's README for more information."
       (cond
        ((symbolp arg)
         (setq loopy--loop-name arg))
-       ((memq (car-safe arg) '(with let*))
-        (setq loopy--with-vars (cdr arg)))
+       ((memq (car-safe arg) '(with let*))            ; This undone by another
+        (setq loopy--with-vars (nreverse (cdr arg)))) ; `nreverse' later.
        ((memq (car-safe arg) '(before-do before))
         (setq loopy--before-do (cdr arg)))
        ((memq (car-safe arg) '(after-do after else else-do))

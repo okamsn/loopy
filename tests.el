@@ -8,7 +8,14 @@
 (require 'ert)
 (require 'loopy "./loopy.el")
 
-;;; Outside the Loop
+;;; Macro arguments
+;;;; With
+(ert-deftest with-arg-order ()
+  (should (= 4
+             (eval (quote (loopy (with (a 2)
+                                       (b (+ a 2)))
+                                 ((return b))))))))
+
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
 (ert-deftest basic-before-do ()
