@@ -115,11 +115,7 @@ mapping features.
 
   Loopy is not the only Lisp library that uses expressions instead of keyword
   clauses (like in =cl-loop=).  [[https://common-lisp.net/project/iterate/][=iterate=]] and [[https://github.com/Shinmera/for/][=for=]] are two examples in Common
-  Lisp.  I know of no examples for Emacs Lisp.
-
-  Though I am not familiar with either, it seems to me that the =loopy= macro is
-  more like =for= than it is like =iterate=.  I suspect that, given it’s youth,
-  Loopy is much simpler than both.
+  Lisp.
 
   #+begin_src emacs-lisp
     ;; Collecting 10 random numbers:
@@ -134,14 +130,13 @@ mapping features.
     (loopy ((repeat 10) (collect (random 10))))
   #+end_src
 
-  Generally, I’d expect that all of the packages handle basic use cases in
-  similar ways.  While =iterate= can apparently embed its looping constructs in
-  arbitrary code, =loopy= doesn’t allow that, and I believe that the same is
-  true of =for=.
+  =loopy= is more like =for= than it is like =iterate=.  Unlike =iterate=,
+  =loopy= does not allow arbitrary Lisp expressions within its body.  For
+  simplicity, it has a =do= command, much like the =do= clause of ~cl-loop~.
 
-  However, Loopy is not yet feature complete.  Please request features or report
-  problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
-  full feature parity with =cl-loop= is still being worked on.
+  That being said, Loopy is not yet feature complete.  Please request features
+  or report problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are
+  covered, full feature parity with =cl-loop= is still being worked on.
 
 * How to use
   :PROPERTIES:
