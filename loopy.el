@@ -740,14 +740,17 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                                                   ((max maximize) -1.0e+INF)
                                                   ((min minimize) +1.0e+INF))))
         ,@(cl-ecase name
+            ;; NOTE: Some commands have different behavior when a
+            ;;       variable is not specified.
+            ;;       - `collect' uses the `push'-`nreverse' idiom.
+            ;;       - `append' uses the `reverse'-`nconc'-`nreverse' idiom.
+            ;;       - `nconc' uses the `nreverse'-`nconc'-`nreverse' idiom.
             (append
              `((loopy--main-body
-                . (setq ,value-holder (append ,value-holder ,var-or-val)))
-               (loopy--implicit-return . ,value-holder)))
+                . (setq ,value-holder (nconc (reverse ,var-or-val)
+                                             ,value-holder)))
+               (loopy--implicit-return . (nreverse ,value-holder))))
             (collect
-             ;; NOTE: This is different from the behavior where a variable is
-             ;;       specified.  To be more like other libraries, we push
-             ;;       into `value-holder' and `nreverse' the implicit return.
              `((loopy--main-body
                 . (setq ,value-holder (cons ,var-or-val ,value-holder)))
                (loopy--implicit-return . (nreverse ,value-holder))))
