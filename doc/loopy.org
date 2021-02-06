@@ -178,18 +178,27 @@ mapping features.
    does nothing.
 
    You can name a loop by passing =loopy= an unquoted symbol.  All other
-   arguments are expressions that begin with a keyword from the table below.
+   arguments are expressions that begin with a keyword from the list below.
    For clarity and convenience, some keywords have multiple names and the =loop=
    keyword can be excluded.
 
-   | Keyword                                | Usage                                                   |
-   |----------------------------------------+---------------------------------------------------------|
-   | =with=, =let*=                         | Declare variables before the loop.                      |
-   | =before-do=, =before=                  | Run Lisp expressions before loop starts.                |
-   | =loop=, or excluded                    | Add expressions to the loop body and perform setup.     |
-   | =after-do=, =after=, =else-do=, =else= | Run Lisp expressions after loop successfully completes. |
-   | =finally-do=, =finally=                | Always run Lisp expressions after loop exits.           |
-   | =finally-return=, =return=             | Return a value, regardless of how the loop completes.   |
+   - =with=, =let*= :: Declare variables before the loop.
+
+   - =before-do=, =before= :: Run Lisp expressions before the loop starts.
+
+   - =loop= (or no keyword) :: Add expressions to the loop body, perform any
+     setup like initializing variables or adding exit conditions.
+
+   - =after-do=, =after=, =else-do=, =else= :: Run Lisp expressions after the
+     loop successfully completes.  This is similar to Python’s ~else~ loop
+     clause.
+
+   - =finally-do=, =finally= :: Always run Lisp expressions after the loop
+     exits.
+
+   - =finally-return=, =return= :: Return a value, regardless of how the loop
+     completes.  Accumulation commands have an implicit return value, but this
+     overrides them.
 
    The loop body and any expressions that are part of the =before-do= and
    =after-do= arguments are contained in a single =cl-block=.  Naming the loop
