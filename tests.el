@@ -905,6 +905,25 @@ Not multiple of 3: 7")))
                                (list j '(2 4 6 8 9))
                                (always (< i 10) (cl-evenp j))))))))))
 
+;;; Repeated evaluation of macro
+
+;; This was an odd case reported by a user. See:
+;; https://github.com/okamsn/loopy/issues/17
+(ert-deftest evaluate-function-twice ()
+  (should
+   (progn
+     (defun mu4e:other-path ()
+       "Return load-path for mu4e.
+This assumes that you're on guix."
+       (loopy (with (regexp "Documents")
+	            (base-dir (expand-file-name "~/")))
+	      ((list file (directory-files base-dir))
+	       (expr full-path (expand-file-name file base-dir)))))
+     (mu4e:other-path)
+     ;; If an `nreverse' goes bad, then the function value of `mu4e:other-path'
+     ;; might be changed (somehow), which causes an error.
+     (eq nil (mu4e:other-path)))))
+
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
 ;; flycheck-emacs-lisp-load-path: ("./.")
