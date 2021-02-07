@@ -943,11 +943,20 @@ Returns are always explicit.  See this package's README for more information."
                    ([&or "finally-return" "return"] form &optional [&rest form]))))
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
-        (loopy--with-vars)
-        (loopy--before-do)
-        (loopy--after-do)
-        (loopy--final-do)
-        (loopy--final-return)
+        (loopy--with-vars (nreverse (cdr (or (assq 'with body)
+                                             (assq 'let* body)))))
+        (loopy--before-do (cdr (or (assq 'before-do body)
+                                   (assq 'before body))))
+        (loopy--after-do (cdr (or (assq 'after-do body)
+                                  (assq 'after body))))
+        (loopy--final-do (cdr (or (assq 'finally-do body)
+                                  (assq 'finally body))))
+        (loopy--final-return (when-let ((return-val
+                                         (cdr (or (assq 'finally-return body)
+                                                  (assq 'return body)))))
+                               (if (= 1 (length return-val))
+                                   (car return-val)
+                                 (cons 'list return-val))))
 
         ;; -- Vars for processing loop commands --
         (loopy--implicit-vars)
@@ -964,25 +973,14 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--tagbody-exit-used))
 
 ;;;;; Interpreting the macro arguments.
-    ;; Check what was passed to the macro.
+    ;; Check the remaining arguments passed to the macro.
+
     (dolist (arg body)
       (cond
        ((symbolp arg)
         (setq loopy--loop-name arg))
-       ((memq (car-safe arg) '(with let*))            ; This undone by another
-        (setq loopy--with-vars (nreverse (cdr arg)))) ; `nreverse' later.
-       ((memq (car-safe arg) '(before-do before))
-        (setq loopy--before-do (cdr arg)))
-       ((memq (car-safe arg) '(after-do after else else-do))
-        (setq loopy--after-do (cdr arg)))
-       ((memq (car-safe arg) '(finally-do finally))
-        (setq loopy--final-do (cdr arg)))
-       ((memq (car-safe arg) '(finally-return return))
-        (setq loopy--final-return
-              (if (= 1 (length (cdr arg)))
-                  (cadr arg)
-                (cons 'list (cdr arg)))))
-       (t
+       ((or (eq (car arg) 'loop)
+            (consp (car arg)))
         ;; Body forms have the most variety.
         ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
         ;; Things added are expanded in place.
