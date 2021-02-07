@@ -16,6 +16,16 @@
                                        (b (+ a 2)))
                                  ((return b))))))))
 
+;;;; Without
+(ert-deftest without ()
+  (should (equal '(4 5)
+                 (let ((a 1) (b 2))
+                   (eval (quote (loopy (with (c 3))
+                                       (without a b)
+                                       (loop (expr a (+ a c))
+                                             (expr b (+ b c))
+                                             (return a b)))))))))
+
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
 (ert-deftest basic-before-do ()

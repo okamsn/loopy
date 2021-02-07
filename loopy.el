@@ -57,6 +57,15 @@ This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).
 They are inserted into the variable declarations of a `let*' binding.
 They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to `loopy'.")
 
+(defvar loopy--without-vars nil
+  "A list of variables that `loopy' won't try to initialize.
+
+`loopy' tries to initialize all variables that it uses in a
+`let'-like form, but this isn't always desired.
+
+This is used in `loopy--bound-p', and is of the form (VAR1 VAR2 ...).
+There are no values in this list, only variable names.")
+
 (defvar loopy--implicit-vars nil
   "A list of variables and their values implicitly created by loop commands.
 
@@ -163,7 +172,8 @@ The variable can exist in `loopy--with-vars', `loopy--explicit-vars',
 or `loopy--explicit-generalized-vars'."
   (or (memq var-name (mapcar #'car loopy--with-vars))
       (memq var-name (mapcar #'car loopy--explicit-vars))
-      (memq var-name (mapcar #'car loopy--explicit-generalized-vars))))
+      (memq var-name (mapcar #'car loopy--explicit-generalized-vars))
+      (memq var-name loopy--without-vars)))
 
 (defun loopy--already-implicit-return (var-name)
   "Check whether variable VAR-NAME is in the list of implied return values.
@@ -945,6 +955,8 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--loop-name)
         (loopy--with-vars (nreverse (cdr (or (assq 'with body)
                                              (assq 'let* body)))))
+        (loopy--without-vars (cdr (or (assq 'without body)
+                                      (assq 'no-init body))))
         (loopy--before-do (cdr (or (assq 'before-do body)
                                    (assq 'before body))))
         (loopy--after-do (cdr (or (assq 'after-do body)

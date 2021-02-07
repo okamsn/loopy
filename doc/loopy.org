@@ -167,7 +167,7 @@ mapping features.
    :CUSTOM_ID: macro-arguments
    :END:
 
-   =loopy= takes at most 7 arguments, which are all technically optional.
+   =loopy= takes at most 8 arguments, which are all technically optional.
    Calling the =loopy= macro without arguments creates an infinite loop that
    does nothing.
 
@@ -178,6 +178,11 @@ mapping features.
 
    #+findex: with, let*
    - =with=, =let*= :: Declare variables before the loop.
+
+   #+findex: without, no-init
+   - =without=, =no-init= :: Variables that ~loopy~ should not try to
+     initialize.  ~loopy~ tries to initialize all the variables it uses in a
+     ~let~-like form, but that isn’t always desired.
 
    #+findex: before-do, before
    - =before-do=, =before= :: Run Lisp expressions before the loop starts.
