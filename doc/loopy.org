@@ -179,31 +179,110 @@ mapping features.
    #+findex: with, let*
    - =with=, =let*= :: Declare variables before the loop.
 
+     #+begin_src emacs-lisp
+       (loopy (with (a 1) (b 2)) ...)
+       (loopy (let* (a 1) (b 2)) ...)
+     #+end_src
+
    #+findex: without, no-init
    - =without=, =no-init= :: Variables that ~loopy~ should not try to
      initialize.  ~loopy~ tries to initialize all the variables it uses in a
      ~let~-like form, but that isn’t always desired.
 
+     #+begin_src emacs-lisp
+       (let ((a 5))
+         (loopy (without a) ...)
+         (loopy (no-init a) ...))
+     #+end_src
+
    #+findex: before-do, before
    - =before-do=, =before= :: Run Lisp expressions before the loop starts.
+
+     #+begin_src emacs-lisp
+       (loopy (before-do (message "1: before loop")
+                         (message "2: before loop"))
+              ...)
+
+       (loopy (before (message "1: before loop")
+                      (message "2: before loop"))
+              ...)
+     #+end_src
 
    #+findex: loop
    - =loop= (or no keyword) :: Add expressions to the loop body, perform any
      setup like initializing variables or adding exit conditions.
+
+     #+begin_src emacs-lisp
+       (loopy (loop (list i '(1 2 3))
+                    (when (= i 2) (return i))))
+
+       (loopy ((list i '(1 2 3))
+               (when (= i 2) (return i))))
+     #+end_src
 
    #+findex: after-do, after, else-do, else
    - =after-do=, =after=, =else-do=, =else= :: Run Lisp expressions after the
      loop successfully completes.  This is similar to Python’s ~else~ loop
      clause.
 
+     #+begin_src emacs-lisp
+       (loopy (loop (list i '(2 4 6 8))
+                    (when (cl-oddp i)
+                      (do (message "Odd number found."))
+                      (leave)))
+              (after-do (message "No odd number found.")))
+
+       (loopy (loop (list i '(2 4 6 8))
+                    (when (cl-oddp i)
+                      (do (message "Odd number found."))
+                      (leave)))
+              (after (message "No odd number found.")))
+
+       (loopy (loop (list i '(2 4 6 8))
+                    (when (cl-oddp i)
+                      (do (message "Odd number found."))
+                      (leave)))
+              (else-do (message "No odd number found.")))
+
+       (loopy (loop (list i '(2 4 6 8))
+                    (when (cl-oddp i)
+                      (do (message "Odd number found."))
+                      (leave)))
+              (else (message "No odd number found.")))
+     #+end_src
+
    #+findex: finally-do, finally
    - =finally-do=, =finally= :: Always run Lisp expressions after the loop
      exits.
+
+     #+begin_src emacs-lisp
+       (loopy (loop (list i '(1 2 3))
+                    (when (cl-oddp i) (break)))
+              (after-do (message "This not messaged."))
+              (finally-do (message "This always messaged.")))
+
+       (loopy (loop (list i '(1 2 3))
+                    (when (cl-oddp i) (break)))
+              (after-do (message "This not messaged."))
+              (finally (message "This always messaged.")))
+     #+end_src
 
    #+findex: finally-return, return macro argument
    - =finally-return=, =return= :: Return a value, regardless of how the loop
      completes.  Accumulation commands have an implicit return value, but this
      overrides them.
+
+     #+begin_src emacs-lisp
+       (loopy (loop (list i '(1 2 3))
+                    (when (cl-oddp i)
+                      (return "This return value is over-ridden.")))
+              (finally-return "This string always returned."))
+
+       (loopy (loop (list i '(1 2 3))
+                    (when (cl-oddp i)
+                      (return "This return value is over-ridden.")))
+              (return "This string always returned."))
+     #+end_src
 
    The loop body and any expressions that are part of the =before-do= and
    =after-do= arguments are contained in a single =cl-block=.  Naming the loop
