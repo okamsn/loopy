@@ -44,7 +44,7 @@ please let me know.
   - =before-do= is a list of normal Lisp expressions to run before the loop
     executes.
   - =loop= is a list of special commands that create the loop body.  These
-    commands are described in detail in the section [[#loop-commands][Loop Commands]].
+    commands are described in detail in the section [[file:doc/loopy.org::#loop-commands][Loop Commands]].
   - =after-do= is a list of normal Lisp expressions to run after the successful
     completion of the loop.
   - =finally-do= is a list of normal Lisp expressions that always run,
@@ -142,19 +142,19 @@ please let me know.
 
   Macro arguments set up the lexical environment the loop runs in, Lisp code
   that runs before or after the loop, and the ultimate return value of the
-  macro.  See the section [[#macro-arguments][Macro Arguments]].
+  macro.  See the section [[file:doc/loopy.org::#macro-arguments][Macro Arguments]].
 
   “Loop commands” are the main feature of the =loopy= macro and make up the
   =loop= macro argument, such as =list= in =(list i '(1 2 3))=.  A command
   inserts code into the loop body, but can also perform additional setup, such
   as initializing specified or implicit variables.  Many commands set up a
-  condition for ending the loop.  See the section [[#loop-commands][Loop Commands]].
+  condition for ending the loop.  See the section [[file:doc/loopy.org::#loop-commands][Loop Commands]].
 
   The loop ends when any condition required by a loop command evaluates to
   false.  If no conditions are needed, the loop runs infinitely until a =return=
-  or =return-from= command is reached.  See the section [[#exiting-the-loop-early][Exiting the Loop Early]].
+  or =return-from= command is reached.  See the section [[file:doc/loopy.org::#exiting-the-loop-early][Exiting the Loop Early]].
 
-  Except when using [[#accumulation-commands][accumulating loop commands]], return values must be stated
+  Except when using [[file:doc/loopy.org::#accumulation-commands][accumulating loop commands]], return values must be stated
   explicitly, either as an early return in the loop body via the =return= or
   =return-from= commands, or as part of the =finally-return= macro argument.
   =nil= is returned by default.
