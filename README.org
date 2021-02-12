@@ -175,7 +175,8 @@ please let me know.
 
    | Keyword                                | Usage                                                   |
    |----------------------------------------+---------------------------------------------------------|
-   | =with=, =let*=                         | Declare variables before the loop.                      |
+   | =with=, =let*=                         | Initialize variables before the loop.                   |
+   | =without=, =no-init=                   | Variables that ~loopy~ shouldn't try to initialize.     |
    | =before-do=, =before=                  | Run Lisp expressions before loop starts.                |
    | =loop=, or excluded                    | Add expressions to the loop body and perform setup.     |
    | =after-do=, =after=, =else-do=, =else= | Run Lisp expressions after loop successfully completes. |

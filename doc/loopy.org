@@ -191,8 +191,14 @@ mapping features.
 
      #+begin_src emacs-lisp
        (let ((a 5))
-         (loopy (without a) ...)
-         (loopy (no-init a) ...))
+         ;; Without `without', `loopy' would try to initialize `a' to nil, which would
+         ;; overwrite the value of 5 above.
+         (loopy (without a)
+                (loop (while (not (zerop a)))
+                      (expr a (1- a))))
+         (loopy (no-init a)
+                (loop (while (not (zerop a)))
+                      (expr a (1- a)))))
      #+end_src
 
    #+findex: before-do, before
