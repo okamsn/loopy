@@ -1065,7 +1065,9 @@ Returns are always explicit.  See this package's README for more information."
     (when-let ((loopy--flags (cdr (or (assq 'flags body)
                                       (assq 'flag body)))))
       (dolist (flag loopy--flags)
-        (funcall (cdr (assq flag loopy--flags-setup)))))
+        (if-let ((func (cdr (assq flag loopy--flags-setup))))
+            (funcall func)
+          (error "Loopy: Flag not defined: " flag))))
 
 
     ;; Check the remaining arguments passed to the macro.
