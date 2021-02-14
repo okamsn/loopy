@@ -42,17 +42,16 @@
 
 (defvar loopy--destructuring-function)
 (defvar loopy--accumulation-parser)
-(defvar loopy--flags-setup)
+(defvar loopy--flags-setup nil)
 
+;;;###autoload
 (defun loopy-dash--flag-setup ()
   "Make this `loopy' loop use Dash destructuring."
   (setq
    loopy--destructuring-function #'loopy-dash--create-destructured-assignment
    loopy--accumulation-parser #'loopy-dash--parse-accumulation-commands))
 
-(with-eval-after-load 'loopy
-  (add-to-list 'loopy--flags-setup
-               (cons 'dash #'loopy-dash--flag-setup)))
+(add-to-list 'loopy--flags-setup (cons 'dash #'loopy-dash--flag-setup))
 
 ;;;; The actual functions:
 (defun loopy-dash--create-destructured-assignment
