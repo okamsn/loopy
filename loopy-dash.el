@@ -41,6 +41,7 @@
 (require 'dash)
 
 (defvar loopy--destructuring-function)
+(defvar loopy--accumulation-parser)
 (defvar loopy--flags-setup)
 
 (defun loopy-dash--flag-setup ()
