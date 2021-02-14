@@ -133,12 +133,15 @@ please let me know.
 
   #+begin_src emacs-lisp
     (use-package loopy
-      :straight (loopy :type git :host github :repo "okamsn/loopy"))
+      :straight (loopy :type git :host github :repo "okamsn/loopy"
+                       :files (:defaults (:exclude "loopy-dash.el"))))
 
     ;; Optional support for destructuring with Dash.
     (use-package loopy-dash
       :after (loopy)
-      :straight (loopy-dash :type git :host github :repo "okamsn/loopy"))
+      :demand t
+      :straight (loopy-dash :type git :host github :repo "okamsn/loopy"
+                            :files ("loopy-dash.el")))
   #+end_src
 
 * How to use
