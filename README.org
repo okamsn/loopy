@@ -29,6 +29,7 @@ please let me know.
 - [[#how-to-use][How to use]]
   - [[#macro-arguments][Macro Arguments]]
   - [[#loop-commands][Loop Commands]]
+  - [[#destructuring-with-dash][Destructuring with Dash]]
 - [[#adding-custom-commands][Adding Custom Commands]]
 - [[#comparing-to-cl-loop][Comparing to =cl-loop=]]
 -  [[#real-world-examples][Real-World Examples]]
@@ -133,6 +134,11 @@ please let me know.
   #+begin_src emacs-lisp
     (use-package loopy
       :straight (loopy :type git :host github :repo "okamsn/loopy"))
+
+    ;; Optional support for destructuring with Dash.
+    (use-package loopy-dash
+      :after (loopy)
+      :straight (loopy-dash :type git :host github :repo "okamsn/loopy"))
   #+end_src
 
 * How to use
@@ -182,6 +188,7 @@ please let me know.
    | =after-do=, =after=, =else-do=, =else= | Run Lisp expressions after loop successfully completes. |
    | =finally-do=, =finally=                | Always run Lisp expressions after loop exits.           |
    | =finally-return=, =return=             | Return a value, regardless of how the loop completes.   |
+   | =flag=, =flags=                        | Options that affect the macro's behavior.               |
 
    The loop body and any expressions that are part of the =before-do= and
    =after-do= arguments are contained in a single =cl-block=.  Naming the loop
@@ -248,6 +255,33 @@ please let me know.
                           (when (eq i 'bad-val?)
                             (return-from outer-loop 'bad-val?)))))))
     #+end_src
+
+** Destructuring with Dash
+
+   Using =(flag dash)= in ~loopy~ will cause ~loopy~ to use =dash= for
+   destructuring.  This applies for normal variables and accumulation, but not
+   for ~setf~-able places.
+
+   To enable this, load the file =loopy-dash.el= (found in the same repo as
+   =loopy=), such as with
+
+   #+begin_src emacs-lisp
+     (use-package loopy-dash
+       :after (loopy)
+       :straight (loopy-dash :type git :host github :repo "okamsn/loopy"))
+   #+end_src
+
+   #+begin_src emacs-lisp
+     ;; => (((1 (2 3)) (4 (5 6))) ; whole
+     ;;     (1 4)                 ; i
+     ;;     (2 5)                 ; j
+     ;;     (3 6))                ; k
+     (loopy (flag dash)
+            (loop (list elem '((1 (2 3)) (4 (5 6))))
+                  (collect (whole &as i (j k)) elem)))
+   #+end_src
+
+   See more in the documentation section [[file:doc/loopy-doc.org::*Destructuring with =dash=][Destructuring with =dash=]].
 
 * Adding Custom Commands
   :PROPERTIES:

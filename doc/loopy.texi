@@ -24,16 +24,17 @@
 @top Loopy: A Looping and Iteration Macro
 
 @samp{loopy} is a macro meant for iterating and looping.  It is similar in usage to
-@samp{cl-loop} @footnote{@ref{Loop Facility,info:cl#Loop Facility,,cl,}} but uses symbolic expressions rather than keywords.
+@ref{Loop Facility,@code{cl-loop},,cl,} but uses symbolic expressions rather than keywords.
 
-@samp{loopy} should be complementary to the features provided by the Seq @footnote{@ref{Sequence Functions,,,elisp,}} and
-CL @footnote{@ref{Top,,,cl,}} libraries (including @samp{cl-loop}) and Emacs's regular looping and
-mapping features.
+@samp{loopy} should be complementary to the features provided by the @ref{Sequence Functions,Seq,,elisp,} and @ref{Top,CL,,cl,}
+libraries (including @samp{cl-loop}) and Emacs's regular looping and mapping
+features.
 @end ifnottex
 
 @menu
 * Introduction::
 * How to use::
+* Extensions and Customization::
 * Adding Custom Commands::
 * How does it compare to @samp{cl-loop}?::
 * Real-World Examples::
@@ -61,6 +62,10 @@ Control Flow
 * Conditionals::
 * Skipping an Iteration::
 * Exiting the Loop Early::
+
+Extensions and Customization
+
+* Destructuring with @samp{dash}::
 
 Adding Custom Commands
 
@@ -242,8 +247,14 @@ initialize.  @code{loopy} tries to initialize all the variables it uses in a
 
 @lisp
 (let ((a 5))
-  (loopy (without a) ...)
-  (loopy (no-init a) ...))
+  ;; Without `without', `loopy' would try to initialize `a' to nil, which would
+  ;; overwrite the value of 5 above.
+  (loopy (without a)
+         (loop (while (not (zerop a)))
+               (expr a (1- a))))
+  (loopy (no-init a)
+         (loop (while (not (zerop a)))
+               (expr a (1- a)))))
 @end lisp
 @end table
 
@@ -351,6 +362,23 @@ overrides them.
 @end lisp
 @end table
 
+@findex flag, flags
+@table @asis
+@item @samp{flag}, @samp{flags}
+Options that change the behavior of @code{loopy}.  See the
+section @ref{Destructuring with @samp{dash}} for an example.
+
+@lisp
+(loopy (flag dash)
+       (loop (list (whole &as a b) '((1 2) (3 4)))
+             ...))
+
+(loopy (flags dash)
+       (loop (list (whole &as a b) '((1 2) (3 4)))
+             ...))
+@end lisp
+@end table
+
 The loop body and any expressions that are part of the @samp{before-do} and
 @samp{after-do} arguments are contained in a single @samp{cl-block}.  Naming the loop
 really just names the block, allowing for more specific exiting via
@@ -394,7 +422,7 @@ and this is not:
 Trying to use loop commands where they don't belong will result in errors
 when the code is evaluated.
 
-Underneath, interpreting a command results in "instructions" that describe
+Underneath, interpreting a command results in ``instructions'' that describe
 how to substitute code into the loop body and other locations.  This process
 is described in detail in @ref{Background Information}.
 
@@ -1057,6 +1085,55 @@ Leave the loop @samp{NAME}, returning @samp{[EXPRS]}.
 @end lisp
 @end table
 
+@node Extensions and Customization
+@chapter Extensions and Customization
+
+@menu
+* Destructuring with @samp{dash}::
+@end menu
+
+@node Destructuring with @samp{dash}
+@section Destructuring with @samp{dash}
+
+@cindex loopy-dash
+If requested, @code{loopy} can use other kinds of destructuring instead of its
+default method.  For example, you can use Dash's destructuring by loading the
+library @samp{loopy-dash} (found in the same repo as @samp{loopy}) and passing @samp{dash} as
+a @samp{flag} argument.
+
+@lisp
+(require 'loopy)
+;; Load after `loopy':
+(require 'loopy-dash)
+
+;; => (((1 (2 3)) (4 (5 6))) ; whole
+;;     (1 4)                 ; i
+;;     (2 5)                 ; j
+;;     (3 6))                ; k
+(loopy (flag dash)
+       (loop (list elem '((1 (2 3)) (4 (5 6))))
+             (collect (whole &as i (j k)) elem)))
+@end lisp
+
+What functions @code{loopy} uses by default can be customized with the user
+options:
+@vindex loopy-default-destructuring-function
+@itemize
+@item
+@code{loopy-default-destructuring-function}
+@end itemize
+@vindex loopy-default-accumulation-parsing-function
+@itemize
+@item
+@code{loopy-default-accumulation-parsing-function}
+@end itemize
+
+To always use Dash (without needing to use a @samp{flag} argument), set these
+options to @code{loopy-dash--create-destructured-assignment} and
+@code{loopy-dash--parse-accumulation-commands}, respectively.
+
+See @ref{-let,Dash's documentation,,dash,} for how it performs destructuring.
+
 @node Adding Custom Commands
 @chapter Adding Custom Commands
 
@@ -1075,7 +1152,7 @@ substituted into or around a loop body.
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
 list of instructions.  Some commands require the creation of unique temporary
 variables, such as @samp{g3019} in the below output. Such variables are called
-“implicit", as opposed to the explicitly named variable @samp{i} in the command.
+“implicit``, as opposed to the explicitly named variable @samp{i} in the command.
 
 @lisp
 ((loopy--implicit-vars g3019 '(1 2 3))
