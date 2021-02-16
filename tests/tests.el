@@ -484,6 +484,13 @@
                                (loop (seq-ref i my-seq)
                                      (do (setf i 7)))
                                (return my-seq)))))))
+;;;;; Order of implicit returns.
+(ert-deftest implicit-collect-order ()
+  (should (equal '((2) (1 3))
+                 (eval (quote (loopy ((list i '(1 2 3))
+                                      (if (cl-evenp i)
+                                          (collect evens i)
+                                        (collect odds i)))))))))
 
 ;;; Accumulation
 (ert-deftest append ()

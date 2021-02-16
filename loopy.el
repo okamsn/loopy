@@ -460,9 +460,9 @@ This uses the command name (such as `list' in `(list i my-list)')."
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) conditional-body)
         (push instruction full-instructions)))
-    (push `(loopy--main-body . (,name ,condition ,@(nreverse conditional-body)))
-          full-instructions)
-    full-instructions))
+    ;; Return the instructions.
+    (cons `(loopy--main-body . (,name ,condition ,@(nreverse conditional-body)))
+          (nreverse full-instructions))))
 
 (cl-defun loopy--parse-group-command ((_ &rest body))
   "Parse the `group' loop command.
@@ -473,10 +473,9 @@ BODY is one or more commands to be grouped by a `progn' form."
       (if (eq (car instruction) 'loopy--main-body)
           (push (cdr instruction) progn-body)
         (push instruction full-instructions)))
-    (push (cons 'loopy--main-body
-                (cons 'progn (nreverse progn-body)))
-          full-instructions)
-    full-instructions))
+    ;; Return the instructions.
+    (cons `(loopy--main-body . (progn ,@(nreverse progn-body)))
+          (nreverse full-instructions))))
 
 (cl-defun loopy--parse-if-command ((_
                                     condition
@@ -503,13 +502,13 @@ BODY is one or more commands to be grouped by a `progn' form."
           (if (= 1 (length if-true-main-body))
               (car if-true-main-body)
             (cons 'progn (nreverse if-true-main-body))))
-    (push `(loopy--main-body
+
+    ;; Return the list of instructions.
+    (cons `(loopy--main-body
             . (if ,condition
                   ,if-true-main-body
                 ,@(nreverse if-false-main-body)))
-          full-instructions)
-    ;; Return the list of instructions.
-    full-instructions))
+          (nreverse full-instructions))))
 
 (cl-defun loopy--parse-cond-command ((_ &rest clauses))
   "Parse the `cond' command.  This works like the `cond' special form.
@@ -519,7 +518,8 @@ loop commands.
 
 The Lisp expression and the loopy-body instructions from each
 command are inserted into a `cond' special form."
-  (let (full-instructions actual-cond-clauses)
+  (let ((full-instructions)
+        (actual-cond-clauses))
     (dolist (clause clauses)
       (let ((instructions (loopy--parse-loop-commands (cl-rest clause)))
             clause-body)
@@ -533,7 +533,7 @@ command are inserted into a `cond' special form."
     ;; Wrap the `actual-cond-clauses' in a `cond' special form, and return all
     ;; instructions.
     (cons `(loopy--main-body . ,(cons 'cond (nreverse actual-cond-clauses)))
-          full-instructions)))
+          (nreverse full-instructions))))
 
 (cl-defun loopy--parse-do-command ((_ &rest expressions))
   "Parse the `do' loop command.
