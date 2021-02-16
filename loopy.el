@@ -1133,7 +1133,15 @@ Returns are always explicit.  See this package's README for more information."
 
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
-          loopy--with-vars (nreverse loopy--with-vars))
+          loopy--with-vars (nreverse loopy--with-vars)
+          loopy--implicit-return (when (consp loopy--implicit-return)
+                                   (if (= 1 (length loopy--implicit-return))
+                                       ;; If implicit return is just a single thing,
+                                       ;; don't use a list.
+                                       (car loopy--implicit-return)
+                                     ;; If multiple items, be sure to use a list
+                                     ;; in the correct order.
+                                     `(list ,@(nreverse loopy--implicit-return)))))
 
 ;;;;; Constructing/Creating the returned code.
 
@@ -1193,13 +1201,12 @@ Returns are always explicit.  See this package's README for more information."
                                      (0 t)
                                      (1 (car loopy--post-conditions))
                                      (t (cons 'and loopy--post-conditions)))
+                            ;; If the loop exits early, we should still use the
+                            ;; implicit return.  That isn't a problem for the
+                            ;; `while' loop, but we need to be more explicit
+                            ;; here.
                             (cl-return-from ,loopy--loop-name
-                              ,(cond
-                                ((null loopy--implicit-return) nil)
-                                ((= 1 (length loopy--implicit-return))
-                                 (car loopy--implicit-return))
-                                (t
-                                 `(list ,@(nreverse loopy--implicit-return))))))))))
+                              ,loopy--implicit-return))))))
 
         ;; Now wrap loop body in the `while' form.
         (setq result `(while ,(cl-case (length loopy--pre-conditions)
@@ -1238,15 +1245,10 @@ Returns are always explicit.  See this package's README for more information."
         ;; at a certain point.
         (setq result `(cl-block ,loopy--loop-name
                         ,@(get-result)
-                        ;; Be sure that the `cl-block' defaults to returning
-                        ;; nil.  This can be overridden by any call to
-                        ;; `cl-return-from'.
-                        ,(cond
-                          ((null loopy--implicit-return) nil)
-                          ((= 1 (length loopy--implicit-return))
-                           (car loopy--implicit-return))
-                          (t
-                           `(list ,@(nreverse loopy--implicit-return)))))
+                        ;; Be sure that the `cl-block' defaults to returning the
+                        ;; implicit return, which can be nil.  This can be
+                        ;; overridden by any call to `cl-return-from'.
+                        ,loopy--implicit-return)
               ;; Will always be a single expression after wrapping with
               ;; `cl-block'.
               result-is-one-expression t)
