@@ -284,7 +284,9 @@ please let me know.
                   (collect (whole &as i (j k)) elem)))
    #+end_src
 
-   See more in the documentation section [[file:doc/loopy-doc.org::*Destructuring with =dash=][Destructuring with =dash=]].
+   For more on how ~loopy~ can use =dash=, see the section [[file:doc/loopy-doc.org::*Destructuring with =dash=][Destructuring with =dash=]]
+   in the documentation.  For more on how =dash= does destructuring, see their
+   documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]] form.
 
 * Adding Custom Commands
   :PROPERTIES:
