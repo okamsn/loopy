@@ -260,7 +260,7 @@
                                                (setf k 9)))
                                           (return my-array))))))))
 
-;;;; Cons
+;;;;; Cons
 (ert-deftest cons ()
   (should
    (and (cl-every (lambda (list)
@@ -290,7 +290,7 @@
                                    (return coll))))))))
 
 
-;;;; List
+;;;;; List
 (ert-deftest list ()
   (should (= 3 (eval (quote (loopy (loop (list i '(1 2 3)))
                                    ;; Same thing:
@@ -331,7 +331,7 @@
            (eval (quote (loopy ((list (a (b (c))) '((1 (1 (2))) (5 (5 (6))))))
                                (finally-return (list a b c)))))))))
 
-;;;; List Ref
+;;;;; List Ref
 (ert-deftest list-ref ()
   (should (equal  '(7 7 7)
                   (eval (quote (loopy (with (my-list '(1 2 3)))
@@ -378,7 +378,7 @@
                                                (setf k 9)))
                                           (return my-list))))))))
 
-;;;; Repeat
+;;;;; Repeat
 (ert-deftest repeat-no-var ()
   (should (= 3 (length (eval (quote (loopy (loop (repeat 3)
                                                  (list i (number-sequence 1 10))
@@ -392,7 +392,7 @@
                                       (repeat i 3))
                                      (finally-return coll)))))))
 
-;;;; Seq
+;;;;; Seq
 (ert-deftest seq ()
   (should (eval (quote (loopy ((seq l '(1 2 3 4 5))
                                (seq a [1 2 3 4 5])
@@ -448,26 +448,26 @@
                                                (setf k '(9 10))))
                                           (return my-seq)))))
                (equal '((7 8 9) (7 8 9))
-                       (eval (quote (loopy (with (my-seq '((1 2 3) (4 5 6))))
-                                           ((seq-ref (i j k) my-seq)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k 9)))
-                                           (return my-seq)))))
+                      (eval (quote (loopy (with (my-seq '((1 2 3) (4 5 6))))
+                                          ((seq-ref (i j k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-seq)))))
                (equal '((7 8 9 10) (7 8 9 10))
-                       (eval (quote (loopy (with (my-seq '((1 2 3 4) (4 5 6 8))))
-                                           ((seq-ref (i j . k) my-seq)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k '(9 10))))
-                                           (return my-seq)))))
+                      (eval (quote (loopy (with (my-seq '((1 2 3 4) (4 5 6 8))))
+                                          ((seq-ref (i j . k) my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k '(9 10))))
+                                          (return my-seq)))))
                (equal '([7 8 9 4] [7 8 9 8])
-                       (eval (quote (loopy (with (my-seq '([1 2 3 4] [4 5 6 8])))
-                                           ((seq-ref [i j k] my-seq)
-                                            (do (setf i 7)
-                                                (setf j 8)
-                                                (setf k 9)))
-                                           (return my-seq)))))
+                      (eval (quote (loopy (with (my-seq '([1 2 3 4] [4 5 6 8])))
+                                          ((seq-ref [i j k] my-seq)
+                                           (do (setf i 7)
+                                               (setf j 8)
+                                               (setf k 9)))
+                                          (return my-seq)))))
                (equal [[7 8 9 4] [7 8 9 8]]
                       (eval (quote (loopy (with (my-seq [[1 2 3 4] [4 5 6 8]]))
                                           ((seq-ref [i j k] my-seq)
@@ -476,14 +476,14 @@
                                                (setf k 9)))
                                           (return my-seq))))))))
 
-;;;; Seq Ref
+;;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should
    (equal '(7 7 7 7)
-           (eval (quote (loopy (with (my-seq '(1 2 3 4)))
-                               (loop (seq-ref i my-seq)
-                                     (do (setf i 7)))
-                               (return my-seq)))))))
+          (eval (quote (loopy (with (my-seq '(1 2 3 4)))
+                              (loop (seq-ref i my-seq)
+                                    (do (setf i 7)))
+                              (return my-seq)))))))
 ;;;;; Order of implicit returns.
 (ert-deftest implicit-collect-order ()
   (should (equal '((2) (1 3))
@@ -492,7 +492,8 @@
                                           (collect evens i)
                                         (collect odds i)))))))))
 
-;;; Accumulation
+;;;;; Accumulation Commands
+
 (ert-deftest append ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))
