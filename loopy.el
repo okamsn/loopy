@@ -1091,17 +1091,19 @@ There are several possible arguments that make up BODY:
 Returns are always explicit.  See this package's README for more information."
   (declare (debug (&optional ;; TODO: Is this correct?
                    ([&or "with" "let*"] &rest (symbolp &optional form))
-                   ([&or "before-do" "before-progn" "before"] body)
+                   ([&or "without" "no-init"] &rest (symbolp &optional form))
+                   ([&or "before-do" "before"] body)
                    ([&optional "loop"]
                     &rest [&or (symbolp ;; This one covers most commands.
                                 &optional
-                                symbolp
+                                [&or symbolp sexp] ; destructured arg
                                 form
                                 [&or symbolp function-form lambda-expr])
                                ([&or "when" "if" "unless"] form body)
-                               ("cond" &rest (body))])
-                   ([&or "after-do" "after-progn" "after"] body)
-                   ([&or "finally-do" "finally-progn"] body)
+                               ("cond" &rest (body))
+                               ("group" body)])
+                   ([&or "after-do" "after" "else-do" "else"] body)
+                   ([&or "finally-do" "finally"] body)
                    ([&or "finally-return" "return"] form &optional [&rest form]))))
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
