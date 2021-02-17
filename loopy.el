@@ -1078,17 +1078,50 @@ First check in `loopy--builtin-command-parsers', then
 (cl-defmacro loopy (&rest body)
   "A looping macro.
 
-There are several possible arguments that make up BODY:
-- a name for the loop, unquoted
-- variables to declare before the loop, as in
-  (with (VAR1 VAL1) [(VAR2 VAL2) ...])
-- code to run before the loop, as in (before-do FORM1 [FORM2 ...])
-- special commands that define the loop, as in (loop COMMAND1 [COMMAND2 ...])
-- code to run if the loop completes, as in (after-do FORM1 [FORM2 ...])
-- code to always run after the loop, as in (finally-do FORM1 [FORM2 ...])
-- a value to always return, as in (finally-return FORM1 [FORM2 ...])
+The macro takes several top-level arguments, all, except a loop
+name, being a list beginning with one of the keywords below.  To
+name a loop, pass in an unquoted symbol as an argument.
 
-Returns are always explicit.  See this package's README for more information."
+- `with', `let*': Declare variables before the loop.
+
+- `without', `no-init': Variables that `loopy' should not try to
+  initialize.  `loopy' tries to initialize all the variables it
+  uses in a `let'-like form, but that isn’t always desired.
+
+- `before-do', `before': Run Lisp expressions before the loop
+  starts.
+
+- `loop' (or no keyword): Add expressions to the loop body,
+  perform any setup like initializing variables or adding exit
+  conditions.  This is done using \"loop commands\", which are
+  described in this packages Info document.
+
+- `after-do', `after', `else-do', `else': Run Lisp expressions
+  after the loop successfully completes.  This is similar to
+  Python’s `else' loop clause.
+
+- `finally-do', `finally': Always run Lisp expressions after the
+  loop exits.
+
+- `finally-return', `return': Return a value, regardless of how
+  the loop completes.  Accumulation commands have an implicit
+  return value, but this overrides them.
+
+- `flag', `flags': Options that change the behavior of `loopy'.
+
+The loop body and any expressions that are part of the
+`before-do' and `after-do' arguments are contained in a single
+`cl-block'.  Naming the loop really just names the block,
+allowing for more specific exiting via ~cl-return~ and the loop
+commands that wrap it.
+
+Finally, `(finally-return 1 2 3)' is the same as
+`(finally-return (list 1 2 3))'.  This is convenient when using
+`seq-let', `pcase-let', `cl-destructuring-bind', and the like.
+
+For more information, including a list of available loop commands,
+see the Info node `(loopy)' distributed with this package."
+
   (declare (debug (&optional ;; TODO: Is this correct?
                    ([&or "with" "let*"] &rest (symbolp &optional form))
                    ([&or "without" "no-init"] &rest (symbolp &optional form))
