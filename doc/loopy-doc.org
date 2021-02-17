@@ -35,8 +35,9 @@ features.
       - [[#conditionals][Conditionals]]
       - [[#skipping-an-iteration][Skipping an Iteration]]
       - [[#exiting-the-loop-early][Exiting the Loop Early]]
-- [[#extensions-and-customization][Extensions and Customization]]
+- [[#extensions-customization-and-flags][Extensions, Customization, and Flags]]
   - [[#destructuring-with-dash][Destructuring with =dash=]]
+  - [[#splitting-accumulation-results-with-implicit-variables][Splitting Accumulation Results with Implicit Variables]]
 - [[#adding-custom-commands][Adding Custom Commands]]
   - [[#background-information][Background Information]]
   - [[#a-small-example][A Small Example]]
@@ -669,16 +670,67 @@ features.
     #+end_src
 
     #+cindex: implied/implicit accumulation variables
+    #+vindex: loopy-result
     Like ~cl-loop~, you do not need to supply a variable name to accumulation
-    commands.  With only one argument, they accumulate values into a generated
-    variable and use that variable as an implicit return value.  Unlike
-    ~cl-loop~, this generation means that if you want accumulation commands to
-    act on the same variable, you must supply the same =VAR= as the first
-    argument to each command.
+    commands.  With only one argument, they accumulate values into a variable
+    named after the loop.  The default name of the variable is =loopy-result=,
+    but if you were to name the loop =my-cool-loop=, it would be
+    =loopy-my-cool-loop-results=.  This variable is accessible in the loop
+    itself and the ~after-do~, ~finally-do~, and ~finally-return~ macro
+    arguments.  Note that while its value can be changed in ~after-do~,
+    ~finally-do~ alone is too late to effect what the macro returns without also
+    using ~finally-return~.
+
+    #+begin_src emacs-lisp
+      ;; => (1 2 3)
+      (cl-assert (equal (loopy ((list i '(1 2 3))
+                                (collect i))
+                               (after-do (cl-return loopy-result)))
+
+                        (loopy ((list i '(1 2 3))
+                                (collect i))
+                               (return loopy-result))))
+
+      ;; => (0 1 2 3)
+      (cl-assert (equal (loopy ((list i '(1 2 3))
+                                (collect i))
+                               (else-do (push 0 loopy-result)
+                                        (cl-return loopy-result)))
+                        (loopy ((list i '(1 2 3))
+                                (collect i))
+                               (finally-do (push 0 loopy-result))
+                               (finally-return loopy-result))))
+    #+end_src
+
+    Like in ~cl-loop~, each accumulation command will use the same implied
+    variable.  This means that several uses of =(collect my-value)=, for
+    example, will all collect values into the same variable.  If you want to use
+    to collect into separate variables, just specify a variable name like you
+    normally would.
 
     The commands =collect=, =append=, and =nconc= are more efficient if no =VAR=
     is provided, constructing the accumulated value backwards and then reversing
-    it, which is usually faster.
+    it, which is usually faster.  This means that if you want to use
+    destructuring with accumulation commands, it might be faster to use the
+    [[*Splitting Accumulation Results with Implicit Variables][=split= flag]], which will make ~loopy~ accumulate into separate implied variables
+    instead of the same ~loopy-result~.  See that section for more details.
+
+    #+begin_src emacs-lisp
+      ;; Both of these example give the same result, but the latter can
+      ;; expand into more efficient code.
+      ;; There is also the `push-into' commands, which avoids this problem.
+
+      ;; => ((1 4) (2 5) (3 6))
+      (loopy (loop (list elem '((1 2 3) (4 5 6)))
+                   (collect (i j k) elem)))
+
+      ;; => ((1 4) (2 5) (3 6))
+      (loopy (flag split) ; Don't accumulate into same implicit variable.
+             (loop (list (i j k) '((1 2 3) (4 5 6)))
+                   (collect i)        ; Without the `split' flag,
+                   (collect j)        ; this would just produce
+                   (collect k)))      ; (1 2 3 4 5 6).
+    #+end_src
 
     #+findex: append
     - =(append VAR EXPR)= :: Repeatedly ~append~ the value of =EXPR= to =VAR=.
@@ -917,10 +969,31 @@ features.
                                (return-from outer-loop 'bad-val?)))))))
        #+END_SRC
 
-* Extensions and Customization
+* Extensions, Customization, and Flags
+
+  ~loopy~ has several options for customizing behavior:
+   #+vindex: loopy-default-destructuring-function
+   - ~loopy-default-destructuring-function~ :: The function that is used
+     for destructuring in iteration commands like =list= or =array=.
+   #+vindex: loopy-default-accumulation-parsing-function
+   - ~loopy-default-accumulation-parsing-function~ :: The function that is user
+     for destructuring in accumulation commands like =collect= or =sum=.
+   #+vindex: loopy-split-implied-accumulation-results
+   - ~loopy-split-implied-accumulation-results~ :: Whether accumulation commands
+     with an implied variable (e.g., =(collect my-value)=) should accumulate
+     into the same variable (by default, named ~loopy-result~) or into separate
+     values.
+
+   #+cindex: flag
+   A "flag" is an unquoted symbol passed to the =flag= macro argument, which
+   will change the behavior of ~loopy~ similar to the above user options.  For
+   example, the =split= flag will cause a particular loop to behave as if
+   ~loopy-split-implied-accumulation-results~ was non-nil.
+
 ** Destructuring with =dash=
 
    #+cindex: loopy-dash
+   #+cindex: dash flag
    If requested, ~loopy~ can use other kinds of destructuring instead of its
    default method.  For example, you can use Dash's destructuring by loading the
    library =loopy-dash= (found in the same repo as =loopy=) and passing =dash= as
@@ -943,18 +1016,66 @@ features.
                   (collect (whole &as i (j k)) elem)))
    #+end_src
 
-   What functions ~loopy~ uses by default can be customized with the user
-   options:
-   #+vindex: loopy-default-destructuring-function
-   - ~loopy-default-destructuring-function~
-   #+vindex: loopy-default-accumulation-parsing-function
-   - ~loopy-default-accumulation-parsing-function~
 
-   To always use Dash (without needing to use a =flag= argument), set these
-   options to ~loopy-dash--create-destructured-assignment~ and
+   To always use Dash (without needing to use a =flag= argument), set the
+   ~loopy-default-destructuring-function~ and
+   ~loopy-default-accumulation-parsing-function~ options to
+   ~loopy-dash--create-destructured-assignment~ and
    ~loopy-dash--parse-accumulation-commands~, respectively.
 
    See [[info:dash#-let][Dash's documentation]] for how it performs destructuring.
+
+** Splitting Accumulation Results with Implicit Variables
+
+   #+cindex: split flag
+   By default, each accumulation command with an implied variable (i.e., those
+   that do not specify =VAR=) accumulate into the same variable.
+
+   #+begin_src emacs-lisp
+     ;; => (1 2 3 4 5)
+     (loopy (loop (list i '(1 2 3 4 5))
+                  (if (cl-oddp i)
+                      (collect i)
+                    (collect i)))
+            ;; For un-named loops, the variable is `loopy-result'.
+            (finally-return loopy-result))
+   #+end_src
+
+   By using the =split= flag, ~loopy~ will accumulate into separate variables
+   when no =VAR= is given.
+
+   #+begin_src emacs-lisp
+     ;; => ((1 3 5) (2 4))
+     (loopy (flag split)
+            (loop (list i '(1 2 3 4 5))
+                  (if (cl-oddp i)
+                      (collect i)
+                    (collect i))))
+   #+end_src
+
+   The =split= flag can be more efficient than using destructuring with
+   accumulation commands, as it allows lists to be constructed in reverse if
+   need be.  This can make a noticeable difference on large lists, but note that
+   if you use this feature, you will not be able to access the implicit
+   variables with ~loopy-result~.  They have their own, uniquely generated name
+   in each loop.
+
+   #+begin_src emacs-lisp
+     ;; Both of these example give the same result, but the latter
+     ;; can expand into more efficient code.
+     ;; There is also the `push-into' commands, avoids this problem.
+
+     ;; => ((1 4) (2 5) (3 6))
+     (loopy (loop (list elem '((1 2 3) (4 5 6)))
+                  (collect (i j k) elem)))
+
+     ;; => ((1 4) (2 5) (3 6))
+     (loopy (flag split) ; Don't accumulate into same implicit variable.
+            (loop (list (i j k) '((1 2 3) (4 5 6)))
+                  (collect i)
+                  (collect j)
+                  (collect k)))
+   #+end_src
 
 * Adding Custom Commands
   :PROPERTIES:

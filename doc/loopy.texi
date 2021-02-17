@@ -34,7 +34,7 @@ features.
 @menu
 * Introduction::
 * How to use::
-* Extensions and Customization::
+* Extensions, Customization, and Flags: Extensions Customization and Flags. 
 * Adding Custom Commands::
 * How does it compare to @samp{cl-loop}?::
 * Real-World Examples::
@@ -63,9 +63,10 @@ Control Flow
 * Skipping an Iteration::
 * Exiting the Loop Early::
 
-Extensions and Customization
+Extensions, Customization, and Flags
 
 * Destructuring with @samp{dash}::
+* Splitting Accumulation Results with Implicit Variables::
 
 Adding Custom Commands
 
@@ -791,16 +792,67 @@ be overridden by using the @samp{return} and @samp{return-from} loop commands or
 @end lisp
 
 @cindex implied/implicit accumulation variables
+@vindex loopy-result
 Like @code{cl-loop}, you do not need to supply a variable name to accumulation
-commands.  With only one argument, they accumulate values into a generated
-variable and use that variable as an implicit return value.  Unlike
-@code{cl-loop}, this generation means that if you want accumulation commands to
-act on the same variable, you must supply the same @samp{VAR} as the first
-argument to each command.
+commands.  With only one argument, they accumulate values into a variable
+named after the loop.  The default name of the variable is @samp{loopy-result},
+but if you were to name the loop @samp{my-cool-loop}, it would be
+@samp{loopy-my-cool-loop-results}.  This variable is accessible in the loop
+itself and the @code{after-do}, @code{finally-do}, and @code{finally-return} macro
+arguments.  Note that while its value can be changed in @code{after-do},
+@code{finally-do} alone is too late to effect what the macro returns without also
+using @code{finally-return}.
+
+@lisp
+;; => (1 2 3)
+(cl-assert (equal (loopy ((list i '(1 2 3))
+                          (collect i))
+                         (after-do (cl-return loopy-result)))
+
+                  (loopy ((list i '(1 2 3))
+                          (collect i))
+                         (return loopy-result))))
+
+;; => (0 1 2 3)
+(cl-assert (equal (loopy ((list i '(1 2 3))
+                          (collect i))
+                         (else-do (push 0 loopy-result)
+                                  (cl-return loopy-result)))
+                  (loopy ((list i '(1 2 3))
+                          (collect i))
+                         (finally-do (push 0 loopy-result))
+                         (finally-return loopy-result))))
+@end lisp
+
+Like in @code{cl-loop}, each accumulation command will use the same implied
+variable.  This means that several uses of @samp{(collect my-value)}, for
+example, will all collect values into the same variable.  If you want to use
+to collect into separate variables, just specify a variable name like you
+normally would.
 
 The commands @samp{collect}, @samp{append}, and @samp{nconc} are more efficient if no @samp{VAR}
 is provided, constructing the accumulated value backwards and then reversing
-it, which is usually faster.
+it, which is usually faster.  This means that if you want to use
+destructuring with accumulation commands, it might be faster to use the
+@ref{Splitting Accumulation Results with Implicit Variables, , @samp{split} flag}, which will make @code{loopy} accumulate into separate implied variables
+instead of the same @code{loopy-result}.  See that section for more details.
+
+@lisp
+;; Both of these example give the same result, but the latter can
+;; expand into more efficient code.
+;; There is also the `push-into' commands, which avoids this problem.
+
+;; => ((1 4) (2 5) (3 6))
+(loopy (loop (list elem '((1 2 3) (4 5 6)))
+             (collect (i j k) elem)))
+
+;; => ((1 4) (2 5) (3 6))
+(loopy (flag split) ; Don't accumulate into same implicit variable.
+       (loop (list (i j k) '((1 2 3) (4 5 6)))
+             (collect i)        ; Without the `split' flag,
+             (collect j)        ; this would just produce
+             (collect k)))      ; (1 2 3 4 5 6).
+@end lisp
 
 @findex append
 @table @asis
@@ -1085,21 +1137,54 @@ Leave the loop @samp{NAME}, returning @samp{[EXPRS]}.
 @end lisp
 @end table
 
-@node Extensions and Customization
-@chapter Extensions and Customization
+@node Extensions Customization and Flags
+@chapter Extensions, Customization, and Flags
+
+@code{loopy} has several options for customizing behavior:
+@vindex loopy-default-destructuring-function
+@table @asis
+@item @code{loopy-default-destructuring-function}
+The function that is used
+for destructuring in iteration commands like @samp{list} or @samp{array}.
+@end table
+@vindex loopy-default-accumulation-parsing-function
+@table @asis
+@item @code{loopy-default-accumulation-parsing-function}
+The function that is user
+for destructuring in accumulation commands like @samp{collect} or @samp{sum}.
+@end table
+@vindex loopy-split-implied-accumulation-results
+@table @asis
+@item @code{loopy-split-implied-accumulation-results}
+Whether accumulation commands
+with an implied variable (e.g., @samp{(collect my-value)}) should accumulate
+into the same variable (by default, named @code{loopy-result}) or into separate
+values.
+@end table
+
+@cindex flag
+A ``flag'' is an unquoted symbol passed to the @samp{flag} macro argument, which
+will change the behavior of @code{loopy} similar to the above user options.  For
+example, the @samp{split} flag will cause a particular loop to behave as if
+@code{loopy-split-implied-accumulation-results} was non-nil.
 
 @menu
 * Destructuring with @samp{dash}::
+* Splitting Accumulation Results with Implicit Variables::
 @end menu
 
 @node Destructuring with @samp{dash}
 @section Destructuring with @samp{dash}
 
 @cindex loopy-dash
+@cindex dash flag
 If requested, @code{loopy} can use other kinds of destructuring instead of its
 default method.  For example, you can use Dash's destructuring by loading the
 library @samp{loopy-dash} (found in the same repo as @samp{loopy}) and passing @samp{dash} as
 a @samp{flag} argument.
+
+Destructuring with @samp{dash} is not used for @code{setf}-able places, where it makes
+less sense to use.
 
 @lisp
 (require 'loopy)
@@ -1115,24 +1200,67 @@ a @samp{flag} argument.
              (collect (whole &as i (j k)) elem)))
 @end lisp
 
-What functions @code{loopy} uses by default can be customized with the user
-options:
-@vindex loopy-default-destructuring-function
-@itemize
-@item
-@code{loopy-default-destructuring-function}
-@end itemize
-@vindex loopy-default-accumulation-parsing-function
-@itemize
-@item
-@code{loopy-default-accumulation-parsing-function}
-@end itemize
 
-To always use Dash (without needing to use a @samp{flag} argument), set these
-options to @code{loopy-dash--create-destructured-assignment} and
+To always use Dash (without needing to use a @samp{flag} argument), set the
+@code{loopy-default-destructuring-function} and
+@code{loopy-default-accumulation-parsing-function} options to
+@code{loopy-dash--create-destructured-assignment} and
 @code{loopy-dash--parse-accumulation-commands}, respectively.
 
 See @ref{-let,Dash's documentation,,dash,} for how it performs destructuring.
+
+@node Splitting Accumulation Results with Implicit Variables
+@section Splitting Accumulation Results with Implicit Variables
+
+@cindex split flag
+By default, each accumulation command with an implied variable (i.e., those
+that do not specify @samp{VAR}) accumulate into the same variable.
+
+@lisp
+;; => (1 2 3 4 5)
+(loopy (loop (list i '(1 2 3 4 5))
+             (if (cl-oddp i)
+                 (collect i)
+               (collect i)))
+       ;; For un-named loops, the variable is `loopy-result'.
+       (finally-return loopy-result))
+@end lisp
+
+By using the @samp{split} flag, @code{loopy} will accumulate into separate variables
+when no @samp{VAR} is given.
+
+@lisp
+;; => ((1 3 5) (2 4))
+(loopy (flag split)
+       (loop (list i '(1 2 3 4 5))
+             (if (cl-oddp i)
+                 (collect i)
+               (collect i))))
+@end lisp
+
+The @samp{split} flag can be more efficient than using destructuring with
+accumulation commands, as it allows lists to be constructed in reverse if
+need be.  This can make a noticeable difference on large lists, but note that
+if you use this feature, you will not be able to access the implicit
+variables with @code{loopy-result}.  They have their own, uniquely generated name
+in each loop.
+
+@lisp
+;; Both of these example give the same result, but the latter
+;; can expand into more efficient code.
+;; There is also the `push-into' commands, avoids this problem.
+
+;; => ((1 4) (2 5) (3 6))
+(loopy (loop (list elem '((1 2 3) (4 5 6)))
+             (collect (i j k) elem)))
+
+;; => ((1 4) (2 5) (3 6))
+(loopy (flag split) ; Don't accumulate into same implicit variable.
+       (loop (list (i j k) '((1 2 3) (4 5 6)))
+             (collect i)
+             (collect j)
+             (collect k)))
+@end lisp
 
 @node Adding Custom Commands
 @chapter Adding Custom Commands

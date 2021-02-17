@@ -484,6 +484,8 @@
                               (loop (seq-ref i my-seq)
                                     (do (setf i 7)))
                               (return my-seq)))))))
+
+;;;; Accumulation Commands
 ;;;;; Order of implicit returns.
 (ert-deftest implicit-collect-order ()
   (should (equal '((2) (1 3))
@@ -492,8 +494,45 @@
                                           (collect evens i)
                                         (collect odds i)))))))))
 
-;;;;; Accumulation Commands
+;;;;; Name of implicit accumulations
+(ert-deftest implicit-accumulation-name ()
+  (should
+   (and (equal '(1 2 3)
+               (eval (quote (loopy ((list i '(1 2 3))
+                                    (collect i))
+                                   (else-do (cl-return loopy-result))))))
+        (equal '(0 1 2 3)
+               (eval (quote (loopy ((list i '(1 2 3))
+                                    (collect i))
+                                   (else-do
+                                    (push 0 loopy-result)
+                                    (cl-return loopy-result))))))
+        (equal '(0 1 2 3)
+               (eval (quote (loopy ((list i '(1 2 3))
+                                    (collect i))
+                                   (finally-do
+                                    (push 0 loopy-result))
+                                   (finally-return loopy-result)))))
+        (equal '(1 2 3)
+               (eval (quote (loopy ((list i '(1 2 3))
+                                    (collect i))
+                                   (return loopy-result)))))
+        (equal '(1 2 3)
+               (eval (quote (loopy my-loop
+                                   ((list i '(1 2 3))
+                                    (collect i))
+                                   (return loopy-my-loop-result))))))))
 
+;;;;; Split flag
+(ert-deftest split-flag ()
+  (should (equal '((1 3) (2))
+                 (eval (quote (loopy (flag split)
+                                     ((list i '(1 2 3))
+                                      (if (cl-oddp i)
+                                          (collect i)
+                                        (collect i)))))))))
+
+;;;;; Append
 (ert-deftest append ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy ((list i '((1 2 3) (4 5 6)))

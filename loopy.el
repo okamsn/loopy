@@ -62,6 +62,34 @@ This is like `loopy-default-destructuring-function', but
 accumulation commands use their own kind of destructuring."
   :type 'function)
 
+(defcustom loopy-split-implied-accumulation-results nil
+  "Whether `loopy' should split implied accumulations into seprate variables.
+
+The default behavior is that accumulation command with implied
+variables (such as `(collect my-value)') as accumulate into the
+same value, by default named `loopy-result'.
+
+If you want to use destructuring with accumulation commands like
+`collect', `append', or `nconc', it might be faster to enable
+this, either by customizing this variable or using the flag `split'.")
+
+;;;; Flags
+
+(defvar loopy--flags-setup nil
+  "Alist of functions to run on presence of their respective flag.
+
+Each item is of the form (FLAG . FLAG-FUNCTION).")
+
+(defvar loopy--split-implied-accumulation-results-internal nil
+  "Internal variable, see `loopy-split-implied-accumulation-results'.")
+
+(defun loopy--split-flag-setup ()
+  "Set `loopy-split-implied-accumulation-results' to t inside the loop."
+  (setq loopy--split-implied-accumulation-results-internal t))
+
+(add-to-list 'loopy--flags-setup
+             (cons 'split #'loopy--split-flag-setup))
+
 ;;;; Important Variables
 ;; These only set in the `loopy' macro, but that might change in the future.  It
 ;; might be cleaner code to modify from the parsing function, after the macro
@@ -72,14 +100,10 @@ accumulation commands use their own kind of destructuring."
 
 NOTE: This functionality might change in the future.")
 
-(defvar loopy--flags-setup nil
-  "Alist of functions to run on presence of their respective flag.
-
-Each item is of the form (FLAG . FLAG-FUNCTION).")
 
 (defvar loopy--valid-macro-arguments
   '( flag flags with let* without no-init loop before-do before
-     after-do after finally-do finally finally-return return)
+     after-do after else-do else finally-do finally finally-return return)
   "List of valid keywords for `loopy' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -180,7 +204,10 @@ These run in a `progn'.")
   "Whether a skip/continue command is present in the loop main body.")
 
 (defvar loopy--tagbody-exit-used nil
-  "Whether a command uses a tag-body to jump to the end of the `cl-block'.")
+  "Whether a command uses a tag-body to jump to the end of the `cl-block'.
+
+This has the effect of leaving the loop without immediately
+returning a value.")
 
 (defvar loopy--destructuring-function nil
   "The destructuring function to use.
@@ -189,6 +216,32 @@ If nil, `loopy-default-destructuring-function'.")
 (defvar loopy--accumulation-parser nil
   "The accumulation parser to use.
 If nil, `loopy-default-accumulation-parsing-function'.")
+
+(defvar loopy--implicit-accumulation-final-update nil
+  "Actions to perform on the implicit accumulation variable.
+
+So as to avoid conflicts, there can be only one final action.
+This variable is a list of such actions, but only the action at
+the head of the list will be performed.
+
+For example, it is usually more efficient to build a list in
+reverse order, so a final update might be to reverse a backwards
+list so that it is in the correct order.")
+
+(defvar loopy--implicit-accumulation-updated nil
+  "Whether the implicit accumulation commands were finally updated.
+
+If a `cl-tagbody' exit is used (such by a `while' or `until'
+command, which don't return values, just leaving the loop), then
+the `after-do' body is skipped.  This also has the consequence of
+skipping the final update to implicit accumulation variables,
+which needs to run before the `after-do' body so that the
+variable is safe when accessed.
+
+To work around this, the final update before the `after-do' will
+set this variable to t if it has run.  This value will be
+checked after the tag-body exit if `loopy--tagbody-exit-used' is
+t.")
 
 ;;;; Errors
 (define-error 'loopy-error
@@ -815,7 +868,17 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
 For better efficiency, accumulation commands with implicit variables can
 have different behavior than their explicit counterparts."
 
-  (let ((value-holder (gensym (concat (symbol-name name) "-implicit-"))))
+  (let* ((splitting-implicit-vars
+          (or loopy-split-implied-accumulation-results
+              loopy--split-implied-accumulation-results-internal))
+         (value-holder (if splitting-implicit-vars
+                           (gensym (concat (symbol-name name) "-implicit-"))
+                         ;; Note: This must be `intern', not `make-symbol', as
+                         ;;       the user can refer to it later.
+                         (intern (if loopy--loop-name
+                                     (concat "loopy-" (symbol-name loopy--loop-name)
+                                             "-result")
+                                   "loopy-result")))))
     `((loopy--implicit-vars . (,value-holder ,(cl-case name
                                                 ((sum count)    0)
                                                 ((max maximize) -1.0e+INF)
@@ -830,11 +893,21 @@ have different behavior than their explicit counterparts."
            `((loopy--main-body
               . (setq ,value-holder (nconc (reverse ,value-expression)
                                            ,value-holder)))
-             (loopy--implicit-return . (nreverse ,value-holder))))
+             ,@(if splitting-implicit-vars
+                   (list `(loopy--implicit-return . (nreverse ,value-holder)))
+                 (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (nreverse ,value-holder)))
+                  `(loopy--implicit-return . ,value-holder)))))
           (collect
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
-             (loopy--implicit-return . (nreverse ,value-holder))))
+             ,@(if splitting-implicit-vars
+                   (list `(loopy--implicit-return . (nreverse ,value-holder)))
+                 (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (nreverse ,value-holder)))
+                  `(loopy--implicit-return . ,value-holder)))))
           (concat
            `((loopy--main-body
               . (setq ,value-holder (concat ,value-holder ,value-expression)))
@@ -858,7 +931,12 @@ have different behavior than their explicit counterparts."
           (nconc
            `((loopy--main-body
               . (setq ,value-holder (nconc (nreverse ,value-expression) ,value-holder)))
-             (loopy--implicit-return . (nreverse ,value-holder))))
+             ,@(if splitting-implicit-vars
+                   (list `(loopy--implicit-return . (nreverse ,value-holder)))
+                 (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (nreverse ,value-holder)))
+                  `(loopy--implicit-return . ,value-holder)))))
           ((push-into push)
            `((loopy--main-body . (push ,value-expression ,value-holder))
              (loopy--implicit-return . ,value-holder)))
@@ -1034,7 +1112,9 @@ Returns are always explicit.  See this package's README for more information."
         (loopy--before-do (cdr (or (assq 'before-do body)
                                    (assq 'before body))))
         (loopy--after-do (cdr (or (assq 'after-do body)
-                                  (assq 'after body))))
+                                  (assq 'after body)
+                                  (assq 'else-do body)
+                                  (assq 'else body))))
         (loopy--final-do (cdr (or (assq 'finally-do body)
                                   (assq 'finally body))))
         (loopy--final-return (when-let ((return-val
@@ -1057,7 +1137,11 @@ Returns are always explicit.  See this package's README for more information."
         ;; -- Variables for constructing code --
         (loopy--destructuring-function)
         (loopy--skip-used)
-        (loopy--tagbody-exit-used))
+        (loopy--tagbody-exit-used)
+        (loopy--implicit-accumulation-final-update)
+
+        ;; -- Built-in Flags --
+        (loopy--split-implied-accumulation-results-internal))
 
 ;;;;; Interpreting the macro arguments.
 
@@ -1108,6 +1192,8 @@ Returns are always explicit.  See this package's README for more information."
             (loopy--implicit-return
              (unless (loopy--already-implicit-return (cdr instruction))
                (push (cdr instruction) loopy--implicit-return)))
+            (loopy--implicit-accumulation-final-update
+             (push (cdr instruction) loopy--implicit-accumulation-final-update))
 
             ;; Code for conditionally constructing the loop body.
             (loopy--skip-used
@@ -1134,6 +1220,7 @@ Returns are always explicit.  See this package's README for more information."
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
           loopy--with-vars (nreverse loopy--with-vars)
+          loopy--implicit-vars (nreverse loopy--implicit-vars)
           loopy--implicit-return (when (consp loopy--implicit-return)
                                    (if (= 1 (length loopy--implicit-return))
                                        ;; If implicit return is just a single thing,
@@ -1220,23 +1307,44 @@ Returns are always explicit.  See this package's README for more information."
               ;; Will always be a single expression after wrapping with `while'.
               result-is-one-expression t)
 
+        ;; Make sure that the implicit accumulation variable is correctly
+        ;; updated after the loop, if need be.
+        (when loopy--implicit-accumulation-final-update
+          (setq result
+                (if loopy--tagbody-exit-used
+                    `(,@(get-result)
+                      ,(car loopy--implicit-accumulation-final-update)
+                      (setq loopy--implicit-accumulation-updated t))
+                  `(,@(get-result)
+                    ,(car loopy--implicit-accumulation-final-update)))
+                result-is-one-expression nil))
+
         ;; Now ensure return value is nil and add the code to run before and
         ;; after the `while' loop.
         (cond
          ((and loopy--before-do loopy--after-do)
-          (setq result `(,@loopy--before-do ,result ,@loopy--after-do)
+          (setq result `(,@loopy--before-do ,@(get-result) ,@loopy--after-do)
                 result-is-one-expression nil))
          (loopy--before-do
-          (setq result `(,@loopy--before-do ,result)
+          (setq result `(,@loopy--before-do ,@(get-result))
                 result-is-one-expression nil))
          (loopy--after-do
-          (setq result `(,result ,@loopy--after-do)
+          (setq result `(,@(get-result) ,@loopy--after-do)
                 result-is-one-expression nil)))
 
         (when loopy--tagbody-exit-used
-          (setq result `(cl-tagbody
-                         ,@(get-result)
-                         loopy--non-returning-exit-tag)
+          (setq result (if loopy--implicit-accumulation-final-update
+                           `(cl-tagbody
+                             ,@(get-result)
+                             loopy--non-returning-exit-tag
+                             ;; Even if leave the loop early, make sure the
+                             ;; update is always run.
+                             (if loopy--implicit-accumulation-updated
+                                 nil
+                               ,(car loopy--implicit-accumulation-final-update)))
+                         `(cl-tagbody
+                           ,@(get-result)
+                           loopy--non-returning-exit-tag))
                 result-is-one-expression t))
 
         ;; Always wrap in `cl-block', as any arbitrary Lisp code could call
@@ -1272,12 +1380,28 @@ Returns are always explicit.  See this package's README for more information."
                   result-is-one-expression t)))
 
         ;; Declare the implicit and explicit variables.
+
         ;; Implicit variables must be in a `let*' in case one refers to another,
         ;; like in `seq-ref'.
-        (when loopy--implicit-vars
-          (setq result `(let* ,(nreverse loopy--implicit-vars)
-                          ,@(get-result))
-                result-is-one-expression t))
+        ;;
+        ;; If there are final updates to made and a tag-body exit that can skip
+        ;; them, then we must include `loopy--implicit-accumulation-updated' in
+        ;; the list of implicit variables.
+        (if (and loopy--implicit-accumulation-final-update
+                 loopy--tagbody-exit-used)
+            (if loopy--implicit-vars
+                (setq result
+                      `(let* ,(cons '(loopy--implicit-accumulation-updated nil)
+                                    loopy--implicit-vars)
+                         ,@(get-result))
+                      result-is-one-expression t)
+              (setq result `(let ((loopy--implicit-accumulation-updated nil))
+                              ,@(get-result))
+                    result-is-one-expression t))
+          (when loopy--implicit-vars
+            (setq result `(let* ,loopy--implicit-vars
+                            ,@(get-result))
+                  result-is-one-expression t)))
 
         (when loopy--explicit-vars
           (setq result `(let ,loopy--explicit-vars
@@ -1293,9 +1417,7 @@ Returns are always explicit.  See this package's README for more information."
         (when loopy--explicit-generalized-vars
           (setq result `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
                           ,@(get-result))
-                ;; TODO: Not using this, but maybe later?
-                ;; result-is-one-expression t
-                ))
+                result-is-one-expression t))
 
         ;; Final check: If `result' is not one expression, then wrap `result' in
         ;; a `progn'.  Otherwise, the return value of the first expression would
