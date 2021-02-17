@@ -102,7 +102,8 @@ same value, by default named `loopy-result'.
 
 If you want to use destructuring with accumulation commands like
 `collect', `append', or `nconc', it might be faster to enable
-this, either by customizing this variable or using the flag `split'.")
+this, either by customizing this variable or using the flag `split'."
+  :type 'boolean)
 
 ;;;; Flags
 
