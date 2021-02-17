@@ -61,6 +61,7 @@ features.
 
   - =with= declares variables that are bound in order before and around the
     loop, like in a =let*= binding.
+  - =without= declares variables that ~loopy~ should not try to initialize.
   - =before-do= is a list of normal Lisp expressions to run before the loop
     executes.
   - =loop= is a list of special commands that create the loop body.  These
@@ -71,6 +72,7 @@ features.
     regardless of whether an early return was triggered in the loop body.
   - =finally-return= is an expression whose value is always returned, regardless
     of whether an early return was triggered in the loop body.
+  - =flag= is a list of symbols that change the macro's behavior.
 
   The loop commands generally follow the form =(COMMAND VARIABLE-NAME &rest ARGS)=.
   For example,
