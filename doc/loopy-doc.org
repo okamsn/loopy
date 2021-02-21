@@ -154,9 +154,9 @@ features.
 
   “Loop commands” are the main feature of the =loopy= macro and make up the
   =loop= macro argument, such as =list= in =(list i '(1 2 3))=.  A command
-  inserts code into the loop body, but can also perform additional setup, such
-  as initializing specified or implicit variables.  Many commands set up a
-  condition for ending the loop.  See the section [[#loop-commands][Loop Commands]].
+  inserts code into the loop body, but can also perform additional setup like
+  initializing variables.  Many commands set up a condition for ending the loop.
+  See the section [[#loop-commands][Loop Commands]].
 
   The loop ends when any condition required by a loop command evaluates to
   false.  If no conditions are needed, the loop runs infinitely until a =return=
@@ -1094,15 +1094,14 @@ features.
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
-   variables, such as =g3019= in the below output. Such variables are called
-   “implicit", as opposed to the explicitly named variable =i= in the command.
+   variables, such as =list-3717= in the below output.
 
    #+BEGIN_SRC emacs-lisp
-     ((loopy--implicit-vars g3019 '(1 2 3))
-      (loopy--explicit-vars i nil)
-      (loopy--pre-conditions consp g3019)
-      (loopy--main-body setq i (car g3019))
-      (loopy--latter-body setq g3019 (cdr g3019)))
+     ((loopy--loop-vars list-3717 '(1 2 3))
+      (loopy--latter-body setq list-3717 (cdr list-3717))
+      (loopy--pre-conditions consp list-3717)
+      (loopy--main-body setq i (car list-3717))
+      (loopy--loop-vars i nil))
    #+END_SRC
 
    The ~car~ of an instruction is the place to put code and the ~cdr~ of the
@@ -1111,43 +1110,58 @@ features.
    some instructions insert pairs of names and values into variable lists like
    in ~let~ and ~let*~ .
 
-   | Place                     | Code                         |
-   |---------------------------+------------------------------|
-   | =loopy--implicit-vars=    | =(g3019 '(1 2 3))=           |
-   | =loopy--explicit-vars=    | =(i nil)=                    |
-   | =loopy--pre-conditions=   | =(consp g3019)=              |
-   | =loopy--main-body=        | =(setq i (car g3019))=       |
-   | =loopy--latter-body=      | =(setq g3019 (cdr g3019))=   |
+   | Place                   | Code                               |
+   |-------------------------+------------------------------------|
+   | =loopy--loop-vars=      | =(list-3717 '(1 2 3))=             |
+   | =loopy--latter-body=    | =(setq list-3717 (cdr list-3717))= |
+   | =loopy--pre-conditions= | =(consp list-3717)=                |
+   | =loopy--main-body=      | =(setq i (car list-3717))=         |
+   | =loopy--loop-vars=      | =(i nil)=                          |
 
-   Commands are parsed by =loopy--parse-body-forms=, which receives a list of
+   Commands are parsed by =loopy--parse-loop-commands=, which receives a list of
    commands and returns a list of instructions.  For commands that take
    sub-commands as arguments (such as =cond=, =if=, and =when=), more specific
    parsing functions are called in a mutually recursive fashion (e.g.,
    Function-1 uses Function-2 which uses Function-1, and so on).
 
-   For example, consider the function =loopy--parse-conditional-forms=, which
-   parses the =if=, =when=, and =unless= commands.  It needs to be able to group
-   any code going to the loop body under its respective conditional control
-   structure.  To do this, it uses =loopy--parse-body-forms= to turn its
-   sub-commands into a list of instructions, and then checks the =car= of each
-   instruction.
+   For example, consider the function =loopy--parse-if-command=, which parses
+   the =if= command.  It needs to be able to group any code going to the loop
+   body under an ~if~-form.  To do this, it uses =loopy--parse-loop-command= to
+   turn its sub-commands into a list of instructions, and then checks the =car=
+   of each instruction to whether the code should be inserted into the loop's
+   main body (and so whether it should be wrapped in the ~if~-form).
 
    #+BEGIN_SRC emacs-lisp
-     (defun loopy--parse-conditional-forms (wrapper condition forms &optional loop-name)
-       "Parse FORMS, wrapping `loopy--main-body' expressions in a conditional form.
-     The instructions (e.g., return expressions) are wrapped with a
-     WRAPPER with CONDITION.  Optionally needs LOOP-NAME for block
-     returns."
-       (let ((full-instructions)
-             (sub-instructions (loopy--parse-body-forms forms loop-name))
-             (conditional-body))
-         (dolist (instruction sub-instructions)
-           (cl-case (car instruction)
-             (loopy--main-body (push (cdr instruction) conditional-body))
-             (t                (push instruction full-instructions))))
-         (push `(loopy--main-body . (,wrapper ,condition ,@conditional-body))
-               full-instructions)
-         full-instructions))
+     (cl-defun loopy--parse-if-command
+         ((_ condition &optional if-true &rest if-false))
+       "Parse the `if' loop command.  This takes the entire command.
+
+     - CONDITION is a Lisp expression.
+     - IF-TRUE is the first sub-command of the `if' command.
+     - IF-FALSE are all the other sub-commands."
+       (let (full-instructions
+             if-true-main-body
+             if-false-main-body)
+         (dolist (instruction (loopy--parse-loop-command if-true))
+           (if (eq 'loopy--main-body (car instruction))
+               (push (cdr instruction) if-true-main-body)
+             (push instruction full-instructions)))
+         (dolist (instruction (loopy--parse-loop-commands if-false))
+           (if (eq 'loopy--main-body (car instruction))
+               (push (cdr instruction) if-false-main-body)
+             (push instruction full-instructions)))
+         ;; Push the actual main-body instruction.
+         (setq if-true-main-body
+               (if (= 1 (length if-true-main-body))
+                   (car if-true-main-body)
+                 (cons 'progn (nreverse if-true-main-body))))
+
+         ;; Return the list of instructions.
+         (cons `(loopy--main-body
+                 . (if ,condition
+                       ,if-true-main-body
+                     ,@(nreverse if-false-main-body)))
+               (nreverse full-instructions))))
    #+END_SRC
 
    The hardest part of this exchange is making sure the inserted code ends up in
@@ -1155,8 +1169,8 @@ features.
 
    A loop body command has 7 main places to put code:
 
-   #+vindex: loopy--explicit-generalized-vars
-   - =loopy--explicit-generalized-vars= :: Lists of a symbol and a macro
+   #+vindex: loopy--generalized-vars
+   - =loopy--generalized-vars= :: Lists of a symbol and a macro
      expansion that will be given to =cl-symbol-macrolet=.  This is used to
      create named ~setf~-able places.  The expansion you use depends on the kind
      of sequence and how the it is updated.
@@ -1166,15 +1180,11 @@ features.
      =my-list=.  At the end of the loop body, =TEMP-VAR= is set to its =cdr=,
      ensuring that the next call to =car= returns the correct value.
 
-   #+vindex: loopy--implicit-vars
-   - =loopy--implicit-vars= :: Lists of a symbol and an expression that will be
-     given to =let=.  This is used for creating variables that are not named but
-     must exist, such as for holding ='(1 2 3)= in =(list i '(1 2 3))=.
-
-   #+vindex: loopy--explicit-vars
-   - =loopy--explicit-vars= :: Lists of a symbol and an expression that will be
-     given to =let=.  This is needed to ensure that variables explicitly named
-     in commands are locally scoped, such as the =i= in =(list i '(1 2 3))=.
+   #+vindex: loopy--loop-vars
+   - =loopy--loop-vars= :: Lists of a symbol and an expression that will be
+     given to ~let*~.  This is used for initializing variables needed for loop
+     commands, such as the =i= in =(list i '(1 2 3))= or to store the list
+     ='(1 2 3)= in =(list i '(1 2 3))=.
 
    #+vindex: loopy--pre-conditions
    - =loopy--pre-conditions= :: Expressions that determine if the =while=
@@ -1188,7 +1198,7 @@ features.
 
    #+vindex: loopy--latter-body
    - =loopy--latter-body= :: Expressions that need to be run after the main
-     body, such as updating implicit variables.
+     body, such as updating some of variables that determine when a loop ends.
 
    #+vindex: loopy--post-conditions
    - =loopy--post-conditions= :: Expressions that determine whether the
@@ -1196,14 +1206,10 @@ features.
      code from this is ultimately appended to the latter body before being
      substituted in.
 
-   There are 5 more variables a loop command can push to, but they are derived
+   There are 4 more variables a loop command can push to, but they are derived
    from the macro's arguments.  Adding to them after using a macro argument
    might lead to unintended behavior.  You might wish to use them if, for
    example, you are concerned with what happens after the loop exits/completes.
-
-   #+vindex: loopy--with-vars
-   - =loopy--with-vars= :: Lists of a symbol and an expression that will be
-     given to =let*=.  These are derived from the =with= macro argument.
 
    #+vindex: loopy--before-do
    - =loopy--before-do= :: Expressions to evaluate before the loop.  These are
@@ -1228,7 +1234,7 @@ features.
    will work similar to the below example.
 
    #+BEGIN_SRC emacs-lisp
-     `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
+     `(cl-symbol-macrolet ,loopy--generalized-vars
         (let* ,loopy--with-vars
           (let ,(append loopy--implicit-vars loopy--explicit-vars)
             (let ((loopy--early-return-capture

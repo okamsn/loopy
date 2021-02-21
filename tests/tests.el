@@ -16,6 +16,13 @@
                                        (b (+ a 2)))
                                  ((return b))))))))
 
+(ert-deftest with-destructuring ()
+  (should (= -2
+             (eval (quote (loopy (with ((a b) '(1 2))
+                                       ([c d] `[,(1+ a) ,(1+ b)]))
+                                 (loop (return (+ (- a b)
+                                                  (- c d))))))))))
+
 ;;;; Without
 (ert-deftest without ()
   (should (equal '(4 5)
@@ -910,7 +917,7 @@ Not multiple of 3: 7")))
 (ert-deftest custom-command-sum ()
   (cl-defun my-loopy-sum-command ((_ target &rest items))
     "Set TARGET to the sum of ITEMS."
-    `((loopy--explicit-vars . (,target nil))
+    `((loopy--loop-vars . (,target nil))
       (loopy--main-body . (setq ,target (apply #'+ (list ,@items))))))
   (setq-local loopy-custom-command-parsers
               (list (cons 'target-sum #'my-loopy-sum-command)))

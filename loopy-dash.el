@@ -40,27 +40,30 @@
 ;;; Code:
 (require 'dash)
 
-(defvar loopy--destructuring-function)
-(defvar loopy--accumulation-parser)
+(defvar loopy--basic-destructuring-function)
+(defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--flags-setup nil)
 
 ;;;###autoload
 (defun loopy-dash--flag-setup ()
   "Make this `loopy' loop use Dash destructuring."
   (setq
-   loopy--destructuring-function #'loopy-dash--create-destructured-assignment
-   loopy--accumulation-parser #'loopy-dash--parse-accumulation-commands))
+   loopy--basic-destructuring-function
+   #'loopy-dash--destructure-variables
+   loopy--destructuring-accumulation-parser
+   #'loopy-dash--parse-destructuring-accumulation-command))
 
 (add-to-list 'loopy--flags-setup (cons 'dash #'loopy-dash--flag-setup))
 
 ;;;; The actual functions:
-(defun loopy-dash--create-destructured-assignment
+(defun loopy-dash--destructure-variables
     (var value-expression)
-  "Create a list of instructions for using Dash's destructuring in `loopy'."
-  (let ((destructurings (dash--match var value-expression)))
-    `(,@(--map `(loopy--explicit-vars . (,(car it) nil))
-               destructurings)
-      (loopy--main-body . (setq ,@(-flatten-n 1 destructurings))))))
+  "Destructure VALUE-EXPRESSION into VAR using `dash'.
+
+Return a list of variable-value pairs (not dotted), suitable for
+substituting into a `let*' form or being combined under a
+`setq' form."
+  (dash--match var value-expression))
 
 (defvar loopy-dash--accumulation-destructured-symbols nil
   "The names of copies of variable names that Dash will destructure.
@@ -104,7 +107,7 @@ For accumulation, we don't want Dash to assign to the named
     (array
      (cl-map 'vector #'loopy-dash--transform-var-list var-list))))
 
-(cl-defun loopy-dash--parse-accumulation-commands ((name var val))
+(cl-defun loopy-dash--parse-destructuring-accumulation-command ((name var val))
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
 NAME is the name of the command.  VAR-OR-VAL is a variable name
@@ -119,14 +122,14 @@ should only be used if VAR-OR-VAL is a variable."
           (reverse loopy-dash--accumulation-destructured-symbols))
 
     `(;; Declare what Dash will assign to as implicit.
-      ,@(--map `(loopy--implicit-vars . (,(car it) nil))
+      ,@(--map `(loopy--loop-vars . (,(car it) nil))
                destructurings)
       ;; Declare as explicit what the user actually named.
-      ,@(--map `(loopy--explicit-vars . (,(car it) ,(cl-case name
-                                                      ((sum count)    0)
-                                                      ((max maximize) -1.0e+INF)
-                                                      ((min minimize) +1.0e+INF)
-                                                      (t nil))))
+      ,@(--map `(loopy--loop-vars . (,(car it) ,(cl-case name
+                                                  ((sum count)    0)
+                                                  ((max maximize) -1.0e+INF)
+                                                  ((min minimize) +1.0e+INF)
+                                                  (t nil))))
                ;; Alist of (old-name . new-name)
                loopy-dash--accumulation-destructured-symbols)
       ;; Declare the explicitly given variables as implicit returns.

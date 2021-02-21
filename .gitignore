@@ -1,1 +1,4 @@
+# Ignore byte-compiled files:
 *.elc
+# Ignore auto-saves:
+\#*#
