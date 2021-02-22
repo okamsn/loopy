@@ -319,9 +319,11 @@ Accumulation commands can operate on the same variable, and we
 Return a list of variable-value pairs (not dotted), suitable for
 substituting into a `let*' form or being combined under a
 `setq' form."
-  (funcall (or loopy--basic-destructuring-function
-               loopy-default-destructuring-function)
-           var value-expression))
+  (if (symbolp var)
+      `((,var ,value-expression))
+    (funcall (or loopy--basic-destructuring-function
+                 loopy-default-destructuring-function)
+             var value-expression)))
 
 (defun loopy--destructure-variables-default (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR.
