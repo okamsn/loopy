@@ -11,10 +11,14 @@
 ;;; Macro arguments
 ;;;; With
 (ert-deftest with-arg-order ()
-  (should (= 4
-             (eval (quote (loopy (with (a 2)
-                                       (b (+ a 2)))
-                                 ((return b))))))))
+  (should (and (= 4
+                  (eval (quote (loopy (with (a 2)
+                                            (b (+ a 2)))
+                                      ((return b))))))
+               (= 4
+                  (eval (quote (loopy (let* (a 2)
+                                        (b (+ a 2)))
+                                      ((return b)))))))))
 
 (ert-deftest with-destructuring ()
   (should (= -2
@@ -25,13 +29,20 @@
 
 ;;;; Without
 (ert-deftest without ()
-  (should (equal '(4 5)
-                 (let ((a 1) (b 2))
-                   (eval (quote (loopy (with (c 3))
-                                       (without a b)
-                                       (loop (expr a (+ a c))
-                                             (expr b (+ b c))
-                                             (return a b)))))))))
+  (should (and (equal '(4 5)
+                      (let ((a 1) (b 2))
+                        (eval (quote (loopy (with (c 3))
+                                            (without a b)
+                                            (loop (expr a (+ a c))
+                                                  (expr b (+ b c))
+                                                  (return a b)))))))
+               (equal '(4 5)
+                      (let ((a 1) (b 2))
+                        (eval (quote (loopy (with (c 3))
+                                            (no-init a b)
+                                            (loop (expr a (+ a c))
+                                                  (expr b (+ b c))
+                                                  (return a b))))))))))
 
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
@@ -63,6 +74,21 @@
                                            (loop (list i '(1 2 3 4))
                                                  (return nil))
                                            (after-do (setq my-ret t))
+                                           (finally-return my-ret)))))
+               (eq nil (eval (quote (loopy (with (my-ret nil))
+                                           (loop (list i '(1 2 3 4))
+                                                 (return nil))
+                                           (after (setq my-ret t))
+                                           (finally-return my-ret)))))
+               (eq nil (eval (quote (loopy (with (my-ret nil))
+                                           (loop (list i '(1 2 3 4))
+                                                 (return nil))
+                                           (else-do (setq my-ret t))
+                                           (finally-return my-ret)))))
+               (eq nil (eval (quote (loopy (with (my-ret nil))
+                                           (loop (list i '(1 2 3 4))
+                                                 (return nil))
+                                           (else (setq my-ret t))
                                            (finally-return my-ret))))))))
 
 ;;;; Before and After
@@ -75,11 +101,16 @@
 
 ;;;; Final Instructions
 (ert-deftest finally-do ()
-  (should (= 10
-             (let (my-var)
-               (eval (quote (loopy ((list i (number-sequence 1 10)))
-                                   (finally-do (setq my-var i)))))
-               my-var))))
+  (should (and (= 10
+                  (let (my-var)
+                    (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                        (finally-do (setq my-var i)))))
+                    my-var))
+               (= 10
+                  (let (my-var)
+                    (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                        (finally (setq my-var i)))))
+                    my-var)))))
 
 (ert-deftest finally-do-not-affect-return ()
   (should (eq nil
@@ -87,14 +118,20 @@
                                   (finally-do 3)))))))
 
 (ert-deftest finally-return-single-value ()
-  (should (= 10
-             (eval (quote (loopy ((list i (number-sequence 1 10)))
-                                 (finally-return i)))))))
+  (should (and (= 10
+                  (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                      (finally-return i)))))
+               (= 10
+                  (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                      (return i))))))))
 
 (ert-deftest finally-return-list-of-values ()
-  (should (equal '(10 7)
-                 (eval (quote (loopy ((list i (number-sequence 1 10)))
-                                     (finally-return i 7)))))))
+  (should (and (equal '(10 7)
+                      (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                          (finally-return i 7)))))
+               (equal '(10 7)
+                      (eval (quote (loopy ((list i (number-sequence 1 10)))
+                                          (return i 7))))))))
 
 ;;;; Changing the order of macro arguments.
 (ert-deftest change-order-of-commands ()
