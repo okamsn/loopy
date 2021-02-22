@@ -135,8 +135,9 @@ NOTE: This functionality might change in the future.")
 
 
 (defvar loopy--valid-macro-arguments
-  '( flag flags with let* without no-init loop before-do before
-     after-do after else-do else finally-do finally finally-return return)
+  '( flag flags with let* without no-init loop before-do before initially-do
+     initially after-do after else-do else finally-do finally finally-return
+     return)
   "List of valid keywords for `loopy' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -488,7 +489,9 @@ see the Info node `(loopy)' distributed with this package."
         (loopy--without-vars (cdr (or (assq 'without body)
                                       (assq 'no-init body))))
         (loopy--before-do (cdr (or (assq 'before-do body)
-                                   (assq 'before body))))
+                                   (assq 'before body)
+                                   (assq 'initially body)
+                                   (assq 'initially-do body))))
         (loopy--after-do (cdr (or (assq 'after-do body)
                                   (assq 'after body)
                                   (assq 'else-do body)

@@ -36,10 +36,22 @@
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
 (ert-deftest basic-before-do ()
-  (should (= 4
-             (eval (quote (loopy (with (i 3))
-                                 (before-do (setq i (1+ i)))
-                                 (loop (return i))))))))
+  (should (and (= 4
+                  (eval (quote (loopy (with (i 3))
+                                      (before-do (setq i (1+ i)))
+                                      (loop (return i))))))
+               (= 4
+                  (eval (quote (loopy (with (i 3))
+                                      (before (setq i (1+ i)))
+                                      (loop (return i))))))
+               (= 4
+                  (eval (quote (loopy (with (i 3))
+                                      (initially-do (setq i (1+ i)))
+                                      (loop (return i))))))
+               (= 4
+                  (eval (quote (loopy (with (i 3))
+                                      (initially (setq i (1+ i)))
+                                      (loop (return i)))))))))
 
 ;;;; After Do - runs after loop is loop completed successfully
 (ert-deftest basic-after-do ()
