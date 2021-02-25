@@ -2,5 +2,5 @@
 *.elc
 # Ignore auto-saves:
 \#*#
-# Something about Flycheck or Flymake?
+# Ignore lock files:
 .#*
