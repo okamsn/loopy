@@ -48,14 +48,13 @@
 (require 'seq)
 (require 'subr-x)
 
+;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
-(defvar loopy-default-accumulation-parsing-function)
-(defvar loopy-split-implied-accumulation-results)
-(defvar loopy--split-implied-accumulation-results-internal)
-(defvar loopy--loop-name)
-(defvar loopy-default-destructuring-function)
+(defvar loopy--split-implied-accumulation-results)
 (defvar loopy--basic-destructuring-function)
 
+;;;; Variables from macro arguments
+(defvar loopy--loop-name)
 
 ;;;; Custom Commands and Parsing
 (defgroup loopy nil
@@ -435,7 +434,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
                                (sum `(setq ,var (+ ,val ,var))))))))
    (t
     (funcall (or loopy--destructuring-accumulation-parser
-                 loopy-default-accumulation-parsing-function)
+                 #'loopy--parse-destructuring-accumulation-command)
              accumulation-command))))
 
 
@@ -448,15 +447,13 @@ have different behavior than their explicit counterparts.
 NAME is the command name.  VALUE-EXPRESSION is an expression
 whose value is to be accumulated."
 
-  (let* ((splitting-implicit-vars
-          (or loopy-split-implied-accumulation-results
-              loopy--split-implied-accumulation-results-internal))
-         (value-holder (if splitting-implicit-vars
+  (let* ((value-holder (if loopy--split-implied-accumulation-results
                            (gensym (concat (symbol-name name) "-implicit-"))
                          ;; Note: This must be `intern', not `make-symbol', as
                          ;;       the user can refer to it later.
                          (intern (if loopy--loop-name
-                                     (concat "loopy-" (symbol-name loopy--loop-name)
+                                     (concat "loopy-"
+                                             (symbol-name loopy--loop-name)
                                              "-result")
                                    "loopy-result")))))
     `((loopy--loop-vars . (,value-holder ,(cl-case name
@@ -473,7 +470,7 @@ whose value is to be accumulated."
            `((loopy--main-body
               . (setq ,value-holder (nconc (reverse ,value-expression)
                                            ,value-holder)))
-             ,@(if splitting-implicit-vars
+             ,@(if loopy--split-implied-accumulation-results
                    (list `(loopy--implicit-return . (nreverse ,value-holder)))
                  (list
                   `(loopy--implicit-accumulation-final-update
@@ -482,7 +479,7 @@ whose value is to be accumulated."
           (collect
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
-             ,@(if splitting-implicit-vars
+             ,@(if loopy--split-implied-accumulation-results
                    (list `(loopy--implicit-return . (nreverse ,value-holder)))
                  (list
                   `(loopy--implicit-accumulation-final-update
@@ -511,7 +508,7 @@ whose value is to be accumulated."
           (nconc
            `((loopy--main-body
               . (setq ,value-holder (nconc (nreverse ,value-expression) ,value-holder)))
-             ,@(if splitting-implicit-vars
+             ,@(if loopy--split-implied-accumulation-results
                    (list `(loopy--implicit-return . (nreverse ,value-holder)))
                  (list
                   `(loopy--implicit-accumulation-final-update
@@ -661,7 +658,7 @@ destructuring into them in the loop body."
     ((name var val))
   "Return instructions for destructuring accumulation commands.
 
-Unlike `loopy--destructure-for-iteration-command', this function
+Unlike `loopy--destructure-variables-default', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."

@@ -35,9 +35,7 @@ features.
       - [[#conditionals][Conditionals]]
       - [[#skipping-an-iteration][Skipping an Iteration]]
       - [[#exiting-the-loop-early][Exiting the Loop Early]]
-- [[#extensions-customization-and-flags][Extensions, Customization, and Flags]]
-  - [[#destructuring-with-dash][Destructuring with =dash=]]
-  - [[#splitting-accumulation-results-with-implicit-variables][Splitting Accumulation Results with Implicit Variables]]
+- [[#changing-the-macros-behavior-with-flags][Changing the Macro's Behavior with Flags]]
 - [[#adding-custom-commands][Adding Custom Commands]]
   - [[#background-information][Background Information]]
   - [[#a-small-example][A Small Example]]
@@ -971,101 +969,104 @@ features.
                                (return-from outer-loop 'bad-val?)))))))
        #+END_SRC
 
-* Extensions, Customization, and Flags
+* Changing the Macro's Behavior with Flags
 
-  ~loopy~ has several options for customizing behavior:
-   #+vindex: loopy-default-destructuring-function
-   - ~loopy-default-destructuring-function~ :: The function that is used
-     for destructuring in iteration commands like =list= or =array=.
-   #+vindex: loopy-default-accumulation-parsing-function
-   - ~loopy-default-accumulation-parsing-function~ :: The function that is user
-     for destructuring in accumulation commands like =collect= or =sum=.
-   #+vindex: loopy-split-implied-accumulation-results
-   - ~loopy-split-implied-accumulation-results~ :: Whether accumulation commands
-     with an implied variable (e.g., =(collect my-value)=) should accumulate
-     into the same variable (by default, named ~loopy-result~) or into separate
-     values.
+  #+cindex: flag
+  A "flag" is a symbol passed to the =flag= or =flags= macro argument, and
+  changes the macro's behavior.  Currently, flags affect what ~loopy~ uses to
+  perform destructuring (~pcase-let~, ~seq-let~, =dash=, or the default method)
+  and whether accumulation commands that don't specify a variable (such as
+  =(collect collect-value)=) accumulate into one or several variables.
 
-   #+cindex: flag
-   A "flag" is an unquoted symbol passed to the =flag= macro argument, which
-   will change the behavior of ~loopy~ similar to the above user options.  For
-   example, the =split= flag will cause a particular loop to behave as if
-   ~loopy-split-implied-accumulation-results~ was non-nil.
+  Flags are applied in order, so if you specify =(flags seq pcase)= ~loopy~ will
+  use ~pcase-let~ for destructuring, not ~seq-let~.
 
-** Destructuring with =dash=
+  #+vindex: loopy-default-flags
+  If you wish to always use a flag, you can add that flag to the list
+  ~loopy-default-flags~.  These can be overridden by any flag given in the
+  =flag= macro argument.
 
-   #+cindex: loopy-dash
-   #+cindex: dash flag
-   If requested, ~loopy~ can use other kinds of destructuring instead of its
-   default method.  For example, you can use Dash's destructuring by loading the
-   library =loopy-dash= (found in the same repo as =loopy=) and passing =dash= as
-   a =flag= argument.
+  The following flags are currently supported:
 
-   Destructuring with =dash= is not used for ~setf~-able places, where it makes
-   less sense to use.
-
-   #+begin_src emacs-lisp
-     (require 'loopy)
-     ;; Load after `loopy':
-     (require 'loopy-dash)
-
-     ;; => (((1 (2 3)) (4 (5 6))) ; whole
-     ;;     (1 4)                 ; i
-     ;;     (2 5)                 ; j
-     ;;     (3 6))                ; k
-     (loopy (flag dash)
-            (loop (list elem '((1 (2 3)) (4 (5 6))))
-                  (collect (whole &as i (j k)) elem)))
-   #+end_src
+  #+cindex: pcase flag
+  - =pcase= :: Use ~pcase-let~ for destructuring.  See the [[info:elisp#Destructuring with pcase Patterns][~pcase~ documentation]].
+  #+cindex: seq flag
+  - =seq= :: Use ~seq-let~ for destructuring.  See the documentation for [[info:elisp#Sequence Functions][~seq-let~]].
+  #+cindex: dash flag
+  - =dash= :: Use the style of destructuring found in the =dash= library, as if
+    via [[info:dash#-let][~-let~]].
+  #+cindex: split flag
+  - =split= :: Make accumulation commands with implicit variables accumulate into
+    separate variables instead of into ~loopy-result~.
+  #+cindex: default flag
+  - =default= :: Use the default behavior for all options.
 
 
-   To always use Dash (without needing to use a =flag= argument), set the
-   ~loopy-default-destructuring-function~ and
-   ~loopy-default-accumulation-parsing-function~ options to
-   ~loopy-dash--create-destructured-assignment~ and
-   ~loopy-dash--parse-accumulation-commands~, respectively.
+  For convenience, all flags (except =default=) can be undone by prefixing them
+  with =-= (a dash or minus sign), which reverts ~loopy~ to its default
+  behavior.
 
-   See [[info:dash#-let][Dash's documentation]] for how it performs destructuring.
+  For example, if you have set ~loopy-default-flags~ to =(dash split)= and wish
+  to only use the =split= flag for a loop, you can use either =(flags default
+  split)= or, more simply, =(flag -dash)=.  These prefixed flags only apply when
+  the unprefixed version is active.  That is, =(flags pcase -dash)= is the same
+  as just =(flags pcase)=, regardless of the value of ~loopy-default-flags~, as
+  =pcase= destructuring will override all uses of =dash= destructuring as it
+  comes later in the list.  Similarly, =(flags -dash dash)= and =(flags -dash
+  +dash)= leave =dash= destructuring enabled, and =(flags +dash -dash)= disables
+  =dash= destructuring and uses the default behavior.
 
-** Splitting Accumulation Results with Implicit Variables
+  #+cindex: loopy-dash
+  #+cindex: loopy-pcase
+  #+cindex: loopy-seq
+  The destructuring flags (=pcase=, =seq=, and =dash=) are separate libraries
+  (respectively, =loopy-pcase=, =loopy-seq=, and =loopy-dash=) that must be
+  loaded after =loopy=.  Currently, =loopy-dash= is a separate package.
 
-   #+cindex: split flag
-   By default, each accumulation command with an implied variable (i.e., those
-   that do not specify =VAR=) accumulate into the same variable.
+  Below are some example of using the destructuring flags.  These flags do not
+  affect the destructuring of commands using generalized variables (i.e.,
+  ~setf~-able places).
 
-   #+begin_src emacs-lisp
-     ;; => (1 2 3 4 5)
-     (loopy (loop (list i '(1 2 3 4 5))
-                  (if (cl-oddp i)
-                      (collect i)
-                    (collect i)))
-            ;; For un-named loops, the variable is `loopy-result'.
-            (finally-return loopy-result))
-   #+end_src
+  #+begin_src emacs-lisp
+    ;; => (((1 (2 3)) (4 (5 6))) ; whole
+    ;;     (1 4)                 ; i
+    ;;     (2 5)                 ; j
+    ;;     (3 6))                ; k
+    (require 'loopy-dash)
+    (loopy (flag dash)
+           (loop (list elem '((1 (2 3)) (4 (5 6))))
+                 (collect (whole &as i (j k)) elem)))
 
-   By using the =split= flag, ~loopy~ will accumulate into separate variables
-   when no =VAR= is given.
+    ;; => ((1 4) (3 6))
+    (require 'loopy-pcase)
+    (loopy (flag pcase)
+           (loop (list elem '((1 (2 3)) (4 (5 6))))
+                 (collect `(,a (,_ ,b)) elem)))
 
-   #+begin_src emacs-lisp
-     ;; => ((1 3 5) (2 4))
-     (loopy (flag split)
-            (loop (list i '(1 2 3 4 5))
-                  (if (cl-oddp i)
-                      (collect i)
-                    (collect i))))
-   #+end_src
+    ;; => ((1 6) (3 8) ([4 5] [9 10]))
+    (require 'loopy-seq)
+    (loopy (flag seq)
+           (loop (list elem '([1 2 3 4 5] [6 7 8 9 10]))
+                 (collect [a _ b &rest c] elem)))
+  #+end_src
 
-   The =split= flag can be more efficient than using destructuring with
-   accumulation commands, as it allows lists to be constructed in reverse if
-   need be.  This can make a noticeable difference on large lists, but note that
-   if you use this feature, you will not be able to access the implicit
-   variables with ~loopy-result~.  They have their own, uniquely generated name
-   in each loop.
+  The =split= flag can be more efficient than using destructuring with
+  accumulation commands.  Some accumulation commands can have more efficient
+  behavior when using implicit accumulation variables, since the variables can't
+  be accessed until the loop ends.  Using the =split= flag allows you to do this
+  easily for multiple variables.
+
+  This can make a noticeable difference on large lists, but note that if you use
+  this feature, you will not be able to access the implicit return values with
+  loopy-result.  They will each have their own, uniquely generated name in
+  each loop.
 
    #+begin_src emacs-lisp
      ;; Both of these example give the same result, but the latter
      ;; can expand into more efficient code.
-     ;; There is also the `push-into' commands, avoids this problem.
+     ;;
+     ;; There is also the `push-into' command, which avoids this problem when
+     ;; used with `nreverse'.
 
      ;; => ((1 4) (2 5) (3 6))
      (loopy (loop (list elem '((1 2 3) (4 5 6)))
@@ -1078,6 +1079,27 @@ features.
                   (collect j)
                   (collect k)))
    #+end_src
+
+   Below is an example of the split flag.
+
+   #+begin_src emacs-lisp
+     ;; => (1 2 3 4 5)
+     (loopy (flag -split)
+            (loop (list i '(1 2 3 4 5))
+                  (if (cl-oddp i)
+                      (collect i)
+                    (collect i)))
+            ;; For un-named loops, the variable is `loopy-result'.
+            (finally-return loopy-result))
+
+     ;; => ((1 3 5) (2 4))
+     (loopy (flag split)
+            (loop (list i '(1 2 3 4 5))
+                  (if (cl-oddp i)
+                      (collect i)
+                    (collect i))))
+   #+end_src
+
 
 * Adding Custom Commands
   :PROPERTIES:

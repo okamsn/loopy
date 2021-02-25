@@ -71,3 +71,32 @@
                                           ((list j '([1 2 3] [4 5 6]))
                                            (collect [coll1 coll2 coll3] j))
                                           (return coll1 coll2 coll3))))))))
+
+(ert-deftest seq-collect-implicit ()
+  (should
+   (equal '((1 4) (3 6))
+          (eval (quote (loopy (flag seq)
+                              (loop (list elem '((1 (2 3)) (4 (5 6))))
+                                    (collect (a (_ b)) elem))))))))
+
+(ert-deftest seq-flag-default ()
+  (should (equal '(5 6)
+                 (let ((loopy-default-flags '(seq)))
+                   (eval (quote (loopy ((list (a &rest b)
+                                              '((1 . 2) (3 . 4) (5 . 6))))
+                                       (finally-return a b))))))))
+
+(ert-deftest seq-flag-default-disable ()
+  (should (equal '(5 6)
+                 (let ((loopy-default-flags '(seq)))
+                   (eval (quote (loopy (flag -seq)
+                                       ((list (a . b)
+                                              '((1 . 2) (3 . 4) (5 . 6))))
+                                       (finally-return a b))))))))
+
+(ert-deftest seq-flag-enable-disable ()
+  (should (equal '(5 6)
+                 (eval (quote (loopy (flag seq -seq)
+                                     ((list (a . b)
+                                            '((1 . 2) (3 . 4) (5 . 6))))
+                                     (finally-return a b)))))))

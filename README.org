@@ -30,7 +30,8 @@ please let me know.
 * Table of Contents                                                :TOC:noexport:
 - [[#introduction][Introduction]]
 - [[#similar-libraries][Similar Libraries]]
-- [[#destructuring-with-dash][Destructuring with Dash]]
+- [[#how-to-install][How to Install]]
+- [[#multiple-kinds-of-destructuring][Multiple Kinds of Destructuring]]
 - [[#adding-custom-commands][Adding Custom Commands]]
 - [[#comparing-to-cl-loop][Comparing to =cl-loop=]]
 - [[#real-world-examples][Real-World Examples]]
@@ -234,7 +235,7 @@ please let me know.
   problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
   full feature parity with =cl-loop= is still being worked on.
 
-* How to Install                                                   :noexport:
+* How to Install
   Currently, Loopy must be installed manually.  Here is how one could use
   ~straight.el~ with ~use-package~
 
@@ -251,33 +252,47 @@ please let me know.
                             :files ("loopy-dash.el")))
   #+end_src
 
-* Destructuring with Dash
+* Multiple Kinds of Destructuring
 
-  Using =(flag dash)= in ~loopy~ will cause ~loopy~ to use =dash= for
-  destructuring.  This applies for normal variables and accumulation, but not
-  for ~setf~-able places.
+  ~loopy~ can optionally use destructuring provided by ~pcase-let~, ~seq-let~,
+  the =dash= library, as well as its own kind.  This provides greater
+  flexibility and allows you to use destructuring patterns that you're already
+  familiar with.
 
-  To enable this, load the file =loopy-dash.el= (found in the same repo as
-  =loopy=), such as with
+  These features can be enabled with "flags", described in the section
+  [[file:doc/loopy-doc.org::*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]] in the documentation.
 
-  #+begin_src emacs-lisp
-    (use-package loopy-dash
-      :after (loopy)
-      :straight (loopy-dash :type git :host github :repo "okamsn/loopy"))
-  #+end_src
+  Here are a few examples that demonstrate how ~loopy~ can use destructuring
+  with accumulation commands.
 
   #+begin_src emacs-lisp
+    (require 'loopy-dash)
     ;; => (((1 (2 3)) (4 (5 6))) ; whole
     ;;     (1 4)                 ; i
-    ;;     (2 5)                 ; j
     ;;     (3 6))                ; k
     (loopy (flag dash)
            (loop (list elem '((1 (2 3)) (4 (5 6))))
-                 (collect (whole &as i (j k)) elem)))
-  #+end_src
+                 (collect (whole &as i (_ k)) elem)))
 
-  For more on how ~loopy~ can use =dash=, see the section [[file:doc/loopy-doc.org::*Destructuring with =dash=][Destructuring with =dash=]]
-  in the documentation.
+    ;; = > ((3 5) (4 6))
+    (loopy (flag dash)
+           ((list (&plist :a a  :b b)
+                  '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
+            (collect a-vals a)
+            (collect b-vals b)))
+
+    (require 'loopy-pcase)
+    ;; => ((1 4) (3 6))
+    (loopy (flag pcase)
+           (loop (list elem '((1 (2 3)) (4 (5 6))))
+                 (collect `(,a (,_ ,b)) elem)))
+
+    ;; => ((1 6) (3 8) ([4 5] [9 10]))
+    (require 'loopy-seq)
+    (loopy (flag seq)
+           (loop (list elem '([1 2 3 4 5] [6 7 8 9 10]))
+                 (collect [a _ b &rest c] elem)))
+  #+end_src
 
   For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
   form.
@@ -287,156 +302,9 @@ please let me know.
   :CUSTOM_ID: adding-custom-commands
   :END:
 
-   The core working of =loopy= is taking a command and generating code that is
-   substituted into or around a loop body.
-
-   For example, parsing the command =(list i '(1 2 3))= produces the following
-   list of instructions.  Some commands require the creation of unique temporary
-   variables, such as =g3019= in the below output. Such variables are called
-   “implicit", as opposed to the explicitly named variable =i= in the command.
-
-   #+BEGIN_SRC emacs-lisp
-     ((loopy--implicit-vars g3019 '(1 2 3))
-      (loopy--explicit-vars i nil)
-      (loopy--pre-conditions consp g3019)
-      (loopy--main-body setq i (car g3019))
-      (loopy--latter-body setq g3019 (cdr g3019)))
-   #+END_SRC
-
-   The ~car~ of an instruction is the place to put code and the ~cdr~ of the
-   instruction is said code to put.  You can see that not all of the code to be
-   inserted is a valid Lisp form.  Instead of being evaluated as an expression,
-   some instructions insert pairs of names and values into variable lists like
-   in ~let~ and ~let*~ .
-
-   | Place                     | Code                         |
-   |---------------------------+------------------------------|
-   | =loopy--implicit-vars=    | =(g3019 '(1 2 3))=           |
-   | =loopy--explicit-vars=    | =(i nil)=                    |
-   | =loopy--pre-conditions=   | =(consp g3019)=              |
-   | =loopy--main-body=        | =(setq i (car g3019))=       |
-   | =loopy--latter-body=      | =(setq g3019 (cdr g3019))=   |
-
-   Commands are parsed by =loopy--parse-body-forms=, which receives a list of
-   commands and returns a list of instructions.  For commands that take
-   sub-commands as arguments (such as =cond=, =if=, and =when=), more specific
-   parsing functions are called in a mutually recursive fashion (e.g.,
-   Function-1 uses Function-2 which uses Function-1, and so on).
-
-   For example, consider the function =loopy--parse-conditional-forms=, which
-   parses the =if=, =when=, and =unless= commands.  It needs to be able to group
-   any code going to the loop body under its respective conditional control
-   structure.  To do this, it uses =loopy--parse-body-forms= to turn its
-   sub-commands into a list of instructions, and then checks the =car= of each
-   instruction.
-
-   #+BEGIN_SRC emacs-lisp
-     (defun loopy--parse-conditional-forms (wrapper condition forms &optional loop-name)
-       "Parse FORMS, wrapping `loopy--main-body' expressions in a conditional form.
-     The instructions (e.g., return expressions) are wrapped with a
-     WRAPPER with CONDITION.  Optionally needs LOOP-NAME for block
-     returns."
-       (let ((full-instructions)
-             (sub-instructions (loopy--parse-body-forms forms loop-name))
-             (conditional-body))
-         (dolist (instruction sub-instructions)
-           (cl-case (car instruction)
-             (loopy--main-body (push (cdr instruction) conditional-body))
-             (t                (push instruction full-instructions))))
-         (push `(loopy--main-body . (,wrapper ,condition ,@conditional-body))
-               full-instructions)
-         full-instructions))
-   #+END_SRC
-
-   The hardest part of this exchange is making sure the inserted code ends up in
-   the correct order.
-
-   A loop body command has 7 main places to put code:
-
-   - =loopy--explicit-generalized-vars= :: Lists of a symbol and a macro
-     expansion that will be given to =cl-symbol-macrolet=.  This is used to
-     create named ~setf~-able places.  The expansion you use depends on the kind
-     of sequence and how the it is updated.
-
-     For example, =(list-ref i my-list)= declares =i= to be a symbol which
-     expands to =(car TEMP-VAR)=, in which =TEMP-VAR= holds the value of
-     =my-list=.  At the end of the loop body, =TEMP-VAR= is set to its =cdr=,
-     ensuring that the next call to =car= returns the correct value.
-
-   - =loopy--implicit-vars= :: Lists of a symbol and an expression that will be
-     given to =let=.  This is used for creating variables that are not named but
-     must exist, such as for holding ='(1 2 3)= in =(list i '(1 2 3))=.
-
-   - =loopy--explicit-vars= :: Lists of a symbol and an expression that will be
-     given to =let=.  This is needed to ensure that variables explicitly named
-     in commands are locally scoped, such as the =i= in =(list i '(1 2 3))=.
-
-   - =loopy--pre-conditions= :: Expressions that determine if the =while=
-     loop runs/continues, such as whether a list still has elements in it.
-     If there is more than one expression, than all expressions are used in
-     an =and= special form.
-
-   - =loopy--main-body= :: Expressions that make up the main body of the
-     loop.
-
-   - =loopy--latter-body= :: Expressions that need to be run after the main
-     body, such as updating implicit variables.
-
-   - =loopy--post-conditions= :: Expressions that determine whether the
-     =while= loop continues, but checked after the loop body has run.  The
-     code from this is ultimately appended to the latter body before being
-     substituted in.
-
-   There are 5 more variables a loop command can push to, but they are derived
-   from the macro's arguments.  Adding to them after using a macro argument
-   might lead to unintended behavior.  You might wish to use them if, for
-   example, you are concerned with what happens after the loop exits/completes.
-
-   - =loopy--with-vars= :: Lists of a symbol and an expression that will be
-     given to =let*=.  These are derived from the =with= macro argument.
-
-   - =loopy--before-do= :: Expressions to evaluate before the loop.  These are
-     derived from the =before-do= macro argument.
-
-   - =loopy--after-do= :: Expressions to evaluate after the loop completes
-     successfully.  These are derived from the =after-do= macro argument.
-
-   - =loopy--final-do= :: Expressions to evaluate after the loop completes,
-     regardless of success.  These are derived from the =finally-do= macro
-     argument.
-
-   - =loopy--final-return= :: An expression that is always returned by the
-     macro, regardless of any early returns in the loop body.  This is
-     derived from the =finally-return= macro argument.
-
-   The structure of the macro’s expanded code depends on the features used
-   (e.g., =loopy= won’t try to declare variables if none exist), but the result
-   will work similar to the below example.
-
-   #+BEGIN_SRC emacs-lisp
-     `(cl-symbol-macrolet ,loopy--explicit-generalized-vars
-        (let* ,loopy--with-vars
-          (let ,(append loopy--implicit-vars loopy--explicit-vars)
-            (let ((loopy--early-return-capture
-                   (cl-block ,loopy--name-arg
-                     ,@loopy--before-do
-                     (while ,(cl-case (length loopy--pre-conditions)
-                               (0 t)
-                               (1 (car loopy--pre-conditions))
-                               (t (cons 'and loopy--pre-conditions)))
-                       (cl-tagbody
-                        ,@loopy--main-body
-                        loopy--continue-tag
-                        ,@loopy--latter-body))
-                     ,@loopy--after-do
-                     nil)))
-              ,@loopy--final-do
-              ,(if loopy--final-return
-                   loopy--final-return
-                 'loopy--early-return-capture)))))
-   #+END_SRC
-
-   For more on custom commands, see the wiki page [[https://github.com/okamsn/loopy/wiki/Custom-Commands][Custom Commands]].
+  It is easy to create custom commands for Loopy.  To see how, see the section
+  [[file:doc/loopy-doc.org::#adding-custom-commands][Adding Custom Commands]] in the documentation or a copy of this information on
+  the wiki page [[https://github.com/okamsn/loopy/wiki/Custom-Commands][Custom Commands]].
 
 * Comparing to =cl-loop=
   :PROPERTIES:

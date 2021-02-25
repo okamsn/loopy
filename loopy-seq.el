@@ -51,9 +51,9 @@
 
 (defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-accumulation-parser)
-(defvar loopy--flags-setup nil)
+(defvar loopy--flag-settings nil)
 
-(defun loopy-seq--flag-setup ()
+(defun loopy-seq--enable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."
   (setq
    loopy--basic-destructuring-function
@@ -61,7 +61,23 @@
    loopy--destructuring-accumulation-parser
    #'loopy-seq--parse-destructuring-accumulation-command))
 
-(add-to-list 'loopy--flags-setup (cons 'seq #'loopy-seq--flag-setup))
+(defun loopy-seq--disable-flag-seq ()
+  "Make this `loopy' loop use `seq-let' destructuring."
+  (if (eq loopy--basic-destructuring-function
+          #'loopy-seq--destructure-variables)
+      (setq loopy--basic-destructuring-function
+            #'loopy--destructure-variables-default))
+  (if (eq loopy--destructuring-accumulation-parser
+          #'loopy-seq--parse-destructuring-accumulation-command)
+      (setq loopy--destructuring-accumulation-parser
+            #'loopy--parse-destructuring-accumulation-command)))
+
+(add-to-list 'loopy--flag-settings
+             (cons 'seq #'loopy-seq--enable-flag-seq))
+(add-to-list 'loopy--flag-settings
+             (cons '+seq #'loopy-seq--enable-flag-seq))
+(add-to-list 'loopy--flag-settings
+             (cons '-seq #'loopy-seq--disable-flag-seq))
 
 (defun loopy-seq--get-variable-values (var val)
   "Destructure VAL according to VAR using `seq-let'.
@@ -104,6 +120,11 @@ should only be used if VAR-OR-VAL is a variable."
                                                         ((max maximize) -1.0e+INF)
                                                         ((min minimize) +1.0e+INF)
                                                         (t nil))))
+              instructions))
+      ;; While `pcase-let*' might bind named vars in reverse order,
+      ;; it seems `seq-let' binds them in the correct order.
+      (dolist (named-var (reverse named-vars))
+        (push `(loopy--implicit-return . ,(car named-var))
               instructions))
       ;; Push update of accumulation variables before setting required
       ;; variables to avoid needing to reverse the list of instructions.
