@@ -1,12 +1,12 @@
 ;;; loopy-dash.el --- Dash destructuring for `loopy' -*- lexical-binding: t; -*-
 
-;; Copyright (c) 2020 Earl Hyatt
+;; Copyright (c) 2021 Earl Hyatt
 
 ;; Author: Earl Hyatt
-;; Created: November 2020
+;; Created: February 2021
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.1
-;; Package-Requires: ((emacs "25.1") (loopy "0.1") (dash "2"))
+;; Version: 0.2
+;; Package-Requires: ((emacs "25.1") (loopy "0.3") (dash "2"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
 
