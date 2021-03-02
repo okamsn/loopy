@@ -44,6 +44,7 @@
 ;; `seq-let' to produce values (which in turn uses `pcase-let') instead of
 ;; directly passing the variable list to `pcase-let'.
 
+(require 'loopy)
 (require 'seq)
 (require 'pcase)
 (require 'macroexp)

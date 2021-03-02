@@ -38,6 +38,7 @@
 ;; in Emacs.
 
 ;;; Code:
+(require 'loopy)
 (require 'dash)
 (require 'cl-lib)
 

@@ -497,12 +497,6 @@ see the Info node `(loopy)' distributed with this package."
         (loopy--loop-name)
         (loopy--with-vars (cdr (or (assq 'with body)
                                    (assq 'let* body))))
-        (loopy--enabled-flags (cdr (or (assq 'flag-on body)
-                                       (assq 'flags-on body)
-                                       (assq 'on body))))
-        (loopy--disabled-flags (cdr (or (assq 'flag-off body)
-                                        (assq 'flags-off body)
-                                        (assq 'off body))))
         (loopy--without-vars (cdr (or (assq 'without body)
                                       (assq 'no-init body))))
         (loopy--before-do (cdr (or (assq 'before-do body)
@@ -551,8 +545,8 @@ see the Info node `(loopy)' distributed with this package."
     ;;    undo the first group.
 
     (when-let ((loopy--all-flags (append loopy-default-flags
-                                     (cdr (or (assq 'flags body)
-                                      (assq 'flag body))))))
+                                         (cdr (or (assq 'flags body)
+                                                  (assq 'flag body))))))
       (dolist (flag loopy--all-flags)
         (if-let ((func (cdr (assq flag loopy--flag-settings))))
             (funcall func)

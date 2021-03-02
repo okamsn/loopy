@@ -38,6 +38,7 @@
 ;; in `loopy'.
 
 ;;; Code:
+(require 'loopy)
 (require 'macroexp)
 (require 'pcase)
 (require 'cl-lib)

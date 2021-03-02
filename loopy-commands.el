@@ -44,6 +44,7 @@
 
 ;;; Code:
 ;; Cant require `loopy', as that would be recursive.
+(declare-function loopy--destructure-variables "loopy")
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
