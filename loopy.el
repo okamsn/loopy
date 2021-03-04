@@ -176,9 +176,8 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 NOTE: This functionality might change in the future.")
 
 (defvar loopy--valid-macro-arguments
-  '( flag flags with let* without no-init loop before-do before initially-do
-     initially after-do after else-do else finally-do finally finally-return
-     return)
+  '( flag flags with let* without no-init before-do before initially-do
+     initially after-do after else-do else finally-do finally finally-return)
   "List of valid keywords for `loopy' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -510,8 +509,7 @@ see the Info node `(loopy)' distributed with this package."
         (loopy--final-do (cdr (or (assq 'finally-do body)
                                   (assq 'finally body))))
         (loopy--final-return (when-let ((return-val
-                                         (cdr (or (assq 'finally-return body)
-                                                  (assq 'return body)))))
+                                         (cdr (assq 'finally-return body))))
                                (if (= 1 (length return-val))
                                    (car return-val)
                                  (cons 'list return-val))))
@@ -570,15 +568,12 @@ see the Info node `(loopy)' distributed with this package."
       (cond
        ((symbolp arg)
         (setq loopy--loop-name arg))
-       ((or (eq (car arg) 'loop)
-            (consp (car arg)))
+       ((memq (car-safe arg) loopy--valid-macro-arguments) t) ; Do nothing.
+       (t
         ;; Body forms have the most variety.
         ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
         ;; Things added are expanded in place.
-        (dolist (instruction (loopy--parse-loop-commands
-                              (if (eq (car-safe arg) 'loop)
-                                  (cdr arg)
-                                arg)))
+        (dolist (instruction (loopy--parse-loop-command arg))
           ;; Do it this way instead of with `set', cause was getting errors
           ;; about void variables.
           (cl-case (car instruction)
@@ -618,9 +613,7 @@ see the Info node `(loopy)' distributed with this package."
             (loopy--final-return
              (push (cdr instruction) loopy--final-return))
             (t
-             (error "Loopy: Unknown body instruction: %s" instruction)))))
-       ((not (memq (car arg) loopy--valid-macro-arguments))
-        (error "Loopy: Unknown macro argument: %s" (car arg)))))
+             (error "Loopy: Unknown body instruction: %s" instruction)))))))
 
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
