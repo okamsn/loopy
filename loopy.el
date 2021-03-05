@@ -255,6 +255,18 @@ These run in a `progn'.")
 (defvar loopy--final-return nil
   "What the macro finally returns.  This overrides any early return value.")
 
+(defvar loopy--result-vars nil
+  "Initializations of the variables in `loopy--implicit-returns'.
+
+The \"result\" variables need to be accessible from anywhere in
+the macro, and shouldn't be reset upon entering sub-loops.
+Therefore, this must remain separate from `loopy--loop-vars',
+which can be local to a sub-loop.
+
+For simplicity in the code, especially in regards to destructing,
+this variable might sometimes include \"loop\" variables that
+would normally be included in `loopy--loop-vars'.")
+
 (defvar loopy--implicit-return nil
   "The implicit return value of loops that use accumulation commands.")
 
@@ -522,6 +534,7 @@ see the Info node `(loopy)' distributed with this package."
         (loopy--latter-body)
         (loopy--post-conditions)
         (loopy--implicit-return)
+        (loopy--result-vars)
 
         ;; -- Variables for constructing code --
         (loopy--skip-used)
@@ -583,6 +596,10 @@ see the Info node `(loopy)' distributed with this package."
              ;; Don't want to accidentally rebind variables to `nil'.
              (unless (loopy--bound-p (cadr instruction))
                (push (cdr instruction) loopy--loop-vars)))
+            (loopy--result-vars
+             ;; Don't want to accidentally rebind variables to `nil'.
+             (unless (loopy--bound-p (cadr instruction))
+               (push (cdr instruction) loopy--result-vars)))
             (loopy--pre-conditions
              (push (cdr instruction) loopy--pre-conditions))
             (loopy--main-body
@@ -787,6 +804,10 @@ see the Info node `(loopy)' distributed with this package."
                    loopy--tagbody-exit-used)
           (setq result `(let ((loopy--implicit-accumulation-updated nil))
                           ,@(get-result))
+                result-is-one-expression t))
+
+        (when loopy--result-vars
+          (setq result `(let ,loopy--result-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; Declare the With variables.
