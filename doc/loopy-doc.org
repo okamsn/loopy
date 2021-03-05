@@ -1539,12 +1539,12 @@ features.
     :CUSTOM_ID: iteration-clauses
     :END:
 
-    | =cl-loop=          | =loopy=                      |
-    |--------------------+------------------------------|
-    | =repeat INT=       | =(repeat INT)=               |
-    | =while COND=       | =(unless COND (return nil))= |
-    | =until COND=       | =(when COND (return nil))=   |
-    | =iter-by iterator= | None so far.                 |
+    | =cl-loop=          | =loopy=        |
+    |--------------------+----------------|
+    | =repeat INT=       | =(repeat INT)= |
+    | =while COND=       | =(while COND)= |
+    | =until COND=       | =(until COND)= |
+    | =iter-by iterator= | None so far.   |
 
     The clauses =always=, =never=, and =thereis= can be replaced by a
     combination of an exiting command and the =after-do= (also written
