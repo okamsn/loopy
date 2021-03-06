@@ -272,6 +272,16 @@ These run in a `progn'.")
 (defvar loopy--implicit-return nil
   "The implicit return value of loops that use accumulation commands.")
 
+(defvar loopy-result nil
+  "The result of using implicit accumulation commands in `loopy'.
+
+All accumulation commands with no given variable (such
+as `(collect my-val)') will accumulate into `loopy-result'.
+
+While `loopy-result' is an implied return value, it need not be
+the only implied value, and can still be returned in a list with
+other implied return values, if any.")
+
 ;;;;; Variables for constructing the code
 
 ;; These variable affect how the code is expanded.

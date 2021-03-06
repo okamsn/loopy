@@ -641,14 +641,11 @@ features.
    #+cindex: implied/implicit accumulation variables
    #+vindex: loopy-result
    Like ~cl-loop~, you do not need to supply a variable name to accumulation
-   commands.  With only one argument, they accumulate values into a variable
-   named after the loop.  The default name of the variable is =loopy-result=,
-   but if you were to name the loop =my-cool-loop=, it would be
-   =loopy-my-cool-loop-results=.  This variable is accessible in the loop
-   itself and the ~after-do~, ~finally-do~, and ~finally-return~ macro
-   arguments.  Note that while its value can be changed in ~after-do~,
-   ~finally-do~ alone is too late to effect what the macro returns without also
-   using ~finally-return~.
+   commands.  If no variable is given, accumulation commands accumulate into the
+   the variable ~loopy-result~.  This variable is accessible in the loop itself
+   and the ~after-do~, ~finally-do~, and ~finally-return~ macro arguments.  Note
+   that while its value can be changed in ~after-do~, ~finally-do~ alone is too
+   late to effect what the macro returns without also using ~finally-return~.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3)
