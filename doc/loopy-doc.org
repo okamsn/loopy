@@ -678,8 +678,9 @@ features.
    is provided, constructing the accumulated value backwards and then reversing
    it, which is usually faster.  This means that if you want to use
    destructuring with accumulation commands, it might be faster to use the
-   [[*Splitting Accumulation Results with Implicit Variables][=split= flag]], which will make ~loopy~ accumulate into separate implied variables
-   instead of the same ~loopy-result~.  See that section for more details.
+   =split= flag ([[*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]]), which will make
+   ~loopy~ accumulate into separate implied variables instead of the same
+   ~loopy-result~.  See that section for more details.
 
    #+begin_src emacs-lisp
      ;; Both of these example give the same result, but the latter can
@@ -1146,7 +1147,7 @@ features.
             (collect k))
    #+end_src
 
-   Below is an example of the split flag.
+   Below is an example of the =split= flag.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3 4 5)
