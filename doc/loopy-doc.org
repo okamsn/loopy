@@ -129,29 +129,29 @@ features.
   :END:
 
   Except for an optional loop name, all arguments of the ~loopy~ macro are
-  symbolic expressions that create a loop, the lexical environment that
-  surrounds the loop, and code the runs before/after the loop, and the ultimate
-  return value of the macro.
+  symbolic expressions that create a loop, assigns variables in the lexical
+  environment that surrounds the loop, adds code that runs before/after the
+  loop, and sets the ultimate return value of the macro.
 
   For convenience and clarity, symbolic expressions that generate code in the
-  loop body are called "loop commands" (see [[#loop-commands][Loop Commands]]).  Symbolic
+  loop body are called "loop commands" ([[#loop-commands][Loop Commands]]).  Symbolic
   expressions that generate code around the loop are called "special macro
   arguments" or just "macro arguments" as opposed to "loop commands"
-  (see [[#macro-arguments][Macro Arguments]]).
+  ([[#macro-arguments][Special Macro Arguments]]).
 
-  "Loop commands" are the main feature of the ~loopy~ macro, such as =list= in
-  =(list i '(1 2 3))=.  A command inserts code into the loop body, but can also
-  perform additional setup like initializing variables.  Many commands set up a
-  condition for ending the loop.
+  "Loop commands" are the main feature of the ~loopy~ macro, such as the =list=
+  in =(list i '(1 2 3))=.  A command inserts code into the loop body, but can
+  also perform additional setup like initializing variables.  Many commands set
+  a condition for ending the loop.
 
   The loop ends when any condition required by a loop command evaluates to
   false.  If no conditions are needed, the loop runs infinitely until a =return=
-  or =return-from= command is reached.  See the section [[#exiting-the-loop-early][Exiting the Loop Early]].
+  or =return-from= command is reached ([[#exiting-the-loop-early][Exiting the Loop Early]]).
 
-  Except when using [[#accumulation-commands][accumulating loop commands]], return values must be stated
-  explicitly, either as an early return in the loop body via the =return= or
-  =return-from= commands, or as part of the =finally-return= macro argument.
-  =nil= is returned by default.
+  Except when using accumulating loop commands ([[#accumulation-commands][Accumulation Commands]]), return
+  values must be stated explicitly, either as an early return in the loop body
+  via the =return= or =return-from= commands, or as part of the =finally-return=
+  macro argument.  =nil= is returned by default.
 
 * Special Macro Arguments
   :PROPERTIES:
