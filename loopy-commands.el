@@ -140,20 +140,20 @@ arguments like `after-do' or `finally-do'.
 BODY is one or more loop commands."
   ;; TODO: There's a lot of repetition between this and the main macro.
   ;;       Does it make sense to put this repetition in a function instead?
-  (let ((wrapped-loop-name nil)
-        (wrapped-main-body)
+  (let ((wrapped-main-body)
         (wrapped-latter-body)
         (wrapped-pre-conditions)
         (wrapped-post-conditions)
         (wrapped-iteration-vars)
         (non-wrapped-instructions)
         (wrapped-skip-used)
-        (wrapped-tagbody-exit-used))
+        (wrapped-tagbody-exit-used)
+        (loopy--loop-name (gensym "sub-loop-")))
 
     ;; Process the instructions.
     (dolist (command body)
       (if (symbolp command)
-          (setq wrapped-loop-name command)
+          (setq loopy--loop-name command)
         (dolist (instruction (loopy--parse-loop-command command))
           (cl-case (car instruction)
             (loopy--pre-conditions
@@ -207,7 +207,7 @@ BODY is one or more loop commands."
                                      (t (cons 'and wrapped-post-conditions)))
                             ;; Unlike the normal loop, sub-loops don't have a
                             ;; return value, so we can just return nil.
-                            (cl-return-from ,wrapped-loop-name nil))))))
+                            (cl-return-from ,loopy--loop-name nil))))))
         (setq result `(while ,(cl-case (length wrapped-pre-conditions)
                                 (0 t)
                                 (1 (car wrapped-pre-conditions))
@@ -227,7 +227,7 @@ BODY is one or more loop commands."
                          loopy--non-returning-exit-tag)
                 result-is-one-expression t))
 
-        (setq result `(cl-block ,wrapped-loop-name ,@(get-result) nil)
+        (setq result `(cl-block ,loopy--loop-name ,@(get-result) nil)
               ;; Will always be a single expression after wrapping with
               ;; `cl-block'.
               result-is-one-expression t)
@@ -568,11 +568,7 @@ whose value is to be accumulated."
                            (gensym (concat (symbol-name name) "-implicit-"))
                          ;; Note: This must be `intern', not `make-symbol', as
                          ;;       the user can refer to it later.
-                         (intern (if loopy--loop-name
-                                     (concat "loopy-"
-                                             (symbol-name loopy--loop-name)
-                                             "-result")
-                                   "loopy-result")))))
+                         (intern "loopy-result"))))
     `((loopy--accumulation-vars . (,value-holder ,(cl-case name
                                                     ((sum count)    0)
                                                     ((max maximize) -1.0e+INF)
@@ -652,10 +648,11 @@ a loop name, return values, or a list of both."
     (cl-case name
       (return
        `((loopy--main-body
-          . (cl-return-from nil ,(cond
-                                  ((zerop arg-length) nil)
-                                  ((= 1 arg-length)  (car args))
-                                  (t                 `(list ,@args)))))))
+          . (cl-return-from ,loopy--loop-name
+              ,(cond
+                ((zerop arg-length) nil)
+                ((= 1 arg-length)  (car args))
+                (t                 `(list ,@args)))))))
       (return-from
        (let ((arg-length (length args)))
          (when (zerop arg-length) ; Need at least 1 arg.

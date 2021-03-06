@@ -177,6 +177,16 @@
                                            (concat my-str (concat i j)))
                                      (finally-return (concat "0" my-str))))))))
 
+(ert-deftest sub-loop-implicit-accum-in-named-loop ()
+  "The sub-loop should be able to accumulate into the main loop's
+implicit variable without knowing it's name, even for named loops."
+  (should (equal ((1 . 3) (1 . 4) (2 . 3) (2 . 4))
+                 (eval (quote (loopy outer
+                                     (list i '(1 2))
+                                     (loop inner
+                                           (list j '(3 4))
+                                           (collect (cons i j)))))))))
+
 (ert-deftest sub-loop-leave-early ()
   "A `leave' in a sub-loop should not affect the outer loop."
   (should (equal '(1 2 3)
@@ -642,12 +652,7 @@
         (equal '(1 2 3)
                (eval (quote (loopy (list i '(1 2 3))
                                    (collect i)
-                                   (finally-return loopy-result)))))
-        (equal '(1 2 3)
-               (eval (quote (loopy my-loop
-                                   (list i '(1 2 3))
-                                   (collect i)
-                                   (finally-return loopy-my-loop-result))))))))
+                                   (finally-return loopy-result))))))))
 
 ;;;;; Split flag
 (ert-deftest split-flag ()
