@@ -113,14 +113,15 @@ should only be used if VAR-OR-VAL is a variable."
       (loopy-seq--get-variable-values var val)
     (let ((instructions))
       (dolist (required-var generated-vars)
-        (push `(loopy--loop-vars . (,(car required-var) nil))
+        (push `(loopy--accumulation-vars . (,(car required-var) nil))
               instructions))
       (dolist (named-var named-vars)
-        (push `(loopy--loop-vars . (,(car named-var) ,(cl-case name
-                                                        ((sum count)    0)
-                                                        ((max maximize) -1.0e+INF)
-                                                        ((min minimize) +1.0e+INF)
-                                                        (t nil))))
+        (push `(loopy--accumulation-vars
+                . (,(car named-var) ,(cl-case name
+                                       ((sum count)    0)
+                                       ((max maximize) -1.0e+INF)
+                                       ((min minimize) +1.0e+INF)
+                                       (t nil))))
               instructions))
       ;; While `pcase-let*' might bind named vars in reverse order,
       ;; it seems `seq-let' binds them in the correct order.

@@ -1087,11 +1087,11 @@ features.
    variables, such as =list-3717= in the below output.
 
    #+BEGIN_SRC emacs-lisp
-     ((loopy--loop-vars list-3717 '(1 2 3))
+     ((loopy--iteration-vars list-3717 '(1 2 3))
       (loopy--latter-body setq list-3717 (cdr list-3717))
       (loopy--pre-conditions consp list-3717)
       (loopy--main-body setq i (car list-3717))
-      (loopy--loop-vars i nil))
+      (loopy--iteration-vars i nil))
    #+END_SRC
 
    The ~car~ of an instruction is the place to put code and the ~cdr~ of the
@@ -1102,11 +1102,11 @@ features.
 
    | Place                   | Code                               |
    |-------------------------+------------------------------------|
-   | =loopy--loop-vars=      | =(list-3717 '(1 2 3))=             |
+   | =loopy--iteration-vars= | =(list-3717 '(1 2 3))=             |
    | =loopy--latter-body=    | =(setq list-3717 (cdr list-3717))= |
    | =loopy--pre-conditions= | =(consp list-3717)=                |
    | =loopy--main-body=      | =(setq i (car list-3717))=         |
-   | =loopy--loop-vars=      | =(i nil)=                          |
+   | =loopy--iteration-vars= | =(i nil)=                          |
 
    Commands are parsed by =loopy--parse-loop-commands=, which receives a list of
    commands and returns a list of instructions.  For commands that take
@@ -1170,8 +1170,8 @@ features.
      =my-list=.  At the end of the loop body, =TEMP-VAR= is set to its =cdr=,
      ensuring that the next call to =car= returns the correct value.
 
-   #+vindex: loopy--loop-vars
-   - =loopy--loop-vars= :: Lists of a symbol and an expression that will be
+   #+vindex: loopy--iteration-vars
+   - =loopy--iteration-vars= :: Lists of a symbol and an expression that will be
      given to ~let*~.  This is used for initializing variables needed for loop
      commands, such as the =i= in =(list i '(1 2 3))= or to store the list
      ='(1 2 3)= in =(list i '(1 2 3))=.

@@ -137,14 +137,14 @@ should only be used if VAR-OR-VAL is a variable."
           (reverse loopy-dash--accumulation-destructured-symbols))
 
     `(;; Declare what Dash will assign to as implicit.
-      ,@(--map `(loopy--loop-vars . (,(car it) nil))
+      ,@(--map `(loopy--accumulation-vars . (,(car it) nil))
                destructurings)
       ;; Declare as explicit what the user actually named.
-      ,@(--map `(loopy--loop-vars . (,(car it) ,(cl-case name
-                                                  ((sum count)    0)
-                                                  ((max maximize) -1.0e+INF)
-                                                  ((min minimize) +1.0e+INF)
-                                                  (t nil))))
+      ,@(--map `(loopy--accumulation-vars . (,(car it) ,(cl-case name
+                                                          ((sum count)    0)
+                                                          ((max maximize) -1.0e+INF)
+                                                          ((min minimize) +1.0e+INF)
+                                                          (t nil))))
                ;; Alist of (old-name . new-name)
                loopy-dash--accumulation-destructured-symbols)
       ;; Declare the explicitly given variables as implicit returns.

@@ -143,7 +143,7 @@ BODY is one or more loop commands."
         (wrapped-latter-body)
         (wrapped-pre-conditions)
         (wrapped-post-conditions)
-        (wrapped-loop-vars)
+        (wrapped-iteration-vars)
         (non-wrapped-instructions)
         (wrapped-skip-used)
         (wrapped-tagbody-exit-used))
@@ -168,15 +168,15 @@ BODY is one or more loop commands."
             (loopy--tagbody-exit-used
              (setq wrapped-tagbody-exit-used t))
             ;; Vars need to be reset every time the loop is entered.
-            (loopy--loop-vars
+            (loopy--iteration-vars
              (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) wrapped-loop-vars)))
+               (push (cdr instruction) wrapped-iteration-vars)))
             (t
              (push instruction non-wrapped-instructions))))))
 
     ;; Make sure lists are in the correct order.
     (setq wrapped-main-body (nreverse wrapped-main-body)
-          wrapped-loop-vars (nreverse wrapped-loop-vars))
+          wrapped-iteration-vars (nreverse wrapped-iteration-vars))
 
     ;; Create the sub-loop code.
     ;; See the main macro `loopy' for a more detailed version of this.
@@ -226,8 +226,8 @@ BODY is one or more loop commands."
               ;; `cl-block'.
               result-is-one-expression t)
 
-        (when wrapped-loop-vars
-          (setq result `(let* ,wrapped-loop-vars
+        (when wrapped-iteration-vars
+          (setq result `(let* ,wrapped-iteration-vars
                           ,@(get-result))
                 result-is-one-expression t))
 
@@ -257,12 +257,12 @@ BODY is one or more loop commands."
       ;; determine if we should assign the first or second value.  This is
       ;; how `cl-loop' does it.
       (2
-       `((loopy--loop-vars . (,value-selector t))
+       `((loopy--iteration-vars . (,value-selector t))
          ,@(loopy--destructure-for-iteration-command
             var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
          (loopy--latter-body . (setq ,value-selector nil))))
       (t
-       `((loopy--loop-vars . (,value-selector 0))
+       `((loopy--iteration-vars . (,value-selector 0))
          (loopy--latter-body
           . (when (< ,value-selector (1- ,arg-length))
               (setq ,value-selector (1+ ,value-selector))))
@@ -388,8 +388,8 @@ command are inserted into a `cond' special form."
 - VAL is an array value.
 - Optional VALUE-HOLDER holds the array value.
 - Optional INDEX-HOLDER holds the index value."
-  `((loopy--loop-vars  . (,value-holder ,val))
-    (loopy--loop-vars  . (,index-holder 0))
+  `((loopy--iteration-vars  . (,value-holder ,val))
+    (loopy--iteration-vars  . (,index-holder 0))
     ,@(loopy--destructure-for-iteration-command var
                                                 `(aref ,value-holder ,index-holder))
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
@@ -405,8 +405,8 @@ VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
 holds the array value.  INDEX-HOLDER holds the index value."
   `(,@(loopy--destructure-for-generalized-command
        var `(aref ,value-holder ,index-holder))
-    (loopy--loop-vars  . (,value-holder ,val))
-    (loopy--loop-vars  . (,index-holder 0))
+    (loopy--iteration-vars  . (,value-holder ,val))
+    (loopy--iteration-vars  . (,index-holder 0))
     (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
     (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
 
@@ -416,13 +416,13 @@ holds the array value.  INDEX-HOLDER holds the index value."
 VAR is a variable name.  VAL is a cons cell value.  Optional FUNC
 is a function by which to update VAR (default `cdr')."
   (if (symbolp var)
-      `((loopy--loop-vars . (,var ,val))
+      `((loopy--iteration-vars . (,var ,val))
         (loopy--latter-body
          . (setq ,var (,(loopy--get-function-symbol func) ,var)))
         (loopy--pre-conditions . (consp ,var)))
     ;; TODO: For destructuring, do we actually need the extra variable?
     (let ((value-holder (gensym "cons-")))
-      `((loopy--loop-vars . (,value-holder ,val))
+      `((loopy--iteration-vars . (,value-holder ,val))
         ,@(loopy--destructure-for-iteration-command var value-holder)
         (loopy--latter-body
          . (setq ,value-holder (,(loopy--get-function-symbol func)
@@ -437,7 +437,7 @@ VAR is a variable name or a list of such names (dotted pair or
 normal).  VAL is a list value.  FUNC is a function used to update
 VAL (default `cdr').  VAL-HOLDER is a variable name that holds
 the list."
-  `((loopy--loop-vars . (,val-holder ,val))
+  `((loopy--iteration-vars . (,val-holder ,val))
     (loopy--latter-body
      . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
     (loopy--pre-conditions . (consp ,val-holder))
@@ -450,7 +450,7 @@ the list."
 VAR is the name of a setf-able place.  VAL is a list value.  FUNC
 is a function used to update VAL (default `cdr').  VAL-HOLDER is
 a variable name that holds the list."
-  `((loopy--loop-vars . (,val-holder ,val))
+  `((loopy--iteration-vars . (,val-holder ,val))
     ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
     (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
                                              ,val-holder)))
@@ -464,11 +464,11 @@ The command can be of the form (repeat VAR  COUNT) or (repeat COUNT).
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
   (if count
-      `((loopy--loop-vars . (,var-or-count 0))
+      `((loopy--iteration-vars . (,var-or-count 0))
         (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
         (loopy--pre-conditions . (< ,var-or-count ,count)))
     (let ((value-holder (gensym "repeat-limit-")))
-      `((loopy--loop-vars . (,value-holder 0))
+      `((loopy--iteration-vars . (,value-holder 0))
         (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
@@ -481,8 +481,8 @@ VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
   ;;       just checks the type for each iteration, so we do that too.
-  `((loopy--loop-vars . (,value-holder ,val))
-    (loopy--loop-vars . (,index-holder 0))
+  `((loopy--iteration-vars . (,value-holder ,val))
+    (loopy--iteration-vars . (,index-holder 0))
     ,@(loopy--destructure-for-iteration-command
        var `(if (consp ,value-holder)
                 (pop ,value-holder)
@@ -503,9 +503,9 @@ VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into
 VALUE-HOLDER.  LENGTH-HOLDER holds than length of the value of
 VALUE-HOLDER, once VALUE-HOLDER is initialized."
-  `((loopy--loop-vars . (,value-holder ,val))
-    (loopy--loop-vars . (,length-holder (length ,value-holder)))
-    (loopy--loop-vars . (,index-holder 0))
+  `((loopy--iteration-vars . (,value-holder ,val))
+    (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+    (loopy--iteration-vars . (,index-holder 0))
     ,@(loopy--destructure-for-generalized-command
        var `(elt ,value-holder ,index-holder))
     (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
@@ -527,11 +527,11 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
    ;; normal.
    ((symbolp (cl-second accumulation-command))
     (cl-destructuring-bind (name var val) accumulation-command
-      `((loopy--result-vars . (,var ,(cl-case name
-                                       ((sum count)    0)
-                                       ((max maximize) -1.0e+INF)
-                                       ((min minimize) +1.0e+INF)
-                                       (t nil))))
+      `((loopy--accumulation-vars . (,var ,(cl-case name
+                                             ((sum count)    0)
+                                             ((max maximize) -1.0e+INF)
+                                             ((min minimize) +1.0e+INF)
+                                             (t nil))))
         (loopy--implicit-return . ,var)
         (loopy--main-body . ,(cl-ecase name
                                (append `(setq ,var (append ,var ,val)))
@@ -548,7 +548,6 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
     (funcall (or loopy--destructuring-accumulation-parser
                  #'loopy--parse-destructuring-accumulation-command)
              accumulation-command))))
-
 
 (cl-defun loopy--parse-implicit-accumulation-commands ((name value-expression))
   "Parse the accumulation command with implicit variable.
@@ -568,10 +567,10 @@ whose value is to be accumulated."
                                              (symbol-name loopy--loop-name)
                                              "-result")
                                    "loopy-result")))))
-    `((loopy--result-vars . (,value-holder ,(cl-case name
-                                              ((sum count)    0)
-                                              ((max maximize) -1.0e+INF)
-                                              ((min minimize) +1.0e+INF))))
+    `((loopy--accumulation-vars . (,value-holder ,(cl-case name
+                                                    ((sum count)    0)
+                                                    ((max maximize) -1.0e+INF)
+                                                    ((min minimize) +1.0e+INF))))
       ,@(cl-ecase name
           ;; NOTE: Some commands have different behavior when a
           ;;       variable is not specified.
@@ -760,7 +759,7 @@ destructuring into them in the loop body."
          (loopy--destructure-variables var value-expression))
         (instructions nil))
     (dolist (destructuring destructurings)
-      (push `(loopy--loop-vars . (,(cl-first destructuring) nil))
+      (push `(loopy--iteration-vars . (,(cl-first destructuring) nil))
             instructions))
     (cons `(loopy--main-body
             . (setq ,@(apply #'append destructurings)))
@@ -779,7 +778,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
      (let ((value-holder (gensym (concat (symbol-name name) "-destructuring-list-")))
            (is-proper-list (proper-list-p var))
            (normalized-reverse-var))
-       (let ((instructions `(((loopy--loop-vars . (,value-holder nil))
+       (let ((instructions `(((loopy--iteration-vars . (,value-holder nil))
                               (loopy--main-body . (setq ,value-holder ,val))))))
          ;; If `var' is a list, always create a "normalized" variable
          ;; list, since proper lists are easier to work with, as many
@@ -809,7 +808,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
     (array
      (let* ((value-holder (gensym (concat (symbol-name name) "-destructuring-array-")))
             (instructions
-             `(((loopy--loop-vars . (,value-holder nil))
+             `(((loopy--iteration-vars . (,value-holder nil))
                 (loopy--main-body . (setq ,value-holder ,val))))))
        (cl-loop for symbol-or-seq across var
                 for index from 0

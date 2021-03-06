@@ -1014,7 +1014,7 @@ Not multiple of 3: 7")))
 (ert-deftest custom-command-sum ()
   (cl-defun my-loopy-sum-command ((_ target &rest items))
     "Set TARGET to the sum of ITEMS."
-    `((loopy--loop-vars . (,target nil))
+    `((loopy--iteration-vars . (,target nil))
       (loopy--main-body . (setq ,target (apply #'+ (list ,@items))))))
   (setq-local loopy-custom-command-parsers
               (list (cons 'target-sum #'my-loopy-sum-command)))

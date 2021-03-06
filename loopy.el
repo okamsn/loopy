@@ -208,12 +208,26 @@ To create `setf'-able variables, the symbol needs to be expanded
 to a form that can be treated as such.  In this case, with
 `cl-symbol-macrolet'.")
 
-(defvar loopy--loop-vars nil
-  "A list of symbols and values to initialize variables for loop commands.
+(defvar loopy--iteration-vars nil
+  "A list of symbols and values to initialize variables for iteration commands.
+
+These initializations are sensitive to order.
 
 This list includes variables explicitly named in a command (such
 as the `i' in `(list i my-list)'), variables required for
-destructuring, and variables required for looping.")
+destructuring in iteration commands, and other variables required
+for iteration.")
+
+(defvar loopy--accumulation-vars nil
+  "Initializations of the variables needed for accumulation.
+
+This list includes variables explicitly named in a command (such
+as the `collection' in `(collect collection value)') and variables
+required for destructuring in accumulation commands.
+
+Unlike in `loopy--iteration-vars', these variables should be
+accessible from anywhere in the macro, and should not be reset
+for sub-loops.")
 
 (defvar loopy--before-do nil
   "A list of expressions to evaluate before the loop starts.
@@ -254,18 +268,6 @@ These run in a `progn'.")
 
 (defvar loopy--final-return nil
   "What the macro finally returns.  This overrides any early return value.")
-
-(defvar loopy--result-vars nil
-  "Initializations of the variables in `loopy--implicit-returns'.
-
-The \"result\" variables need to be accessible from anywhere in
-the macro, and shouldn't be reset upon entering sub-loops.
-Therefore, this must remain separate from `loopy--loop-vars',
-which can be local to a sub-loop.
-
-For simplicity in the code, especially in regards to destructing,
-this variable might sometimes include \"loop\" variables that
-would normally be included in `loopy--loop-vars'.")
 
 (defvar loopy--implicit-return nil
   "The implicit return value of loops that use accumulation commands.")
@@ -315,10 +317,12 @@ t.")
 This can happen when multiple loop commands refer to the same
 variable, or when a variable is introduced via `with'.
 
-The variable can exist in `loopy--with-vars', `loopy--loop-vars',
-or `loopy--generalized-vars'."
+The variable can exist in `loopy--with-vars',
+`loopy--iteration-vars', `loopy--accumulation-vars', or
+`loopy--generalized-vars'."
   (or (memq var-name (mapcar #'car loopy--with-vars))
-      (memq var-name (mapcar #'car loopy--loop-vars))
+      (memq var-name (mapcar #'car loopy--iteration-vars))
+      (memq var-name (mapcar #'car loopy--accumulation-vars))
       (memq var-name (mapcar #'car loopy--generalized-vars))
       (memq var-name loopy--without-vars)))
 
@@ -527,14 +531,14 @@ see the Info node `(loopy)' distributed with this package."
                                  (cons 'list return-val))))
 
         ;; -- Vars for processing loop commands --
-        (loopy--loop-vars)
+        (loopy--iteration-vars)
+        (loopy--accumulation-vars)
         (loopy--generalized-vars)
         (loopy--pre-conditions)
         (loopy--main-body)
         (loopy--latter-body)
         (loopy--post-conditions)
         (loopy--implicit-return)
-        (loopy--result-vars)
 
         ;; -- Variables for constructing code --
         (loopy--skip-used)
@@ -592,14 +596,14 @@ see the Info node `(loopy)' distributed with this package."
           (cl-case (car instruction)
             (loopy--generalized-vars
              (push (cdr instruction) loopy--generalized-vars))
-            (loopy--loop-vars
+            (loopy--iteration-vars
              ;; Don't want to accidentally rebind variables to `nil'.
              (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) loopy--loop-vars)))
-            (loopy--result-vars
+               (push (cdr instruction) loopy--iteration-vars)))
+            (loopy--accumulation-vars
              ;; Don't want to accidentally rebind variables to `nil'.
              (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) loopy--result-vars)))
+               (push (cdr instruction) loopy--accumulation-vars)))
             (loopy--pre-conditions
              (push (cdr instruction) loopy--pre-conditions))
             (loopy--main-body
@@ -634,7 +638,7 @@ see the Info node `(loopy)' distributed with this package."
 
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
-          loopy--loop-vars (nreverse loopy--loop-vars)
+          loopy--iteration-vars (nreverse loopy--iteration-vars)
           loopy--implicit-return (when (consp loopy--implicit-return)
                                    (if (= 1 (length loopy--implicit-return))
                                        ;; If implicit return is just a single thing,
@@ -652,7 +656,7 @@ see the Info node `(loopy)' distributed with this package."
     ;;
     ;; `(cl-symbol-macrolet ,loopy--generalized-vars
     ;;    (let* ,loopy--with-vars
-    ;;      (let* ,loopy--loop-vars
+    ;;      (let* ,loopy--iteration-vars
     ;;        ;; If we need to, capture early return, those that has less
     ;;        ;; priority than a final return.
     ;;        (let ((loopy--early-return-capture
@@ -794,8 +798,8 @@ see the Info node `(loopy)' distributed with this package."
                   result-is-one-expression t)))
 
         ;; Declare the loop variables.
-        (when loopy--loop-vars
-          (setq result `(let* ,loopy--loop-vars ,@(get-result))
+        (when loopy--iteration-vars
+          (setq result `(let* ,loopy--iteration-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; If there are final updates to made and a tag-body exit that can skip
@@ -806,8 +810,8 @@ see the Info node `(loopy)' distributed with this package."
                           ,@(get-result))
                 result-is-one-expression t))
 
-        (when loopy--result-vars
-          (setq result `(let ,loopy--result-vars ,@(get-result))
+        (when loopy--accumulation-vars
+          (setq result `(let ,loopy--accumulation-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; Declare the With variables.
