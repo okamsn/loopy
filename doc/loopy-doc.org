@@ -1172,9 +1172,16 @@ features.
 
    #+vindex: loopy--iteration-vars
    - =loopy--iteration-vars= :: Lists of a symbol and an expression that will be
-     given to ~let*~.  This is used for initializing variables needed for loop
-     commands, such as the =i= in =(list i '(1 2 3))= or to store the list
-     ='(1 2 3)= in =(list i '(1 2 3))=.
+     given to ~let*~.  This is used for initializing variables needed for
+     iteration commands, such as the =i= in =(list i '(1 2 3))= or to store the
+     list ='(1 2 3)= in =(list i '(1 2 3))=.  This also includes variables
+     needed for destructuring.
+
+   #+vindex: loopy--accumulation-vars
+   - =loopy--accumulation-vars= :: Lists of a symbol and an expression that will
+     be given to ~let*~.  This is used for initializing variables needed for
+     accumulation commands, such as the =coll= in =(collect coll my-val)= or any
+     variables needed for destructuring.
 
    #+vindex: loopy--pre-conditions
    - =loopy--pre-conditions= :: Expressions that determine if the =while=
@@ -1226,24 +1233,25 @@ features.
    #+BEGIN_SRC emacs-lisp
      `(cl-symbol-macrolet ,loopy--generalized-vars
         (let* ,loopy--with-vars
-          (let ,(append loopy--implicit-vars loopy--explicit-vars)
-            (let ((loopy--early-return-capture
-                   (cl-block ,loopy--name-arg
-                     ,@loopy--before-do
-                     (while ,(cl-case (length loopy--pre-conditions)
-                               (0 t)
-                               (1 (car loopy--pre-conditions))
-                               (t (cons 'and loopy--pre-conditions)))
-                       (cl-tagbody
-                        ,@loopy--main-body
-                        loopy--continue-tag
-                        ,@loopy--latter-body))
-                     ,@loopy--after-do
-                     nil)))
-              ,@loopy--final-do
-              ,(if loopy--final-return
-                   loopy--final-return
-                 'loopy--early-return-capture)))))
+          (let ,loopy--accumulation-vars
+            (let* ,loopy--iteration-vars
+              (let ((loopy--early-return-capture
+                     (cl-block ,loopy--name-arg
+                       ,@loopy--before-do
+                       (while ,(cl-case (length loopy--pre-conditions)
+                                 (0 t)
+                                 (1 (car loopy--pre-conditions))
+                                 (t (cons 'and loopy--pre-conditions)))
+                         (cl-tagbody
+                          ,@loopy--main-body
+                          loopy--continue-tag
+                          ,@loopy--latter-body))
+                       ,@loopy--after-do
+                       nil)))
+                ,@loopy--final-do
+                ,(if loopy--final-return
+                     loopy--final-return
+                   'loopy--early-return-capture))))))
    #+END_SRC
 
 ** A Small Example
