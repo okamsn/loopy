@@ -147,6 +147,76 @@
                                        (finally-do (1+ 1)))))))))
 
 ;;; Loop Commands
+;;;; Miscellaneous
+;;;;; Sub Loop
+(ert-deftest sub-loop-implicit-accum-in-loop ()
+  (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (eval (quote (loopy (list i '(1 2))
+                                     (loop (list j '(4 5))
+                                           (collect (cons i j))))))))
+  (should (equal "14152425"
+                 (eval (quote (loopy (list i '("1" "2"))
+                                     (loop (list j '("4" "5"))
+                                           (concat (concat i j))))))))
+
+  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (eval (quote (loopy (list i '(1 2))
+                                     (loop (list j '(4 5))
+                                           (collect (cons i j)))
+                                     (finally-return (cons 0 loopy-result))))))))
+
+(ert-deftest sub-loop-explicit-accum-in-loop ()
+  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (eval (quote (loopy (list i '(1 2))
+                                     (loop (list j '(4 5))
+                                           (collect my-coll (cons i j)))
+                                     (finally-return (cons 0 my-coll)))))))
+  (should (equal "014152425"
+                 (eval (quote (loopy (list i '("1" "2"))
+                                     (loop (list j '("4" "5"))
+                                           (concat my-str (concat i j)))
+                                     (finally-return (concat "0" my-str))))))))
+
+(ert-deftest sub-loop-leave-early ()
+  "A `leave' in a sub-loop should not affect the outer loop."
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (loop (list j '(4 5 6))
+                                           (leave)
+                                           (collect j))
+                                     (collect i)))))))
+
+(ert-deftest sub-loop-skip ()
+  "A `skip' in a sub-loop should not affect the outer loop."
+  (should (equal '(5 7 1 5 7 2 5 7 3)
+                 (eval (quote (loopy  (list i '(1 2 3))
+                                      (loop (list j '(4 5 6 7 8))
+                                            (when (cl-evenp j)
+                                              (continue))
+                                            (collect j))
+                                      (collect i)))))))
+
+(ert-deftest sub-loop-return-from-outer ()
+  (should (= 3 (loopy outer
+                      (list i '(1 2 3))
+                      (loop (list j '(4 5 6 3))
+                            (when (= j i)
+                              (return-from outer j)))))))
+
+(ert-deftest sub-loop-named ()
+  (should
+   (equal
+    '((3 5) (3 5))
+    (eval (quote
+           (loopy (repeat 2)
+                  (loop inner1
+                        (list j '(3 4))
+                        (loop (list k '(5 6 7))
+                              (if (= k 6)
+                                  ;; Return from inner1 so never reach 4.
+                                  (return-from inner1)
+                                (collect (list j k)))))))))))
+
 ;;;; Generic Evaluation
 ;;;;; Do
 (ert-deftest do ()
