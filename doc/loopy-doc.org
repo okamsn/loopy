@@ -108,18 +108,20 @@ features.
   #+end_src
 
   Variables like =elem=, =i=, and =j= in the example above are automatically
-  ~let~-bound so as to not affect code outside of the loop.  ~loopy~ has
-  arguments for binding (or not binding) variables, executing code before/after
-  the loop, executing code only if the loop completes, and for setting the
-  macro's return value (default ~nil~).  This is in addition to the looping
-  features themselves.
+  ~let~-bound so as to not affect code outside of the loop.
+
+  ~loopy~ has arguments for binding (or not binding) variables, executing code
+  before/after the loop, executing code only if the loop completes, and for
+  setting the macro's return value (default ~nil~).  This is in addition to the
+  looping features themselves.
 
   All of this makes ~loopy~ a useful and convenient choice for looping and
   iteration.
 
   That being said, Loopy is not yet feature complete.  Please request features
-  or report problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are
-  covered, full feature parity with =cl-loop= is still being worked on.
+  or report problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most cases are
+  covered, full feature parity with some of the more niche uses of =cl-loop= is
+  still being worked on.
 
 * Basic Concepts
   :PROPERTIES:
