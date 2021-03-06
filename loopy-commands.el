@@ -49,6 +49,8 @@
 (require 'seq)
 (require 'subr-x)
 
+(declare-function loopy--bound-p "loopy")
+
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--split-implied-accumulation-results)
