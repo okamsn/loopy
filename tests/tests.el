@@ -180,7 +180,7 @@
 (ert-deftest sub-loop-implicit-accum-in-named-loop ()
   "The sub-loop should be able to accumulate into the main loop's
 implicit variable without knowing it's name, even for named loops."
-  (should (equal ((1 . 3) (1 . 4) (2 . 3) (2 . 4))
+  (should (equal '((1 . 3) (1 . 4) (2 . 3) (2 . 4))
                  (eval (quote (loopy outer
                                      (list i '(1 2))
                                      (loop inner
