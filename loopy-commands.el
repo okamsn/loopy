@@ -190,6 +190,8 @@ BODY is one or more loop commands."
         (setq result wrapped-main-body)
 
         (when wrapped-skip-used
+          ;; This must stay `loopy--continue-tag', as
+          ;; this name is used by `loopy--parse-skip-command'.
           (setq result `(cl-tagbody ,@result loopy--continue-tag)
                 result-is-one-expression t))
 
@@ -220,7 +222,9 @@ BODY is one or more loop commands."
         (when wrapped-tagbody-exit-used
           (setq result `(cl-tagbody
                          ,@(get-result)
-                         wrapped-non-returning-exit-tag)
+                         ;; This must stay `loopy--non-returning-exit-tag', as
+                         ;; this name is used by `loopy--parse-leave-command'.
+                         loopy--non-returning-exit-tag)
                 result-is-one-expression t))
 
         (setq result `(cl-block ,wrapped-loop-name ,@(get-result) nil)
