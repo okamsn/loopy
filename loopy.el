@@ -176,9 +176,8 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 NOTE: This functionality might change in the future.")
 
 (defvar loopy--valid-macro-arguments
-  '( flag flags with let* without no-init loop before-do before initially-do
-     initially after-do after else-do else finally-do finally finally-return
-     return)
+  '( flag flags with let* without no-init before-do before initially-do
+     initially after-do after else-do else finally-do finally finally-return)
   "List of valid keywords for `loopy' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -209,12 +208,26 @@ To create `setf'-able variables, the symbol needs to be expanded
 to a form that can be treated as such.  In this case, with
 `cl-symbol-macrolet'.")
 
-(defvar loopy--loop-vars nil
-  "A list of symbols and values to initialize variables for loop commands.
+(defvar loopy--iteration-vars nil
+  "A list of symbols and values to initialize variables for iteration commands.
+
+These initializations are sensitive to order.
 
 This list includes variables explicitly named in a command (such
 as the `i' in `(list i my-list)'), variables required for
-destructuring, and variables required for looping.")
+destructuring in iteration commands, and other variables required
+for iteration.")
+
+(defvar loopy--accumulation-vars nil
+  "Initializations of the variables needed for accumulation.
+
+This list includes variables explicitly named in a command (such
+as the `collection' in `(collect collection value)') and variables
+required for destructuring in accumulation commands.
+
+Unlike in `loopy--iteration-vars', these variables should be
+accessible from anywhere in the macro, and should not be reset
+for sub-loops.")
 
 (defvar loopy--before-do nil
   "A list of expressions to evaluate before the loop starts.
@@ -258,6 +271,16 @@ These run in a `progn'.")
 
 (defvar loopy--implicit-return nil
   "The implicit return value of loops that use accumulation commands.")
+
+(defvar loopy-result nil
+  "The result of using implicit accumulation commands in `loopy'.
+
+All accumulation commands with no given variable (such
+as `(collect my-val)') will accumulate into `loopy-result'.
+
+While `loopy-result' is an implied return value, it need not be
+the only implied value, and can still be returned in a list with
+other implied return values, if any.")
 
 ;;;;; Variables for constructing the code
 
@@ -304,10 +327,12 @@ t.")
 This can happen when multiple loop commands refer to the same
 variable, or when a variable is introduced via `with'.
 
-The variable can exist in `loopy--with-vars', `loopy--loop-vars',
-or `loopy--generalized-vars'."
+The variable can exist in `loopy--with-vars',
+`loopy--iteration-vars', `loopy--accumulation-vars', or
+`loopy--generalized-vars'."
   (or (memq var-name (mapcar #'car loopy--with-vars))
-      (memq var-name (mapcar #'car loopy--loop-vars))
+      (memq var-name (mapcar #'car loopy--iteration-vars))
+      (memq var-name (mapcar #'car loopy--accumulation-vars))
       (memq var-name (mapcar #'car loopy--generalized-vars))
       (memq var-name loopy--without-vars)))
 
@@ -510,14 +535,14 @@ see the Info node `(loopy)' distributed with this package."
         (loopy--final-do (cdr (or (assq 'finally-do body)
                                   (assq 'finally body))))
         (loopy--final-return (when-let ((return-val
-                                         (cdr (or (assq 'finally-return body)
-                                                  (assq 'return body)))))
+                                         (cdr (assq 'finally-return body))))
                                (if (= 1 (length return-val))
                                    (car return-val)
                                  (cons 'list return-val))))
 
         ;; -- Vars for processing loop commands --
-        (loopy--loop-vars)
+        (loopy--iteration-vars)
+        (loopy--accumulation-vars)
         (loopy--generalized-vars)
         (loopy--pre-conditions)
         (loopy--main-body)
@@ -570,24 +595,25 @@ see the Info node `(loopy)' distributed with this package."
       (cond
        ((symbolp arg)
         (setq loopy--loop-name arg))
-       ((or (eq (car arg) 'loop)
-            (consp (car arg)))
+       ((memq (car-safe arg) loopy--valid-macro-arguments) t) ; Do nothing.
+       (t
         ;; Body forms have the most variety.
         ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
         ;; Things added are expanded in place.
-        (dolist (instruction (loopy--parse-loop-commands
-                              (if (eq (car-safe arg) 'loop)
-                                  (cdr arg)
-                                arg)))
+        (dolist (instruction (loopy--parse-loop-command arg))
           ;; Do it this way instead of with `set', cause was getting errors
           ;; about void variables.
           (cl-case (car instruction)
             (loopy--generalized-vars
              (push (cdr instruction) loopy--generalized-vars))
-            (loopy--loop-vars
+            (loopy--iteration-vars
              ;; Don't want to accidentally rebind variables to `nil'.
              (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) loopy--loop-vars)))
+               (push (cdr instruction) loopy--iteration-vars)))
+            (loopy--accumulation-vars
+             ;; Don't want to accidentally rebind variables to `nil'.
+             (unless (loopy--bound-p (cadr instruction))
+               (push (cdr instruction) loopy--accumulation-vars)))
             (loopy--pre-conditions
              (push (cdr instruction) loopy--pre-conditions))
             (loopy--main-body
@@ -618,13 +644,11 @@ see the Info node `(loopy)' distributed with this package."
             (loopy--final-return
              (push (cdr instruction) loopy--final-return))
             (t
-             (error "Loopy: Unknown body instruction: %s" instruction)))))
-       ((not (memq (car arg) loopy--valid-macro-arguments))
-        (error "Loopy: Unknown macro argument: %s" (car arg)))))
+             (error "Loopy: Unknown body instruction: %s" instruction)))))))
 
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
-          loopy--loop-vars (nreverse loopy--loop-vars)
+          loopy--iteration-vars (nreverse loopy--iteration-vars)
           loopy--implicit-return (when (consp loopy--implicit-return)
                                    (if (= 1 (length loopy--implicit-return))
                                        ;; If implicit return is just a single thing,
@@ -642,7 +666,7 @@ see the Info node `(loopy)' distributed with this package."
     ;;
     ;; `(cl-symbol-macrolet ,loopy--generalized-vars
     ;;    (let* ,loopy--with-vars
-    ;;      (let* ,loopy--loop-vars
+    ;;      (let* ,loopy--iteration-vars
     ;;        ;; If we need to, capture early return, those that has less
     ;;        ;; priority than a final return.
     ;;        (let ((loopy--early-return-capture
@@ -784,8 +808,8 @@ see the Info node `(loopy)' distributed with this package."
                   result-is-one-expression t)))
 
         ;; Declare the loop variables.
-        (when loopy--loop-vars
-          (setq result `(let* ,loopy--loop-vars ,@(get-result))
+        (when loopy--iteration-vars
+          (setq result `(let* ,loopy--iteration-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; If there are final updates to made and a tag-body exit that can skip
@@ -794,6 +818,10 @@ see the Info node `(loopy)' distributed with this package."
                    loopy--tagbody-exit-used)
           (setq result `(let ((loopy--implicit-accumulation-updated nil))
                           ,@(get-result))
+                result-is-one-expression t))
+
+        (when loopy--accumulation-vars
+          (setq result `(let ,loopy--accumulation-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; Declare the With variables.
