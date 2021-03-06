@@ -56,6 +56,9 @@ keywords.
 - [[#footnotes][Footnotes]]
 
 * Introduction
+  :PROPERTIES:
+  :DESCRIPTION: A short overview.
+  :END:
 
   The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
   Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
@@ -127,7 +130,8 @@ keywords.
 
 * Basic Concepts
   :PROPERTIES:
-  :CUSTOM_ID: how-to-use
+  :CUSTOM_ID: basic-concepts
+  :DESCRIPTION: Basic information about `loopy' and its loops.
   :END:
 
   Except for an optional loop name, all arguments of the ~loopy~ macro are
@@ -158,8 +162,10 @@ keywords.
 * Special Macro Arguments
   :PROPERTIES:
   :CUSTOM_ID: macro-arguments
+  :DESCRIPTION: Creating the environment of the loop.
   :END:
 
+  #+cindex: special macro argument
   There are 7 special macro arguments. One, an unquoted symbol, is taken as the
   loop's name. The others, listed below, are symbolic expressions that begin
   with a keyword or one of their aliases. You do not need to use all of them.
@@ -291,8 +297,10 @@ keywords.
 * Loop Commands
   :PROPERTIES:
   :CUSTOM_ID: loop-commands
+  :DESCRIPTION: The main features of `loopy'.
   :END:
 
+  #+cindex: loop command
   If a macro argument does not match one of the special 7 arguments described
   in [[#macro-arguments][Special Macro Arguments]], ~loopy~ will attempt to treat it as a loop command.
   Loop commands are only valid as a top-level argument to the macro, or inside
