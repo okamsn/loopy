@@ -140,7 +140,7 @@ arguments like `after-do' or `finally-do'.
 BODY is one or more loop commands."
   ;; TODO: There's a lot of repetition between this and the main macro.
   ;;       Does it make sense to put this repetition in a function instead?
-  (let ((wrapped-loop-name (gensym "sub-loop-"))
+  (let ((wrapped-loop-name nil)
         (wrapped-main-body)
         (wrapped-latter-body)
         (wrapped-pre-conditions)
