@@ -4,3 +4,7 @@
 \#*#
 # Ignore lock files:
 .#*
+# Ignore Info files.
+# These are exported from Org mode, and we don't wish to operate them on them explicitly.
+# They are only used to interpret the outputted Texinfo file.
+*.info
