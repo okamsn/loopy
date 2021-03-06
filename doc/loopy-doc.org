@@ -35,6 +35,7 @@ features.
       - [[#conditionals][Conditionals]]
       - [[#skipping-an-iteration][Skipping an Iteration]]
       - [[#exiting-the-loop-early][Exiting the Loop Early]]
+  - [[#sub-loops][Sub-loops]]
 - [[#changing-the-macros-behavior-with-flags][Changing the Macro's Behavior with Flags]]
 - [[#adding-custom-commands][Adding Custom Commands]]
   - [[#background-information][Background Information]]
@@ -936,6 +937,92 @@ features.
                            (when (eq i 'bad-val?)
                              (return-from outer-loop 'bad-val?)))))
        #+END_SRC
+
+** Sub-loops
+
+   - =(sub-loop|subloop|loop [CMDS])= :: Create a sub-loop.
+
+     There are two main ways to have a sub-loop in ~loopy~:
+
+     1. Use another ~loopy~ call in a =do= command.
+     2. Use the =sub-loop= (aliases =loop= and =subloop=) command.
+
+     When using the =sub-loop= command, keep in mind the following:
+
+     1. Only loop commands are valid within a sub-loop, not special macro
+        arguments like =with= or =finally-return=.
+
+        #+begin_src emacs-lisp
+          ;; GOOD:
+          ;; => (8 9 10)
+          (loopy (with (a 7))
+                 (repeat 1)
+                 (loop (list i '(1 2 3))
+                       (collect (+ a i))))
+
+          ;; BAD:
+          (loopy (repeat 1)
+                 (loop (with (a 7))
+                       (list i '(1 2 3))
+                       (collect (+ a i))))
+        #+end_src
+
+     2. Sub-loops can be named, but they do not have their own return value. The
+        default loop name in ~loopy~ is named ~nil~.  This applies to sub-loops
+        as well as the top-level loop.  To return from the outer loop, you
+        should name the loop and use =return-from=.
+
+        #+begin_src emacs-lisp
+          ;; Return from inner1 so never reach 4.
+          ;; => ((3 5) (3 5))
+          (loopy (repeat 2)
+                 (loop inner1
+                       (list j '(3 4))
+                       (loop (list k '(5 6 7))
+                             (if (= k 6)
+                                 (return-from inner1)
+                               (collect (list j k))))))
+        #+end_src
+
+        Because there is no return value for sub-loops, the =return= and =leave=
+        commands behave similarly.
+
+        #+begin_src emacs-lisp
+          ;; => ((1 .6) (2 . 6))
+          (loopy (list i '(1 2))
+                 (loop (list j '(6 7 8))
+                       (if (= j 7)
+                           (return)
+                         (collect (cons i j)))))
+
+          ;; => ((1 .6) (2 . 6))
+          (loopy (list i '(1 2))
+                 (loop (list j '(6 7 8))
+                       (if (= j 7)
+                           (leave)
+                         (collect (cons i j)))))
+        #+end_src
+
+     3. Variables used for iteration can be local to a sub-loop, but not
+        variables used for accumulation.
+
+        #+begin_src emacs-lisp
+          ;; GOOD:
+          ;; => (0 1 2 3 1 2 3)
+          (loopy (repeat 2)
+                 (loop (list i '(1 2 3))
+                       (collect my-coll i))
+                 (finally-return (cons 0 my-coll)))
+
+          ;; BAD:
+          ;; Would not give (0 3 3).  Instead, signals error.
+          (loopy (repeat 2)
+                 (loop (list i '(1 2 3)))
+                 ;; Error:  `i' doesn't exist outside the sub-loop:
+                 (collect my-coll i)
+                 (finally-return (cons 0 my-coll)))
+        #+end_src
+
 
 * Changing the Macro's Behavior with Flags
 
