@@ -38,11 +38,12 @@ keywords.
 * Basic Concepts::               Basic information about `loopy' and its loops.
 * Special Macro Arguments::      Creating the environment of the loop.
 * Loop Commands::                The main features of `loopy'.
-* Changing the Macro's Behavior with Flags::
-* Adding Custom Commands::
-* How does it compare to @samp{cl-loop}?::
-* Real-World Examples::
-* Keyword and Command Index::
+* Configuring @code{loopy}::     Using flags to change behavior.
+* Custom Commands::              Extending `loopy' with personal commands.
+* Comparing to @code{cl-loop}::  Why `loopy' instead of `cl-loop'.
+* Translating @samp{cl-loop}::   Converting `cl-loop' to `loopy', and vice versa.
+* Real-World Examples::          Extra example of how one could use `loopy'.
+* Macro Argument and Loop Command Index::
 * Variable Index::
 * Concept Index::
 
@@ -51,29 +52,25 @@ keywords.
 
 Loop Commands
 
-* Commands for Generic Evaluation::
-* Iteration and Looping Commands::
-* Accumulation Commands::
-* Control Flow::
-* Sub-loops::
+* Generic Evaluation::           Setting variables, evaluating expressions, etc.
+* Iteration::                    Iterating through sequences, etc.
+* Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
+* Control Flow::                 When to run loop commands.
+* Sub-loops::                    Running a loop within a loop.
 
 Control Flow
 
-* Conditionals::
-* Skipping an Iteration::
-* Exiting the Loop Early::
+* Conditionals::                 Choosing if commands should run.
+* Skipping Cycles::              Immediately beginning the next iteration.
+* Early Exit::                   Leaving the loop early, with or without returning values.
 
-Adding Custom Commands
+Custom Commands
 
-* Background Information::
-* A Small Example::
-* A Slightly More Complicated Example::
+* Background Info::              The internals of `loopy'.
+* Hello World::                  A minimal working example.
+* An @code{always} Command::     Adding a feature from `cl-loop'.
 
-How does it compare to @samp{cl-loop}?
-
-* Translating from @samp{cl-loop}::
-
-Translating from @samp{cl-loop}
+Translating @samp{cl-loop}
 
 * For Clauses::
 * Iteration Clauses::
@@ -175,9 +172,9 @@ a condition for ending the loop.
 
 The loop ends when any condition required by a loop command evaluates to
 false.  If no conditions are needed, the loop runs infinitely until a @samp{return}
-or @samp{return-from} command is reached (@ref{Exiting the Loop Early}).
+or @samp{return-from} command is reached (@ref{Early Exit, , Exiting the Loop Early}).
 
-Except when using accumulating loop commands (@ref{Accumulation Commands}), return
+Except when using accumulating loop commands (@ref{Accumulation, , Accumulation Commands}), return
 values must be stated explicitly, either as an early return in the loop body
 via the @samp{return} or @samp{return-from} commands, or as part of the @samp{finally-return}
 macro argument.  @samp{nil} is returned by default.
@@ -313,7 +310,7 @@ overrides them.
 @table @asis
 @item @samp{flag}, @samp{flags}
 Options that change the behavior of @code{loopy}
-(@ref{Changing the Macro's Behavior with Flags}).
+([BROKEN LINK: *Changing the Macro's Behavior with Flags]).
 
 @lisp
 (loopy (flag dash)
@@ -369,7 +366,7 @@ when the code is evaluated.
 
 Underneath, interpreting a command results in ``instructions'' that describe how
 to substitute code into the loop body and other locations.  This process is
-described in detail later in this document (@ref{Background Information}).
+described in detail later in this document (@ref{Background Info, , Background Information}).
 
 Some examples of instructions are:
 @itemize
@@ -489,15 +486,15 @@ Most commands that assign variables (even the @samp{-ref} commands, which use
 not all kinds of destructuring make sense in all situations.
 
 @menu
-* Commands for Generic Evaluation::
-* Iteration and Looping Commands::
-* Accumulation Commands::
-* Control Flow::
-* Sub-loops::
+* Generic Evaluation::           Setting variables, evaluating expressions, etc.
+* Iteration::                    Iterating through sequences, etc.
+* Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
+* Control Flow::                 When to run loop commands.
+* Sub-loops::                    Running a loop within a loop.
 @end menu
 
-@node Commands for Generic Evaluation
-@section Commands for Generic Evaluation
+@node Generic Evaluation
+@section Generic Evaluation
 
 @findex do
 @table @asis
@@ -547,8 +544,8 @@ expressions.  Currently, this command is only useful when used with the
 @samp{if} command.
 @end table
 
-@node Iteration and Looping Commands
-@section Iteration and Looping Commands
+@node Iteration
+@section Iteration
 
 Iteration commands bind local variables and determine when the loop ends.
 If no command sets that condition, then the loop runs forever.
@@ -675,8 +672,8 @@ Loop through the elements of the sequence
 @end lisp
 @end table
 
-@node Accumulation Commands
-@section Accumulation Commands
+@node Accumulation
+@section Accumulation
 
 Accumulation commands are used to repeatedly update a variable using a
 value.  In that way, they are something like shortcuts for several different
@@ -778,7 +775,7 @@ The commands @samp{collect}, @samp{append}, and @samp{nconc} are more efficient 
 is provided, constructing the accumulated value backwards and then reversing
 it, which is usually faster.  This means that if you want to use
 destructuring with accumulation commands, it might be faster to use the
-@samp{split} flag (@ref{Changing the Macro's Behavior with Flags}), which will make
+@samp{split} flag ([BROKEN LINK: *Changing the Macro's Behavior with Flags]), which will make
 @code{loopy} accumulate into separate implied variables instead of the same
 @code{loopy-result}.  See that section for more details.
 
@@ -960,9 +957,9 @@ Repeatedly @samp{vconcat} the value of @samp{EXPR} onto
 @section Control Flow
 
 @menu
-* Conditionals::
-* Skipping an Iteration::
-* Exiting the Loop Early::
+* Conditionals::                 Choosing if commands should run.
+* Skipping Cycles::              Immediately beginning the next iteration.
+* Early Exit::                   Leaving the loop early, with or without returning values.
 @end menu
 
 @node Conditionals
@@ -1026,8 +1023,8 @@ non-nil, run the following commands @samp{CMDS}.
 @end lisp
 @end table
 
-@node Skipping an Iteration
-@subsection Skipping an Iteration
+@node Skipping Cycles
+@subsection Skipping Cycles
 
 @findex skip, continue
 @table @asis
@@ -1045,8 +1042,8 @@ Go to next loop iteration.
 @end lisp
 @end table
 
-@node Exiting the Loop Early
-@subsection Exiting the Loop Early
+@node Early Exit
+@subsection Early Exit
 
 The loop is contained in a @samp{cl-block}, and these forms are all variations
 of @samp{cl-return-from} underneath.  Indeed, you could use @samp{(do (cl-return-from
@@ -1055,6 +1052,25 @@ of @samp{cl-return-from} underneath.  Indeed, you could use @samp{(do (cl-return
 If multiple @samp{EXPR} are passes to the @samp{return} or @samp{return-from}, these
 commands will return a list of those @samp{EXPR}.  If not @samp{EXPR} is given, @samp{nil}
 is returned.
+
+The commands @samp{leave}, @samp{while}, and @samp{until} leave the current loop without
+forcing a returned value.  Unlike the @samp{return} commands, they do not stop
+the loop from returning implied return values, such as the collection in
+their respective examples.
+
+@findex leave
+@table @asis
+@item @samp{leave}
+Leave the current loop without forcing a return value.
+
+@lisp
+;; => (1 2 3 4)
+(loopy (list i '(1 2 3 4 5 6 7))
+       (if (= i 5)
+           (leave)
+         (collect i)))
+@end lisp
+@end table
 
 @findex return loop command
 @table @asis
@@ -1081,6 +1097,34 @@ Leave the loop @samp{NAME}, returning @samp{[EXPRS]}.
        (do (loopy (list i inner-list)
                   (when (eq i 'bad-val?)
                     (return-from outer-loop 'bad-val?)))))
+@end lisp
+@end table
+
+@findex while
+@table @asis
+@item @samp{(while COND)}
+Leave the loop once @samp{COND} is false, without forcing a
+return value.
+
+@lisp
+;; => (1 2 3 4)
+(loopy (list i '(1 2 3 4 5 6 7))
+       (while (not (= i 5)))
+       (collect i))
+@end lisp
+@end table
+
+@findex until
+@table @asis
+@item @samp{(until COND)}
+Leave the loop once @samp{COND} is true, without forcing a
+return value.
+
+@lisp
+;; => (1 2 3 4)
+(loopy (list i '(1 2 3 4 5 6 7))
+       (until (= i 5))
+       (collect i))
 @end lisp
 @end table
 
@@ -1194,8 +1238,8 @@ variables used for accumulation.
 @end lisp
 @end enumerate
 
-@node Changing the Macro's Behavior with Flags
-@chapter Changing the Macro's Behavior with Flags
+@node Configuring @code{loopy}
+@chapter Configuring @code{loopy}
 
 @cindex flag
 A ``flag'' is a symbol passed to the @samp{flag} or @samp{flags} macro argument, and
@@ -1342,17 +1386,17 @@ Below is an example of the @samp{split} flag.
          (collect i)))
 @end lisp
 
-@node Adding Custom Commands
-@chapter Adding Custom Commands
+@node Custom Commands
+@chapter Custom Commands
 
 @menu
-* Background Information::
-* A Small Example::
-* A Slightly More Complicated Example::
+* Background Info::              The internals of `loopy'.
+* Hello World::                  A minimal working example.
+* An @code{always} Command::     Adding a feature from `cl-loop'.
 @end menu
 
-@node Background Information
-@section Background Information
+@node Background Info
+@section Background Info
 
 The core working of @samp{loopy} is taking a command and generating code that is
 substituted into or around a loop body.
@@ -1569,8 +1613,8 @@ will work similar to the below example.
               'loopy--early-return-capture))))))
 @end lisp
 
-@node A Small Example
-@section A Small Example
+@node Hello World
+@section Hello World
 
 To implement a custom loop body command, @samp{loopy} needs two pieces of
 information:
@@ -1636,8 +1680,8 @@ see that it expands to do what we want, as expected.
   nil)
 @end lisp
 
-@node A Slightly More Complicated Example
-@section A Slightly More Complicated Example
+@node An @code{always} Command
+@section An @code{always} Command
 
 Lets say we want to emulate @samp{cl-loop}'s @samp{always} clause, which causes the
 loop to return @samp{nil} if an expression evaluates to @samp{nil} and @samp{t} otherwise.
@@ -1693,8 +1737,8 @@ This command (and equivalents of the @samp{never} and @samp{thereis} clauses) ar
 provided by default on the assumption that modifying values normally derived
 from macro arguments might prove confusing and unexpected.
 
-@node How does it compare to @samp{cl-loop}?
-@chapter How does it compare to @samp{cl-loop}?
+@node Comparing to @code{cl-loop}
+@chapter Comparing to @code{cl-loop}
 
 @samp{loopy} should be comparable with @samp{cl-loop} for most things, keeping in
 mind the following:
@@ -1822,12 +1866,16 @@ effect.
        (finally-return (nreverse my-collection))) ; => (2 4 6 8 12 14 16 18)
 @end lisp
 
-@menu
-* Translating from @samp{cl-loop}::
-@end menu
+@node Translating @samp{cl-loop}
+@chapter Translating @samp{cl-loop}
 
-@node Translating from @samp{cl-loop}
-@section Translating from @samp{cl-loop}
+@code{loopy} and @code{cl-loop} use slightly different terminology.  The equivalent of
+``for clauses'' are referred to as ``iteration commands'' in @code{loopy}, as they
+generally are used for iterating through sequences.  Meanwhile, ``iteration
+clauses'' can be separated into ``iteration commands'' (@samp{repeat} and @samp{iter-by}
+(not yet implemented)) and ``early-exit commands'' (@samp{while} and @samp{until}).
+
+``Accumulation clauses'' work the same as ``accumulation commands''.
 
 @menu
 * For Clauses::
@@ -1837,7 +1885,7 @@ effect.
 @end menu
 
 @node For Clauses
-@subsection For Clauses
+@section For Clauses
 
 As Emacs has many functions that return lists, there is no need to implement
 an exact equivalent for every @samp{for}-clause that @samp{cl-loop} has.  Instead, one
@@ -1890,7 +1938,7 @@ the @samp{list} command.
 @end multitable
 
 @node Iteration Clauses
-@subsection Iteration Clauses
+@section Iteration Clauses
 
 @multitable {aaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaa}
 @headitem @samp{cl-loop}
@@ -1926,7 +1974,7 @@ combination of an exiting command and the @samp{after-do} (also written
 
 A seen in the above example, @samp{loopy} does not always have a one-to-one
 translation to @samp{cl-loop}.  For the above, an example is provided for adding
-an @samp{always} custom command (@ref{A Slightly More Complicated Example}).
+an @samp{always} custom command (@ref{An @code{always} Command}).
 
 It is not an explicit goal to be able to replace all uses of @samp{cl-loop} with
 @samp{loopy}.  I'd prefer that @samp{loopy} be useful in places where @samp{cl-loop} might
@@ -1937,7 +1985,7 @@ Other options in the above example include using @samp{cl-every},
 @samp{seq-every-p}, Dash’s @samp{-all?}, etc.
 
 @node Accumulation Clauses
-@subsection Accumulation Clauses
+@section Accumulation Clauses
 
 In @samp{loopy}, when accumulation commands are not given a @samp{VAR}, they
 accumulate into different variables.  If you want accumulations to act on
@@ -1967,7 +2015,7 @@ the same variable, you must give the same @samp{VAR}.
 @end multitable
 
 @node Other Clauses
-@subsection Other Clauses
+@section Other Clauses
 
 In @samp{loopy}, @samp{if}, @samp{when}, and @samp{unless} can take multiple loop commands as
 arguments, and operate more like their Lisp counterparts.
@@ -2281,10 +2329,10 @@ clarity.
 
 If one were writing code like this often (say, in a library), then the loop
 body could be simplified even further with custom commands
-(@ref{Adding Custom Commands}).
+(@ref{Custom Commands}).
 
-@node Keyword and Command Index
-@chapter Keyword and Command Index
+@node Macro Argument and Loop Command Index
+@chapter Macro Argument and Loop Command Index
 
 @printindex fn
 

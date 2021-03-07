@@ -35,27 +35,27 @@ keywords.
 - [[#basic-concepts][Basic Concepts]]
 - [[#special-macro-arguments][Special Macro Arguments]]
 - [[#loop-commands][Loop Commands]]
-  - [[#commands-for-generic-evaluation][Commands for Generic Evaluation]]
-  - [[#iteration-and-looping-commands][Iteration and Looping Commands]]
-  - [[#accumulation-commands][Accumulation Commands]]
+  - [[#generic-evaluation][Generic Evaluation]]
+  - [[#iteration][Iteration]]
+  - [[#accumulation][Accumulation]]
   - [[#control-flow][Control Flow]]
     - [[#conditionals][Conditionals]]
-    - [[#skipping-an-iteration][Skipping an Iteration]]
-    - [[#exiting-the-loop-early][Exiting the Loop Early]]
+    - [[#skipping-cycles][Skipping Cycles]]
+    - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-loops]]
-- [[#changing-the-macros-behavior-with-flags][Changing the Macro's Behavior with Flags]]
-- [[#adding-custom-commands][Adding Custom Commands]]
-  - [[#background-information][Background Information]]
-  - [[#a-small-example][A Small Example]]
-  - [[#a-slightly-more-complicated-example][A Slightly More Complicated Example]]
-- [[#how-does-it-compare-to-cl-loop][How does it compare to =cl-loop=?]]
-  - [[#translating-from-cl-loop][Translating from =cl-loop=]]
-    - [[#for-clauses][For Clauses]]
-    - [[#iteration-clauses][Iteration Clauses]]
-    - [[#accumulation-clauses][Accumulation Clauses]]
-    - [[#other-clauses][Other Clauses]]
+- [[#configuring-loopy][Configuring ~loopy~]]
+- [[#custom-commands][Custom Commands]]
+  - [[#background-info][Background Info]]
+  - [[#hello-world][Hello World]]
+  - [[#an-always-command][An ~always~ Command]]
+- [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
+- [[#translating-cl-loop][Translating =cl-loop=]]
+  - [[#for-clauses][For Clauses]]
+  - [[#iteration-clauses][Iteration Clauses]]
+  - [[#accumulation-clauses][Accumulation Clauses]]
+  - [[#other-clauses][Other Clauses]]
 -  [[#real-world-examples][Real-World Examples]]
-- [[#keyword-and-command-index][Keyword and Command Index]]
+- [[#macro-argument-and-loop-command-index][Macro Argument and Loop Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
 - [[#footnotes][Footnotes]]
@@ -336,7 +336,7 @@ keywords.
 
   Underneath, interpreting a command results in "instructions" that describe how
   to substitute code into the loop body and other locations.  This process is
-  described in detail later in this document ([[#background-information][Background Information]]).
+  described in detail later in this document ([[#background-info][Background Information]]).
 
   Some examples of instructions are:
   - Declaring a given variable in a let form to make sure it's locally
@@ -439,8 +439,9 @@ keywords.
   ~setf~-able places instead of actual variables) can use destructuring, but
   not all kinds of destructuring make sense in all situations.
 
-** Commands for Generic Evaluation
+** Generic Evaluation
    :PROPERTIES:
+   :DESCRIPTION: Setting variables, evaluating expressions, etc.
    :CUSTOM_ID: commands-for-generic-evaluation
    :END:
 
@@ -483,9 +484,10 @@ keywords.
      expressions.  Currently, this command is only useful when used with the
      =if= command.
 
-** Iteration and Looping Commands
+** Iteration
    :PROPERTIES:
    :CUSTOM_ID: iteration-and-looping-commands
+   :DESCRIPTION: Iterating through sequences, etc.
    :END:
 
    Iteration commands bind local variables and determine when the loop ends.
@@ -588,9 +590,10 @@ keywords.
               (finally-return my-seq)) ; => '(7 7 7 7)
      #+END_SRC
 
-** Accumulation Commands
+** Accumulation
    :PROPERTIES:
    :CUSTOM_ID: accumulation-commands
+   :DESCRIPTION: Accumulating values into new sequences, aggregating values, etc.
    :END:
 
    Accumulation commands are used to repeatedly update a variable using a
@@ -844,11 +847,13 @@ keywords.
 ** Control Flow
    :PROPERTIES:
    :CUSTOM_ID: control-flow
+   :DESCRIPTION: When to run loop commands.
    :END:
 
 *** Conditionals
     :PROPERTIES:
     :CUSTOM_ID: conditionals
+    :DESCRIPTION: Choosing if commands should run.
     :END:
 
     Conditional commands in =loopy= can take multiple sub-commands, and work
@@ -900,9 +905,10 @@ keywords.
                (finally-return evens odds not-numbers))
       #+END_SRC
 
-*** Skipping an Iteration
+*** Skipping Cycles
     :PROPERTIES:
     :CUSTOM_ID: skipping-an-iteration
+    :DESCRIPTION: Immediately beginning the next iteration.
     :END:
 
    #+findex: skip, continue
@@ -918,9 +924,10 @@ keywords.
                (finally-return (nreverse my-collection)))
       #+END_SRC
 
-*** Exiting the Loop Early
+*** Early Exit
     :PROPERTIES:
     :CUSTOM_ID: exiting-the-loop-early
+    :DESCRIPTION: Leaving the loop early, with or without returning values.
     :END:
 
     The loop is contained in a =cl-block=, and these forms are all variations
@@ -992,6 +999,9 @@ keywords.
       #+end_src
 
 ** Sub-loops
+   :PROPERTIES:
+   :DESCRIPTION: Running a loop within a loop.
+   :END:
 
    #+findex: sub-loop, subloop, loop
    - =(sub-loop|subloop|loop [CMDS])= :: Create a sub-loop in the same lexical
@@ -1089,7 +1099,10 @@ keywords.
       #+end_src
 
 
-* Changing the Macro's Behavior with Flags
+* Configuring ~loopy~
+  :PROPERTIES:
+  :DESCRIPTION: Using flags to change behavior.
+  :END:
 
   #+cindex: flag
   A "flag" is a symbol passed to the =flag= or =flags= macro argument, and
@@ -1222,14 +1235,16 @@ keywords.
    #+end_src
 
 
-* Adding Custom Commands
+* Custom Commands
   :PROPERTIES:
   :CUSTOM_ID: adding-custom-commands
+  :DESCRIPTION: Extending `loopy' with personal commands.
   :END:
 
-** Background Information
+** Background Info
    :PROPERTIES:
-   :CUSTOM_ID: background-information
+   :CUSTOM_ID: background-info
+   :DESCRIPTION: The internals of `loopy'.
    :END:
 
    The core working of =loopy= is taking a command and generating code that is
@@ -1407,9 +1422,10 @@ keywords.
                    'loopy--early-return-capture))))))
    #+END_SRC
 
-** A Small Example
+** Hello World
    :PROPERTIES:
    :CUSTOM_ID: a-small-example
+   :DESCRIPTION: A minimal working example.
    :END:
 
    To implement a custom loop body command, =loopy= needs two pieces of
@@ -1472,9 +1488,10 @@ keywords.
        nil)
    #+END_SRC
 
-** A Slightly More Complicated Example
+** An ~always~ Command
    :PROPERTIES:
-   :CUSTOM_ID: a-slightly-more-complicated-example
+   :CUSTOM_ID: always-example
+   :DESCRIPTION: Adding a feature from `cl-loop'.
    :END:
 
    Lets say we want to emulate =cl-loop='s =always= clause, which causes the
@@ -1531,9 +1548,10 @@ keywords.
    provided by default on the assumption that modifying values normally derived
    from macro arguments might prove confusing and unexpected.
 
-* How does it compare to =cl-loop=?
+* Comparing to ~cl-loop~
   :PROPERTIES:
-  :CUSTOM_ID: how-does-it-compare-to-other-approaches
+  :CUSTOM_ID: comparing-to-cl-loop
+  :DESCRIPTION: Why `loopy' instead of `cl-loop'.
   :END:
 
   =loopy= should be comparable with =cl-loop= for most things, keeping in
@@ -1657,7 +1675,7 @@ keywords.
            (finally-return (nreverse my-collection))) ; => (2 4 6 8 12 14 16 18)
   #+END_SRC
 
-* Translating from =cl-loop=
+* Translating =cl-loop=
   :PROPERTIES:
   :CUSTOM_ID: translating-from-cl-loop
   :DESCRIPTION: Converting `cl-loop' to `loopy', and vice versa.
@@ -1797,7 +1815,11 @@ keywords.
    | =do EXPRS=             | =(do EXPRS)= as a loop command              |
    | =return EXPR=          | =(return EXPR)= as a loop command           |
 
+
 *  Real-World Examples
+  :PROPERTIES:
+  :DESCRIPTION: Extra example of how one could use `loopy'.
+  :END:
 
   This section contains examples of loops that exist in real-world commands.  To
   see these loops in context, full examples of those commands can be found in
@@ -2074,7 +2096,7 @@ keywords.
   body could be simplified even further with custom commands
   ([[#adding-custom-commands]]).
 
-* Keyword and Command Index
+* Macro Argument and Loop Command Index
   :PROPERTIES:
   :INDEX: fn
   :END:
