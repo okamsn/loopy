@@ -931,7 +931,23 @@ keywords.
     commands will return a list of those =EXPR=.  If not =EXPR= is given, =nil=
     is returned.
 
-   #+findex: return loop command
+    The commands =leave=, =while=, and =until= leave the current loop without
+    forcing a returned value.  Unlike the =return= commands, they do not stop
+    the loop from returning implied return values, such as the collection in
+    their respective examples.
+
+    #+findex: leave
+    - =leave= :: Leave the current loop without forcing a return value.
+
+      #+begin_src emacs-lisp
+        ;; => (1 2 3 4)
+        (loopy (list i '(1 2 3 4 5 6 7))
+               (if (= i 5)
+                   (leave)
+                 (collect i)))
+      #+end_src
+
+    #+findex: return loop command
     - =(return [EXPRS])= :: Leave the current loop, returning =[EXPRS]=.
 
       #+BEGIN_SRC emacs-lisp
@@ -941,7 +957,7 @@ keywords.
                  (return j))) ; => 6
       #+END_SRC
 
-   #+findex: return-from
+    #+findex: return-from
     - =(return-from NAME [EXPRS])= :: Leave the loop =NAME=, returning =[EXPRS]=.
 
       #+BEGIN_SRC emacs-lisp
@@ -952,6 +968,28 @@ keywords.
                           (when (eq i 'bad-val?)
                             (return-from outer-loop 'bad-val?)))))
       #+END_SRC
+
+    #+findex: while
+    - =(while COND)= :: Leave the loop once =COND= is false, without forcing a
+      return value.
+
+      #+begin_src emacs-lisp
+        ;; => (1 2 3 4)
+        (loopy (list i '(1 2 3 4 5 6 7))
+               (while (not (= i 5)))
+               (collect i))
+      #+end_src
+
+    #+findex: until
+    - =(until COND)= :: Leave the loop once =COND= is true, without forcing a
+      return value.
+
+      #+begin_src emacs-lisp
+        ;; => (1 2 3 4)
+        (loopy (list i '(1 2 3 4 5 6 7))
+               (until (= i 5))
+               (collect i))
+      #+end_src
 
 ** Sub-loops
 
