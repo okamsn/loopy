@@ -127,90 +127,96 @@ A heading is assumed to be on only one line."
 (defun loopy-examples-selectrum-outline ()
   "Jump to a heading.  Regexps are pre-defined.  Obeys narrowing."
   (interactive)
-  ;; Signal a `user-error' if we don't have a regexp for this major mode.  We
-  ;; could also check this in a `before-do' macro argument to `loopy', but that
-  ;; would happen /after/ the `with' variables are defined, which is
-  ;; inefficient.
-  (if-let ((heading-regexp (alist-get major-mode selectrum-outline-formats)))
-      (save-match-data
-        (loopy
-         (with (selectrum-should-sort-p nil)
-               (current-line-number (line-number-at-pos (point) t))
-               (buffer-lines (split-string (buffer-string) "\n"))
-               (line-number-format
-                (format "L%%0%dd: "
-                        (length
-                         (number-to-string (line-number-at-pos (point-max)
-                                                               t))))))
-         (loop (expr line-number 1 (1+ line-number))
-               (list text-line buffer-lines)
-               (when (string-match heading-regexp text-line)
-                 (expr heading-text
-                       (match-string-no-properties 2 text-line))
-                 (expr heading-level
-                       (length (match-string-no-properties 1 text-line)))
+  (let ((heading-regexp (alist-get major-mode selectrum-outline-formats)))
+    ;; Signal a `user-error' if we don't have a regexp for this major mode.  We
+    ;; could also check this in a `before-do' macro argument to `loopy', but
+    ;; that would happen /after/ the `with' variables are defined, which is
+    ;; inefficient.
+    (unless heading-regexp
+      (user-error "Selectrum-outline: No heading regexp for mode %s" major-mode))
+    (save-match-data
+      (loopy
+       (with (default-heading)
+             (buffer-lines (split-string (buffer-string) "\n"))
+             (line-number-format
+              (concat "L%0"
+                      (number-to-string
+                       (length (number-to-string (length buffer-lines))))
+                      "d: "))
+             (current-line-number (line-number-at-pos (point))))
 
-                 ;; Decide whether to update the prefix list and the
-                 ;; previous heading level.
-                 (cond
-                  ;; If we've moved to a greater level (further down the
-                  ;; tree), add the previous heading to the heading prefix
-                  ;; list so that we can prepend it to the current heading
-                  ;; when formatting.
-                  ((> heading-level (or prev-heading-level heading-level))
-                   (push-into backwards-prefix-list prev-heading-text))
-                  ;; Otherwise, if we've moved to a lower level (higher up
-                  ;; the tree), and need to remove the most recently added
-                  ;; prefix from the list (i.e., go from '(c b a) back to
-                  ;; '(b a)).
-                  ((< heading-level (or prev-heading-level heading-level))
-                   (expr backwards-prefix-list (last backwards-prefix-list
-                                                     heading-level))))
+       ;; Iterate through a list of lines.
+       (list text-line buffer-lines)
+       ;; Keep track of the line number of the candidate.
+       (expr line-number 0 (1+ line-number))
 
-                 ;; Regardless of what happens, update the previous
-                 ;; heading text and level.
-                 (expr prev-heading-text heading-text)
-                 (expr prev-heading-level heading-level)
+       (when (string-match heading-regexp text-line)
+         (expr prev-heading-text nil heading-text)
+         (expr prev-heading-level nil heading-level)
 
-                 ;; Decide whether the previous formatted heading was the
-                 ;; default.
-                 (when (and (null default-heading)
-                            (> line-number current-line-number))
-                   (expr default-heading (car formatted-headings)))
+         (expr heading-text (match-string-no-properties 2 text-line))
+         (expr heading-level (length (match-string 1 text-line)))
 
-                 ;; Finally, add to list of formatted headings.
-                 ;; Create heading of form "L#: a/b/c" as:
-                 ;; - having a text property holding the line number
-                 ;; - prepended with a formatted line number,
-                 ;;   with the face ‘completions-annotations’.
-                 (push-into
-                  formatted-headings
-                  (propertize
-                   (concat (string-join
-                            (reverse backwards-prefix-list) "/")
-                           (and backwards-prefix-list "/")
-                           heading-text)
-                   'line-number line-number
-                   'selectrum-candidate-display-prefix
-                   (propertize (format line-number-format line-number)
-                               'face 'completions-annotations)))))
-         (finally-do
-          (let ((chosen-heading
-                 (selectrum-read "Jump to heading: "
-                                 (nreverse formatted-headings)
-                                 :default-candidate default-heading
-                                 :history 'selectrum-outline-history
-                                 :require-match t
-                                 :no-move-default-candidate t)))
-            ;; Push mark, in case we want to return to current location.  This
-            ;; needs to happen /after/ the user has made it clear that they
-            ;; want to go somewhere.
-            (push-mark (point) t)
-            ;; Move to beginning of chosen line.
-            (forward-line (- (get-text-property 0 'line-number chosen-heading)
-                             current-line-number))
-            (beginning-of-line-text 1)))))
-    (user-error "Selectrum-outline: No headings defined for %s" major-mode)))
+         ;; Decide whether to update the prefix list and the previous
+         ;; heading level.
+         (cond
+          ;; If we've moved to a greater level (further down the tree),
+          ;; add the previous heading to the heading prefix list so
+          ;; that we can prepend it to the current heading when
+          ;; formatting.
+          ((> heading-level (or prev-heading-level
+                                heading-level))
+           (push-into backwards-prefix-list
+                      prev-heading-text))
+          ((< heading-level (or prev-heading-level
+                                heading-level))
+           ;; Otherwise, if we've moved to a lower level (higher up the
+           ;; tree), and need to remove the most recently added prefix
+           ;; from the list (i.e., go from '(c b a) back to '(b a)).
+           (loop (repeat (- prev-heading-level heading-level))
+                 (do (pop backwards-prefix-list)))))
+
+         ;; Finally, add to list of formatted headings.
+         ;; Create heading of form "L#: a/b/c" as:
+         ;; - having a text property holding the line number
+         ;; - prepended with a formatted line number,
+         ;;   with the face ‘completions-annotations’.
+         (expr formatted-heading
+               (propertize
+                (concat (string-join (reverse backwards-prefix-list) "/")
+                        (and backwards-prefix-list "/")
+                        heading-text)
+                'line-number line-number
+                'selectrum-candidate-display-prefix
+                (propertize
+                 (format line-number-format line-number)
+                 'face 'completions-annotations)))
+
+         ;; If needed, set default candidate.
+         (when (and (null default-heading)
+                    (> line-number current-line-number))
+           (expr default-heading formatted-heading))
+
+         ;; Collect formatted heading into `loopy-result'.
+         (collect formatted-heading))
+
+       (finally-do
+        (let* ((selectrum-should-sort nil)
+               (chosen-heading
+                (selectrum-read "Jump to heading: "
+                                loopy-result
+                                :default-candidate default-heading
+                                :history 'selectrum-outline-history
+                                :require-match t
+                                :no-move-default-candidate t)))
+          ;; Push mark, in case we want to return to current location.  This
+          ;; needs to happen /after/ the user has made it clear that they
+          ;; want to go somewhere.
+          (push-mark (point) t)
+          ;; Move to beginning of chosen line.
+          (forward-line (- (get-text-property 0 'line-number chosen-heading)
+                           current-line-number))
+          (beginning-of-line-text 1)))))))
 
 
 (provide 'loopy-examples)
