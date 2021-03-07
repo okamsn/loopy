@@ -31,25 +31,31 @@
 ;; commands" that define a loop body and it's surrounding environment, as well
 ;; as exit conditions.
 ;;
-;; The `loopy' macro has several possible arguments, each beginning with a
-;; keyword.
+;; There are several special macro arguments:
 ;;
-;; - `with' declares variables that are bound in order before and around the
-;; loop, like in a `let*' binding.
-;; - `without' declares variables that ~loopy~ should not try to initialize.
-;; - `before-do' is a list of normal Lisp expressions to run before the loop
-;; executes.
-;; - `loop' is a list of special commands that create the loop body.  These
-;; commands are described in detail in this package's Info document.
-;; - `after-do' is a list of normal Lisp expressions to run after the successful
-;; completion of the loop.
-;; - `finally-do' is a list of normal Lisp expressions that always run,
-;; regardless of whether an early return was triggered in the loop body.
-;; - `finally-return' is an expression whose value is always returned, regardless
-;; of whether an early return was triggered in the loop body.
-;; - `flags' is a list of symbols that change the macro's behavior.
+;;   - `with' declares variables that are bound in order before and around the
+;;     loop, like in a `let*' binding.
 ;;
-;; The loop commands generally follow the form `(COMMAND VARIABLE-NAME &rest ARGS)'.
+;;   - `without' declares variables that ~loopy~ should not try to initialize.
+;;
+;;   - `before-do' is a list of normal Lisp expressions to run before the loop
+;;     executes.
+;;
+;;   - `after-do' is a list of normal Lisp expressions to run after the successful
+;;     completion of the loop.
+;;
+;;   - `finally-do' is a list of normal Lisp expressions that always run,
+;;     regardless of whether an early return was triggered in the loop body.
+;;
+;;   - `finally-return' is an expression whose value is always returned, regardless
+;;     of whether an early return was triggered in the loop body.
+;;
+;;   - `flags' is a list of symbols that change the macro's behavior.
+;;
+;; Additionally, a symbol can be used to name the loop.
+;;
+;; Any argument that doesn't match the above is taken to be a loop command.  The
+;; loop commands generally follow the form `(COMMAND VARIABLE-NAME &rest ARGS)'.
 ;; For example,
 ;;
 ;; - To iterate through a sequence, use `(seq elem [1 2 3])' (for
@@ -58,12 +64,8 @@
 ;; - To just bind a variable to the result of a Lisp expression, use
 ;;   `(expr my-var (my-func))'
 ;;
-;; Below is a full example of the arguments of the `loopy' macro.  The top-level
-;; forms have a flexible-order, but meaning is clearest if they have the
-;; following order.  All of the arguments are technically optional, but having a
-;; loop without a body wouldn't be useful.
-;;
-;; For more information, see this package's Info documentation under Info node
+;; For more information, including the full list of loop commands and how to
+;; extend the macro, see this package's Info documentation under Info node
 ;; `(loopy)'.
 
 ;;; Code:
