@@ -14,6 +14,11 @@
 #+TEXINFO_DIR_TITLE: Loopy: (loopy)
 #+TEXINFO_DIR_DESC: A looping and iteration macro.
 
+#+begin_export html
+NOTE: This file is meant for viewing in Org mode or for exporting to Texinfo.
+Features might not work in other formats (e.g., Info links in HTML).
+#+end_export
+
 =loopy= is a macro meant for iterating and looping.  It is similar in usage to
 ~cl-loop~ ([[info:cl#Loop Facility]]) but uses symbolic expressions rather than
 keywords.
