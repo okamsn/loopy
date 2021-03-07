@@ -277,8 +277,8 @@ keywords.
     #+end_src
 
   #+findex: flag, flags
-  - =flag=, =flags= :: Options that change the behavior of ~loopy~.  See the
-    section [[*Destructuring with =dash=][Destructuring with =dash=]] for an example.
+  - =flag=, =flags= :: Options that change the behavior of ~loopy~
+    ([[*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]]).
 
     #+begin_src emacs-lisp
       (loopy (flag dash)
@@ -306,10 +306,10 @@ keywords.
   :END:
 
   #+cindex: loop command
-  If a macro argument does not match one of the special 7 arguments described
-  in [[#macro-arguments][Special Macro Arguments]], ~loopy~ will attempt to treat it as a loop command.
-  Loop commands are only valid as a top-level argument to the macro, or inside
-  another loop command.
+  If a macro argument does not match one of the previously listed special macro
+  arguments ([[#macro-arguments][Special Macro Arguments]]), ~loopy~ will attempt to treat it as a
+  loop command.  Loop commands are only valid as a top-level argument to the
+  macro, or inside another loop command.
 
   Therefore, these macro calls are valid:
 
@@ -334,9 +334,9 @@ keywords.
   Trying to use loop commands where they don't belong will result in errors
   when the code is evaluated.
 
-  Underneath, interpreting a command results in "instructions" that describe
-  how to substitute code into the loop body and other locations.  This process
-  is described in detail in [[#background-information][Background Information]].
+  Underneath, interpreting a command results in "instructions" that describe how
+  to substitute code into the loop body and other locations.  This process is
+  described in detail later in this document ([[#background-information][Background Information]]).
 
   Some examples of instructions are:
   - Declaring a given variable in a let form to make sure it's locally
@@ -1071,12 +1071,13 @@ keywords.
   The following flags are currently supported:
 
   #+cindex: pcase flag
-  - =pcase= :: Use ~pcase-let~ for destructuring.  See the [[info:elisp#Destructuring with pcase Patterns][~pcase~ documentation]].
+  - =pcase= :: Use ~pcase-let~ for destructuring
+    ([[info:elisp#Destructuring with pcase Patterns]]).
   #+cindex: seq flag
-  - =seq= :: Use ~seq-let~ for destructuring.  See the documentation for [[info:elisp#Sequence Functions][~seq-let~]].
+  - =seq= :: Use ~seq-let~ for destructuring ([[info:elisp#seq-let]]).
   #+cindex: dash flag
-  - =dash= :: Use the style of destructuring found in the =dash= library, as if
-    via [[info:dash#-let][~-let~]].
+  - =dash= :: Use the style of destructuring found in the =dash= library
+   ([[info:dash#-let]]).
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
     separate variables instead of into ~loopy-result~.
@@ -1688,7 +1689,8 @@ keywords.
     #+END_SRC
 
     A seen in the above example, =loopy= does not always have a one-to-one
-    translation to =cl-loop= ([[#a-slightly-more-complicated-example][though you could try a custom command]]).
+    translation to =cl-loop=.  For the above, an example is provided for adding
+    an =always= custom command ([[#a-slightly-more-complicated-example]]).
 
     It is not an explicit goal to be able to replace all uses of =cl-loop= with
     =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
@@ -2022,7 +2024,8 @@ keywords.
   clarity.
 
   If one were writing code like this often (say, in a library), then the loop
-  body could be simplified even further with [[#adding-custom-commands][custom commands]].
+  body could be simplified even further with custom commands
+  ([[#adding-custom-commands]]).
 
 * Keyword and Command Index
   :PROPERTIES:

@@ -312,8 +312,8 @@ overrides them.
 @findex flag, flags
 @table @asis
 @item @samp{flag}, @samp{flags}
-Options that change the behavior of @code{loopy}.  See the
-section [BROKEN LINK: *Destructuring with =dash=] for an example.
+Options that change the behavior of @code{loopy}
+(@ref{Changing the Macro's Behavior with Flags}).
 
 @lisp
 (loopy (flag dash)
@@ -339,10 +339,10 @@ Finally, @samp{(finally-return 1 2 3)} is the same as @samp{(finally-return (lis
 @chapter Loop Commands
 
 @cindex loop command
-If a macro argument does not match one of the special 7 arguments described
-in @ref{Special Macro Arguments}, @code{loopy} will attempt to treat it as a loop command.
-Loop commands are only valid as a top-level argument to the macro, or inside
-another loop command.
+If a macro argument does not match one of the previously listed special macro
+arguments (@ref{Special Macro Arguments}), @code{loopy} will attempt to treat it as a
+loop command.  Loop commands are only valid as a top-level argument to the
+macro, or inside another loop command.
 
 Therefore, these macro calls are valid:
 
@@ -367,9 +367,9 @@ and this is not:
 Trying to use loop commands where they don't belong will result in errors
 when the code is evaluated.
 
-Underneath, interpreting a command results in ``instructions'' that describe
-how to substitute code into the loop body and other locations.  This process
-is described in detail in @ref{Background Information}.
+Underneath, interpreting a command results in ``instructions'' that describe how
+to substitute code into the loop body and other locations.  This process is
+described in detail later in this document (@ref{Background Information}).
 
 Some examples of instructions are:
 @itemize
@@ -1217,18 +1217,19 @@ The following flags are currently supported:
 @cindex pcase flag
 @table @asis
 @item @samp{pcase}
-Use @code{pcase-let} for destructuring.  See the @ref{Destructuring with pcase Patterns,@code{pcase} documentation,,elisp,}.
+Use @code{pcase-let} for destructuring
+(@ref{Destructuring with pcase Patterns,,,elisp,}).
 @end table
 @cindex seq flag
 @table @asis
 @item @samp{seq}
-Use @code{seq-let} for destructuring.  See the documentation for @ref{Sequence Functions,@code{seq-let},,elisp,}.
+Use @code{seq-let} for destructuring (@ref{seq-let,,,elisp,}).
 @end table
 @cindex dash flag
 @table @asis
 @item @samp{dash}
-Use the style of destructuring found in the @samp{dash} library, as if
-via @ref{-let,@code{-let},,dash,}.
+Use the style of destructuring found in the @samp{dash} library
+(@ref{-let,,,dash,}).
 @end table
 @cindex split flag
 @table @asis
@@ -1924,7 +1925,8 @@ combination of an exiting command and the @samp{after-do} (also written
 @end lisp
 
 A seen in the above example, @samp{loopy} does not always have a one-to-one
-translation to @samp{cl-loop} (@ref{A Slightly More Complicated Example, , though you could try a custom command}).
+translation to @samp{cl-loop}.  For the above, an example is provided for adding
+an @samp{always} custom command (@ref{A Slightly More Complicated Example}).
 
 It is not an explicit goal to be able to replace all uses of @samp{cl-loop} with
 @samp{loopy}.  I'd prefer that @samp{loopy} be useful in places where @samp{cl-loop} might
@@ -2012,7 +2014,7 @@ the file @uref{loopy-examples.el} (containing the library @samp{loopy-examples})
 comes with this package.
 
 One command that could see a benefit from using @samp{loopy} is @samp{selectrum-swiper}
-from the Selectrum wiki @footnote{@uref{https://github.com/raxod502/selectrum/wiki/Useful-Commands#jumping-to-lines}}.  This command allows a user to jump to
+from the Selectrum wiki @footnote{@uref{https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines}}.  This command allows a user to jump to
 a matched line in the buffer.  Candidates are created by looping through text
 lines, formatting non-empty lines and collecting the formatted lines into a
 list of candidates.  At the same time, it selects a default candidate by
@@ -2278,7 +2280,8 @@ same flow of logic, you still get the benefit of less typing with no loss in
 clarity.
 
 If one were writing code like this often (say, in a library), then the loop
-body could be simplified even further with @ref{Adding Custom Commands, , custom commands}.
+body could be simplified even further with custom commands
+(@ref{Adding Custom Commands}).
 
 @node Keyword and Command Index
 @chapter Keyword and Command Index
