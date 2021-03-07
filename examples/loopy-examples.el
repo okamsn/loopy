@@ -46,47 +46,55 @@
 The default candidate is the line closest to the current one.
 Obeys narrowing."
   (interactive)
-  (loopy (with (selectrum-should-sort-p nil)
-               (current-line-number (line-number-at-pos (point) t))
+  (loopy (with (current-line-number (line-number-at-pos (point) t))
                (buffer-text-lines (split-string (buffer-string) "\n"))
                (number-format
                 (format "L%%0%dd: "
-                        (length
-                         (number-to-string (line-number-at-pos (point-max)
-                                                               t))))))
-         (loop (list line-text buffer-text-lines)
-               (expr line-num (line-number-at-pos (point-min) t)
-                     (1+ line-num))
+                        (length (number-to-string
+                                 (line-number-at-pos (point-max) t))))))
 
-               (unless (string-empty-p line-text)
-                 (push-into formatted-candidates
-                            (propertize
-                             line-text
-                             'selectrum-candidate-display-prefix
-                             (propertize (format number-format line-num)
-                                         'face 'completions-annotations)
-                             'line-num line-num))
-                 ;; There are a few different ways that you could express
-                 ;; this.
-                 (when (null default-candidate)
-                   (expr prev-dist +1.0e+INF dist-to-default-cand)
-                   (expr dist-to-default-cand (abs (- current-line-number
-                                                      line-num)))
-                   (when (> dist-to-default-cand prev-dist)
-                     ;; Note that we don't need to declare `default-candidate'.
-                     (expr default-candidate
-                           (cl-second formatted-candidates))))))
+         ;; Loop through lines in the buffer.
+         (list line-text buffer-text-lines)
+         (expr line-num (line-number-at-pos (point-min) t) (1+ line-num))
+
+         (unless (string-empty-p line-text)
+
+           ;; Once the distance between candidates and the current line starts
+           ;; to increase, select the previously formatted candidate (i.e., the
+           ;; candidate closest to the current line) as the default.
+           ;;
+           ;; There are a few different ways that you could express this idea.
+           (when (null default-candidate)
+             (expr prev-dist +1.0e+INF dist-to-default-cand)
+             (expr dist-to-default-cand (abs (- current-line-number
+                                                line-num)))
+             (when (> dist-to-default-cand prev-dist)
+               ;; Note that we don't need to declare `default-candidate'.
+               (expr default-candidate formatted-candidate)))
+
+           ;; Format the current line.
+           (expr formatted-candidate
+                 (propertize
+                  line-text
+                  'selectrum-candidate-display-prefix
+                  (propertize (format number-format line-num)
+                              'face 'completions-annotations)
+                  'line-num line-num))
+
+           ;; Create a list of formatted candidates.
+           (collect formatted-candidate))
 
          (finally-do
-          (let ((chosen-line-number
-                 (get-text-property
-                  0 'line-num
-                  (selectrum-read "Jump to matching line: "
-                                  (nreverse formatted-candidates)
-                                  :default-candidate default-candidate
-                                  :history 'selectrum-swiper-history
-                                  :require-match t
-                                  :no-move-default-candidate t))))
+          (let* ((selectrum-should-sort nil)
+                 (chosen-line-number
+                  (get-text-property
+                   0 'line-num
+                   (selectrum-read "Jump to matching line: "
+                                   loopy-result
+                                   :default-candidate default-candidate
+                                   :history 'selectrum-swiper-history
+                                   :require-match t
+                                   :no-move-default-candidate t))))
             (push-mark (point) t)
             (forward-line (- chosen-line-number current-line-number))
             (beginning-of-line-text 1)))))
