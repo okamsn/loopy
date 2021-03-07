@@ -231,6 +231,16 @@ Unlike in `loopy--iteration-vars', these variables should be
 accessible from anywhere in the macro, and should not be reset
 for sub-loops.")
 
+(defvar loopy--misc-vars nil
+  "Initialization of miscellaneous variables.
+
+These variables don't fall into the other categories, and are not
+order sensitive.
+
+See also the variables `loopy--iteration-vars',
+`loopy--accumulation-vars', `loopy--generalized-vars', and
+`loopy--with-vars'.")
+
 (defvar loopy--before-do nil
   "A list of expressions to evaluate before the loop starts.
 This is done using a `progn'.")
@@ -545,6 +555,7 @@ Info node `(loopy)' distributed with this package."
         (loopy--iteration-vars)
         (loopy--accumulation-vars)
         (loopy--generalized-vars)
+        (loopy--misc-vars)
         (loopy--pre-conditions)
         (loopy--main-body)
         (loopy--latter-body)
@@ -615,6 +626,10 @@ Info node `(loopy)' distributed with this package."
              ;; Don't want to accidentally rebind variables to `nil'.
              (unless (loopy--bound-p (cadr instruction))
                (push (cdr instruction) loopy--accumulation-vars)))
+            (loopy--misc-vars
+             ;; Don't want to accidentally rebind variables to `nil'.
+             (unless (loopy--bound-p (cadr instruction))
+               (push (cdr instruction) loopy--misc-vars)))
             (loopy--pre-conditions
              (push (cdr instruction) loopy--pre-conditions))
             (loopy--main-body
@@ -823,6 +838,10 @@ Info node `(loopy)' distributed with this package."
 
         (when loopy--accumulation-vars
           (setq result `(let ,loopy--accumulation-vars ,@(get-result))
+                result-is-one-expression t))
+
+        (when loopy--misc-vars
+          (setq result `(let ,loopy--misc-vars ,@(get-result))
                 result-is-one-expression t))
 
         ;; Declare the With variables.

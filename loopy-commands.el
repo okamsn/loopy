@@ -373,15 +373,36 @@ command are inserted into a `cond' special form."
 - NAME is `when' or `unless'.
 - CONDITION is the condition.
 - BODY is the sub-commands."
-  (let (full-instructions
-        conditional-body)
-    (dolist (instruction (loopy--parse-loop-commands body))
-      (if (eq 'loopy--main-body (car instruction))
-          (push (cdr instruction) conditional-body)
-        (push instruction full-instructions)))
-    ;; Return the instructions.
-    (cons `(loopy--main-body . (,name ,condition ,@(nreverse conditional-body)))
-          (nreverse full-instructions))))
+  (let* ((parsed-instructions (loopy--parse-loop-commands body))
+         ;; If there are latter-body instructions, they also need to be
+         ;; executed conditionally, meaning that we must store the value of the
+         ;; condition.
+         (wrapping-latter-body-instructions (assq 'loopy--latter-body
+                                                  parsed-instructions)))
+    (let ((unwrapped-instructions)
+          (wrapped-main-body)
+          (wrapped-latter-body))
+      (dolist (instruction parsed-instructions)
+        (cl-case (car instruction)
+          (loopy--main-body   (push (cdr instruction) wrapped-main-body))
+          (loopy--latter-body (push (cdr instruction) wrapped-latter-body))
+          (t                  (push instruction unwrapped-instructions))))
+
+      ;; Return new instructions.
+      (if wrapping-latter-body-instructions
+          (let ((condition-holder (gensym (concat (symbol-name name)
+                                                  "-condition-"))))
+            `((loopy--misc-vars . (,condition-holder nil))
+              (loopy--main-body . (setq ,condition-holder ,condition))
+              (loopy--main-body . (,name ,condition-holder
+                                         ,@(nreverse wrapped-main-body)))
+              (loopy--latter-body . (,name ,condition-holder
+                                           ,@(nreverse wrapped-latter-body)))
+              ,@(nreverse unwrapped-instructions)))
+        ;; If no latter-body, then we don't need to store the condition.
+        `((loopy--main-body . (,name ,condition
+                                     ,@(nreverse wrapped-main-body)))
+          ,@(nreverse unwrapped-instructions))))))
 
 ;;;;; Iteration
 (cl-defun loopy--parse-array-command
