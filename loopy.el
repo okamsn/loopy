@@ -468,13 +468,8 @@ name a loop, pass in an unquoted symbol as an argument.
   initialize.  `loopy' tries to initialize all the variables it
   uses in a `let'-like form, but that isn’t always desired.
 
-- `before-do', `before': Run Lisp expressions before the loop
-  starts.
-
-- `loop' (or no keyword): Add expressions to the loop body,
-  perform any setup like initializing variables or adding exit
-  conditions.  This is done using \"loop commands\", which are
-  described in this packages Info document.
+- `before-do', `before', `initially-do', `initially': Run Lisp
+  expressions before the loop starts.
 
 - `after-do', `after', `else-do', `else': Run Lisp expressions
   after the loop successfully completes.  This is similar to
@@ -499,25 +494,29 @@ Finally, `(finally-return 1 2 3)' is the same as
 `(finally-return (list 1 2 3))'.  This is convenient when using
 `seq-let', `pcase-let', `cl-destructuring-bind', and the like.
 
-For more information, including a list of available loop commands,
-see the Info node `(loopy)' distributed with this package."
+Any another argument is assumed to be a loop command.  For more
+information, including a list of available loop commands, see the
+Info node `(loopy)' distributed with this package."
 
-  (declare (debug (&optional ;; TODO: Is this correct?
-                   ([&or "with" "let*"] &rest (symbolp &optional form))
-                   ([&or "without" "no-init"] &rest (symbolp &optional form))
-                   ([&or "before-do" "before"] body)
-                   ([&optional "loop"]
-                    &rest [&or (symbolp ;; This one covers most commands.
-                                &optional
-                                [&or symbolp sexp] ; destructured arg
-                                form
-                                [&or symbolp function-form lambda-expr])
-                               ([&or "when" "if" "unless"] form body)
-                               ("cond" &rest (body))
-                               ("group" body)])
-                   ([&or "after-do" "after" "else-do" "else"] body)
-                   ([&or "finally-do" "finally"] body)
-                   ([&or "finally-return" "return"] form &optional [&rest form]))))
+  (declare (debug (&rest ;; TODO: Is this correct?
+                   [&or
+                    ([&or "with" "let*"] &rest (symbolp &optional form))
+                    ([&or "without" "no-init"] &rest symbolp)
+                    ([&or "flag" "flags"] &rest symbolp)
+                    ([&or "before-do" "before" "initially-do" "initially"] body)
+                    [&or (symbolp ;; This one covers most commands.
+                          &optional
+                          [&or symbolp sexp] ; destructured arg
+                          form
+                          [&or symbolp function-form lambda-expr])
+                         ([&or "when" "if" "unless"] form body)
+                         ([&or "expr" "exprs" "set"] [&or symbolp sexp]
+                          &optional [&rest form])
+                         ("cond" &rest (body))
+                         ("group" body)]
+                    ([&or "after-do" "after" "else-do" "else"] body)
+                    ([&or "finally-do" "finally"] body)
+                    ("finally-return" form &optional [&rest form]) ])))
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
         (loopy--with-vars (cdr (or (assq 'with body)
