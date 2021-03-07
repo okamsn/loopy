@@ -53,7 +53,6 @@ keywords.
 - [[#keyword-and-command-index][Keyword and Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
-- [[#footnotes][Footnotes]]
 
 * Introduction
   :PROPERTIES:
@@ -2033,16 +2032,3 @@ keywords.
   :PROPERTIES:
   :INDEX: cp
   :END:
-
-* Footnotes
-
-[fn:cl-loop] [[info:cl#Loop Facility][info:cl#Loop Facility]]
-
-[fn:seq] [[info:elisp#Sequence Functions]]
-
-[fn:cl-lib] [[info:cl]]
-
-[fn:sequence] [[info:elisp#Sequences Arrays Vectors]]
-
-[fn:sel-wiki]
-https://github.com/raxod502/selectrum/wiki/Useful-Commands#jumping-to-lines
