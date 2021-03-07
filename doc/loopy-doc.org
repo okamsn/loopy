@@ -1657,136 +1657,145 @@ keywords.
            (finally-return (nreverse my-collection))) ; => (2 4 6 8 12 14 16 18)
   #+END_SRC
 
-** Translating from =cl-loop=
+* Translating from =cl-loop=
+  :PROPERTIES:
+  :CUSTOM_ID: translating-from-cl-loop
+  :DESCRIPTION: Converting `cl-loop' to `loopy', and vice versa.
+  :END:
+
+  ~loopy~ and ~cl-loop~ use slightly different terminology.  The equivalent of
+  "for clauses" are referred to as "iteration commands" in ~loopy~, as they
+  generally are used for iterating through sequences.  Meanwhile, "iteration
+  clauses" can be separated into "iteration commands" (=repeat= and =iter-by=
+  (not yet implemented)) and "early-exit commands" (=while= and =until=).
+
+  "Accumulation clauses" work the same as "accumulation commands".
+
+** For Clauses
    :PROPERTIES:
-   :CUSTOM_ID: translating-from-cl-loop
+   :CUSTOM_ID: for-clauses
    :END:
 
-*** For Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: for-clauses
-    :END:
+   As Emacs has many functions that return lists, there is no need to implement
+   an exact equivalent for every =for=-clause that =cl-loop= has.  Instead, one
+   can just iterate through the return value of the appropriate function using
+   the =list= command.
 
-    As Emacs has many functions that return lists, there is no need to implement
-    an exact equivalent for every =for=-clause that =cl-loop= has.  Instead, one
-    can just iterate through the return value of the appropriate function using
-    the =list= command.
+   | =cl-loop=                                     | =loopy=                                          |
+   |-----------------------------------------------+--------------------------------------------------|
+   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
+   | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
+   | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
+   | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
+   | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                              |
+   | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                          |
+   | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                             |
+   | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                         |
+   | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.                    |
+   | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=        |
+   | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))=      |
+   | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.                  |
+   | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.                  |
+   | =for VAR being the key-seqs of KEYMAP=        | None so far.                                     |
+   | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.               |
+   | =for VAR being the intervals [of BUFFER]=     | None so far.                                     |
+   | =for VAR being the frames=                    | =(list VAR (frame-list))=                        |
+   | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=                 |
+   | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                       |
+   | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                         |
 
-    | =cl-loop=                                     | =loopy=                                          |
-    |-----------------------------------------------+--------------------------------------------------|
-    | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
-    | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
-    | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
-    | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
-    | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                              |
-    | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                          |
-    | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                             |
-    | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                         |
-    | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.                    |
-    | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=        |
-    | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))=      |
-    | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.                  |
-    | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.                  |
-    | =for VAR being the key-seqs of KEYMAP=        | None so far.                                     |
-    | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.               |
-    | =for VAR being the intervals [of BUFFER]=     | None so far.                                     |
-    | =for VAR being the frames=                    | =(list VAR (frame-list))=                        |
-    | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=                 |
-    | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                       |
-    | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                         |
+** Iteration Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: iteration-clauses
+   :END:
 
-*** Iteration Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: iteration-clauses
-    :END:
+   | =cl-loop=          | =loopy=        |
+   |--------------------+----------------|
+   | =repeat INT=       | =(repeat INT)= |
+   | =while COND=       | =(while COND)= |
+   | =until COND=       | =(until COND)= |
+   | =iter-by iterator= | None so far.   |
 
-    | =cl-loop=          | =loopy=        |
-    |--------------------+----------------|
-    | =repeat INT=       | =(repeat INT)= |
-    | =while COND=       | =(while COND)= |
-    | =until COND=       | =(until COND)= |
-    | =iter-by iterator= | None so far.   |
+   The clauses =always=, =never=, and =thereis= can be replaced by a
+   combination of an exiting command and the =after-do= (also written
+   =else-do=) macro argument.  Below is an example from the CL Lib manual.
 
-    The clauses =always=, =never=, and =thereis= can be replaced by a
-    combination of an exiting command and the =after-do= (also written
-    =else-do=) macro argument.  Below is an example from the CL Lib manual.
+   #+BEGIN_SRC emacs-lisp
+     ;; With `cl-loop':
+     (if (cl-loop for size in size-list always (> size 10))
+         (only-big-sizes)
+       (some-small-sizes))
 
-    #+BEGIN_SRC emacs-lisp
-      ;; With `cl-loop':
-      (if (cl-loop for size in size-list always (> size 10))
-          (only-big-sizes)
-        (some-small-sizes))
+     ;; With `loopy':
+     ;; Depends on whether the functions have return values.
+     (loopy (list size size-list)
+            ;; `return` is just a wrapper for `cl-return`.
+            (when (< size 10) (return (some-small-sizes)))
+            ;; Only runs if loop doesn't exit early.
+            (else-do (cl-return (only-big-sizes))))
+   #+END_SRC
 
-      ;; With `loopy':
-      ;; Depends on whether the functions have return values.
-      (loopy (list size size-list)
-             ;; `return` is just a wrapper for `cl-return`.
-             (when (< size 10) (return (some-small-sizes)))
-             ;; Only runs if loop doesn't exit early.
-             (else-do (cl-return (only-big-sizes))))
-    #+END_SRC
+   A seen in the above example, =loopy= does not always have a one-to-one
+   translation to =cl-loop=.  For the above, an example is provided for adding
+   an =always= custom command ([[#always-example]]).
 
-    A seen in the above example, =loopy= does not always have a one-to-one
-    translation to =cl-loop=.  For the above, an example is provided for adding
-    an =always= custom command ([[#a-slightly-more-complicated-example]]).
+   It is not an explicit goal to be able to replace all uses of =cl-loop= with
+   =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
+   not be enough, instead of forcing =loopy= into places where =cl-loop=
+   already works well.
 
-    It is not an explicit goal to be able to replace all uses of =cl-loop= with
-    =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
-    not be enough, instead of forcing =loopy= into places where =cl-loop=
-    already works well.
+   Other options in the above example include using =cl-every=,
+   =seq-every-p=, Dash’s =-all?=, etc.
 
-    Other options in the above example include using =cl-every=,
-    =seq-every-p=, Dash’s =-all?=, etc.
+** Accumulation Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: accumulation-clauses
+   :END:
 
-*** Accumulation Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: accumulation-clauses
-    :END:
+   In =loopy=, when accumulation commands are not given a =VAR=, they
+   accumulate into different variables.  If you want accumulations to act on
+   the same variable, you must give the same =VAR=.
 
-    In =loopy=, when accumulation commands are not given a =VAR=, they
-    accumulate into different variables.  If you want accumulations to act on
-    the same variable, you must give the same =VAR=.
+   | =cl-loop=                | =loopy=              |
+   |--------------------------+----------------------|
+   | =append EXPR into VAR=   | =(append VAR EXPR)=  |
+   | =collect EXPR into VAR=  | =(collect VAR EXPR)= |
+   | =concat EXPR into VAR=   | =(concat VAR EXPR)=  |
+   | =count EXPR into VAR=    | =(count VAR EXPR)=   |
+   | =maximize EXPR into VAR= | =(max VAR EXPR)=     |
+   | =minimize EXPR into VAR= | =(min VAR EXPR)=     |
+   | =nconc EXPR into VAR=    | =(nconc VAR EXPR)=   |
+   | =sum EXPR into VAR=      | =(sum VAR EXPR)=     |
+   | =vconcat EXPR into VAR=  | =(vconcat VAR EXPR)= |
 
-    | =cl-loop=                | =loopy=              |
-    |--------------------------+----------------------|
-    | =append EXPR into VAR=   | =(append VAR EXPR)=  |
-    | =collect EXPR into VAR=  | =(collect VAR EXPR)= |
-    | =concat EXPR into VAR=   | =(concat VAR EXPR)=  |
-    | =count EXPR into VAR=    | =(count VAR EXPR)=   |
-    | =maximize EXPR into VAR= | =(max VAR EXPR)=     |
-    | =minimize EXPR into VAR= | =(min VAR EXPR)=     |
-    | =nconc EXPR into VAR=    | =(nconc VAR EXPR)=   |
-    | =sum EXPR into VAR=      | =(sum VAR EXPR)=     |
-    | =vconcat EXPR into VAR=  | =(vconcat VAR EXPR)= |
+** Other Clauses
+   :PROPERTIES:
+   :CUSTOM_ID: other-clauses
+   :END:
 
-*** Other Clauses
-    :PROPERTIES:
-    :CUSTOM_ID: other-clauses
-    :END:
+   In =loopy=, =if=, =when=, and =unless= can take multiple loop commands as
+   arguments, and operate more like their Lisp counterparts.
 
-    In =loopy=, =if=, =when=, and =unless= can take multiple loop commands as
-    arguments, and operate more like their Lisp counterparts.
+   This means that =if= is not a synonym for =when=.  Just like the normal Lisp
+   special form =if=, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
+   evaluates to non-nil, and only runs commands =cmd2= and =cmd3= if =COND=
+   evaluates to =nil=.
 
-    This means that =if= is not a synonym for =when=.  Just like the normal Lisp
-    special form =if=, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
-    evaluates to non-nil, and only runs commands =cmd2= and =cmd3= if =COND=
-    evaluates to =nil=.
+   =loopy= also provides the command =cond=, which works like the normal Lisp
+   special form =cond=.
 
-    =loopy= also provides the command =cond=, which works like the normal Lisp
-    special form =cond=.
-
-    | =cl-loop=              | =loopy=                                     |
-    |------------------------+---------------------------------------------|
-    | =with var = value=     | =(with (VAR VALUE))= as a macro argument    |
-    | =if COND clause=       | =(if COND CMDS)= as a loop command          |
-    | =when COND clause=     | =(when COND CMDS)= as a loop command        |
-    | =unless COND clause=   | =(unless COND CMDS)= as a loop command      |
-    | =named NAME=           | =NAME= as a macro argument                  |
-    | =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument     |
-    | =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument    |
-    | =finally return EXPR=  | =(finally-return EXPR)= as a macro argument |
-    | =do EXPRS=             | =(do EXPRS)= as a loop command              |
-    | =return EXPR=          | =(return EXPR)= as a loop command           |
+   | =cl-loop=              | =loopy=                                     |
+   |------------------------+---------------------------------------------|
+   | =with var = value=     | =(with (VAR VALUE))= as a macro argument    |
+   | =if COND clause=       | =(if COND CMDS)= as a loop command          |
+   | =when COND clause=     | =(when COND CMDS)= as a loop command        |
+   | =unless COND clause=   | =(unless COND CMDS)= as a loop command      |
+   | =named NAME=           | =NAME= as a macro argument                  |
+   | =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument     |
+   | =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument    |
+   | =finally return EXPR=  | =(finally-return EXPR)= as a macro argument |
+   | =do EXPRS=             | =(do EXPRS)= as a loop command              |
+   | =return EXPR=          | =(return EXPR)= as a loop command           |
 
 *  Real-World Examples
 
