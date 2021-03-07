@@ -58,6 +58,7 @@ keywords.
 - [[#keyword-and-command-index][Keyword and Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
+- [[#footnotes][Footnotes]]
 
 * Introduction
   :PROPERTIES:
@@ -2037,3 +2038,8 @@ keywords.
   :PROPERTIES:
   :INDEX: cp
   :END:
+
+* Footnotes
+
+[fn:sel-wiki]
+[[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
