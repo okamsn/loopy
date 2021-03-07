@@ -1371,6 +1371,25 @@ keywords.
      code from this is ultimately appended to the latter body before being
      substituted in.
 
+   For accumulation commands, you might also wish to place values in the
+   following:
+
+   #+vindex: loopy--implicit-return
+   - =loopy--implicit-return= :: A list of values to be returned by the loop if
+     no other return value is specified. All accumulation commands can add a
+     value to this list, which can include the variable ~loopy-result~ if an
+     accumulation command is used without specifying a variable.
+
+     For example, =(collect my-coll my-val)= would add =my-coll= to this list.
+
+   #+vindex: loopy--implicit-accumulation-final-update
+   - =loopy--implicit-accumulation-final-update= :: Actions to perform on
+     ~loopy-result~ after the loop ends.  Some implied accumulation commands
+     need to update the variable one final time after ending the loop, such as
+     making sure it is in the right order.  Although this variable is a list of
+     such updates, to avoid conflicts, only the update at the head of the list
+     is performed.
+
    There are 4 more variables a loop command can push to, but they are derived
    from the macro's arguments.  Adding to them after using a macro argument
    might lead to unintended behavior.  You might wish to use them if, for
