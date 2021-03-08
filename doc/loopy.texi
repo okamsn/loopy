@@ -550,6 +550,19 @@ expressions.  Currently, this command is only useful when used with the
 Iteration commands bind local variables and determine when the loop ends.
 If no command sets that condition, then the loop runs forever.
 
+Iteration commands must occur in the top level of the @code{loopy} form or in a
+@samp{sub-loop} command.  Trying to do something like the below will signal an
+error.
+
+@lisp
+(loopy (list i '(1 2 3 4 5))
+       (when (cl-evenp i)
+         ;; Can't use `list' in a `when'.
+         ;; Will signal an error.
+         (list j '(6 7 8 9 10))
+         (collect j)))
+@end lisp
+
 The @samp{-ref} (as in “reference”) commands create @code{setf}-able places instead of
 true variables.  Like other commands, they can also use destructuring.  In
 such cases, the variables in the sequence @samp{VAR} are also @code{setf}-able places
@@ -1548,6 +1561,31 @@ Expressions that determine whether the
 @samp{while} loop continues, but checked after the loop body has run.  The
 code from this is ultimately appended to the latter body before being
 substituted in.
+@end table
+
+For accumulation commands, you might also wish to place values in the
+following:
+
+@vindex loopy--implicit-return
+@table @asis
+@item @samp{loopy--implicit-return}
+A list of values to be returned by the loop if
+no other return value is specified. All accumulation commands can add a
+value to this list, which can include the variable @code{loopy-result} if an
+accumulation command is used without specifying a variable.
+
+For example, @samp{(collect my-coll my-val)} would add @samp{my-coll} to this list.
+@end table
+
+@vindex loopy--implicit-accumulation-final-update
+@table @asis
+@item @samp{loopy--implicit-accumulation-final-update}
+Actions to perform on
+@code{loopy-result} after the loop ends.  Some implied accumulation commands
+need to update the variable one final time after ending the loop, such as
+making sure it is in the right order.  Although this variable is a list of
+such updates, to avoid conflicts, only the update at the head of the list
+is performed.
 @end table
 
 There are 4 more variables a loop command can push to, but they are derived
