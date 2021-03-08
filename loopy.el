@@ -587,15 +587,10 @@ Info node `(loopy)' distributed with this package."
 
     ;; Process `with' for destructuring.
     (when loopy--with-vars
-      (let ((actual-with-vars))
-        (dolist (var loopy--with-vars)
-          ;; Push a list of lists.
-          (push (loopy--destructure-variables (car var)
-                                              (cadr var))
-                actual-with-vars))
-        ;; This will be revered into the correct order after processing any
-        ;; pushes from loop commands.
-        (setq loopy--with-vars (apply #'append (nreverse actual-with-vars)))))
+      (setq loopy--with-vars
+            (mapcan (lambda (var)
+                      (loopy--destructure-variables (cl-first var) (cl-second var)))
+                    loopy--with-vars)))
 
     ;; Check the remaining arguments passed to the macro.
 
@@ -675,25 +670,29 @@ Info node `(loopy)' distributed with this package."
     ;; `(cl-symbol-macrolet ,loopy--generalized-vars
     ;;    (let* ,loopy--with-vars
     ;;      (let* ,loopy--iteration-vars
-    ;;        ;; If we need to, capture early return, those that has less
-    ;;        ;; priority than a final return.
-    ;;        (let ((loopy--early-return-capture
-    ;;               (cl-block ,loopy--loop-name
-    ;;                 ,@loopy--before-do
-    ;;                 (while ,(cl-case (length loopy--pre-conditions)
-    ;;                           (0 t)
-    ;;                           (1 (car loopy--pre-conditions))
-    ;;                           (t (cons 'and loopy--pre-conditions)))
+    ;;        (let ,loopy--accumulation-vars
+    ;;          ;; If we need to, capture early return, those that has less
+    ;;          ;; priority than a final return.
+    ;;          (let ((loopy--early-return-capture
+    ;;                 (cl-block ,loopy--loop-name
+    ;;                   ,@loopy--before-do
     ;;                   (cl-tagbody
-    ;;                    ,@loopy--main-body
-    ;;                    loopy--continue-tag
-    ;;                    ,@loopy--latter-body))
-    ;;                 ,@loopy--after-do
-    ;;                 nil)))
-    ;;          ,@loopy--final-do
-    ;;          ,(if loopy--final-return
-    ;;               loopy--final-return
-    ;;             'loopy--early-return-capture)))))
+    ;;                    (while ,loopy--pre-conditions
+    ;;                      (cl-tagbody
+    ;;                       ,@loopy--main-body
+    ;;                       loopy--continue-tag
+    ;;                       ,@loopy--latter-body
+    ;;                       (unless ,loopy--post-conditions
+    ;;                         (cl-return-from ,loopy--loop-name
+    ;;                           ,loopy--implicit-return))))
+    ;;                    ,@loopy--after-do)
+    ;;                   loopy--non-returning-exit-tag
+    ;;                   ,loopy--implicit-accumulation-final-update
+    ;;                   ,loopy--implicit-return)))
+    ;;            ,@loopy--final-do
+    ;;            ,(if loopy--final-return
+    ;;                 loopy--final-return
+    ;;               'loopy--early-return-capture))))))
 
     (let (result
           ;; Need a variable to track whether `result' is currently one

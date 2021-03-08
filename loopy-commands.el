@@ -294,7 +294,7 @@ BODY is one or more loop commands."
                   (cons 'cond body-code)))
          ;; This needs to happen right after running the above.
          (loopy--main-body
-          . (when (< ,value-selector (1- ,arg-length))
+          . (when (< ,value-selector ,(1- arg-length))
               (setq ,value-selector (1+ ,value-selector)))))))))
 
 (cl-defun loopy--parse-group-command ((_ &rest body))
@@ -396,10 +396,7 @@ command are inserted into a `cond' special form."
           (nreverse full-instructions))))
 
 ;;;;; Iteration
-(cl-defun loopy--parse-array-command
-    ((_ var val)
-     &optional
-     (value-holder (gensym "array-")) (index-holder (gensym "index-")))
+(cl-defun loopy--parse-array-command ((_ var val))
   "Parse the `array' command.
 
 - VAR is a variable name.
@@ -408,29 +405,34 @@ command are inserted into a `cond' special form."
 - Optional INDEX-HOLDER holds the index value."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'array))
-  `((loopy--iteration-vars  . (,value-holder ,val))
-    (loopy--iteration-vars  . (,index-holder 0))
-    ,@(loopy--destructure-for-iteration-command var
-                                                `(aref ,value-holder ,index-holder))
-    (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
-    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
+  (let ((value-holder (gensym "array-"))
+        (index-holder (gensym "array-index-"))
+        (length-holder (gensym "array-length-")))
+    `((loopy--iteration-vars . (,value-holder ,val))
+      (loopy--iteration-vars . (,index-holder 0))
+      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+      ,@(loopy--destructure-for-iteration-command var
+                                                  `(aref ,value-holder ,index-holder))
+      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
+      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
 
-(cl-defun loopy--parse-array-ref-command
-    ((_ var val)
-     &optional
-     (value-holder (gensym "array-ref-")) (index-holder (gensym "index-")))
+(cl-defun loopy--parse-array-ref-command ((_ var val))
   "Parse the `array-ref' command by editing the `array' command's instructions.
 
 VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
 holds the array value.  INDEX-HOLDER holds the index value."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'array-ref))
-  `(,@(loopy--destructure-for-generalized-command
-       var `(aref ,value-holder ,index-holder))
-    (loopy--iteration-vars  . (,value-holder ,val))
-    (loopy--iteration-vars  . (,index-holder 0))
-    (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
-    (loopy--pre-conditions . (< ,index-holder (length ,value-holder)))))
+  (let ((value-holder (gensym "array-"))
+        (index-holder (gensym "array-ref-index-"))
+        (length-holder (gensym "array-ref-length-")))
+    `(,@(loopy--destructure-for-generalized-command
+         var `(aref ,value-holder ,index-holder))
+      (loopy--iteration-vars  . (,value-holder ,val))
+      (loopy--iteration-vars  . (,index-holder 0))
+      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
+      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
 
 (cl-defun loopy--parse-cons-command ((_ var val &optional (func #'cdr)))
   "Parse the `cons' loop command.
@@ -502,9 +504,7 @@ an integer, to be used if a variable name is provided."
         (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
-(cl-defun loopy--parse-seq-command
-    ((_ var val)
-     &optional (value-holder (gensym "seq-")) (index-holder (gensym "index-")))
+(cl-defun loopy--parse-seq-command ((_ var val))
   "Parse the `seq' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
@@ -513,22 +513,22 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   ;;       just checks the type for each iteration, so we do that too.
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'seq))
-  `((loopy--iteration-vars . (,value-holder ,val))
-    (loopy--iteration-vars . (,index-holder 0))
-    ,@(loopy--destructure-for-iteration-command
-       var `(if (consp ,value-holder)
-                (pop ,value-holder)
-              (aref ,value-holder ,index-holder)))
-    (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
-    (loopy--pre-conditions
-     . (and ,value-holder (or (consp ,value-holder)
-                              (< ,index-holder (length ,value-holder)))))))
+  (let ((value-holder (gensym "seq-"))
+        (index-holder (gensym "seq-index-"))
+        (length-holder (gensym "seq-length-")))
+    `((loopy--iteration-vars . (,value-holder ,val))
+      (loopy--iteration-vars . (,index-holder 0))
+      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+      ,@(loopy--destructure-for-iteration-command
+         var `(if (consp ,value-holder)
+                  (pop ,value-holder)
+                (aref ,value-holder ,index-holder)))
+      (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
+      (loopy--pre-conditions
+       . (and ,value-holder (or (consp ,value-holder)
+                                (< ,index-holder ,length-holder)))))))
 
-(cl-defun loopy--parse-seq-ref-command
-    ((_ var val)
-     &optional
-     (value-holder (gensym "seq-ref-")) (index-holder (gensym "index-"))
-     (length-holder (gensym "seq-ref-length-")))
+(cl-defun loopy--parse-seq-ref-command ((_ var val))
   "Parse the `seq-ref' loop command.
 
 VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
@@ -537,13 +537,16 @@ VALUE-HOLDER.  LENGTH-HOLDER holds than length of the value of
 VALUE-HOLDER, once VALUE-HOLDER is initialized."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'seq-ref))
-  `((loopy--iteration-vars . (,value-holder ,val))
-    (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-    (loopy--iteration-vars . (,index-holder 0))
-    ,@(loopy--destructure-for-generalized-command
-       var `(elt ,value-holder ,index-holder))
-    (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
-    (loopy--pre-conditions . (< ,index-holder ,length-holder))))
+  (let ((value-holder (gensym "seq-ref-"))
+        (index-holder (gensym "seq-ref-index-"))
+        (length-holder (gensym "seq-ref-length-")))
+    `((loopy--iteration-vars . (,value-holder ,val))
+      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+      (loopy--iteration-vars . (,index-holder 0))
+      ,@(loopy--destructure-for-generalized-command
+         var `(elt ,value-holder ,index-holder))
+      (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
+      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
 
 ;;;;; Accumulation
 (defun loopy--parse-accumulation-commands (accumulation-command)
