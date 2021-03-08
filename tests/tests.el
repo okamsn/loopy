@@ -975,14 +975,6 @@ Multiple of 2: 4
 Multiple of 2: 6
 Multiple of 3: 6")))
 
-(ert-deftest when-iteration ()
-  (should (equal '(nil 6 6 7 7)
-                 (eval (quote
-                        (loopy (list i '(1 2 3 4 5))
-                               (when (cl-evenp i)
-                                 (list j '(6 7 8 9 10)))
-                               (collect j)))))))
-
 ;;;;; Unless
 (ert-deftest multi-unless-prepend-test ()
   (should
@@ -1005,14 +997,6 @@ Not multiple of 2: 5
 Not multiple of 3: 5
 Not multiple of 2: 7
 Not multiple of 3: 7")))
-
-(ert-deftest unless-iteration ()
-  (should (equal '(6 6 7 7 8)
-                 (eval (quote
-                        (loopy (list i '(1 2 3 4 5))
-                               (unless (cl-evenp i)
-                                 (list j '(6 7 8 9 10)))
-                               (collect j)))))))
 
 ;;;;; Cond FORMS
 ;; (ert-deftest parse-cond-form ()
