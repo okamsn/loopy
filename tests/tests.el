@@ -264,6 +264,20 @@ implicit variable without knowing it's name, even for named loops."
                                 (collect my-coll (list i j))
                                 (finally-return my-coll))))))))
 
+(ert-deftest expr-two-values-when ()
+  (should (equal '(nil 0 0 1 1 2 2 3)
+                 (loopy (list i '(1 2 3 4 5 6 7 8))
+                        (when (cl-evenp i)
+                          (expr j 0 (1+ j)))
+                        (collect j)))))
+
+(ert-deftest expr-three-values-when ()
+  (should (equal '(nil a a 0 0 1 1 2)
+                 (loopy (list i '(1 2 3 4 5 6 7 8))
+                        (when (cl-evenp i)
+                          (expr j 'a 0 (1+ j)))
+                        (collect j)))))
+
 ;; Implementation is different for more than 2 values.
 (ert-deftest expr-five-values ()
   (should
@@ -301,6 +315,47 @@ implicit variable without knowing it's name, even for named loops."
                               (finally-return c1 c2)))))))
 
 ;;;; Iteration
+;; Making sure iteration fails in sub-level
+(ert-deftest iteration-sub-level ()
+  (should-error
+   (progn
+     (loopy (if t (list i '(1))) (finally-return t))
+     (loopy (if t (list-ref i '(1))) (finally-return t))
+     (loopy (if t (array i '(1))) (finally-return t))
+     (loopy (if t (array-ref i '(1))) (finally-return t))
+     (loopy (if t (seq i '(1))) (finally-return t))
+     (loopy (if t (seq-ref i '(1))) (finally-return t))
+     (loopy (if t (repeat 1)) (finally-return t))
+     (loopy (when t (list i '(1))) (finally-return t))
+     (loopy (when t (list-ref i '(1))) (finally-return t))
+     (loopy (when t (array i '(1))) (finally-return t))
+     (loopy (when t (array-ref i '(1))) (finally-return t))
+     (loopy (when t (seq i '(1))) (finally-return t))
+     (loopy (when t (seq-ref i '(1))) (finally-return t))
+     (loopy (when t (repeat 1)) (finally-return t))
+     (loopy (unless t (list i '(1))) (finally-return t))
+     (loopy (unless t (list-ref i '(1))) (finally-return t))
+     (loopy (unless t (array i '(1))) (finally-return t))
+     (loopy (unless t (array-ref i '(1))) (finally-return t))
+     (loopy (unless t (seq i '(1))) (finally-return t))
+     (loopy (unless t (seq-ref i '(1))) (finally-return t))
+     (loopy (unless t (repeat 1)) (finally-return t))
+     (loopy (cond (t (list i '(1)))) (finally-return t))
+     (loopy (cond (t (list-ref i '(1)))) (finally-return t))
+     (loopy (cond (t (array i '(1)))) (finally-return t))
+     (loopy (cond (t (array-ref i '(1)))) (finally-return t))
+     (loopy (cond (t (seq i '(1)))) (finally-return t))
+     (loopy (cond (t (seq-ref i '(1)))) (finally-return t))
+     (loopy (cond (t (repeat 1))) (finally-return t))
+     (loopy (group (list i '(1))) (finally-return t))
+     (loopy (group (list-ref i '(1))) (finally-return t))
+     (loopy (group (array i '(1))) (finally-return t))
+     (loopy (group (array-ref i '(1))) (finally-return t))
+     (loopy (group (seq i '(1))) (finally-return t))
+     (loopy (group (seq-ref i '(1))) (finally-return t))
+     (loopy (group (repeat 1))) (finally-return t))
+   :type 'user-error))
+
 ;;;;; Array
 (ert-deftest array ()
   (should (equal '(1 2 3)

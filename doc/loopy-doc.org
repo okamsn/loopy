@@ -493,6 +493,19 @@ keywords.
    Iteration commands bind local variables and determine when the loop ends.
    If no command sets that condition, then the loop runs forever.
 
+   Iteration commands must occur in the top level of the ~loopy~ form or in a
+   =sub-loop= command.  Trying to do something like the below will signal an
+   error.
+
+   #+begin_src emacs-lisp
+     (loopy (list i '(1 2 3 4 5))
+            (when (cl-evenp i)
+              ;; Can't use `list' in a `when'.
+              ;; Will signal an error.
+              (list j '(6 7 8 9 10))
+              (collect j)))
+   #+end_src
+
    The =-ref= (as in “reference”) commands create ~setf~-able places instead of
    true variables.  Like other commands, they can also use destructuring.  In
    such cases, the variables in the sequence =VAR= are also ~setf~-able places

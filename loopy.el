@@ -285,6 +285,12 @@ the only implied value, and can still be returned in a list with
 other implied return values, if any.")
 
 ;;;;; Variables for constructing the code
+(defvar loopy--in-sub-level nil
+  "Whether the commands parsed are not in the top level of a loop.
+
+Certain commands (e.g., `list' or `array') can only occur in the
+top level of a loop.  Sub-loops (those created by the `sub-loop'
+command) create for themselves a new, local top level.")
 
 ;; These variable affect how the code is expanded.
 (defvar loopy--skip-used nil
@@ -555,6 +561,7 @@ Info node `(loopy)' distributed with this package."
         (loopy--skip-used)
         (loopy--tagbody-exit-used)
         (loopy--implicit-accumulation-final-update)
+        (loopy--in-sub-level)
 
         ;; -- Flag Variables --
         (loopy--basic-destructuring-function)

@@ -50,6 +50,7 @@
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
+(defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
@@ -114,6 +115,10 @@ This uses the command name (such as `list' in `(list i my-list)')."
   "Loopy: Bad command arguments"
   'loopy-error)
 
+(defun loopy--signal-bad-iter (command-name)
+  "Signal an error for COMMAND-NAME."
+  (user-error "Can't use command \"%s\" in `loopy' sub-level" command-name))
+
 ;;;; Helpful Functions
 (defun loopy--get-function-symbol (function-form)
   "Return the actual symbol described by FUNCTION-FORM.
@@ -140,7 +145,8 @@ arguments like `after-do' or `finally-do'.
 BODY is one or more loop commands."
   ;; TODO: There's a lot of repetition between this and the main macro.
   ;;       Does it make sense to put this repetition in a function instead?
-  (let ((wrapped-main-body)
+  (let ((loopy--in-sub-level nil)
+        (wrapped-main-body)
         (wrapped-latter-body)
         (wrapped-pre-conditions)
         (wrapped-post-conditions)
@@ -266,12 +272,10 @@ BODY is one or more loop commands."
        `((loopy--iteration-vars . (,value-selector t))
          ,@(loopy--destructure-for-iteration-command
             var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
-         (loopy--latter-body . (setq ,value-selector nil))))
+         ;; This needs to happen right after running the above.
+         (loopy--main-body . (setq ,value-selector nil))))
       (t
        `((loopy--iteration-vars . (,value-selector 0))
-         (loopy--latter-body
-          . (when (< ,value-selector (1- ,arg-length))
-              (setq ,value-selector (1+ ,value-selector))))
          ;; Assign to var based on the value of value-selector.  For
          ;; efficiency, we want to check for the last expression first,
          ;; since it will probably be true the most times.  To enable
@@ -287,13 +291,18 @@ BODY is one or more loop commands."
                             ,value)
                           body-code)
                     (setq index (1+ index)))
-                  (cons 'cond body-code))))))))
+                  (cons 'cond body-code)))
+         ;; This needs to happen right after running the above.
+         (loopy--main-body
+          . (when (< ,value-selector (1- ,arg-length))
+              (setq ,value-selector (1+ ,value-selector)))))))))
 
 (cl-defun loopy--parse-group-command ((_ &rest body))
   "Parse the `group' loop command.
 
 BODY is one or more commands to be grouped by a `progn' form."
-  (let ((full-instructions) (progn-body))
+  (let ((loopy--in-sub-level t)
+        (full-instructions) (progn-body))
     (dolist (instruction (loopy--parse-loop-commands body))
       (if (eq (car instruction) 'loopy--main-body)
           (push (cdr instruction) progn-body)
@@ -318,9 +327,10 @@ the loop literally (not even in a `progn')."
 - CONDITION is a Lisp expression.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
-  (let (full-instructions
-        if-true-main-body
-        if-false-main-body)
+  (let ((loopy--in-sub-level t)
+        (full-instructions)
+        (if-true-main-body)
+        (if-false-main-body))
     (dolist (instruction (loopy--parse-loop-command if-true))
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) if-true-main-body)
@@ -350,7 +360,8 @@ loop commands.
 
 The Lisp expression and the loopy-body instructions from each
 command are inserted into a `cond' special form."
-  (let ((full-instructions)
+  (let ((loopy--in-sub-level t)
+        (full-instructions)
         (actual-cond-clauses))
     (dolist (clause clauses)
       (let ((instructions (loopy--parse-loop-commands (cl-rest clause)))
@@ -373,7 +384,8 @@ command are inserted into a `cond' special form."
 - NAME is `when' or `unless'.
 - CONDITION is the condition.
 - BODY is the sub-commands."
-  (let (full-instructions
+  (let ((loopy--in-sub-level t)
+        full-instructions
         conditional-body)
     (dolist (instruction (loopy--parse-loop-commands body))
       (if (eq 'loopy--main-body (car instruction))
@@ -394,6 +406,8 @@ command are inserted into a `cond' special form."
 - VAL is an array value.
 - Optional VALUE-HOLDER holds the array value.
 - Optional INDEX-HOLDER holds the index value."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'array))
   `((loopy--iteration-vars  . (,value-holder ,val))
     (loopy--iteration-vars  . (,index-holder 0))
     ,@(loopy--destructure-for-iteration-command var
@@ -409,6 +423,8 @@ command are inserted into a `cond' special form."
 
 VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
 holds the array value.  INDEX-HOLDER holds the index value."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'array-ref))
   `(,@(loopy--destructure-for-generalized-command
        var `(aref ,value-holder ,index-holder))
     (loopy--iteration-vars  . (,value-holder ,val))
@@ -421,6 +437,8 @@ holds the array value.  INDEX-HOLDER holds the index value."
 
 VAR is a variable name.  VAL is a cons cell value.  Optional FUNC
 is a function by which to update VAR (default `cdr')."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'cons))
   (if (symbolp var)
       `((loopy--iteration-vars . (,var ,val))
         (loopy--latter-body
@@ -443,6 +461,8 @@ VAR is a variable name or a list of such names (dotted pair or
 normal).  VAL is a list value.  FUNC is a function used to update
 VAL (default `cdr').  VAL-HOLDER is a variable name that holds
 the list."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'list))
   `((loopy--iteration-vars . (,val-holder ,val))
     (loopy--latter-body
      . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
@@ -456,6 +476,8 @@ the list."
 VAR is the name of a setf-able place.  VAL is a list value.  FUNC
 is a function used to update VAL (default `cdr').  VAL-HOLDER is
 a variable name that holds the list."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'list-ref))
   `((loopy--iteration-vars . (,val-holder ,val))
     ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
     (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
@@ -469,6 +491,8 @@ The command can be of the form (repeat VAR  COUNT) or (repeat COUNT).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'repeat))
   (if count
       `((loopy--iteration-vars . (,var-or-count 0))
         (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
@@ -487,6 +511,8 @@ VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
   ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
   ;;       just checks the type for each iteration, so we do that too.
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'seq))
   `((loopy--iteration-vars . (,value-holder ,val))
     (loopy--iteration-vars . (,index-holder 0))
     ,@(loopy--destructure-for-iteration-command
@@ -509,6 +535,8 @@ VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
 holds VAL.  INDEX-HOLDER holds an index that point into
 VALUE-HOLDER.  LENGTH-HOLDER holds than length of the value of
 VALUE-HOLDER, once VALUE-HOLDER is initialized."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'seq-ref))
   `((loopy--iteration-vars . (,value-holder ,val))
     (loopy--iteration-vars . (,length-holder (length ,value-holder)))
     (loopy--iteration-vars . (,index-holder 0))
