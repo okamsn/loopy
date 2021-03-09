@@ -205,7 +205,8 @@ keywords.
     #+end_src
 
   #+findex: before-do, before
-  - =before-do=, =before= :: Run Lisp expressions before the loop starts.
+  - =initially-do=, =initially=, =before-do=, =before= :: Run Lisp expressions before
+    the loop starts.
 
     #+begin_src emacs-lisp
       (loopy (before-do (message "1: before loop")
