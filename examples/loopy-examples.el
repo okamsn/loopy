@@ -156,7 +156,7 @@ A heading is assumed to be on only one line."
        ;; Iterate through a list of lines.
        (list text-line buffer-lines)
        ;; Keep track of the line number of the candidate.
-       (expr line-number 0 (1+ line-number))
+       (expr line-number 1 (1+ line-number))
 
        (when (string-match heading-regexp text-line)
          (expr prev-heading-text nil heading-text)
