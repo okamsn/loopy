@@ -631,12 +631,26 @@ whose value is to be accumulated."
                   `(loopy--implicit-return . ,value-holder)))))
           (concat
            `((loopy--main-body
-              . (setq ,value-holder (concat ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
+              . (setq ,value-holder (cons ,value-expression ,value-holder)))
+             ,@(if loopy--split-implied-accumulation-results
+                   (list `(loopy--implicit-return
+                           . (apply #'concat (nreverse ,value-holder))))
+                 (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (apply #'concat
+                                                 (nreverse ,value-holder))))
+                  `(loopy--implicit-return . ,value-holder)))))
           (vconcat
            `((loopy--main-body
-              . (setq ,value-holder (vconcat ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
+              . (setq ,value-holder (cons ,value-expression ,value-holder)))
+             ,@(if loopy--split-implied-accumulation-results
+                   (list `(loopy--implicit-return
+                           . (apply #'vconcat (nreverse ,value-holder))))
+                 (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (apply #'vconcat
+                                                 (nreverse ,value-holder))))
+                  `(loopy--implicit-return . ,value-holder)))))
           (count
            `((loopy--main-body
               . (if ,value-expression (setq ,value-holder (1+ ,value-holder))))
