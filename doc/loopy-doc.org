@@ -178,6 +178,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   If a macro argument does not match one of these special 7, ~loopy~ will
   attempt to interpret it as a loop command, and throw an error if that fails.
 
+  These special macro arguments are always processed before loop commands,
+  regardless of the order of the arguments passed to ~loopy~.  As they are not
+  loop commands, they cannot occur in sub-loops ([[*Sub-loops][Sub-loops]]).
+
   #+findex: with, let*
   - =with=, =let*= :: Declare variables before the loop.
 
