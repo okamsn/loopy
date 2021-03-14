@@ -497,9 +497,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      Once the last =EXPR= is reached, it is used repeatedly for the rest of the
      loop.  With no =EXPR=, =VAR= is repeatedly bound to =nil=.
 
-     *NOTE*: Loops are locally scoped, so using this command does not always
-     have the same effect as using =(do (setq VAR EXPR))=, as =VAR= is
-     initialized to =nil= before the loop starts.
+     #+ATTR_TEXINFO: :tag Note
+     #+begin_quote
+     =expr= does /not/ behave the same as ~setq~ in all situations.
+
+     While =expr= can take multiple arguments, it only assigns the value of one
+     expression to one variable during each iteration of the loop (unless using
+     destructuring).  It cannot take pairs of variables and values in the same
+     way that ~setq~ does.
+
+     Furthermore, variables assigned by =expr= (and other commands) are by
+     default ~let~-bound around the loop and generally initialized to ~nil~.
+     This means that doing =(expr VAR EXPR)= will not, by default, affect
+     variables outside of the loop in the same way that using =(do (setq VAR
+     EXPR))= would.
+     #+end_quote
 
      #+BEGIN_SRC emacs-lisp
        (loopy (repeat 5)
