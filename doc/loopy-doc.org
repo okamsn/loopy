@@ -8,7 +8,7 @@
 # Some parsers require this option to export footnotes.
 #+options: f:t
 
-# Texinfo settings.  We’ll just generate an Info document from this README.
+# Texinfo settings.
 #+TEXINFO_FILENAME: loopy.info
 #+TEXINFO_DIR_CATEGORY: Emacs
 #+TEXINFO_DIR_TITLE: Loopy: (loopy)
@@ -19,13 +19,13 @@ NOTE: This file is meant for viewing in Org mode or for exporting to Texinfo.
 Features might not work in other formats (e.g., Info links in HTML).
 #+end_export
 
-=loopy= is a macro meant for iterating and looping.  It is similar in usage to
+~loopy~ is a macro meant for iterating and looping.  It is similar in usage to
 ~cl-loop~ ([[info:cl#Loop Facility]]) but uses symbolic expressions rather than
 keywords.
 
-=loopy= should be complementary to the features provided by the =seq=
-([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]]) libraries (including
-=cl-loop=) and Emacs's regular looping and mapping features.
+For most use cases, ~loopy~ should a nice substitute for ~cl-loop~ and
+complementary to the features provided by the =seq= ([[info:elisp#Sequence Functions]])
+and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping features.
 
 -----
 
@@ -85,7 +85,7 @@ keywords.
   #+end_src
 
   ~loopy~ supports destructuring for iteration commands like =list= and
-  accumulation commands like ~collect~.
+  accumulation commands like =collect=.
 
   #+begin_src emacs-lisp
     ;; Summing the nth elements of arrays:

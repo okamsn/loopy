@@ -8,12 +8,12 @@
 # Some parsers require this option to export footnotes.
 #+options: f:t
 
-=loopy= is a macro meant for iterating and looping.  It is similar in usage to
+~loopy~ is a macro meant for iterating and looping.  It is similar in usage to
 [[https://www.gnu.org/software/emacs/manual/html_node/cl/Loop-Facility.html#Loop-Facility][~cl-loop~]] but uses symbolic expressions rather than keywords.
 
-=loopy= should be complementary to the features provided by the [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html][Seq]] and [[https://www.gnu.org/software/emacs/manual/html_node/cl/index.html][CL]]
-libraries (including ~cl-loop~) and Emacs's regular looping and mapping
-features.
+For most use cases, ~loopy~ should a nice substitute for ~cl-loop~ and
+complementary to the features provided by the [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html][Seq]] and [[https://www.gnu.org/software/emacs/manual/html_node/cl/index.html][CL]] libraries and Emacs's
+regular looping and mapping features.
 
 For detailed information, see [[file:doc/loopy-doc.org][the documentation file]].  This README is just an
 overview.
@@ -38,171 +38,68 @@ please let me know.
 
 * Introduction
 
-  The ~loopy~ macro expands to a ~while~ loop whose context is determined by the
-  macro's arguments and whose body is determined by special "loop commands"
-  passed in the =loop= macro argument.
-
-  For example, to iterate through the items in a list, one could use the =list=
-  loop command.  To collect values into a list, one can use the =collect=
-  command.
+  The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
+  Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
 
   #+begin_src emacs-lisp
-    ;; => (2 3 4)
-    (loopy (with (my-variable 1))
-           (loop (list elem '(1 2 3))
-                 (collect (+ elem my-variable))))
+    ;; A simple usage of `cl-loop':
+    (cl-loop for i from 1 to 10
+             if (cl-evenp i) collect i into evens
+             else collect i into odds
+             end ; This `end' keyword is optional here.
+             finally return (list odds evens))
+
+    ;; How it could be done using `loopy':
+    (loopy (list i (number-sequence 1 10))
+           (if (cl-evenp i)
+               (collect evens i)
+             (collect odds i))
+           (finally-return odds evens))
   #+end_src
 
-  This is very similar to how it would be done with ~cl-loop~:
+  ~loopy~ supports destructuring for iteration commands like =list= and
+  accumulation commands like =collect=.
 
   #+begin_src emacs-lisp
-    (cl-loop with my-var = 1
-             for elem in '(1 2 3)
-             collect (+ i my-var))
+    ;; Summing the nth elements of arrays:
+    ;; => (8 10 12 14 16 18)
+    (loopy (list (list-elem1 list-elem2)
+                 '(([1 2 3] [4 5 6])
+                   ([7 8 9] [10 11 12])))
+           (sum [sum1 sum2 sum3] list-elem1)
+           (sum [sum4 sum5 sum6] list-elem2))
+
+    ;; Or, more simply:
+    ;; => (8 10 12 14 16 18)
+    (loopy (list list-elem '(([1 2 3] [4 5 6])
+                             ([7 8 9] [10 11 12])))
+           (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
+                list-elem))
   #+end_src
 
-  Because ~loopy~ uses symbolic expressions instead of clauses like in
-  ~cl-loop~, things like conditionally updating variables are much easier.
+  The ~loopy~ macro is configurable and extensible.  In addition to writing one's
+  own "loop commands" (such as =list= in the example below), by using "flags",
+  one can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
+  library for destructuring.
 
   #+begin_src emacs-lisp
-    (loopy (loop (list i (number-sequence 1 20))
-                 (if (cl-evenp i)
-                     (set last-even-found i)
-                   (collect odds i)))
-           (after-do
-            (message "Found odds: %s" odds)
-            (message "Last even found: %d" last-even-found))
-           (finally-return odds))
+    ;; Use Seq.el to destructure an array:
+    ;; => ((1 4) ([2 3] [5 6]))
+    (loopy (flag seq)
+           (list elem '([1 2 3] [4 5 6]))
+           (collect [i &rest j] elem))
   #+end_src
 
-  The =loopy= macro has several possible arguments, each beginning with a
-  keyword.
+  Variables like =elem=, =i=, and =j= in the example above are automatically
+  ~let~-bound so as to not affect code outside of the loop.
 
-  - =with=, =let*= :: Declares and initializes variables that are bound in order
-    before and around the loop, like in a =let*= binding.
-  - =without=, =no-init= :: Declares variables that ~loopy~ shouldn't try to
-    initialize.  Without this, ~loopy~ might set a variable to ~nil~ or ~0~, for
-    example.
-  - =before-do=, =before= :: A list of normal Lisp expressions to run before the loop
-    executes.
-  - =loop= :: A list of loop commands, which create the loop body.  These
-    commands are described in detail in the section [[file:doc/loopy.org::#loop-commands][Loop Commands]].
-  - =after-do=, =after=, =else-do=, =else= :: A list of normal Lisp expressions
-    to run after the successful completion of the loop.
-  - =finally-do=, =finally= :: A list of normal Lisp expressions that always
-    run, regardless of whether an early return was triggered in the loop body.
-  - =finally-return=, =return= :: An expression whose value is always returned,
-    regardless of whether an early return was triggered in the loop body.  If
-    given several expressions, returns their values as one list.
-  - =flag=, =flags= :: Optional triggers that change how ~loopy~ behaves.  For
-    example, one can use =(flag dash)= to use =dash= for destructuring values
-    instead of ~loopy~'s normal behavior.
+  ~loopy~ has arguments for binding (or not binding) variables, executing code
+  before/after the loop, executing code only if the loop completes, and for
+  setting the macro's return value (default ~nil~).  This is in addition to the
+  looping features themselves.
 
-  The code is expanded so that the loop and any expressions from the =before-do=
-  and =after-do= macro arguments are contained in a single ~cl-block~.  Naming
-  the loop can be done by passing a symbol as a macro argument, and names this
-  block.  This allows for any call to ~cl-return~ (for convenience, already
-  wrapped in a =return= loop command) to exit the loop or change the macro's
-  return value.  The default return value is ~nil~.
-
-  Loop commands determine when and how the loop exits, and generally follow the
-  form =(COMMAND VARIABLE-NAME &rest ARGS)=.  For example,
-
-  - To iterate through a sequence [fn:sequence], use =(seq elem [1 2 3])= (for
-    efficiency, there are also more specific commands, like =list=).
-  - To collect values into a list, use =(collect my-collection collected-value)=.
-  - To just bind a variable to the result of a Lisp expression, use
-    =(expr my-var (my-func))=.
-
-
-  These commands can use destructuring, even accumulation commands.
-  #+begin_src emacs-lisp
-    ;; = >((1 5) (2 6) (3 7) (4 8))
-    (loopy (loop (list [first-half second-half] '([(1 2) (3 4)]
-                                                  [(5 6) (7 8)]))
-                 (collect (first-quarter second-quarter) first-half)
-                 (collect (third-quarter fourth-quarter) second-half)))
-  #+end_src
-
-  Other commands create ~setf~-able places.
-
-  #+begin_src emacs-lisp
-    ;; => 6, from summing [0 2 0 4]
-    (loopy (with (my-array [1 2 3 4]))
-           ((array-ref elem my-array)
-            (when (cl-oddp elem)
-              (do (setf elem 0))))
-           (finally-return (cl-reduce #'+ my-array)))
-
-    ;; For completeness, more idiomatic equivalent of above:
-    ;; => 6
-    (loopy (with (my-array [1 2 3 4]))
-           (loop (array elem my-array)
-                 (when (cl-evenp elem)
-                   (sum elem))))
-  #+end_src
-
-  Like in ~cl-loop~, accumulation commands can accumulate into implicit
-  variables.  As seen in the above example, we did not need to use =(sum my-sum
-  elem)=, as =(sum elem)= automatically initializes a variable adds to it the
-  value of =elem=.  The variables used by accumulation commands are
-  automatically returned by ~loopy~ without needing an explicit ~return~ usage.
-  If multiple accumulation variables are used, they will be returned in a list
-  in the order that they appear in the loop body.
-
-  #+begin_src emacs-lisp
-    ;; => (("cat" "dog") (2 4 6) (1 3 5))
-    (loopy ((list i '(1 2 3 "cat" 4 5 6 "dog"))
-            (cond
-             ((not (numberp i)) (collect not-numbers i))
-             ((cl-evenp i)      (collect evens i))
-             (t                 (collect odds i)))))
-
-    ;; More explicitly:
-    (loopy ((list i '(1 2 3 "cat" 4 5 6 "dog"))
-            (cond
-             ((not (numberp i)) (collect not-numbers i))
-             ((cl-evenp i)      (collect evens i))
-             (t                 (collect odds i))))
-           ;; Same as (finally-return (list not-numbers evens odds)):
-           (return not-numbers evens odds))
-  #+end_src
-
-  Below is an admittedly complicated example of most of the arguments of the
-  ~loopy~ macro.  The top-level forms have a flexible-order, but meaning is
-  clearest if they have the following order.  All of the arguments are
-  technically optional, but passing ~loopy~ no arguments creates an infinite
-  ~while~-loop that does nothing.
-
-  #+BEGIN_SRC emacs-lisp
-    ;; Returns: '((2 4 6 8 10) (1 3 5 7 9)) and prints messages.
-    (loopy
-     ;; Name the loop `my-loop'.
-     my-loop
-     ;; Create the locally scoped variable `success-p', initialized to `nil'.
-     (with (success-p nil))
-     ;; Before starting the loop, print a message.
-     (before-do (message "Beginning loop ..."))
-     ;; Create the loop body.
-     (loop (list i (number-sequence 1 10))        ; Assign `i' from 1 through 10.
-           (do (message "Checking number: %d" i)) ; Report the value of `i'.
-           (if (cl-evenp i)                       ; If `i' is even, add to the list
-               (collect found-evens i)            ; of even numbers, otherwise add
-             (collect found-odds i)))             ; to the list of odd numbers.
-     ;; If the loop completes successfully, print a message and update `success-p'.
-     (after-do (message "Loop completed successfully.")
-               (setq success-p t))
-     ;; Always report based on the value of `success-p', and message the value of
-     ;; the lists of even and odd numbers.
-     (finally-do (if success-p
-                     (message "Confirmed success reported.")
-                   (message "W: Success not confirmed!"))
-                 (message "Found evens: %s" found-evens)
-                 (message "Found odds: %s" found-odds))
-     ;; Always return a list containing the list of even numbers and the list of odd
-     ;; numbers.
-     (finally-return (list found-evens found-odds)))
-  #+END_SRC
+  All of this makes ~loopy~ a useful and convenient choice for looping and
+  iteration.
 
 * Similar Libraries
   Loopy is not the only Lisp library that uses expressions instead of keyword
