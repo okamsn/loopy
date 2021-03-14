@@ -103,7 +103,7 @@ Unlike @code{cl-loop}, @code{loopy} uses symbolic expressions instead of ``claus
 @end lisp
 
 @code{loopy} supports destructuring for iteration commands like @samp{list} and
-accumulation commands like @samp{collect}.
+accumulation commands like @samp{sum} or @samp{collect}.
 
 @lisp
 ;; Summing the nth elements of arrays:
@@ -120,6 +120,11 @@ accumulation commands like @samp{collect}.
                          ([7 8 9] [10 11 12])))
        (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
             list-elem))
+
+;; Separate the elements of sub-list:
+;; => ((1 3) (2 4))
+(loopy (list i '((1 2) (3 4)))
+       (collect (elem1 elem2) i))
 @end lisp
 
 The @code{loopy} macro is configurable and extensible.  In addition to writing one's
