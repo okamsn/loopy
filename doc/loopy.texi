@@ -23,13 +23,13 @@
 @node Top
 @top Loopy: A Looping and Iteration Macro
 
-@samp{loopy} is a macro meant for iterating and looping.  It is similar in usage to
+@code{loopy} is a macro meant for iterating and looping.  It is similar in usage to
 @code{cl-loop} (@ref{Loop Facility,,,cl,}) but uses symbolic expressions rather than
 keywords.
 
-@samp{loopy} should be complementary to the features provided by the @samp{seq}
-(@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref{Top,,,cl,}) libraries (including
-@samp{cl-loop}) and Emacs's regular looping and mapping features.
+For most use cases, @code{loopy} should a nice substitute for @code{cl-loop} and
+complementary to the features provided by the @samp{seq} (@ref{Sequence Functions,,,elisp,})
+and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and mapping features.
 
 @end ifnottex
 
@@ -103,7 +103,7 @@ Unlike @code{cl-loop}, @code{loopy} uses symbolic expressions instead of ``claus
 @end lisp
 
 @code{loopy} supports destructuring for iteration commands like @samp{list} and
-accumulation commands like @code{collect}.
+accumulation commands like @samp{collect}.
 
 @lisp
 ;; Summing the nth elements of arrays:
@@ -190,6 +190,10 @@ with a keyword or one of their aliases. You do not need to use all of them.
 If a macro argument does not match one of these special 7, @code{loopy} will
 attempt to interpret it as a loop command, and throw an error if that fails.
 
+These special macro arguments are always processed before loop commands,
+regardless of the order of the arguments passed to @code{loopy}.  As they are not
+loop commands, they cannot occur in sub-loops (@ref{Sub-loops}).
+
 @findex with, let*
 @table @asis
 @item @samp{with}, @samp{let*}
@@ -224,8 +228,9 @@ initialize.  @code{loopy} tries to initialize all the variables it uses in a
 
 @findex before-do, before
 @table @asis
-@item @samp{before-do}, @samp{before}
-Run Lisp expressions before the loop starts.
+@item @samp{before-do}, @samp{before}, @samp{initially-do}, @samp{initially}
+Run Lisp expressions
+before the loop starts.
 
 @lisp
 (loopy (before-do (message "1: before loop")
@@ -235,6 +240,14 @@ Run Lisp expressions before the loop starts.
 (loopy (before (message "1: before loop")
                (message "2: before loop"))
        ...)
+
+(loopy (initially-do (message "1: initially loop")
+                     (message "2: initially loop"))
+       ...)
+
+(loopy (initially (message "1: initially loop")
+                  (message "2: initially loop"))
+       ...)
 @end lisp
 @end table
 
@@ -242,8 +255,8 @@ Run Lisp expressions before the loop starts.
 @table @asis
 @item @samp{after-do}, @samp{after}, @samp{else-do}, @samp{else}
 Run Lisp expressions after the
-loop successfully completes.  This is similar to Python’s @code{else} loop
-clause.
+loop successfully completes.  This is similar to Python’s @code{else} statement
+after a @code{for} or @code{while} loop.
 
 @lisp
 (loopy (list i '(2 4 6 8))
@@ -294,15 +307,21 @@ exits.
 @findex finally-return
 @table @asis
 @item @samp{finally-return}
-Return a value, regardless of how the loop
-completes.  Accumulation commands have an implicit return value, but this
-overrides them.
+Return a value, regardless of how the loop completes.
+Accumulation commands have an implicit return value, but this argument
+overrides them.  Specifying multiple return values is the same as returning
+a list of those values.  This is convenient when used with @code{seq-let},
+@code{pcase-let}, @code{cl-destructuring-bind}, and the like.
 
 @lisp
 (loopy (list i '(1 2 3))
        (when (cl-oddp i)
          (return "This return value is over-ridden."))
        (finally-return "This string always returned."))
+
+;; => (1 2 3)
+(loopy (repeat 0)
+       (finally-return 1 2 3))
 @end lisp
 @end table
 
@@ -323,14 +342,38 @@ Options that change the behavior of @code{loopy}
 @end lisp
 @end table
 
-The loop body and any expressions that are part of the @samp{before-do} and
-@samp{after-do} arguments are contained in a single @samp{cl-block}.  Naming the loop
-really just names the block, allowing for more specific exiting via
-@code{cl-return} and the loop commands that wrap it.
 
-Finally, @samp{(finally-return 1 2 3)} is the same as @samp{(finally-return (list 1 2
-  3))}.  This is convenient when using @code{seq-let}, @code{pcase-let},
-@code{cl-destructuring-bind}, and the like.
+As stated above, all other expressions will be considered loop commands
+(@ref{Loop Commands}).
+
+
+@quotation Note
+For convenience, the @code{while}-loop that @code{loopy} creates is wrapped by a
+@code{cl-block}.  Naming the loop names this block, which is created @emph{after}
+initializing variables.
+
+The two special macro arguments @samp{before-do} and @samp{after-do} (and their aliases)
+also occur within this @code{cl-block}, before and after the loop, respectively.
+This has 2 consequences:
+
+@enumerate
+@item
+Using @code{cl-return} in @samp{before-do} will prevent the both loop and @samp{after-do}
+code from running.
+
+@item
+Using @code{cl-return} or an early exit command (@ref{Early Exit}) in the loop will
+prevent the @samp{after-do} code from running.  For this reason, @samp{after-do} is
+run if and only if the loop completes successfully, hence the alias
+@samp{else-do} and the similarity to Python's @code{else} statement for loops.
+@end enumerate
+
+These three sections (@samp{before-do}, @samp{after-do}, and the @code{while}-loop itself)
+are the only structures that occur within the @code{cl-block}.  Using @code{cl-return}
+in @samp{before-do}, for example, will not stop code in @samp{finally-do} from running
+or values listed in @samp{finally-return} from being returned.
+
+@end quotation
 
 @node Loop Commands
 @chapter Loop Commands
@@ -518,9 +561,21 @@ Bind @samp{VAR} to each @samp{EXPR} in order.
 Once the last @samp{EXPR} is reached, it is used repeatedly for the rest of the
 loop.  With no @samp{EXPR}, @samp{VAR} is repeatedly bound to @samp{nil}.
 
-@strong{NOTE}: Loops are locally scoped, so using this command does not always
-have the same effect as using @samp{(do (setq VAR EXPR))}, as @samp{VAR} is
-initialized to @samp{nil} before the loop starts.
+@quotation Note
+@samp{expr} does @emph{not} behave the same as @code{setq} in all situations.
+
+While @samp{expr} can take multiple arguments, it only assigns the value of one
+expression to one variable during each iteration of the loop (unless using
+destructuring).  It cannot take pairs of variables and values in the same
+way that @code{setq} does.
+
+Furthermore, variables assigned by @samp{expr} (and other commands) are by
+default @code{let}-bound around the loop and generally initialized to @code{nil}.
+This means that doing @samp{(expr VAR EXPR)} will not, by default, affect
+variables outside of the loop in the same way that using @samp{(do (setq VAR
+     EXPR))} would.
+
+@end quotation
 
 @lisp
 (loopy (repeat 5)
