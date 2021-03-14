@@ -120,7 +120,7 @@ please let me know.
 
     (for:for ((i repeat 10) (randoms collecting (random 10))))
 
-    (loopy ((repeat 10) (collect (random 10))))
+    (loopy (repeat 10) (collect (random 10)))
   #+end_src
 
   Generally, I’d expect that all of the packages handle basic use cases in
@@ -168,27 +168,27 @@ please let me know.
     ;;     (1 4)                 ; i
     ;;     (3 6))                ; k
     (loopy (flag dash)
-           (loop (list elem '((1 (2 3)) (4 (5 6))))
-                 (collect (whole &as i (_ k)) elem)))
+           (list elem '((1 (2 3)) (4 (5 6))))
+           (collect (whole &as i (_ k)) elem))
 
     ;; = > ((3 5) (4 6))
     (loopy (flag dash)
-           ((list (&plist :a a  :b b)
-                  '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
-            (collect a-vals a)
-            (collect b-vals b)))
+           (list (&plist :a a  :b b)
+                 '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
+           (collect a-vals a)
+           (collect b-vals b))
 
     (require 'loopy-pcase)
     ;; => ((1 4) (3 6))
     (loopy (flag pcase)
-           (loop (list elem '((1 (2 3)) (4 (5 6))))
-                 (collect `(,a (,_ ,b)) elem)))
+           (list elem '((1 (2 3)) (4 (5 6))))
+           (collect `(,a (,_ ,b)) elem))
 
     ;; => ((1 6) (3 8) ([4 5] [9 10]))
     (require 'loopy-seq)
     (loopy (flag seq)
-           (loop (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-                 (collect [a _ b &rest c] elem)))
+           (list elem '([1 2 3 4 5] [6 7 8 9 10]))
+           (collect [a _ b &rest c] elem))
   #+end_src
 
   For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
