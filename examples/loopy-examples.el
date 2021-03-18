@@ -33,7 +33,7 @@
 (require 'loopy)
 
 (require 'selectrum)
-(defvar selectrum-should-sort-p)
+(defvar selectrum-should-sort)
 (defvar selectrum-swiper-history)
 (defvar selectrum-outline-history)
 
