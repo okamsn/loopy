@@ -839,18 +839,33 @@ late to effect what the macro returns without also using @code{finally-return}.
 @end lisp
 
 Like in @code{cl-loop}, each accumulation command will use the same implied
-variable.  This means that several uses of @samp{(collect my-value)}, for
-example, will all collect values into the same variable.  If you want to use
-to collect into separate variables, just specify a variable name like you
-normally would.
+variable.  This means that several uses of @samp{(collect my-value)}, for example,
+will all collect values into the same variable.  If you want to collect into
+separate variables, just specify a variable name like you normally would.
 
-The commands @samp{collect}, @samp{append}, and @samp{nconc} are more efficient if no @samp{VAR}
-is provided, constructing the accumulated value backwards and then reversing
-it, which is usually faster.  This means that if you want to use
-destructuring with accumulation commands, it might be faster to use the
-@samp{split} flag ([BROKEN LINK: *Changing the Macro's Behavior with Flags]), which will make
-@code{loopy} accumulate into separate implied variables instead of the same
-@code{loopy-result}.  See that section for more details.
+@quotation Warning
+You should not try to access implied accumulation results like @code{loopy-result}
+while the loop is running.  For efficiency, implied results only need to be
+in the correct state after the loop ends (before code in @samp{else-do} is run).
+For example, it can be faster to construct a list in reverse or to
+concatenate a list of strings just once.
+
+Furthermore, because using a @samp{return} or @samp{return-from} command overrides
+implied return values, using these commands can prevent implied accumulation
+results from being finalized.  Using the @samp{leave} command, which exits the
+loop without returning a value, does not have this problem.
+
+@end quotation
+
+As accumulation with implied results is faster than with named accumulation
+results, you should prefer the implied form whenever you don't need to access
+the results during the loop.  However, as noted above, accumulation commands
+will all accumulate into @code{loopy-result} unless a variable name is given.
+This can be inconvenient when you wish to use the implied form but also
+accumulate into separate variables.  In such cases, consider using the
+@samp{split} flag (@ref{Configuring @code{loopy}}), which will make @code{loopy}
+accumulate into separate implied variables instead.  See that section for
+more details.
 
 @lisp
 ;; Both of these example give the same result, but the latter can
@@ -868,6 +883,9 @@ destructuring with accumulation commands, it might be faster to use the
        (collect j)        ; this would just produce
        (collect k))      ; (1 2 3 4 5 6).
 @end lisp
+
+
+The available accumulation commands are:
 
 @findex append
 @table @asis

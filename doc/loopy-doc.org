@@ -756,18 +756,33 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+end_src
 
    Like in ~cl-loop~, each accumulation command will use the same implied
-   variable.  This means that several uses of =(collect my-value)=, for
-   example, will all collect values into the same variable.  If you want to use
-   to collect into separate variables, just specify a variable name like you
-   normally would.
+   variable.  This means that several uses of =(collect my-value)=, for example,
+   will all collect values into the same variable.  If you want to collect into
+   separate variables, just specify a variable name like you normally would.
 
-   The commands =collect=, =append=, and =nconc= are more efficient if no =VAR=
-   is provided, constructing the accumulated value backwards and then reversing
-   it, which is usually faster.  This means that if you want to use
-   destructuring with accumulation commands, it might be faster to use the
-   =split= flag ([[*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]]), which will make
-   ~loopy~ accumulate into separate implied variables instead of the same
-   ~loopy-result~.  See that section for more details.
+   #+attr_texinfo: :tag Warning
+   #+begin_quote
+   You should not try to access implied accumulation results like ~loopy-result~
+   while the loop is running.  For efficiency, implied results only need to be
+   in the correct state after the loop ends (before code in =else-do= is run).
+   For example, it can be faster to construct a list in reverse or to
+   concatenate a list of strings just once.
+
+   Furthermore, because using a =return= or =return-from= command overrides
+   implied return values, using these commands can prevent implied accumulation
+   results from being finalized.  Using the =leave= command, which exits the
+   loop without returning a value, does not have this problem.
+   #+end_quote
+
+   As accumulation with implied results is faster than with named accumulation
+   results, you should prefer the implied form whenever you don't need to access
+   the results during the loop.  However, as noted above, accumulation commands
+   will all accumulate into ~loopy-result~ unless a variable name is given.
+   This can be inconvenient when you wish to use the implied form but also
+   accumulate into separate variables.  In such cases, consider using the
+   =split= flag ([[*Configuring ~loopy~][Configuring ~loopy~]]), which will make ~loopy~
+   accumulate into separate implied variables instead.  See that section for
+   more details.
 
    #+begin_src emacs-lisp
      ;; Both of these example give the same result, but the latter can
@@ -785,6 +800,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (collect j)        ; this would just produce
             (collect k))      ; (1 2 3 4 5 6).
    #+end_src
+
+
+   The available accumulation commands are:
 
    #+findex: append
    - =(append VAR EXPR)= :: Repeatedly ~append~ the value of =EXPR= to =VAR=.
