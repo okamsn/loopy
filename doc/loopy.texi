@@ -748,9 +748,9 @@ Loop through the elements of the sequence
 @node Accumulation
 @section Accumulation
 
-Accumulate commands are used to accumulate or aggregate values into a
-variable.  For creating a list of values or summing the elements in a
-sequence can both be done using accumulation commands.
+Accumulation commands are used to accumulate or aggregate values into a
+variable.  For example, creating a list of values or summing the elements in
+a sequence can both be done using accumulation commands.
 
 If needed, you can refer to the same accumulation variable in multiple
 accumulation commands, such as in the following example.
@@ -797,7 +797,7 @@ of the ``whole'' value.
 Using an accumulation command implies a return value for the macro, which you
 can override using the @samp{return} and @samp{return-from} loop commands or the
 @samp{finally-return} macro argument.  If there are multiple accumulation
-variables (including those created with destructuring), then the implied
+variables (including those created via destructuring), then the implied
 return value of the macro is a list of those accumulated values in the order
 that their respective command occurs in the loop body.  In the example below,
 note that @code{my-collection} is the first element in the list of values returned
@@ -818,9 +818,10 @@ command.
 Like in @code{cl-loop}, you do not need to supply a variable name to accumulation
 commands.  If no accumulation variable is given, accumulation commands will
 use the variable @code{loopy-result}.  This variable is accessible in the
-@samp{after-do}, @samp{finally-do}, and @samp{finally-return} special macro arguments.  Note
-that while its value can be changed in @samp{after-do}, @samp{finally-do} alone is too
-late to effect what the macro returns without also using @samp{finally-return}.
+@samp{after-do}, @samp{finally-do}, and @samp{finally-return} special macro arguments.  As a
+consequence of how the macro expands, changing the value of @code{loopy-result} in
+the @samp{after-do} (but not @samp{finally-do}) macro argument changes the implied
+return value of the loop.
 
 @lisp
 ;; => (1 2 3)
@@ -843,23 +844,25 @@ late to effect what the macro returns without also using @samp{finally-return}.
                          (finally-return loopy-result))))
 @end lisp
 
-Like in @code{cl-loop}, each accumulation command will use the same implied
-variable.  This means that several uses of @samp{(collect my-value)}, for example,
-will all collect values into the variable @code{loopy-result}.  If you want to
-collect into separate variables, just specify a variable name like you
-normally would.
+Like in @code{cl-loop}, all accumulation commands using implied variables will
+accumulate into the same implied variable (that is, into @code{loopy-result}).
+You should make sure that such commands are compatible.  For example, you
+should not try to accumulate @samp{collect} results and @samp{sum} results into
+@code{loopy-result}, as trying to use a list as a number will cause an error.  If
+you want to collect into separate variables, just specify a variable name
+like you normally would.
 
 @quotation Warning
-You should not try to access implied accumulation results like @code{loopy-result}
-while the loop is running.  For efficiency, implied results only need to be
-in the correct state after the loop ends (before code in @samp{else-do} is run).
-For example, it can be faster to construct a list in reverse or to
-concatenate a list of strings just once.
+You should not try to access implied accumulation results (e.g.,
+@code{loopy-result}) while the loop is running.  Implied results are only required
+to be correct after the loop ends (before code in @samp{else-do} is run), allowing
+for more efficient code.
 
 Furthermore, because using a @samp{return} or @samp{return-from} command overrides
 implied return values, using these commands can prevent implied accumulation
 results from being finalized.  Using the @samp{leave} command, which exits the
-loop without returning a value, does not have this problem.
+loop without returning a value, does not affect the correctness of implied
+results.
 
 @end quotation
 
