@@ -748,13 +748,12 @@ Loop through the elements of the sequence
 @node Accumulation
 @section Accumulation
 
-Accumulation commands are used to repeatedly update a variable using a
-value.  In that way, they are something like shortcuts for several different
-ways of using the @samp{expr} command.  For example, @samp{(sum my-sum my-var)} is
-really just another way of saying @samp{(expr my-sum 0 (+ my-sum my-var))}.
+Accumulate commands are used to accumulate or aggregate values into a
+variable.  For creating a list of values or summing the elements in a
+sequence can both be done using accumulation commands.
 
-If needed, you can refer to the same variable in multiple accumulation
-commands, such as in the following.
+If needed, you can refer to the same accumulation variable in multiple
+accumulation commands, such as in the following example.
 
 @lisp
 (loopy (list i '(1 2 3))
@@ -763,12 +762,17 @@ commands, such as in the following.
        (finally-return coll)) ; => (1 6 2 7 3 8)
 @end lisp
 
+@quotation Note
+Like with other loop commands, variables created by accumulation commands
+(such as @samp{coll} in the above example) are initialized to @code{nil} unless
+stated otherwise.
+
+@end quotation
+
 @cindex accumulation destructuring
-Using a “destructuring” @samp{VAR} argument in accumulation commands works a bit
-differently than how it would in iteration commands.  While iteration
-commands just assign variables the values that make up the destructured
-@samp{EXPR}, accumulation commands accumulate each of those values into their
-respective variable in the sequence @samp{VAR}.
+Like iteration loop commands, accumulation commands can also use
+destructuring, in which case the destructured values are accumulated instead
+of the ``whole'' value.
 
 @lisp
 ;; => ((1 4) (2 5) (3 6))
@@ -790,32 +794,33 @@ respective variable in the sequence @samp{VAR}.
 @end lisp
 
 @cindex implied/implicit return values
-Using an accumulation command implies a return value.  If there are multiple
-accumulations, or destructured accumulations, than the implied return value
-of the loop is a list of those accumulated values in the order that their
-respective command occurs in the loop body.  This implied return value can
-be overridden by using the @samp{return} and @samp{return-from} loop commands or a
-@samp{finally-return} macro argument.
+Using an accumulation command implies a return value for the macro, which you
+can override using the @samp{return} and @samp{return-from} loop commands or the
+@samp{finally-return} macro argument.  If there are multiple accumulation
+variables (including those created with destructuring), then the implied
+return value of the macro is a list of those accumulated values in the order
+that their respective command occurs in the loop body.  In the example below,
+note that @code{my-collection} is the first element in the list of values returned
+by the macro, even though the collection happens @emph{after} the first summation.
+This is because the macro sees the @samp{collect} command before it sees the @samp{sum}
+command.
 
 @lisp
-;; Note that `my-collection' is the first value in the implied return,
-;; even though the collection happens after the first summation step.
-;;
-;; => (((4 5 6)) 5 7 9), for `my-collection', `sum1', `sum2', `sum3'
+;; => (((4 5 6)) 5 7 9), for (`my-collection', `sum1', `sum2', `sum3')
 (loopy (list elem '((1 2 3) (4 5 6)))
        (when (equal elem '(4 5 6))
          (collect my-collection elem))
        (sum (my-sum1 my-sum2 my-sum3) elem))
 @end lisp
 
-@cindex implied/implicit accumulation variables
+@cindex implied/implicit accumulation results
 @vindex loopy-result
-Like @code{cl-loop}, you do not need to supply a variable name to accumulation
-commands.  If no variable is given, accumulation commands accumulate into the
-the variable @code{loopy-result}.  This variable is accessible in the loop itself
-and the @code{after-do}, @code{finally-do}, and @code{finally-return} macro arguments.  Note
-that while its value can be changed in @code{after-do}, @code{finally-do} alone is too
-late to effect what the macro returns without also using @code{finally-return}.
+Like in @code{cl-loop}, you do not need to supply a variable name to accumulation
+commands.  If no accumulation variable is given, accumulation commands will
+use the variable @code{loopy-result}.  This variable is accessible in the
+@samp{after-do}, @samp{finally-do}, and @samp{finally-return} special macro arguments.  Note
+that while its value can be changed in @samp{after-do}, @samp{finally-do} alone is too
+late to effect what the macro returns without also using @samp{finally-return}.
 
 @lisp
 ;; => (1 2 3)
@@ -840,8 +845,9 @@ late to effect what the macro returns without also using @code{finally-return}.
 
 Like in @code{cl-loop}, each accumulation command will use the same implied
 variable.  This means that several uses of @samp{(collect my-value)}, for example,
-will all collect values into the same variable.  If you want to collect into
-separate variables, just specify a variable name like you normally would.
+will all collect values into the variable @code{loopy-result}.  If you want to
+collect into separate variables, just specify a variable name like you
+normally would.
 
 @quotation Warning
 You should not try to access implied accumulation results like @code{loopy-result}
@@ -857,31 +863,33 @@ loop without returning a value, does not have this problem.
 
 @end quotation
 
-As accumulation with implied results is faster than with named accumulation
-results, you should prefer the implied form whenever you don't need to access
-the results during the loop.  However, as noted above, accumulation commands
-will all accumulate into @code{loopy-result} unless a variable name is given.
-This can be inconvenient when you wish to use the implied form but also
-accumulate into separate variables.  In such cases, consider using the
-@samp{split} flag (@ref{Configuring @code{loopy}}), which will make @code{loopy}
-accumulate into separate implied variables instead.  See that section for
-more details.
+You should prefer using accumulation with implied results whenever you don't
+need to access the accumulation results during the loop.  Because @code{loopy} has
+more freedom when generating implied accumulation results, using implied
+results can be much faster.
+
+As noted above, @code{loopy} will by default accumulate into the same implied
+variable, @code{loopy-result}.  If you wish to have the speed of implied results
+while accumulating into separate variables, you should enable the @samp{split}
+flag (@ref{Configuring @code{loopy}}).  This flag will make the macro split the implied
+results of each accumulation command into a separate variable instead of
+using @code{loopy-result}.  This can be much faster than using destructuring with
+accumulation commands.
 
 @lisp
 ;; Both of these example give the same result, but the latter can
 ;; expand into more efficient code.
-;; There is also the `push-into' commands, which avoids this problem.
 
 ;; => ((1 4) (2 5) (3 6))
 (loopy (list elem '((1 2 3) (4 5 6)))
        (collect (i j k) elem))
 
 ;; => ((1 4) (2 5) (3 6))
-(loopy (flag split) ; Don't accumulate into same implicit variable.
+(loopy (flag split) ; Don't implicitly accumulate into `loopy-result'.
        (list (i j k) '((1 2 3) (4 5 6)))
        (collect i)        ; Without the `split' flag,
        (collect j)        ; this would just produce
-       (collect k))      ; (1 2 3 4 5 6).
+       (collect k))       ; (1 2 3 4 5 6).
 @end lisp
 
 
@@ -890,29 +898,22 @@ The available accumulation commands are:
 @findex append
 @table @asis
 @item @samp{(append VAR EXPR)}
-Repeatedly @code{append} the value of @samp{EXPR} to @samp{VAR}.
-If @samp{VAR} is not provided, repeatedly @code{nconc} the @code{reverse} of @samp{EXPR} onto
-the front of the implicit return value, and then @code{nreverse} the implicit
-value at the end of the loop.
-
-@samp{VAR} starts as @samp{nil}.
+Repeatedly concatenate @samp{EXPR} to the end of @samp{VAR},
+as if by the function @code{append}.
 
 @lisp
+;; => '(1 2 3 4 5 6)
 (loopy (list i '((1 2 3) (4 5 6)))
        (append coll i)
-       (finally-return coll)) ; => '(1 2 3 4 5 6)
+       (finally-return coll))
 @end lisp
 @end table
 
 @findex collect
 @table @asis
 @item @samp{(collect VAR EXPR)}
-Collect the value of @samp{EXPR} into a list.  If @samp{VAR}
-is not provided, repeatedly @code{push} the value of @samp{EXPR} into he implicit
-return value, and then @code{nreverse} the implicit return value at the end of
-the loop.
-
-@samp{VAR} starts as @samp{nil}.
+Collect the value of @samp{EXPR} into a list, adding
+values to the end of @samp{VAR}.
 
 @lisp
 ;; => '(1 2 3)
@@ -927,22 +928,22 @@ the loop.
        (collect coll1))
 @end lisp
 
-If you want to @code{push} values into a provided variable (instead of
-repeatedly appending a list of one element), use the @samp{push-into} command
-(see below).
+To add values to the front of the list, use the @samp{push-into} command (see
+below).
 @end table
 
 @findex concat
 @table @asis
 @item @samp{(concat VAR EXPR)}
-Repeatedly @samp{concat} the value of @samp{EXPR} onto the
-end of @samp{VAR}.  @samp{VAR} starts as @samp{nil}.  See the @samp{vconcat} command for
-vectors.
+Repeatedly @samp{concat} the value of @samp{EXPR} onto the end
+of @samp{VAR}, as a string.  See the @samp{vconcat} command for concatenating values
+into a vector.
 
 @lisp
+;; => "abc"
 (loopy (list i '("a" "b" "c"))
        (concat str i)
-       (finally-return str)) ; => "abc"
+       (finally-return str))
 @end lisp
 @end table
 
@@ -950,12 +951,13 @@ vectors.
 @table @asis
 @item @samp{(count VAR EXPR)}
 Count the number of times that @samp{EXPR} evaluates to a
-non-nil value, adding 1 to @samp{VAR} each time.  @samp{VAR} starts at 0.
+non-nil value.  @samp{VAR} starts at 0 and is incremented by 1 each time.
 
 @lisp
+;; => 3
 (loopy (list i '(1 nil 3 nil 5))
        (count non-nil-count i)
-       (finally-return non-nil-count)) ; => 3
+       (finally-return non-nil-count))
 @end lisp
 @end table
 
@@ -967,9 +969,10 @@ and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{-1.0e+INF}, so that an
 value should be greater that it.
 
 @lisp
+;; => 11
 (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
        (max my-max i)
-       (finally-return my-max)) ; => 11
+       (finally-return my-max))
 @end lisp
 @end table
 
@@ -981,9 +984,10 @@ and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{1.0e+INF}, so that any
 value should be less than it.
 
 @lisp
+;; => 0
 (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
        (min my-min i)
-       (finally-return my-min)) ; => 0
+       (finally-return my-min))
 @end lisp
 @end table
 
@@ -991,24 +995,26 @@ value should be less than it.
 @table @asis
 @item @samp{(nconc VAR EXPR)}
 Repeatedly concatenate the value of @samp{EXPR} onto
-@samp{VAR} with @samp{nconc}.  If @samp{VAR} is not provided, repeatedly @code{nconc} the
-@code{nreverse} of @samp{EXPR} onto the front of the implicit return value, and then
-@code{nreverse} that implicit return value at the end of the loop.
+@samp{VAR} via the function @code{nconc}.
 
-Unlike @code{append}, @code{nconc} does not concatenate copies of the lists, but
-modifies @samp{VAR} directly.
+@quotation Caution
+Unlike the function @code{append}, @code{nconc} does not concatenate copies of the
+lists, instead modifying @samp{VAR} directly.
+
+@end quotation
 
 @lisp
+;; => '(1 2 3 4 5 6 7 8)
 (loopy (list i '((1 2 3 4) (5 6 7 8)))
        (nconc my-new-list i)
-       (finally-return my-new-list)) ; => '(1 2 3 4 5 6 7 8)
+       (finally-return my-new-list))
 @end lisp
 @end table
 
 @findex prepend
 @table @asis
 @item @samp{(prepend VAR EXPR)}
-Repeatedly concatenate @samp{EXPR} to the front of
+Repeatedly concatenate @samp{EXPR} onto the front of
 @samp{VAR}.
 
 @lisp
@@ -1027,40 +1033,46 @@ Repeatedly concatenate @samp{EXPR} to the front of
 @findex push, push-into
 @table @asis
 @item @samp{(push|push-into VAR EXPR)}
-Repeatedly @samp{push} @samp{EXPR} into @samp{VAR}.  @samp{VAR}
-stars as @samp{nil}.
+Collect the value of @samp{EXPR} into a list,
+adding values to the front of @samp{VAR} via the function @code{push}.
 
 @lisp
-(loopy (seq i [1 2 3])
-       (push reversed i)
-       (finally-return (nreverse reversed))) ; => '(1 2 3)
+;; => (3 2 1)
+(loopy (array i [1 2 3])
+       (push my-list i))
 @end lisp
+
+To add values to the end of a list, use the @samp{collect} command (see above).
 @end table
 
 @findex sum
 @table @asis
 @item @samp{(sum VAR EXPR)}
-Repeatedly set @samp{VAR} to the sum of the value of @samp{EXPR}
+Repeatedly set @samp{VAR} to the sum of the values of @samp{EXPR}
 and @samp{VAR}.  @samp{VAR} starts at 0.
 
 @lisp
+;; => 10
 (loopy (list i '(1 2 3 4))
        (sum my-sum i)
-       (finally-return my-sum)) ; => 10
+       (finally-return my-sum))
 @end lisp
 @end table
 
 @findex vconcat
 @table @asis
 @item @samp{(vconcat VAR EXPR)}
-Repeatedly @samp{vconcat} the value of @samp{EXPR} onto
-@samp{VAR}.  @samp{VAR} starts as @samp{nil}.
+Repeatedly concatenate the value of @samp{EXPR} onto the
+end of @samp{VAR} via the function @code{vconcat}.
 
 @lisp
+;; => [1 2 3 4 5 6]
 (loopy (list i '([1 2 3] [4 5 6]))
-       (vconcat vector i)
-       (finally-return vector)) ; => [1 2 3 4 5 6]
+       (vconcat my-vector i)
+       (finally-return my-vector))
 @end lisp
+
+To concatenate values as strings, see the command @samp{concat} above.
 @end table
 
 @node Control Flow
