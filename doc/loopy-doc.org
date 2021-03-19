@@ -901,6 +901,22 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-new-list)) ; => '(1 2 3 4 5 6 7 8)
      #+END_SRC
 
+   #+findex: prepend
+   - =(prepend VAR EXPR)= :: Repeatedly concatenate =EXPR= to the front of
+     =VAR=.
+
+     #+begin_src emacs-lisp
+       ;; => (5 6 3 4 1 2)
+       (loopy (array i [(1 2) (3 4) (5 6)])
+              (prepend i))
+
+       ;; => (4 3 2 1)
+       (let ((my-list '(1)))
+         (loopy (without my-list)
+                (array elem [(2) (3) (4)])
+                (prepend my-list elem)))
+     #+end_src
+
    #+findex: push, push-into
    - =(push|push-into VAR EXPR)= :: Repeatedly =push= =EXPR= into =VAR=.  =VAR=
      stars as =nil=.

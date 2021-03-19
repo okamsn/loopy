@@ -166,6 +166,7 @@ should only be used if VAR-OR-VAL is a variable."
                        ((min minimize) `(setq ,given-var (min ,dash-copy ,given-var)))
                        (nconc `(setq ,given-var (nconc ,given-var ,dash-copy)))
                        ((push-into push) `(push ,dash-copy ,given-var))
+                       (prepend `(setq ,given-var (append ,dash-copy ,given-var)))
                        (sum `(setq ,given-var (+ ,dash-copy ,given-var))))))
               loopy-dash--accumulation-destructured-symbols))))
 

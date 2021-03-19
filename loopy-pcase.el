@@ -139,6 +139,7 @@ should only be used if VAR-OR-VAL is a variable."
                              ((max maximize) `(,var (max ,val ,var)))
                              ((min minimize) `(,var (min ,val ,var)))
                              (nconc `(,var (nconc ,var ,val)))
+                             (prepend `(setq ,var (append ,val ,var)))
                              ((push-into push) `(push ,val ,var))
                              (sum `(,var (+ ,val ,var)))))
                          named-vars)))

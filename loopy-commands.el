@@ -579,6 +579,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
                                ((max maximize) `(setq ,var (max ,val ,var)))
                                ((min minimize) `(setq ,var (min ,val ,var)))
                                (nconc `(setq ,var (nconc ,var ,val)))
+                               (prepend `(setq ,var (append ,val ,var)))
                                ((push-into push) `(push ,val ,var))
                                (sum `(setq ,var (+ ,val ,var))))))))
    (t
@@ -672,6 +673,11 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
+          (prepend
+           `((loopy--main-body
+              . (setq ,value-holder (nconc ,value-expression
+                                           ,value-holder)))
+             (loopy--implicit-return . ,value-holder)))
           ((push-into push)
            `((loopy--main-body . (push ,value-expression ,value-holder))
              (loopy--implicit-return . ,value-holder)))
@@ -914,6 +920,7 @@ COMMAND-LIST."
     (min         . loopy--parse-accumulation-commands)
     (minimize    . loopy--parse-accumulation-commands)
     (nconc       . loopy--parse-accumulation-commands)
+    (prepend     . loopy--parse-accumulation-commands)
     (push        . loopy--parse-accumulation-commands)
     (push-into   . loopy--parse-accumulation-commands)
     (repeat      . loopy--parse-repeat-command)

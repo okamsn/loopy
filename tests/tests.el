@@ -900,6 +900,30 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
                                      (nconc l i)))))))
 
+(ert-deftest prepend ()
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend my-list i)
+                                     (finally-return my-list))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend my-list i)))))))
+
+(ert-deftest prepend-destructuring ()
+  (should (equal '((5 6 1 2) (7 8 3 4))
+                 (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
+                                     (prepend [my-list1 my-list2] i)))))))
+
+(ert-deftest prepend-implicit ()
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend i)
+                                     (finally-return loopy-result))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend i)))))))
+
+
 (ert-deftest push-into ()
   (should (equal '(3 2 1)
                  (eval (quote (loopy (list j '(1 2 3))
