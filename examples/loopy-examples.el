@@ -184,6 +184,11 @@ A heading is assumed to be on only one line."
            (loop (repeat (- prev-heading-level heading-level))
                  (do (pop backwards-prefix-list)))))
 
+         ;; If needed, set default candidate.
+         (when (and (null default-heading)
+                    (> line-number current-line-number))
+           (expr default-heading formatted-heading))
+
          ;; Finally, add to list of formatted headings.
          ;; Create heading of form "L#: a/b/c" as:
          ;; - having a text property holding the line number
@@ -199,11 +204,6 @@ A heading is assumed to be on only one line."
                 (propertize
                  (format line-number-format line-number)
                  'face 'completions-annotations)))
-
-         ;; If needed, set default candidate.
-         (when (and (null default-heading)
-                    (> line-number current-line-number))
-           (expr default-heading formatted-heading))
 
          ;; Collect formatted heading into `loopy-result'.
          (collect formatted-heading))
