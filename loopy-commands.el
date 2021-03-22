@@ -120,6 +120,10 @@ This uses the command name (such as `list' in `(list i my-list)')."
   (user-error "Can only use command \"%s\" in top level of `loopy' or sub-loop"
               command-name))
 
+(defun loopy--signal-must-be-top-level (command-name)
+  "Signal an error for COMMAND-NAME."
+  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
+
 ;;;; Helpful Functions
 (defun loopy--get-function-symbol (function-form)
   "Return the actual symbol described by FUNCTION-FORM.
