@@ -38,7 +38,8 @@ and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and ma
 * Basic Concepts::               Basic information about `loopy' and its loops.
 * Special Macro Arguments::      Creating the environment of the loop.
 * Loop Commands::                The main features of `loopy'.
-* Configuring @code{loopy}::     Using flags to change behavior.
+* Using Flags::                  Using flags to change behavior.
+* Custom Aliases::               How to add one's own aliases.
 * Custom Commands::              Extending `loopy' with personal commands.
 * Comparing to @code{cl-loop}::  Why `loopy' instead of `cl-loop'.
 * Translating @samp{cl-loop}::   Converting `cl-loop' to `loopy', and vice versa.
@@ -874,7 +875,7 @@ results can be much faster.
 As noted above, @code{loopy} will by default accumulate into the same implied
 variable, @code{loopy-result}.  If you wish to have the speed of implied results
 while accumulating into separate variables, you should enable the @samp{split}
-flag (@ref{Configuring @code{loopy}}).  This flag will make the macro split the implied
+flag (@ref{Using Flags, , Flags}).  This flag will make the macro split the implied
 results of each accumulation command into a separate variable instead of
 using @code{loopy-result}.  This can be much faster than using destructuring with
 accumulation commands.
@@ -1363,8 +1364,8 @@ variables used for accumulation.
 @end lisp
 @end enumerate
 
-@node Configuring @code{loopy}
-@chapter Configuring @code{loopy}
+@node Using Flags
+@chapter Using Flags
 
 @cindex flag
 A ``flag'' is a symbol passed to the @samp{flag} or @samp{flags} macro argument, and
@@ -1509,6 +1510,66 @@ Below is an example of the @samp{split} flag.
        (if (cl-oddp i)
            (collect i)
          (collect i)))
+@end lisp
+
+@node Custom Aliases
+@chapter Custom Aliases
+
+@cindex custom aliases
+An @dfn{alias} is another name for a command.  @code{loopy} comes with several
+built-in aliases, such as @samp{set} for the command @samp{expr}.
+
+@vindex loopy-custom-command-aliases
+@findex loopy-defalias
+Custom aliases can be added to the user option @code{loopy-custom-command-aliases}.
+Each element in this list is a pair of the alias and the definition.  For
+convenience, the function @code{loopy-defalias} is provided, which will correctly
+add the pairs to this variable.
+
+@lisp
+;; You don't need to quote either of the arguments,
+;; but you can if you prefer.
+(loopy-defalias l list)
+(loopy-defalias a 'array)
+
+;; => ((1 . 4) (2 . 5) (3 . 6))
+(loopy (l i '(1 2 3))
+       (a j [4 5 6])
+       (collect (cons i j)))
+
+;; => ((a . array) (l . list))
+loopy-custom-command-aliases
+@end lisp
+
+@quotation Note
+The macro checks for command definitions in the following order:
+
+@enumerate
+@item
+Custom aliases
+@item
+Custom commands
+@item
+Built-in commands
+@end enumerate
+
+
+If an alias is found, the macro will check first whether it is an alias of a
+custom command, then whether it is an alias of a built-in command.
+
+@end quotation
+
+The special macro arguments (@ref{Special Macro Arguments}) can also be aliased.
+Using an alias does not change that the special arguments are parsed before
+@code{loopy} attempts to parse loop commands.
+
+@lisp
+(loopy-defalias as with)
+
+;; => (8 9 10)
+(loopy (as (a 7))
+       (list i '(1 2 3))
+       (collect (+ i 7)))
 @end lisp
 
 @node Custom Commands

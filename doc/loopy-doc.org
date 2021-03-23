@@ -45,7 +45,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     - [[#skipping-cycles][Skipping Cycles]]
     - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-loops]]
-- [[#configuring-loopy][Configuring ~loopy~]]
+- [[#using-flags][Using Flags]]
+- [[#custom-aliases][Custom Aliases]]
 - [[#custom-commands][Custom Commands]]
   - [[#background-info][Background Info]]
   - [[#hello-world][Hello World]]
@@ -793,7 +794,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    As noted above, ~loopy~ will by default accumulate into the same implied
    variable, ~loopy-result~.  If you wish to have the speed of implied results
    while accumulating into separate variables, you should enable the =split=
-   flag ([[*Configuring ~loopy~][Configuring ~loopy~]]).  This flag will make the macro split the implied
+   flag ([[#flags][Flags]]).  This flag will make the macro split the implied
    results of each accumulation command into a separate variable instead of
    using ~loopy-result~.  This can be much faster than using destructuring with
    accumulation commands.
@@ -1219,8 +1220,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       #+end_src
 
 
-* Configuring ~loopy~
+* Using Flags
   :PROPERTIES:
+  :CUSTOM_ID: flags
   :DESCRIPTION: Using flags to change behavior.
   :END:
 
@@ -1353,6 +1355,65 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                 (collect i)
               (collect i)))
    #+end_src
+
+
+* Custom Aliases
+  :PROPERTIES:
+  :CUSTOM_ID: custom-behavior
+  :DESCRIPTION: How to add one's own aliases.
+  :END:
+
+  #+cindex: custom aliases
+  An {{{dfn(alias)}}} is another name for a command.  ~loopy~ comes with several
+  built-in aliases, such as =set= for the command =expr=.
+
+  #+vindex: loopy-custom-command-aliases
+  #+findex: loopy-defalias
+  Custom aliases can be added to the user option ~loopy-custom-command-aliases~.
+  Each element in this list is a pair of the alias and the definition.  For
+  convenience, the function ~loopy-defalias~ is provided, which will correctly
+  add the pairs to this variable.
+
+  #+begin_src emacs-lisp
+    ;; You don't need to quote either of the arguments,
+    ;; but you can if you prefer.
+    (loopy-defalias l list)
+    (loopy-defalias a 'array)
+
+    ;; => ((1 . 4) (2 . 5) (3 . 6))
+    (loopy (l i '(1 2 3))
+           (a j [4 5 6])
+           (collect (cons i j)))
+
+    ;; => ((a . array) (l . list))
+    loopy-custom-command-aliases
+  #+end_src
+
+  #+attr_texinfo: :tag Note
+  #+begin_quote
+  The macro checks for command definitions in the following order:
+
+  1. Custom aliases
+  2. Custom commands
+  3. Built-in commands
+
+
+  If an alias is found, the macro will check first whether it is an alias of a
+  custom command, then whether it is an alias of a built-in command.
+  #+end_quote
+
+  The special macro arguments ([[#macro-arguments][Special Macro Arguments]]) can also be aliased.
+  Using an alias does not change that the special arguments are parsed before
+  ~loopy~ attempts to parse loop commands.
+
+  #+begin_src emacs-lisp
+    (loopy-defalias as with)
+
+    ;; => (8 9 10)
+    (loopy (as (a 7))
+           (list i '(1 2 3))
+           (collect (+ i 7)))
+  #+end_src
 
 
 * Custom Commands
