@@ -107,9 +107,16 @@ For example, to create the alias `add' for the command `sum', one would add
 
 to this list.")
 
-(defmacro loopy-defalias (alias true-name)
-  "Alias loop command TRUE-NAME to ALIAS."
-  `(push (cons ,alias ,true-name)
+(defmacro loopy-defalias (alias definition)
+  "Add alias ALIAS for loop command DEFINITION.
+
+Neither argument need be quoted."
+  `(push (cons ,(if (eq (car-safe alias) 'quote)
+                    alias
+                  `(quote ,alias))
+               ,(if (eq (car-safe definition) 'quote)
+                    definition
+                  `(quote ,definition)))
          loopy-custom-command-aliases))
 
 ;;;; Errors
@@ -962,12 +969,21 @@ COMMAND-LIST."
 (defun loopy--get-command-parser (command)
   "Get the parsing function for COMMAND, based on the command name.
 
-First check in `loopy--builtin-command-parsers', then
-`loopy-custom-command-parsers'."
+The following variables are checked:
 
-  (or (alist-get (car command) loopy--builtin-command-parsers)
-      (alist-get (car command) loopy-custom-command-parsers)
-      (signal 'loopy-unknown-command command)))
+1. `loopy-custom-command-aliases'
+2. `loopy-custom-command-parsers'
+3. `loopy--builtin-command-parsers'
+
+Failing that, an error is signaled."
+
+  (let ((key (car command)))
+    (or (when-let ((alias-def (cdr (assq key loopy-custom-command-aliases))))
+          (or (cdr (assq alias-def loopy-custom-command-parsers))
+              (cdr (assq alias-def loopy--builtin-command-parsers))))
+        (cdr (assq key loopy-custom-command-parsers))
+        (cdr (assq key loopy--builtin-command-parsers))
+        (signal 'loopy-unknown-command command))))
 
 (provide 'loopy-commands)
 

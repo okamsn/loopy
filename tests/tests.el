@@ -1278,6 +1278,14 @@ This assumes that you're on guix."
              (eval (quote (loopy (list i (number-sequence 1 10))
                                  (fr i)))))))
 
+(ert-deftest custom-aliases-list ()
+  (should (loopy-defalias l list))
+  (should (loopy-defalias a 'array))
+  (should (equal '((1 . 4) (2 . 5) (3 . 6))
+                 (eval (quote (loopy (l i '(1 2 3))
+                                     (a j [4 5 6])
+                                     (collect (cons i j))))))))
+
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
 ;; flycheck-emacs-lisp-load-path: ("./.")
