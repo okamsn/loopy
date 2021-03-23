@@ -98,6 +98,19 @@ exist), one could do
 This uses the command name (such as `list' in `(list i my-list)')."
   (alist-get (car command) loopy-custom-command-parsers))
 
+(defcustom loopy-custom-command-aliases nil
+  "An alist of pairs of a quoted alias and a quoted true name.
+
+For example, to create the alias `add' for the command `sum', one would add
+
+  '(add . sum)
+
+to this list.")
+
+(defmacro loopy-defalias (alias true-name)
+  "Alias loop command TRUE-NAME to ALIAS."
+  `(push (cons ,alias ,true-name)
+         loopy-custom-command-aliases))
 
 ;;;; Errors
 (define-error 'loopy-error
