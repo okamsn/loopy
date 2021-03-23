@@ -98,6 +98,7 @@ exist), one could do
 This uses the command name (such as `list' in `(list i my-list)')."
   (alist-get (car command) loopy-custom-command-parsers))
 
+;;;###autoload
 (defcustom loopy-custom-command-aliases nil
   "An alist of pairs of a quoted alias and a quoted true name.
 
