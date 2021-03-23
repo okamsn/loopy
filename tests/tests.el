@@ -1223,6 +1223,61 @@ This assumes that you're on guix."
      ;; might be changed (somehow), which causes an error.
      (eq nil (mu4e:other-path)))))
 
+;;; Custom Aliases
+(setq loopy-custom-command-aliases
+      '((f . flags)
+        (as . with)
+        (ignore . without)
+        (precode . before-do)
+        (postcode . after-do)
+        (fd . finally-do)
+        (fr . finally-return)))
+
+(ert-deftest custom-alias-flag ()
+  (should (equal '((1) (2))
+                 (eval (quote (loopy (f split)
+                                     (list i '(1))
+                                     (collect i)
+                                     (collect (1+ i))))))))
+
+(ert-deftest custom-aliases-with ()
+  (should (= 1
+             (eval (quote (loopy (as (a 1))
+                                 (return a)))))))
+
+(ert-deftest custom-aliases-without ()
+  (should (= 5 (let ((a 1)
+                     (b 2))
+                 (eval (quote (loopy (ignore a b)
+                                     (repeat 1)
+                                     (expr a 2)
+                                     (expr b 3))))
+                 (+ a b)))))
+
+(ert-deftest custom-aliases-before-do ()
+  (should (= 7 (eval (quote (loopy (with (i 2))
+                                   (precode (setq i 7))
+                                   (return i)))))))
+
+(ert-deftest custom-aliases-after-do ()
+  (should (eval (quote (loopy (with (my-ret nil))
+                              (list i '(1 2 3 4))
+                              (postcode (setq my-ret t))
+                              (finally-return my-ret))))))
+
+(ert-deftest custom-aliases-finally-do ()
+  (should
+   (= 10
+      (let (my-var)
+        (eval (quote (loopy (list i (number-sequence 1 10))
+                            (fd (setq my-var i)))))
+        my-var))))
+
+(ert-deftest custom-aliases-finally-return ()
+  (should (= 10
+             (eval (quote (loopy (list i (number-sequence 1 10))
+                                 (fr i)))))))
+
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
 ;; flycheck-emacs-lisp-load-path: ("./.")

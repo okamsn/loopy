@@ -461,6 +461,25 @@ substituting into a `let*' form or being combined under a
     (t
      (error "Don't know how to destructure this: %s" var))))
 
+(cl-defun loopy--find-special-macro-arguments (names body)
+  "Find any usages of special macro arguments NAMES in BODY, given aliases.
+
+NAMES can be either a single quoted name or a list of quoted names.
+
+Aliases can be found in `loopy-custom-command-aliases'."
+  (dolist (keyword
+           (if (listp names)
+               (append names
+                       (cl-loop for alias in loopy-custom-command-aliases
+                                if (memq (cdr alias) names)
+                                collect (car alias)))
+             (cons names (cl-loop for alias in loopy-custom-command-aliases
+                                  if (eq (cdr alias) names)
+                                  collect (car alias)))))
+    (when-let ((target (cdr (assq keyword body))))
+      (cl-return-from loopy--find-special-macro-arguments target))))
+
+
 ;;;; The Macro Itself
 ;;;###autoload
 (cl-defmacro loopy (&rest body)
@@ -527,25 +546,12 @@ Info node `(loopy)' distributed with this package."
                     ("finally-return" form &optional [&rest form]) ])))
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
-        (loopy--with-vars (cdr (or (assq 'with body)
-                                   (assq 'let* body))))
-        (loopy--without-vars (cdr (or (assq 'without body)
-                                      (assq 'no-init body))))
-        (loopy--before-do (cdr (or (assq 'before-do body)
-                                   (assq 'before body)
-                                   (assq 'initially body)
-                                   (assq 'initially-do body))))
-        (loopy--after-do (cdr (or (assq 'after-do body)
-                                  (assq 'after body)
-                                  (assq 'else-do body)
-                                  (assq 'else body))))
-        (loopy--final-do (cdr (or (assq 'finally-do body)
-                                  (assq 'finally body))))
-        (loopy--final-return (when-let ((return-val
-                                         (cdr (assq 'finally-return body))))
-                               (if (= 1 (length return-val))
-                                   (car return-val)
-                                 (cons 'list return-val))))
+        (loopy--with-vars)
+        (loopy--without-vars)
+        (loopy--before-do)
+        (loopy--after-do)
+        (loopy--final-do)
+        (loopy--final-return)
 
         ;; -- Vars for processing loop commands --
         (loopy--iteration-vars)
@@ -568,7 +574,11 @@ Info node `(loopy)' distributed with this package."
         (loopy--destructuring-accumulation-parser)
         (loopy--split-implied-accumulation-results))
 
-;;;;; Interpreting the macro arguments.
+;;;;; Process the special macro arguments.
+
+    ;; There should be only one of each of these arguments.
+
+    ;; Flags
 
     ;; Process any flags passed to the macro.  In case of conflicts, the
     ;; processing order is:
@@ -577,77 +587,115 @@ Info node `(loopy)' distributed with this package."
     ;; 2. Flags in the `flag' macro argument, which can
     ;;    undo the first group.
 
-    (when-let ((loopy--all-flags (append loopy-default-flags
-                                         (cdr (or (assq 'flags body)
-                                                  (assq 'flag body))))))
+    (when-let ((loopy--all-flags
+                (append loopy-default-flags
+                        (loopy--find-special-macro-arguments '(flag flags)
+                                                             body))))
       (dolist (flag loopy--all-flags)
         (if-let ((func (cdr (assq flag loopy--flag-settings))))
             (funcall func)
           (error "Loopy: Flag not defined: %s" flag))))
 
-    ;; Process `with' for destructuring.
-    (when loopy--with-vars
-      (setq loopy--with-vars
-            (mapcan (lambda (var)
-                      (loopy--destructure-variables (cl-first var) (cl-second var)))
-                    loopy--with-vars)))
+    ;; With
+    (setq loopy--with-vars
+          ;; Process `with' for destructuring.
+          (mapcan (lambda (var)
+                    (loopy--destructure-variables (cl-first var)
+                                                  (cl-second var)))
+                  (loopy--find-special-macro-arguments '(with let*) body)))
 
-    ;; Check the remaining arguments passed to the macro.
+    ;; Without
+    (setq loopy--without-vars
+          (loopy--find-special-macro-arguments '(without no-init) body))
 
-    (dolist (arg body)
-      (cond
-       ((symbolp arg)
-        (setq loopy--loop-name arg))
-       ((memq (car-safe arg) loopy--valid-macro-arguments) t) ; Do nothing.
-       (t
-        ;; Body forms have the most variety.
-        ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
-        ;; Things added are expanded in place.
-        (dolist (instruction (loopy--parse-loop-command arg))
-          ;; Do it this way instead of with `set', cause was getting errors
-          ;; about void variables.
-          (cl-case (car instruction)
-            (loopy--generalized-vars
-             (push (cdr instruction) loopy--generalized-vars))
-            (loopy--iteration-vars
-             ;; Don't want to accidentally rebind variables to `nil'.
-             (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) loopy--iteration-vars)))
-            (loopy--accumulation-vars
-             ;; Don't want to accidentally rebind variables to `nil'.
-             (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) loopy--accumulation-vars)))
-            (loopy--pre-conditions
-             (push (cdr instruction) loopy--pre-conditions))
-            (loopy--main-body
-             (push (cdr instruction) loopy--main-body))
-            (loopy--latter-body
-             (push (cdr instruction) loopy--latter-body))
-            (loopy--post-conditions
-             (push (cdr instruction) loopy--post-conditions))
-            (loopy--implicit-return
-             (unless (loopy--already-implicit-return (cdr instruction))
-               (push (cdr instruction) loopy--implicit-return)))
-            (loopy--implicit-accumulation-final-update
-             (push (cdr instruction) loopy--implicit-accumulation-final-update))
+    ;; Before do
+    (setq loopy--before-do
+          (loopy--find-special-macro-arguments '( before-do before
+                                                  initially-do initially)
+                                               body))
 
-            ;; Code for conditionally constructing the loop body.
-            (loopy--skip-used
-             (setq loopy--skip-used t))
-            (loopy--tagbody-exit-used
-             (setq loopy--tagbody-exit-used t))
+    ;; After do
+    (setq loopy--after-do
+          (loopy--find-special-macro-arguments '( after-do after
+                                                  else-do else)
+                                               body))
 
-            ;; Places users probably shouldn't push to, but can if they want:
-            (loopy--before-do
-             (push (cdr instruction) loopy--before-do))
-            (loopy--after-do
-             (push (cdr instruction) loopy--after-do))
-            (loopy--final-do
-             (push (cdr instruction) loopy--final-do))
-            (loopy--final-return
-             (push (cdr instruction) loopy--final-return))
-            (t
-             (error "Loopy: Unknown body instruction: %s" instruction)))))))
+    ;; Finally Do
+    (setq loopy--final-do
+          (loopy--find-special-macro-arguments '(finally-do finally) body))
+
+    ;; Final Return
+    (setq loopy--final-return
+          (when-let ((return-val
+                      (loopy--find-special-macro-arguments 'finally-return
+                                                           body)))
+            (if (= 1 (length return-val))
+                (car return-val)
+              (cons 'list return-val))))
+
+;;;;; Check the loop name and loop commands.
+
+    (let ((non-command-arguments
+           (append loopy--valid-macro-arguments
+                   (let ((results))
+                     (dolist (alias loopy-custom-command-aliases)
+                       (when (memq (cdr alias) loopy--valid-macro-arguments)
+                         (push (car alias) results)))
+                     results))))
+      (dolist (arg body)
+        (cond
+         ((symbolp arg)
+          (setq loopy--loop-name arg))
+         ((memq (car-safe arg) non-command-arguments) t) ; Do nothing.
+         (t
+          ;; Body forms have the most variety.
+          ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
+          ;; Things added are expanded in place.
+          (dolist (instruction (loopy--parse-loop-command arg))
+            ;; Do it this way instead of with `set', cause was getting errors
+            ;; about void variables.
+            (cl-case (car instruction)
+              (loopy--generalized-vars
+               (push (cdr instruction) loopy--generalized-vars))
+              (loopy--iteration-vars
+               ;; Don't want to accidentally rebind variables to `nil'.
+               (unless (loopy--bound-p (cadr instruction))
+                 (push (cdr instruction) loopy--iteration-vars)))
+              (loopy--accumulation-vars
+               ;; Don't want to accidentally rebind variables to `nil'.
+               (unless (loopy--bound-p (cadr instruction))
+                 (push (cdr instruction) loopy--accumulation-vars)))
+              (loopy--pre-conditions
+               (push (cdr instruction) loopy--pre-conditions))
+              (loopy--main-body
+               (push (cdr instruction) loopy--main-body))
+              (loopy--latter-body
+               (push (cdr instruction) loopy--latter-body))
+              (loopy--post-conditions
+               (push (cdr instruction) loopy--post-conditions))
+              (loopy--implicit-return
+               (unless (loopy--already-implicit-return (cdr instruction))
+                 (push (cdr instruction) loopy--implicit-return)))
+              (loopy--implicit-accumulation-final-update
+               (push (cdr instruction) loopy--implicit-accumulation-final-update))
+
+              ;; Code for conditionally constructing the loop body.
+              (loopy--skip-used
+               (setq loopy--skip-used t))
+              (loopy--tagbody-exit-used
+               (setq loopy--tagbody-exit-used t))
+
+              ;; Places users probably shouldn't push to, but can if they want:
+              (loopy--before-do
+               (push (cdr instruction) loopy--before-do))
+              (loopy--after-do
+               (push (cdr instruction) loopy--after-do))
+              (loopy--final-do
+               (push (cdr instruction) loopy--final-do))
+              (loopy--final-return
+               (push (cdr instruction) loopy--final-return))
+              (t
+               (error "Loopy: Unknown body instruction: %s" instruction))))))))
 
     ;; Make sure the order-dependent lists are in the correct order.
     (setq loopy--main-body (nreverse loopy--main-body)
