@@ -118,20 +118,14 @@
                                   (finally-do 3)))))))
 
 (ert-deftest finally-return-single-value ()
-  (should (and (= 10
-                  (eval (quote (loopy (list i (number-sequence 1 10))
-                                      (finally-return i)))))
-               (= 10
-                  (eval (quote (loopy (list i (number-sequence 1 10))
-                                      (finally-return i))))))))
+  (should (= 10
+             (eval (quote (loopy (list i (number-sequence 1 10))
+                                 (finally-return i)))))))
 
 (ert-deftest finally-return-list-of-values ()
-  (should (and (equal '(10 7)
-                      (eval (quote (loopy (list i (number-sequence 1 10))
-                                          (finally-return i 7)))))
-               (equal '(10 7)
-                      (eval (quote (loopy (list i (number-sequence 1 10))
-                                          (finally-return i 7))))))))
+  (should (equal '(10 7)
+                 (eval (quote (loopy (list i (number-sequence 1 10))
+                                     (finally-return i 7)))))))
 
 ;;;; Changing the order of macro arguments.
 (ert-deftest change-order-of-commands ()
