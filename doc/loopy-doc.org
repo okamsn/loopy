@@ -14,6 +14,8 @@
 #+TEXINFO_DIR_TITLE: Loopy: (loopy)
 #+TEXINFO_DIR_DESC: A looping and iteration macro.
 
+#+MACRO: dfn @@texinfo:@dfn{$1}@@
+
 #+begin_export html
 NOTE: This file is meant for viewing in Org mode or for exporting to Texinfo.
 Features might not work in other formats (e.g., Info links in HTML).
