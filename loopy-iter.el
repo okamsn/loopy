@@ -145,19 +145,23 @@ Other instructions are just pushed to their variables."
     (let ((new-tree))
       (dolist (elem tree)
         (if (consp elem)
-            (progn
-              (message "Elem: %s" elem)
+            ;; Depending on the structure that we're dealing with, we need to
+            ;; expand differently.
+            (let ((key (cl-first elem)))
               (cond
                ;; If it's a special macro argument, just remove it from the tree.
                ;; By this point, it's already been interpreted.
                ((and (not loopy--in-sub-level)
-                     (memq (cl-first elem) loopy-iter--valid-macro-arguments))
+                     (memq key loopy-iter--valid-macro-arguments))
                 t)
+               ;; Check if it's a literal form.
+               ((memq key loopy-iter--literal-forms)
+                (push elem new-tree))
                ;; Check if it's a `let'-like form.
-               ((memq (cl-first elem) loopy-iter--let-forms)
+               ((memq key loopy-iter--let-forms)
                 (push (loopy-iter--replace-in-let-form elem)
                       new-tree))
-               ((and (memq (cl-first elem) '(for accum exit))
+               ((and (memq key '(for accum exit))
                      (loopy-iter--valid-loop-command (cl-second elem)))
                 (seq-let (main-body other-instructions)
                     (loopy-iter--extract-main-body
