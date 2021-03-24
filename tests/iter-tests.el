@@ -35,4 +35,15 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                  (accum collect a)))))))
   )
 
+(ert-deftest wrap-setq ()
+  (should
+   (equal '((1 . 2) (2 . 4) (3 . 6))
+          (eval (quote (loopy-iter (for list elem '(1 2 3))
+                                   (setq a (progn
+                                             (for expr i elem)
+                                             i)
+                                         b (progn
+                                             (for expr j (* 2 elem))
+                                             j))
+                                   (accum collect (cons a b))))))))
 ;; end

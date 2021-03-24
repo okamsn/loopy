@@ -60,6 +60,9 @@ This variable is used to signal an error instead of silently failing.")
 (defvar loopy-iter--literal-forms '(loopy-iter--junk-symbol quote function)
   "Forms that shouldn't be evaluated.")
 
+(defvar loopy-iter--setq-forms '(setq)
+  "Special forms that work like `setq'.")
+
 (defvar loopy-iter-progn-forms '(progn prog1 prog2)
   "Forms like `progn', `prog1', and `prog2'.")
 
@@ -165,6 +168,11 @@ Other instructions are just pushed to their variables."
                ((memq key loopy-iter--let-forms)
                 (push (loopy-iter--replace-in-let-form elem)
                       new-tree))
+               ;; Check if it's a `setq'-like form.
+               ((memq key loopy-iter--setq-forms)
+                (push (loopy-iter--replace-in-setq-form elem)
+                      new-tree))
+
                ((and (memq key '(for accum exit))
                      (loopy-iter--valid-loop-command (cl-second elem)))
                 (seq-let (main-body other-instructions)
@@ -203,6 +211,23 @@ These forms can have loop commands in the values of variables or in the body."
     ;; Return value
     `(,(cl-first tree) ,(nreverse new-var-list)
       ,@(loopy-iter--replace-in-tree (cddr tree)))))
+
+(defun loopy-iter--replace-in-setq-form (tree)
+  "Replace loop commands in `setq'-like form TREE.
+
+These forms can have loop commands in every other expression
+starting at the third element in TREE."
+  (let ((new-var-val-pairs)
+        (name (cl-first tree))
+        ;; Just to make the `while' loop easier.
+        (tree (cdr tree)))
+    (while tree
+      (push (list (pop tree)
+                  (loopy-iter--replace-in-tree (pop tree)))
+            new-var-val-pairs))
+    ;; Return new tree.
+    `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))
+
 
 ;; The macro itself
 (defmacro loopy-iter (&rest body)
