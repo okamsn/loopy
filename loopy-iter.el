@@ -140,33 +140,40 @@ The lists will be in the order parsed (correct for insertion)."
 Other instructions are just pushed to their variables."
   ;; TODO: THis will probably need to be modified to handle walking constructs
   ;; like `let', etc.  E.g., "(let* ((for expr) (exit leave)) ...)".
+  (if (nlistp tree)
+      ;; If `tree' is not a list, just return the object.  This can happen when
+      ;; trying to expand sub-expressions, such as the "v" in "(let ((i v)) ...)".
+      tree
+    (let ((new-tree))
+      (dolist (elem tree)
+        (message "Elem: %s" elem)
+        (if (consp elem)
+            (progn
+              (message "Elem: %s" elem)
+              (cond
+               ;; If it's a special macro argument, just remove it from the tree.
+               ;; By this point, it's already been interpreted.
+               ((and (not loopy--in-sub-level)
+                     (memq (cl-first elem) loopy-iter--valid-macro-arguments))
+                t)
+               ((and (memq (cl-first elem) '(for accum exit))
+                     (loopy-iter--valid-loop-command (cl-second elem)))
+                (seq-let (main-body other-instructions)
+                    (loopy-iter--extract-main-body
+                     (loopy--parse-loop-command (cdr elem)))
+                  ;; Push the main body into the tree.
+                  (push (cons 'progn main-body) new-tree)
+                  ;; Interpret the other instructions.
+                  (loopy-iter--process-non-main-body other-instructions)))
+               (t
+                (let ((loopy--in-sub-level t))
+                  (push (loopy-iter--replace-in-tree elem)
+                        new-tree)))))
+          ;; Just add anything else to the tree.
+          (push elem new-tree)))
+      ;; Return branches in correct order.
+      (nreverse new-tree))))
 
-  (let ((new-tree))
-    (dolist (elem tree)
-      (if (consp elem)
-          (cond
-           ;; If it's a special macro argument, just remove it from the tree.
-           ;; By this point, it's already been interpreted.
-           ((and (not loopy--in-sub-level)
-                 (memq (cl-first elem) loopy-iter--valid-macro-arguments))
-            t)
-           ((and (memq (cl-first elem) '(for accum exit))
-                 (loopy-iter--valid-loop-command (cl-second elem)))
-            (seq-let (main-body other-instructions)
-                (loopy-iter--extract-main-body
-                 (loopy--parse-loop-command (cdr elem)))
-              ;; Push the main body into the tree.
-              (push (cons 'progn main-body) new-tree)
-              ;; Interpret the other instructions.
-              (loopy-iter--process-non-main-body other-instructions)))
-           (t
-            (let ((loopy--in-sub-level t))
-              (push (loopy-iter--replace-in-tree elem)
-                    new-tree))))
-        ;; Just add anything else to the tree.
-        (push elem new-tree)))
-    ;; Return branches in correct order.
-    (nreverse new-tree)))
 (defun loopy-iter--replace-in-let-form (tree)
   "Replace loop commands in `let'-like form TREE.
 
