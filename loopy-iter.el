@@ -223,7 +223,10 @@ starting at the third element in TREE."
         (tree (cdr tree)))
     (while tree
       (push (list (pop tree)
-                  (loopy-iter--replace-in-tree (pop tree)))
+                  (let ((val (pop tree)))
+                    (if (memq (cl-first val) loopy-iter--literal-forms)
+                        val
+                      (loopy-iter--replace-in-tree val))))
             new-var-val-pairs))
     ;; Return new tree.
     `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))

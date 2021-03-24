@@ -45,5 +45,11 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                          b (progn
                                              (for expr j (* 2 elem))
                                              j))
-                                   (accum collect (cons a b))))))))
+                                   (accum collect (cons a b)))))))
+
+  (should (equal '((for expr i 2) (for expr i 2) (for expr i 2))
+                 (eval (quote (loopy-iter (for list elem '(1 2 3))
+                                          (setq a '(for expr i 2))
+                                          (accum collect a)))))))
+
 ;; end
