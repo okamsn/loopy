@@ -189,9 +189,13 @@ These forms can have loop commands in the values of variables or in the body."
   (let ((new-var-list))
     ;; Handle the var-list
     (dolist (pair (cl-second tree))
-      (push (list (cl-first pair)
-                  (loopy-iter--replace-in-tree (cl-second pair)))
-            new-var-list))
+      ;; TODO: Why do we need to deal with quoted forms here specifically?
+      ;;       The `quote' doesn't seem to be passed along.
+      (if (memq (cl-first (cl-second pair)) loopy-iter--literal-forms)
+          (push pair new-var-list)
+        (push (list (cl-first pair)
+                    (loopy-iter--replace-in-tree (cl-second pair)))
+              new-var-list)))
     ;; Return value
     `(,(cl-first tree) ,(nreverse new-var-list)
       ,@(loopy-iter--replace-in-tree (cddr tree)))))
