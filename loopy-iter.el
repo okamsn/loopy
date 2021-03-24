@@ -174,15 +174,18 @@ Other instructions are just pushed to their variables."
                ;; Check if it's a literal form.
                ((memq key loopy-iter--literal-forms)
                 (push elem new-tree))
+
                ;; Check if it's a `let'-like form.
                ((memq key loopy-iter--let-forms)
                 (push (loopy-iter--replace-in-let-form elem)
                       new-tree))
+
                ;; Check if it's a `setq'-like form.
                ((memq key loopy-iter--setq-forms)
                 (push (loopy-iter--replace-in-setq-form elem)
                       new-tree))
 
+               ;; Check if it's a loop command
                ((and (memq key '(for accum exit))
                      (loopy-iter--valid-loop-command (cl-second elem)))
                 (seq-let (main-body other-instructions)
@@ -195,6 +198,8 @@ Other instructions are just pushed to their variables."
                         new-tree)
                   ;; Interpret the other instructions.
                   (loopy-iter--process-non-main-body other-instructions)))
+
+               ;; Otherwise, recurse.
                (t
                 (let ((loopy--in-sub-level t))
                   (push (loopy-iter--replace-in-tree elem)
