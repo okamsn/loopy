@@ -32,8 +32,26 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                (let ((a (progn
                                           (for expr i (* 2 elem))
                                           (+ elem i))))
-                                 (accum collect a)))))))
-  )
+                                 (accum collect a))))))))
+
+(ert-deftest dont-expand-quoted ()
+  (should (equal '((for expr i 2))
+                 (eval
+                  (quote
+                   (loopy-iter (for repeat 1)
+                               (let ((j '(for expr i 2)))
+                                 (accum collect j))))))))
+
+
+(ert-deftest wrap-macro ()
+  (should (equal '(3 6 9)
+                 (eval
+                  (quote
+                   (loopy-iter (for list elem '(1 2 3))
+                               (cl-destructuring-bind (a b c) (progn
+                                                                (for expr i elem)
+                                                                (list i i i))
+                                 (accum collect (+ a b c)))))))))
 
 (ert-deftest wrap-setq ()
   (should
