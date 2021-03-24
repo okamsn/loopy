@@ -52,4 +52,30 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                           (setq a '(for expr i 2))
                                           (accum collect a)))))))
 
+(ert-deftest wrap-lambda ()
+  "Both quoted an unquoted lambda's should be wrapped."
+  (should (equal '(1 2 3)
+                 (loopy-iter (for list elem '(1 2 3))
+                             (let ((a #'(lambda (x)
+                                          (for expr j x))))
+                               (accum collect (progn
+                                                (funcall a elem)
+                                                j))))))
+  (should (equal '(1 2 3)
+                 (loopy-iter (for list elem '(1 2 3))
+                             (let ((a (lambda (x)
+                                        (for expr j x))))
+                               (accum collect (progn
+                                                (funcall a elem)
+                                                j))))))
+
+  ;; NOTE: `defun' expands to a use of `lambda'.
+  (should (equal '(1 2 3)
+                 (loopy-iter (for list elem '(1 2 3))
+                             (let ((a (defun loopy-defun-test (x)
+                                        (for expr j x))))
+                               (accum collect (progn
+                                                (funcall a elem)
+                                                j)))))))
+
 ;; end

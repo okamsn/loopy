@@ -161,6 +161,12 @@ Other instructions are just pushed to their variables."
                ((and (not loopy--in-sub-level)
                      (memq key loopy-iter--valid-macro-arguments))
                 t)
+
+               ;; Check if it's a lambda form
+               ((eq key 'lambda)
+                (push (loopy-iter--replace-in-lambda-form elem)
+                      new-tree))
+
                ;; Check if it's a literal form.
                ((memq key loopy-iter--literal-forms)
                 (push elem new-tree))
@@ -231,6 +237,12 @@ starting at the third element in TREE."
     ;; Return new tree.
     `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))
 
+(defun loopy-iter--replace-in-lambda-form (tree)
+  "Replace loop commands in `lambda'-like expressions.
+
+These expressions can have loop commands in the body."
+  `(lambda ,(cl-second tree)
+     ,@(loopy-iter--replace-in-tree (cddr tree))))
 
 ;; The macro itself
 (defmacro loopy-iter (&rest body)
