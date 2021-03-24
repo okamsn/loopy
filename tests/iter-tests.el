@@ -96,4 +96,12 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                                 (funcall a elem)
                                                 j)))))))
 
+(ert-deftest wrap-while ()
+  ;; `dolist' expands to `while'
+  (should (equal '(1 7 2 8 3 9)
+                 (loopy-iter (for list elem '((1 7) (2 8) (3 9)))
+                             (dolist (i elem)
+                               (accum collect i))))))
+
+
 ;; end
