@@ -144,7 +144,10 @@ Other instructions are just pushed to their variables."
       ;; trying to expand sub-expressions, such as the "v" in "(let ((i v)) ...)".
       tree
     (let ((new-tree))
-      (dolist (elem tree)
+      ;; TODO: How to handle macro expansion?  Ideally, we only need to parse
+      ;; the fundamental building blocks of source code, and macros would expand
+      ;; to usages of these blocks.
+      (dolist (elem (macroexpand-1 tree))
         (if (consp elem)
             ;; Depending on the structure that we're dealing with, we need to
             ;; expand differently.
