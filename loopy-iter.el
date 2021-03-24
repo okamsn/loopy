@@ -26,7 +26,7 @@
 ;; You should have received a copy of the GNU General Public License
 ;; along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
-;;; Commentary
+;;; Commentary:
 ;; A macro similar to and heavily inspired by Common Lisp's Iterate package.
 ;; This package is somewhat like a translation of Iter into Loopy.
 ;;
@@ -71,7 +71,7 @@ still evaluated.")
   "Forms like `progn', `prog1', and `prog2'.")
 
 (defun loopy-iter--extract-main-body (instructions)
-  "Separate main-body instructions from others.
+  "Separate main-body instructions from others in INSTRUCTIONS.
 
 This returns a list of two sub-lists:
 1. Expression that should be inserted into a main-body instruction.
@@ -247,7 +247,7 @@ starting at the third element in TREE."
     `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))
 
 (defun loopy-iter--replace-in-lambda-form (tree)
-  "Replace loop commands in `lambda'-like expressions.
+  "Replace loop commands in `lambda'-like expression TREE.
 
 These expressions can have loop commands in the body."
   `(lambda ,(cl-second tree)
@@ -255,7 +255,9 @@ These expressions can have loop commands in the body."
 
 ;; The macro itself
 (defmacro loopy-iter (&rest body)
-  "An `iter'-like `loopy' macro."
+  "An `iter'-like `loopy' macro.
+
+See `loopy' for information about BODY."
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
         (loopy--with-vars)
