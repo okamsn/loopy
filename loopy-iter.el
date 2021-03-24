@@ -167,6 +167,19 @@ Other instructions are just pushed to their variables."
         (push elem new-tree)))
     ;; Return branches in correct order.
     (nreverse new-tree)))
+(defun loopy-iter--replace-in-let-form (tree)
+  "Replace loop commands in `let'-like form TREE.
+
+These forms can have loop commands in the values of variables or in the body."
+  (let ((new-var-list))
+    ;; Handle the var-list
+    (dolist (pair (cl-second tree))
+      (push (list (cl-first pair)
+                  (loopy-iter--replace-in-tree (cl-second pair)))
+            new-var-list))
+    ;; Return value
+    `(,(cl-first tree) ,(nreverse new-var-list)
+      ,@(loopy-iter--replace-in-tree (cddr tree)))))
 
 ;; The macro itself
 (defmacro loopy-iter (&rest body)
