@@ -91,13 +91,14 @@ exist), one could do
   (add-to-list \'loopy-custom-command-parsers
                 (cons 'when #'my-loopy-parse-when-command))"
   :group 'loopy
-  :type '(alist :key-type sexp :value-type function))
+  :type '(alist :key-type symbol :value-type function))
 
 (defun loopy--get-custom-command-parser (command)
   "Get the parsing function for COMMAND from `loopy-custom-command-parsers'.
 This uses the command name (such as `list' in `(list i my-list)')."
   (alist-get (car command) loopy-custom-command-parsers))
 
+;;;###autoload
 (defcustom loopy-custom-command-aliases nil
   "An alist of pairs of a quoted alias and a quoted true name.
 
@@ -105,7 +106,9 @@ For example, to create the alias `add' for the command `sum', one would add
 
   '(add . sum)
 
-to this list.")
+to this list."
+  :group 'loopy
+  :type '(alist :key-type symbol :value-type symbol))
 
 (defmacro loopy-defalias (alias definition)
   "Add alias ALIAS for loop command DEFINITION.
