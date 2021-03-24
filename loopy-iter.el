@@ -56,7 +56,8 @@ This variable is used to signal an error instead of silently failing.")
 
 `let' forms might use constructs wrapped in variable definitions.")
 
-(defvar loopy-iter--literal-forms '(quote function)
+;; TODO: Get this to eval to '(quote function) without need of fist symbol.
+(defvar loopy-iter--literal-forms '(loopy-iter--junk-symbol quote function)
   "Forms that shouldn't be evaluated.")
 
 (defvar loopy-iter-progn-forms '(progn prog1 prog2)
