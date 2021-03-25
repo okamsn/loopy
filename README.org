@@ -213,6 +213,8 @@ please let me know.
   #+end_center
 
   #+begin_src emacs-lisp
+    (require 'loopy-iter)
+
     ;; => (2 4 6)
     (loopy-iter (for list i '(1 2 3))
                 (let ((a (* 2 i)))

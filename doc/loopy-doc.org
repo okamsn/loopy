@@ -1231,7 +1231,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+findex: loopy-iter
   ~loopy-iter~ is a macro that allows for the embedding of loop commands inside
   arbitrary code, instead of trying to use the =do= loop command to embed
-  arbitrary code in a loop.
+  arbitrary code in a loop.  You must use ~require~ to load this feature.
 
   #+attr_texinfo: :tag Warning
   #+begin_quote
@@ -1244,6 +1244,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   confused with the ~iter-*~ functions provided by Emacs).
 
   #+begin_src emacs-lisp
+    (require 'loopy-iter) ; <- Must `require' to load feature.
+
     ;; => (2 4 6)
     (loopy-iter (for list i '(1 2 3))
                 (let ((a (* 2 i)))
