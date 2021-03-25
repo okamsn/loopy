@@ -112,4 +112,19 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                                         i))))
                                       (accum collect a))))))))
 
+(ert-deftest leave-in-let ()
+  (should
+   (equal '(8 9 10 11 12)
+          (eval
+           (quote
+            (loopy-iter (let ((a (progn
+                                   ;; NOTE: No restriction on placement of `expr'.
+                                   (for expr j 8 (1+ j))
+                                   (when (> j 12)
+                                     ;; Leave loop but don't force return value,
+                                     ;; allowing implicit result to be returned.
+                                     (exit leave))
+                                   j)))
+                          (accum collect a))))))))
+
 ;; end
