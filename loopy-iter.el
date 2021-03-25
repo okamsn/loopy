@@ -69,9 +69,6 @@ still evaluated.")
 (defvar loopy-iter--setq-forms '(setq)
   "Special forms that work like `setq'.")
 
-(defvar loopy-iter-progn-forms '(progn prog1 prog2)
-  "Forms like `progn', `prog1', and `prog2'.")
-
 (defun loopy-iter--extract-main-body (instructions)
   "Separate main-body instructions from others in INSTRUCTIONS.
 
