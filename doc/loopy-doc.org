@@ -1224,8 +1224,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 * The ~loopy-iter~ Macro
   :PROPERTIES:
   :CUSTOM_ID: loopy-iter
-  :DESCRIPTION: Another way to build loops.
+  :DESCRIPTION: Embedding loop commands in arbitrary code.
   :END:
+
+  ~loopy-iter~ is a macro that allows for the embedding of loop commands inside
+  arbitrary code, instead of trying to use the =do= loop command.
 
   #+attr_texinfo: :tag Warning
   #+begin_quote
@@ -1233,14 +1236,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   circumstances.
   #+end_quote
 
-  Besides the ~loopy~ macro, there is also the ~loopy-iter~ macro.  This other
-  macro is more flexible in some ways, and more restrictive in others.
-  Conceptually, it is meant to be similar to the ~iter~ macro found in the
-  Common Lisp package "Iterate" [fn:iter] (not to be confused with the ~iter-~
-  functions provided by Emacs).
-
-  The main point of this macro is that it allows the arbitrary nesting of code
-  instead of using the ~do~ loop command.
+  This macro is meant to be conceptually similar to the ~iterate~ or ~iter~
+  macro provided by the Common Lisp package "Iterate" [fn:iter] (not to be
+  confused with the ~iter-*~ functions provided by Emacs).
 
   #+begin_src emacs-lisp
     ;; => (2 4 6)
@@ -1249,32 +1247,59 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                   (accum collect a)))
   #+end_src
 
-  To do this, it needs to be able to clearly distinguish between loop commands
-  (like =list=) and functions/macros (like ~list~).  This is done by using the
-  keywords =for=, =accum=, or =exit= in front of loop commands, as those words
-  do not match any built-in function in Emacs and are similar to what is used by
+  To clearly distinguish between loop commands and Emacs features (such as the
+  loop command =list= and the function ~list~), a loop command must be preceded
+  by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
+  a name with any built-in Emacs feature and are similar to the keywords used by
   other packages.
 
-  Special macro arguments still work in ~loopy-iter~, but some aliases (such as
-  =let*= for =with=) do not.  The macro tries hard to make sure it doesn't
-  accidentally garble code that should have been understood literally.
+  Special macro arguments, already having clearly distinguishable names, do not
+  need to be preceded by one of the above keywords.  However, some aliases (such
+  as =let*= for =with=) will not work in ~loopy-iter~.
 
   #+begin_src emacs-lisp
-    ;; => ((1 8 16) (2 9 18) (3 10 20))
+    ;; => ((1 8) (2 9) (3 10))
     (loopy-iter (with (a 7))                ; <- Set once around loop.
                 (for list elem '(1 2 3))
                 (let* ((c elem)             ; <- These set inside of loop.
-                       (d (+ a c))
-                       (e (progn
-                            (for expr i (* 2 d))
-                            i)))
-                  (accum collect (list c d e))))
+                       (d (+ a c)))
+                  (accum collect (list c d))))
   #+end_src
 
-  However, you should be aware that loop commands in ~lambda~ forms are always
-  interpreted, even when the ~lambda~ form is quoted with the ~function~ form or
-  the sharp-quote (=#'=).  This is because the ~lambda~ macro is self-quoting,
-  and so Emacs might quote it before it is seen by ~loopy-iter~.
+  Restrictions on the placement of loop commands and special macro arguments
+  still apply in ~loopy-iter~.  For example, iteration commands must still occur
+  at the top level of ~loopy-iter~ or a sub-loop.
+
+  #+begin_src emacs-lisp
+    ;; BAD
+    (loopy-iter (let ((a (progn
+                           ;; ERROR: `list' must occur at top level.
+                           (for list j '(8 9 10 11 12))
+                           j)))
+                  (accum collect a)))
+
+    ;; GOOD
+    ;; => (8 9 10 11 12)
+    (loopy-iter (let ((a (progn
+                           ;; NOTE: No restriction on placement of `expr'.
+                           (for expr j 8 (1+ j))
+                           (when (> j 12)
+                             ;; Leave loop but don't force return value,
+                             ;; allowing implicit result to be returned.
+                             (exit leave))
+                           j)))
+                  (accum collect a)))
+  #+end_src
+
+  You should not rely on the values of the code into which loop commands
+  translate.  For example, the above usage of =expr= might become a ~setq~ form,
+  but that is an implementation detail and subject to change.  Best practice is
+  to instead use a variable as the last expression in a ~progn~ form.
+
+  For convenience, ~loopy-iter~ will not attempt to interpret loop commands in
+  quoted code, except in sharp-quoted ~lambda~ forms.  This is because the
+  ~lambda~ macro is self-quoting, and so Emacs might quote the form before it is
+  seen by ~loopy-iter~.
 
   #+begin_src emacs-lisp
     ;; => (1 2 3)
@@ -1298,8 +1323,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   Please report such cases on this project's [[https://github.com/okamsn/loopy/issues][issues tracker]].
   #+end_quote
 
-  ~loopy-iter~ does not currently have all of the features of CL's ~iter~ macro.
-  Think of it more as a way to use loop commands embedded in arbitrary code.
+  ~loopy~ (and so ~loopy-iter~) does not currently have all of the features of
+  Common Lisp's ~iter~ macro.  Think of it more as a way to use loop commands
+  embedded in arbitrary code.
 
 
 * Using Flags
