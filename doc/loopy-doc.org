@@ -1295,7 +1295,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   Nesting arbitrary code in the loop requires knowing how to understand the
   code.  You might find cases where ~loopy-iter~ interprets code incorrectly.
 
-  Please report such cases on this project's issue tracker.
+  Please report such cases on this project's [[https://github.com/okamsn/loopy/issues][issues tracker]].
   #+end_quote
 
   ~loopy-iter~ does not currently have all of the features of CL's ~iter~ macro.
