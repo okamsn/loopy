@@ -1227,8 +1227,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :DESCRIPTION: Embedding loop commands in arbitrary code.
   :END:
 
+  #+cindex: loopy-iter
+  #+findex: loopy-iter
   ~loopy-iter~ is a macro that allows for the embedding of loop commands inside
-  arbitrary code, instead of trying to use the =do= loop command.
+  arbitrary code, instead of trying to use the =do= loop command to embed
+  arbitrary code in a loop.
 
   #+attr_texinfo: :tag Warning
   #+begin_quote
@@ -1247,6 +1250,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                   (accum collect a)))
   #+end_src
 
+  #+cindex: loopy-iter keywords
   To clearly distinguish between loop commands and Emacs features (such as the
   loop command =list= and the function ~list~), a loop command must be preceded
   by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
@@ -1363,6 +1367,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
     separate variables instead of into ~loopy-result~.
+  #+cindex: lax-naming flag
   - =lax-naming= :: In ~loopy-iter~, don't require keywords when using loop
     commands ([[#loopy-iter][The ~loopy-iter~ Macro]]).
   #+cindex: default flag

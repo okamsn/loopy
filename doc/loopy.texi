@@ -1368,6 +1368,8 @@ variables used for accumulation.
 @node The @code{loopy-iter} Macro
 @chapter The @code{loopy-iter} Macro
 
+@cindex loopy-iter
+@findex loopy-iter
 @code{loopy-iter} is a macro that allows for the embedding of loop commands inside
 arbitrary code, instead of trying to use the @samp{do} loop command.
 
@@ -1388,11 +1390,13 @@ confused with the @code{iter-*} functions provided by Emacs).
               (accum collect a)))
 @end lisp
 
+@cindex loopy-iter keywords
 To clearly distinguish between loop commands and Emacs features (such as the
 loop command @samp{list} and the function @code{list}), a loop command must be preceded
 by one of the keywords @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not share
 a name with any built-in Emacs feature and are similar to the keywords used by
-other packages.
+other packages. To disable this requirement, use the flag @samp{lax-naming}
+(@ref{Using Flags}).
 
 Special macro arguments, already having clearly distinguishable names, do not
 need to be preceded by one of the above keywords.  However, some aliases (such
@@ -1510,6 +1514,12 @@ Use the style of destructuring found in the @samp{dash} library
 @item @samp{split}
 Make accumulation commands with implicit variables accumulate into
 separate variables instead of into @code{loopy-result}.
+@end table
+@cindex lax-naming flag
+@table @asis
+@item @samp{lax-naming}
+In @code{loopy-iter}, don't require keywords when using loop
+commands (@ref{The @code{loopy-iter} Macro}).
 @end table
 @cindex default flag
 @table @asis
