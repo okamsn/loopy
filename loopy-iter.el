@@ -34,10 +34,12 @@
 ;; distinct from Lisp's other functions.
 ;;
 ;; Subject to change:
-;; - loop commands start with `for'
-;; - accumulation commands start with `accum'
+;; - loop commands start with `for': (for list i '(1 2 3))
+;; - accumulation commands start with `accum': (accum collect i)
+;; - early exit commands start with `exit': (exit return i)
 ;; - Special macro arguments should use unambiguous versions.  No aliases.
-
+;;
+;; See the `loopy' documentation for more details.
 
 ;;; Code:
 (require 'loopy)
@@ -259,7 +261,10 @@ These expressions can have loop commands in the body."
 (defmacro loopy-iter (&rest body)
   "An `iter'-like `loopy' macro.
 
-See `loopy' for information about BODY."
+See `loopy' for information about BODY.  One difference is that
+`let*' is not an alias of the `with' special macro argument.  See
+the Info node `(loopy)' for information on how to use `loopy' and
+`loopy-iter'."
   (let (;; -- Top-level expressions other than loop body --
         (loopy--loop-name)
         (loopy--with-vars)
