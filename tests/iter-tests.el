@@ -4,6 +4,7 @@
       load-path)
 
 (require 'loopy "./loopy.el")
+(require 'loopy-iter "./loopy-iter.el")
 (require 'ert)
 (require 'cl-lib)
 
