@@ -128,4 +128,20 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                    j)))
                           (accum collect a))))))))
 
+;;; lax naming
+(ert-deftest flag-lax-naming ()
+  (should
+   (equal '(2 3 4)
+          (eval (quote (loopy-iter (flag lax-naming)
+                                   (array elem [1 2 3])
+                                   (let ((a (1+ elem)))
+                                     (collect a)))))))
+
+  (should
+   (equal '(2 3 4)
+          (let ((loopy-default-flags '(lax-naming)))
+            (eval (quote (loopy-iter (array elem [1 2 3])
+                                     (let ((a (1+ elem)))
+                                       (collect a)))))))))
+
 ;; end

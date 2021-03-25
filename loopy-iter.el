@@ -45,6 +45,38 @@
 (require 'loopy)
 (require 'cl-lib)
 
+(defvar loopy--flag-settings nil)
+
+;;; Flags
+(defvar loopy-iter--lax-naming nil
+  "Whether loop commands must be preceded by keywords to be recognized.
+
+By default, `loopy-iter' requires loop commands to be preceded by
+the keywords `for', `accum', or `exit', in order to distinguish
+loop commands from other Emacs features.
+
+The flag `lax-naming' disables this requirement, at the cost of
+name collisions becoming more likely.")
+
+(defun loopy-iter--enable-flag-lax-naming ()
+  "Set `loopy-iter--lax-naming' to t inside the loop."
+  (setq loopy-iter--lax-naming t))
+
+(defun loopy-iter--disable-flag-lax-naming ()
+  "Set `loopy-iter--lax-naming' to nil inside the loop if active."
+  ;; Currently redundant, but leaves room for possibilities.
+  (if loopy-iter--lax-naming
+      (setq loopy-iter--lax-naming nil)))
+
+(add-to-list 'loopy--flag-settings (cons 'lax-naming #'loopy-iter--enable-flag-lax-naming))
+(add-to-list 'loopy--flag-settings (cons '+lax-naming #'loopy-iter--enable-flag-lax-naming))
+(add-to-list 'loopy--flag-settings (cons '-lax-naming #'loopy-iter--disable-flag-lax-naming))
+
+;; For convenience, add another variant `lax-names'.
+(add-to-list 'loopy--flag-settings (cons 'lax-names #'loopy-iter--enable-flag-lax-naming))
+(add-to-list 'loopy--flag-settings (cons '+lax-names #'loopy-iter--enable-flag-lax-naming))
+(add-to-list 'loopy--flag-settings (cons '-lax-names #'loopy-iter--disable-flag-lax-naming))
+
 ;;; Variables
 (defvar loopy-iter--valid-macro-arguments
   '( flag flags with without no-init before-do before initially-do
@@ -88,7 +120,11 @@ The lists will be in the order parsed (correct for insertion)."
     (list (nreverse wrapped-main-body) (nreverse other-instructions))))
 
 (defun loopy-iter--valid-loop-command (name)
-  "Check if NAME is a known command."
+  "Check if NAME is a known command.
+
+This checks for NAME as a key in
+`loopy-custom-command-aliases', `loopy-custom-command-parsers',
+and `loopy--builtin-command-parsers', in that order."
   (or (assq name loopy-custom-command-aliases)
       (assq name loopy-custom-command-parsers)
       (assq name loopy--builtin-command-parsers)))
@@ -185,11 +221,21 @@ Other instructions are just pushed to their variables."
                       new-tree))
 
                ;; Check if it's a loop command
-               ((and (memq key '(for accum exit))
-                     (loopy-iter--valid-loop-command (cl-second elem)))
+               (;; If lax-naming, just check the first element in the list.
+                ;; Otherwise, check if the first element is an appropriate
+                ;; keyword and the second element is a known command.
+                (if loopy-iter--lax-naming
+                    (loopy-iter--valid-loop-command (cl-first elem))
+                  (and (memq key '(for accum exit))
+                       (loopy-iter--valid-loop-command (cl-second elem))))
+
                 (seq-let (main-body other-instructions)
                     (loopy-iter--extract-main-body
-                     (loopy--parse-loop-command (cdr elem)))
+                     ;; If using lax naming, then the entire `elem' is the loop
+                     ;; command.  Otherwise, it is the `cdr'.
+                     (loopy--parse-loop-command (if loopy-iter--lax-naming
+                                                    elem
+                                                  (cl-rest elem))))
                   ;; Push the main body into the tree.
                   (push (if (= 1 (length main-body))
                             (cl-first main-body)
@@ -288,6 +334,7 @@ the Info node `(loopy)' for information on how to use `loopy' and
         (loopy--in-sub-level)
 
         ;; -- Flag Variables --
+        (loopy-iter--lax-naming)
         (loopy--basic-destructuring-function)
         (loopy--destructuring-accumulation-parser)
         (loopy--split-implied-accumulation-results))
