@@ -1271,6 +1271,25 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                   (accum collect (list c d e))))
   #+end_src
 
+  However, you should be aware that loop commands in ~lambda~ forms are always
+  interpreted, even when the ~lambda~ form is quoted with the ~function~ form or
+  the sharp-quote (=#'=).  This is because the ~lambda~ macro is self-quoting,
+  and so Emacs might quote it before it is seen by ~loopy-iter~.
+
+  #+begin_src emacs-lisp
+    ;; => (1 2 3)
+    (loopy-iter (for list elem '(1 2 3))
+                (funcall (lambda (x)
+                           (accum collect x))
+                         elem))
+
+    ;; => (1 2 3)
+    (loopy-iter (for list elem '(1 2 3))
+                (funcall #'(lambda (x) ; <- sharp-quoted, but still interpreted
+                             (accum collect x))
+                         elem))
+  #+end_src
+
   #+attr_texinfo: :tag Note
   #+begin_quote
   Nesting arbitrary code in the loop requires knowing how to understand the
