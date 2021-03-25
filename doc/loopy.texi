@@ -38,6 +38,7 @@ and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and ma
 * Basic Concepts::               Basic information about `loopy' and its loops.
 * Special Macro Arguments::      Creating the environment of the loop.
 * Loop Commands::                The main features of `loopy'.
+* The @code{loopy-iter} Macro::  Another way to build loops.
 * Using Flags::                  Using flags to change behavior.
 * Custom Aliases::               How to add one's own aliases.
 * Custom Commands::              Extending `loopy' with personal commands.
@@ -1363,6 +1364,64 @@ variables used for accumulation.
        (finally-return (cons 0 my-coll)))
 @end lisp
 @end enumerate
+
+@node The @code{loopy-iter} Macro
+@chapter The @code{loopy-iter} Macro
+
+@quotation Warning
+@strong{This feature is still experimental.}  It might not work correctly in all
+circumstances.
+
+@end quotation
+
+Besides the @code{loopy} macro, there is also the @code{loopy-iter} macro.  This other
+macro is more flexible in some ways, and more restrictive in others.
+Conceptually, it is meant to be similar to the @code{iter} macro found in the
+Common Lisp package ``Iterate'' @footnote{@uref{https://common-lisp.net/project/iterate/}} (not to be confused with the @code{iter-}
+functions provided by Emacs).
+
+The main point of this macro is that it allows the arbitrary nesting of code
+instead of using the @code{do} loop command.
+
+@lisp
+;; => (2 4 6)
+(loopy-iter (for list i '(1 2 3))
+            (let ((a (* 2 i)))
+              (accum collect a)))
+@end lisp
+
+To do this, it needs to be able to clearly distinguish between loop commands
+(like @samp{list}) and functions/macros (like @code{list}).  This is done by using the
+keywords @samp{for}, @samp{accum}, or @samp{exit} in front of loop commands, as those words
+do not match any built-in function in Emacs and are similar to what is used by
+other packages.
+
+Special macro arguments still work in @code{loopy-iter}, but some aliases (such as
+@samp{let*} for @samp{with}) do not.  The macro tries hard to make sure it doesn't
+accidentally garble code that should have been understood literally.
+
+@lisp
+;; => ((1 8 16) (2 9 18) (3 10 20))
+(loopy-iter (with (a 7))                ; <- Set once around loop.
+            (for list elem '(1 2 3))
+            (let* ((c elem)             ; <- These set inside of loop.
+                   (d (+ a c))
+                   (e (progn
+                        (for expr i (* 2 d))
+                        i)))
+              (accum collect (list c d e))))
+@end lisp
+
+@quotation Note
+Nesting arbitrary code in the loop requires knowing how to understand the
+code.  You might find cases where @code{loopy-iter} interprets code incorrectly.
+
+Please report such cases on this project's issue tracker.
+
+@end quotation
+
+@code{loopy-iter} does not currently have all of the features of CL's @code{iter} macro.
+Think of it more as a way to use loop commands embedded in arbitrary code.
 
 @node Using Flags
 @chapter Using Flags
