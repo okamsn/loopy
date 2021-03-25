@@ -1251,7 +1251,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   loop command =list= and the function ~list~), a loop command must be preceded
   by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
   a name with any built-in Emacs feature and are similar to the keywords used by
-  other packages.
+  other packages. To disable this requirement, use the flag =lax-naming=
+  ([[#flags][Using Flags]]).
 
   Special macro arguments, already having clearly distinguishable names, do not
   need to be preceded by one of the above keywords.  However, some aliases (such
@@ -1362,6 +1363,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
     separate variables instead of into ~loopy-result~.
+  - =lax-naming= :: In ~loopy-iter~, don't require keywords when using loop
+    commands ([[#loopy-iter][The ~loopy-iter~ Macro]]).
   #+cindex: default flag
   - =default= :: Use the default behavior for all options.
 
