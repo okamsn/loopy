@@ -32,6 +32,7 @@ please let me know.
 - [[#similar-libraries][Similar Libraries]]
 - [[#how-to-install][How to Install]]
 - [[#multiple-kinds-of-destructuring][Multiple Kinds of Destructuring]]
+- [[#loop-commands-in-arbitrary-code][Loop Commands in Arbitrary Code]]
 - [[#adding-custom-commands][Adding Custom Commands]]
 - [[#comparing-to-cl-loop][Comparing to =cl-loop=]]
 - [[#real-world-examples][Real-World Examples]]
@@ -198,6 +199,37 @@ please let me know.
 
   For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
   form.
+
+* Loop Commands in Arbitrary Code
+
+  The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
+  It requires using a keyword =for=, =accum=, or =exit= before a loop command to
+  distinguish loop commands from built-in Emacs features (though this can be
+  disabled with the flag =lax-naming=).
+
+  #+begin_center
+  *NOTE: This feature is still experimental.  Please report any problems you
+   come across.*
+  #+end_center
+
+  #+begin_src emacs-lisp
+    ;; => (2 4 6)
+    (loopy-iter (for list i '(1 2 3))
+                (let ((a (* 2 i)))
+                  (accum collect a)))
+
+    ;; => (8 9 10 11 12)
+    (loopy-iter (let ((a (progn
+                           (for expr j 8 (1+ j))
+                           (when (> j 12)
+                             ;; Leave the loop without preventing the use of the
+                             ;; implicit return value created by `collect'.
+                             (exit leave))
+                           j)))
+                  (accum collect a)))
+  #+end_src
+
+  For more on this, [[file:doc/loopy-doc.org::#loopy-iter][see the documentation]].
 
 * Adding Custom Commands
   :PROPERTIES:
