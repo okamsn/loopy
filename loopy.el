@@ -76,6 +76,8 @@
 (require 'subr-x)
 (require 'loopy-commands)
 
+(defvar loopy-iter--lax-naming) ; A flag defined in file "loopy-iter.el".
+
 ;;;; Custom User Options
 (defgroup loopy nil
   "A looping and iteration macro."
@@ -163,7 +165,8 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
         loopy--basic-destructuring-function
         #'loopy--destructure-variables-default
         loopy--destructuring-accumulation-parser
-        #'loopy--parse-destructuring-accumulation-command))
+        #'loopy--parse-destructuring-accumulation-command
+        loopy-iter--lax-naming nil))
 
 (add-to-list 'loopy--flag-settings
              (cons 'default #'loopy--enable-flag-default))
@@ -570,6 +573,7 @@ Info node `(loopy)' distributed with this package."
         (loopy--in-sub-level)
 
         ;; -- Flag Variables --
+        (loopy-iter--lax-naming)
         (loopy--basic-destructuring-function)
         (loopy--destructuring-accumulation-parser)
         (loopy--split-implied-accumulation-results))
