@@ -1253,12 +1253,26 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+end_src
 
   #+cindex: loopy-iter keywords
+  #+vindex: loopy-iter-command-keywords
   To clearly distinguish between loop commands and Emacs features (such as the
   loop command =list= and the function ~list~), a loop command must be preceded
   by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
   a name with any built-in Emacs feature and are similar to the keywords used by
-  other packages. To disable this requirement, use the flag =lax-naming=
-  ([[#flags][Using Flags]]).
+  other packages.
+
+  Any keyword in the user option ~loopy-iter-command-keywords~ can be used to
+  identify any loop command.  For example, =(accum collect a)= and
+  =(for collect a)= are both valid ways of referring to the =collect= loop
+  command in ~loopy-iter~.
+
+  To disable this requirement, use the flag =lax-naming= ([[#flags][Using Flags]]).  When
+  using =lax-naming=, ~loopy-iter~ will always prefer built-in features to loop
+  commands.  E.g., "list" will always be understood as referring to the function
+  ~list~ and not the loop command =list=.
+
+  #+vindex: loopy-iter-ignored-commands
+  If for some reason you wish for ~loopy-iter~ to ignore a loop command while
+  using =lax-naming=, you can add that symbol to ~loopy-iter-ignored-commands~.
 
   Special macro arguments, already having clearly distinguishable names, do not
   need to be preceded by one of the above keywords.  However, some aliases (such
