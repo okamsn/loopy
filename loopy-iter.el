@@ -196,11 +196,16 @@ Other instructions are just pushed to their variables."
                      (loopy--parse-loop-command (if loopy-iter--lax-naming
                                                     elem
                                                   (cl-rest elem))))
-                  ;; Push the main body into the tree.
-                  (push (if (= 1 (length main-body))
-                            (cl-first main-body)
-                          (cons 'progn main-body))
-                        new-tree)
+                  ;; Some loop commands might interleave expressions and
+                  ;; commands to produce a value, so we should also check the
+                  ;; expansion.
+                  (let ((recursively-parsed-main-body
+                         (loopy-iter--replace-in-tree main-body)))
+                    ;; Push the main body into the tree.
+                    (push (if (= 1 (length recursively-parsed-main-body))
+                              (cl-first recursively-parsed-main-body)
+                            (cons 'progn recursively-parsed-main-body))
+                          new-tree))
                   ;; Interpret the other instructions.
                   (loopy-iter--process-non-main-body other-instructions)))
 

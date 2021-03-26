@@ -144,4 +144,21 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                      (let ((a (1+ elem)))
                                        (collect a)))))))))
 
+;; Wrap in accum
+(ert-deftest wrap-expressions-in-loop-commands ()
+  (should
+   (equal '(2 4 6)
+          (eval (quote (loopy-iter (for list i '(1 2 3))
+                                   (accum collect (progn (for expr a (* 2 i))
+                                                         a)))))))
+  (should
+   (equal '(2 4 6)
+          (eval (quote (loopy-iter (for list elem '(1 2 3))
+                                   (for expr i (progn
+                                                 (for expr j (* 2 elem))
+                                                 j))
+                                   (accum collect i)))))))
+
+
+
 ;; end
