@@ -130,6 +130,11 @@ and `loopy--builtin-command-parsers', in that order."
       (assq name loopy-custom-command-parsers)
       (assq name loopy--builtin-command-parsers)))
 
+(defun loopy-iter--literal-form-p (form)
+  "Whether FORM is a literal form that should not be interpreted."
+  (or (and (consp form)
+           (memq (cl-first form) loopy-iter--literal-forms))
+      (arrayp form)))
 
 ;;;; Replacement functions
 (defun loopy-iter--replace-in-tree (tree)
@@ -162,7 +167,7 @@ Other instructions are just pushed to their variables."
                       new-tree))
 
                ;; Check if it's a literal form.
-               ((memq key loopy-iter--literal-forms)
+               ((loopy-iter--literal-form-p elem)
                 (push elem new-tree))
 
                ;; Check if it's a `let'-like form.
@@ -219,8 +224,7 @@ These forms can have loop commands in the values of variables or in the body."
       ;; TODO: Why do we need to deal with quoted forms here specifically?
       ;;       The `quote' doesn't seem to be passed along.
       (let ((value (cl-second pair)))
-        (if (and (consp value)
-                 (memq (cl-first value) loopy-iter--literal-forms))
+        (if (loopy-iter--literal-form-p value)
             (push pair new-var-list)
           (push (list (cl-first pair)
                       (loopy-iter--replace-in-tree value))
@@ -241,7 +245,7 @@ starting at the third element in TREE."
     (while tree
       (push (list (pop tree)
                   (let ((val (pop tree)))
-                    (if (memq (cl-first val) loopy-iter--literal-forms)
+                    (if (loopy-iter--literal-form-p val)
                         val
                       (loopy-iter--replace-in-tree val))))
             new-var-val-pairs))
