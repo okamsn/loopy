@@ -47,7 +47,7 @@
 
 (defvar loopy--flag-settings nil)
 
-;;; Flags
+;;;; Flags
 (defvar loopy-iter--lax-naming nil
   "Whether loop commands must be preceded by keywords to be recognized.
 
@@ -77,7 +77,7 @@ name collisions becoming more likely.")
 (add-to-list 'loopy--flag-settings (cons '+lax-names #'loopy-iter--enable-flag-lax-naming))
 (add-to-list 'loopy--flag-settings (cons '-lax-names #'loopy-iter--disable-flag-lax-naming))
 
-;;; Variables
+;;;; Variables
 (defvar loopy-iter--valid-macro-arguments
   '( flag flags with without no-init before-do before initially-do
      initially after-do after else-do else finally-do finally finally-return)
@@ -101,6 +101,7 @@ still evaluated.")
 (defvar loopy-iter--setq-forms '(setq)
   "Special forms that work like `setq'.")
 
+;;;; Miscellaneous Helper Functions
 (defun loopy-iter--extract-main-body (instructions)
   "Separate main-body instructions from others in INSTRUCTIONS.
 
@@ -129,54 +130,8 @@ and `loopy--builtin-command-parsers', in that order."
       (assq name loopy-custom-command-parsers)
       (assq name loopy--builtin-command-parsers)))
 
-(defun loopy-iter--process-non-main-body (instructions)
-  "Push the values of INSTRUCTIONS to the appropriate variable."
-  ;; These variables are `let'-bound by the macro `loopy-iter'.
-  (dolist (instruction instructions)
-    (cl-case (car instruction)
-      (loopy--generalized-vars
-       (push (cdr instruction) loopy--generalized-vars))
-      (loopy--iteration-vars
-       ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cadr instruction))
-         (push (cdr instruction) loopy--iteration-vars)))
-      (loopy--accumulation-vars
-       ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cadr instruction))
-         (push (cdr instruction) loopy--accumulation-vars)))
-      (loopy--pre-conditions
-       (push (cdr instruction) loopy--pre-conditions))
-      ;; NOTE: We shouldn't get any of these.
-      ;; (loopy--main-body
-      ;;  (push (cdr instruction) loopy--main-body))
-      (loopy--latter-body
-       (push (cdr instruction) loopy--latter-body))
-      (loopy--post-conditions
-       (push (cdr instruction) loopy--post-conditions))
-      (loopy--implicit-return
-       (unless (loopy--already-implicit-return (cdr instruction))
-         (push (cdr instruction) loopy--implicit-return)))
-      (loopy--implicit-accumulation-final-update
-       (push (cdr instruction) loopy--implicit-accumulation-final-update))
 
-      ;; Code for conditionally constructing the loop body.
-      (loopy--skip-used
-       (setq loopy--skip-used t))
-      (loopy--tagbody-exit-used
-       (setq loopy--tagbody-exit-used t))
-
-      ;; Places users probably shouldn't push to, but can if they want:
-      (loopy--before-do
-       (push (cdr instruction) loopy--before-do))
-      (loopy--after-do
-       (push (cdr instruction) loopy--after-do))
-      (loopy--final-do
-       (push (cdr instruction) loopy--final-do))
-      (loopy--final-return
-       (push (cdr instruction) loopy--final-return))
-      (t
-       (error "Loopy: Unknown body instruction: %s" instruction)))))
-
+;;;; Replacement functions
 (defun loopy-iter--replace-in-tree (tree)
   "Replace loop commands in TREE in-place with their main-body code.
 
@@ -300,7 +255,57 @@ These expressions can have loop commands in the body."
   `(lambda ,(cl-second tree)
      ,@(loopy-iter--replace-in-tree (cddr tree))))
 
-;; The macro itself
+;;;; Functions for building the macro.
+
+(defun loopy-iter--process-non-main-body (instructions)
+  "Push the values of INSTRUCTIONS to the appropriate variable."
+  ;; These variables are `let'-bound by the macro `loopy-iter'.
+  (dolist (instruction instructions)
+    (cl-case (car instruction)
+      (loopy--generalized-vars
+       (push (cdr instruction) loopy--generalized-vars))
+      (loopy--iteration-vars
+       ;; Don't want to accidentally rebind variables to `nil'.
+       (unless (loopy--bound-p (cadr instruction))
+         (push (cdr instruction) loopy--iteration-vars)))
+      (loopy--accumulation-vars
+       ;; Don't want to accidentally rebind variables to `nil'.
+       (unless (loopy--bound-p (cadr instruction))
+         (push (cdr instruction) loopy--accumulation-vars)))
+      (loopy--pre-conditions
+       (push (cdr instruction) loopy--pre-conditions))
+      ;; NOTE: We shouldn't get any of these.
+      ;; (loopy--main-body
+      ;;  (push (cdr instruction) loopy--main-body))
+      (loopy--latter-body
+       (push (cdr instruction) loopy--latter-body))
+      (loopy--post-conditions
+       (push (cdr instruction) loopy--post-conditions))
+      (loopy--implicit-return
+       (unless (loopy--already-implicit-return (cdr instruction))
+         (push (cdr instruction) loopy--implicit-return)))
+      (loopy--implicit-accumulation-final-update
+       (push (cdr instruction) loopy--implicit-accumulation-final-update))
+
+      ;; Code for conditionally constructing the loop body.
+      (loopy--skip-used
+       (setq loopy--skip-used t))
+      (loopy--tagbody-exit-used
+       (setq loopy--tagbody-exit-used t))
+
+      ;; Places users probably shouldn't push to, but can if they want:
+      (loopy--before-do
+       (push (cdr instruction) loopy--before-do))
+      (loopy--after-do
+       (push (cdr instruction) loopy--after-do))
+      (loopy--final-do
+       (push (cdr instruction) loopy--final-do))
+      (loopy--final-return
+       (push (cdr instruction) loopy--final-return))
+      (t
+       (error "Loopy: Unknown body instruction: %s" instruction)))))
+
+;;;; The macro itself
 (defmacro loopy-iter (&rest body)
   "An `iter'-like `loopy' macro.
 
