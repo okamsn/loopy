@@ -159,6 +159,47 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                                  j))
                                    (accum collect i)))))))
 
+(ert-deftest dont-interpret-ignored-commands ()
+  (let ((loopy-iter-ignored-commands '(when)))
+    (should
+     (equal '(2 3 4)
+            (eval (quote
+                   (loopy-iter (flag lax-naming)
+                               (array elem [1 2 3])
+                               (when t ; Should not be treated as a command.
+                                 (let ((a (1+ elem)))
+                                   (collect a)))))))))
+  (let ((loopy-iter-ignored-commands '(if)))
+    (should
+     (equal '((4) (3 5))
+            (eval
+             (quote
+              (loopy-iter (flag lax-naming)
+                          (array elem [1 2 3])
+                          ;; Should not be treated as a command.
+                          (if (cl-evenp elem)
+                              (let ((a (+ 2 elem)))
+                                (collect evens a))
+                            (let ((a (+ 2 elem)))
+                              (collect odds a)))))))))
 
+  (let ((loopy-iter-ignored-commands '(if)))
+    (should
+     (equal '((4) (3 5))
+            (eval
+             (quote
+              (loopy-iter (flag lax-naming)
+                          (array elem [1 2 3])
+                          ;; Should not be treated as a command.
+
+                          (if (cl-evenp elem)
+                              (collect evens (progn
+                                               (expr a (+ 2 elem))
+                                               a))
+                            (collect odds (progn
+                                            (expr a (+ 2 elem))
+                                            a)))))))))
+
+  )
 
 ;; end
