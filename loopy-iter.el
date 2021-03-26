@@ -180,6 +180,15 @@ Other instructions are just pushed to their variables."
                 (push (loopy-iter--replace-in-setq-form elem)
                       new-tree))
 
+               ;; If it's a known function or macro, recurse.
+               ;; It's better to prefer existing functions to loop commands.
+               ((or (functionp key)
+                    (macrop key)
+                    (special-form-p key))
+                (let ((loopy--in-sub-level t))
+                  (push (loopy-iter--replace-in-tree elem)
+                        new-tree)))
+
                ;; Check if it's a loop command
                (;; If lax-naming, just check the first element in the list.
                 ;; Otherwise, check if the first element is an appropriate
