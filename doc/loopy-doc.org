@@ -816,6 +816,16 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (collect k))       ; (1 2 3 4 5 6).
    #+end_src
 
+   #+attr_texinfo: :tag Note
+   #+begin_quote
+   In addition to those listed below, each accumulation command has an alias of
+   the command name in the present participle form (the "-ing" form).
+
+   For example, instead of "min" or "minimize", you can use "minning" or
+   "minimizing".  Instead of "sum" and "append", you can use "summing" and
+   "appending".  This helps to avoid name collisions when using the ~loopy-iter~
+   macro with the =lax-naming= flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
+   #+end_quote
 
    The available accumulation commands are:
 
