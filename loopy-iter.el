@@ -77,7 +77,28 @@ name collisions becoming more likely.")
 (add-to-list 'loopy--flag-settings (cons '+lax-names #'loopy-iter--enable-flag-lax-naming))
 (add-to-list 'loopy--flag-settings (cons '-lax-names #'loopy-iter--disable-flag-lax-naming))
 
-;;;; Variables
+;;;; Custom User Options
+(defgroup loopy-iter nil
+  "Options specifically for the `loopy-iter' macro."
+  :group 'loopy
+  :prefix "loopy-iter-")
+
+(defcustom loopy-iter-ignored-commands '()
+  "Commands and aliases that `loopy-iter' should ignore.
+
+This option is used only when the `lax-naming' flag is enabled.
+
+For example, `loopy' provides a loop command `if', but in
+`loopy-iter', one would probably prefer to use the special form
+`if' provided by Emacs instead.
+
+`loopy-iter' automatically checks whether an expression is a
+function, macro, or special form before checking whether it is a
+loop command, but this user option can be used to help avoid
+errors when that fails."
+  :type '(repeat symbol))
+
+;;;;
 (defvar loopy-iter--valid-macro-arguments
   '( flag flags with without no-init before-do before initially-do
      initially after-do after else-do else finally-do finally finally-return)
@@ -194,7 +215,8 @@ Other instructions are just pushed to their variables."
                 ;; Otherwise, check if the first element is an appropriate
                 ;; keyword and the second element is a known command.
                 (if loopy-iter--lax-naming
-                    (loopy-iter--valid-loop-command (cl-first elem))
+                    (and (loopy-iter--valid-loop-command (cl-first elem))
+                         (not (memq key loopy-iter-ignored-commands)))
                   (and (memq key '(for accum exit))
                        (loopy-iter--valid-loop-command (cl-second elem))))
 
