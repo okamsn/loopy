@@ -98,6 +98,19 @@ loop command, but this user option can be used to help avoid
 errors when that fails."
   :type '(repeat symbol))
 
+(defcustom loopy-iter-command-keywords '(accum for exit)
+  "Keywords that `loopy-iter' can use to recognize loop commands.
+
+By default, `loopy-iter' requires keywords to clearly distinguish
+loop commands from other Emacs features.  This requirement can be
+disabled with the `lax-naming' flag.
+
+A loop command can be preceded by any of the keywords in this
+list.  For example, by default, \"(for collect i)\" and
+\"(accum collect i)\" are both valid way of identifying the
+`collect' loop command."
+  :type '(repeat symbol))
+
 ;;;;
 (defvar loopy-iter--valid-macro-arguments
   '( flag flags with without no-init before-do before initially-do
@@ -217,7 +230,7 @@ Other instructions are just pushed to their variables."
                 (if loopy-iter--lax-naming
                     (and (loopy-iter--valid-loop-command (cl-first elem))
                          (not (memq key loopy-iter-ignored-commands)))
-                  (and (memq key '(for accum exit))
+                  (and (memq key loopy-iter-command-keywords)
                        (loopy-iter--valid-loop-command (cl-second elem))))
 
                 (seq-let (main-body other-instructions)
