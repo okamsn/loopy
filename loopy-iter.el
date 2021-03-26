@@ -214,21 +214,20 @@ Other instructions are just pushed to their variables."
                 (push (loopy-iter--replace-in-setq-form elem)
                       new-tree))
 
-               ;; If it's a known function or macro, recurse.
-               ;; It's better to prefer existing functions to loop commands.
-               ((or (functionp key)
-                    (macrop key)
-                    (special-form-p key))
-                (let ((loopy--in-sub-level t))
-                  (push (loopy-iter--replace-in-tree elem)
-                        new-tree)))
-
                ;; Check if it's a loop command
                (;; If lax-naming, just check the first element in the list.
                 ;; Otherwise, check if the first element is an appropriate
                 ;; keyword and the second element is a known command.
                 (if loopy-iter--lax-naming
-                    (and (loopy-iter--valid-loop-command (cl-first elem))
+                    ;; It's better to prefer existing functions to loop commands
+                    ;; when using `lax-naming', since the expanded code might
+                    ;; include calls to the function `list', which is
+                    ;; indistinguishable from the loop command `list' in such
+                    ;; cases.
+                    (and (not (or (functionp key)
+                                  (macrop key)
+                                  (special-form-p key)))
+                         (loopy-iter--valid-loop-command (cl-first elem))
                          (not (memq key loopy-iter-ignored-commands)))
                   (and (memq key loopy-iter-command-keywords)
                        (loopy-iter--valid-loop-command (cl-second elem))))
