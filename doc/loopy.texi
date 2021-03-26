@@ -897,6 +897,16 @@ accumulation commands.
        (collect k))       ; (1 2 3 4 5 6).
 @end lisp
 
+@quotation Note
+In addition to those listed below, each accumulation command has an alias of
+the command name in the present participle form (the ``-ing'' form).
+
+For example, instead of ``min'' or ``minimize'', you can use ``minning'' or
+``minimizing''.  Instead of ``sum'' and ``append'', you can use ``summing'' and
+``appending''.  This helps to avoid name collisions when using the @code{loopy-iter}
+macro with the @samp{lax-naming} flag enabled (@ref{The @code{loopy-iter} Macro}).
+
+@end quotation
 
 The available accumulation commands are:
 
@@ -1371,7 +1381,8 @@ variables used for accumulation.
 @cindex loopy-iter
 @findex loopy-iter
 @code{loopy-iter} is a macro that allows for the embedding of loop commands inside
-arbitrary code, instead of trying to use the @samp{do} loop command.
+arbitrary code, instead of trying to use the @samp{do} loop command to embed
+arbitrary code in a loop.  You must use @code{require} to load this feature.
 
 @quotation Warning
 @strong{This feature is still experimental.}  It might not work correctly in all
@@ -1384,6 +1395,8 @@ macro provided by the Common Lisp package ``Iterate'' @footnote{@uref{https://co
 confused with the @code{iter-*} functions provided by Emacs).
 
 @lisp
+(require 'loopy-iter) ; <- Must `require' to load feature.
+
 ;; => (2 4 6)
 (loopy-iter (for list i '(1 2 3))
             (let ((a (* 2 i)))
@@ -1391,12 +1404,26 @@ confused with the @code{iter-*} functions provided by Emacs).
 @end lisp
 
 @cindex loopy-iter keywords
+@vindex loopy-iter-command-keywords
 To clearly distinguish between loop commands and Emacs features (such as the
 loop command @samp{list} and the function @code{list}), a loop command must be preceded
 by one of the keywords @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not share
 a name with any built-in Emacs feature and are similar to the keywords used by
-other packages. To disable this requirement, use the flag @samp{lax-naming}
-(@ref{Using Flags}).
+other packages.
+
+Any keyword in the user option @code{loopy-iter-command-keywords} can be used to
+identify any loop command.  For example, @samp{(accum collect a)} and
+@samp{(for collect a)} are both valid ways of referring to the @samp{collect} loop
+command in @code{loopy-iter}.
+
+To disable this requirement, use the flag @samp{lax-naming} (@ref{Using Flags}).  When
+using @samp{lax-naming}, @code{loopy-iter} will always prefer built-in features to loop
+commands.  E.g., ``list'' will always be understood as referring to the function
+@code{list} and not the loop command @samp{list}.
+
+@vindex loopy-iter-ignored-commands
+If for some reason you wish for @code{loopy-iter} to ignore a loop command while
+using @samp{lax-naming}, you can add that symbol to @code{loopy-iter-ignored-commands}.
 
 Special macro arguments, already having clearly distinguishable names, do not
 need to be preceded by one of the above keywords.  However, some aliases (such
