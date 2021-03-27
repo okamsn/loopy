@@ -200,11 +200,19 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                             (expr a (+ 2 elem))
                                             a))))))))))
 
-(ert-deftest wrap-pcase-let ()
+(ert-deftest wrap-pcase-let* ()
   (should
    (equal '(1 2 3 4 5 6)
           (eval (quote (loopy-iter (for list i '((1 2) (3 4) (5 6)))
                                    (pcase-let* ((`(,a ,b) i))
+                                     (accum collect a)
+                                     (accum collect b))))))))
+
+(ert-deftest wrap-pcase-let ()
+  (should
+   (equal '(1 2 3 4 5 6)
+          (eval (quote (loopy-iter (for list i '((1 2) (3 4) (5 6)))
+                                   (pcase-let ((`(,a ,b) i))
                                      (accum collect a)
                                      (accum collect b))))))))
 
