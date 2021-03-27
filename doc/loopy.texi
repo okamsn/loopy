@@ -626,13 +626,29 @@ error.
 @end lisp
 
 The @samp{-ref} (as in “reference”) commands create @code{setf}-able places instead of
-true variables.  Like other commands, they can also use destructuring.  In
-such cases, the variables in the sequence @samp{VAR} are also @code{setf}-able places
+true variables.  Like other commands, they too can use destructuring, in
+which case the variables in the sequence @samp{VAR} are also @code{setf}-able places
 instead of true variables.
 
-@findex array
+@quotation Note
+In @code{loopy}, iteration commands are named after what they iterate through.
+For example, @samp{array} and @samp{list} iterate through the elements of arrays and
+lists, respectively.  For the convenience of familiarity, these commands also
+have aliases based on their equivalent @samp{for}-clause from @code{cl-loop}.
+
+To translate @samp{for VAR in LIST} from @code{cl-loop} to @code{loopy}, one can use either
+@samp{(list VAR LIST)} or @samp{(in VAR LIST)}.  This can be helpful when using
+@code{loopy-iter} (@ref{The @code{loopy-iter} Macro}), in which case you could write any of
+@samp{(for list VAR LIST)}, @samp{(for in VAR LIST)}, or @samp{(in VAR LIST)}, depending on
+whether you have enabled the @samp{lax-naming} flag.
+
+@end quotation
+
+The available iteration commands are:
+
+@findex array, across
 @table @asis
-@item @samp{(array VAR EXPR)}
+@item @samp{(array|across VAR EXPR)}
 Loop through the elements of the array @samp{EXPR}.
 
 @lisp
@@ -641,9 +657,9 @@ Loop through the elements of the array @samp{EXPR}.
 @end lisp
 @end table
 
-@findex array-ref, arrayf
+@findex array-ref, arrayf, across-ref
 @table @asis
-@item @samp{(array-ref|arrayf VAR EXPR)}
+@item @samp{(array-ref|arrayf|across-ref VAR EXPR)}
 Loop through the elements of the array
 @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.
 
@@ -655,9 +671,9 @@ Loop through the elements of the array
 @end lisp
 @end table
 
-@findex cons, conses
+@findex cons, conses, on
 @table @asis
-@item @samp{(cons|conses VAR EXPR [FUNC])}
+@item @samp{(cons|conses|on VAR EXPR [FUNC])}
 Loop through the cons cells of @samp{EXPR}.
 Optionally, find the cons cells via @samp{FUNC} instead of @samp{cdr}.
 
@@ -671,9 +687,9 @@ to @samp{EXPR} instead of @code{nil}.
 @end lisp
 @end table
 
-@findex list
+@findex list, in
 @table @asis
-@item @samp{(list VAR EXPR [FUNC])}
+@item @samp{(list|in VAR EXPR [FUNC])}
 Loop through the elements of the list @samp{EXPR}.
 Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 
@@ -683,12 +699,12 @@ Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 @end lisp
 @end table
 
-@findex list-ref, listf
+@findex list-ref, listf, in-ref
 @table @asis
-@item @samp{(list-ref|listf VAR EXPR [FUNC])}
-Loop through the elements of the
-list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update the
-list by @samp{FUNC} instead of @samp{cdr}.
+@item @samp{(list-ref|listf|in-ref VAR EXPR [FUNC])}
+Loop through the elements of
+the list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update
+the list by @samp{FUNC} instead of @samp{cdr}.
 
 @lisp
 (loopy (with (my-list '(1 2 3)))
@@ -700,31 +716,25 @@ list by @samp{FUNC} instead of @samp{cdr}.
 
 @findex repeat
 @table @asis
-@item @samp{(repeat EXPR)}
+@item @samp{(repeat [VAR] EXPR)}
 Add a condition that the loop should stop after
-@samp{EXPR} iterations.
+@samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is incremented by
+1 at the end of the loop.
 
 @lisp
 (loopy (repeat 3)
        (do (message "Messaged three times.")))
-@end lisp
 
-@item @samp{(repeat VAR EXPR)}
-Add a condition that the loop should stop after
-@samp{EXPR} iterations.  @samp{VAR} starts at 0, and is incremented by 1 at the
-end of the loop.
-
-@lisp
 (loopy (repeat i 3)
        (do (message "%d" i)))
 @end lisp
 @end table
 
-@findex seq
+@findex seq, sequence, elements
 @table @asis
-@item @samp{(seq VAR EXPR)}
-Loop through the sequence @samp{val}, binding @samp{var} to
-the elements of the sequence.
+@item @samp{(seq|sequence|elements VAR EXPR)}
+Loop through the sequence @samp{EXPR},
+binding @samp{VAR} to the elements of the sequence.
 
 @lisp
 (loopy (seq i [1 2 3])
@@ -733,11 +743,12 @@ the elements of the sequence.
 @end lisp
 @end table
 
-@findex seq-ref, seqf
+@findex seq-ref, seqf, sequence-ref, sequencef, elements-ref
 @table @asis
-@item @samp{(seq-ref|seqf VAR EXPR)}
-Loop through the elements of the sequence
-@samp{val}, binding @samp{var} as a @code{setf}-able place.
+@item @samp{(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)}
+Loop
+through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able
+place.
 
 @lisp
 (loopy (with (my-seq '(1 2 3 4)))
