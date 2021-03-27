@@ -567,20 +567,36 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+end_src
 
    The =-ref= (as in “reference”) commands create ~setf~-able places instead of
-   true variables.  Like other commands, they can also use destructuring.  In
-   such cases, the variables in the sequence =VAR= are also ~setf~-able places
+   true variables.  Like other commands, they too can use destructuring, in
+   which case the variables in the sequence =VAR= are also ~setf~-able places
    instead of true variables.
 
-   #+findex: array
-   - =(array VAR EXPR)= :: Loop through the elements of the array =EXPR=.
+   #+ATTR_TEXINFO: :tag Note
+   #+begin_quote
+   In ~loopy~, iteration commands are named after what they iterate through.
+   For example, =array= and =list= iterate through the elements of arrays and
+   lists, respectively.  For the convenience of familiarity, these commands also
+   have aliases based on their equivalent =for=-clause from ~cl-loop~.
+
+   To translate =for VAR in LIST= from ~cl-loop~ to ~loopy~, one can use either
+   =(list VAR LIST)= or =(in VAR LIST)=.  This can be helpful when using
+   ~loopy-iter~ ([[#loopy-iter][The ~loopy-iter~ Macro]]), in which case you could write any of
+   =(for list VAR LIST)=, =(for in VAR LIST)=, or =(in VAR LIST)=, depending on
+   whether you have enabled the =lax-naming= flag.
+   #+end_quote
+
+   The available iteration commands are:
+
+   #+findex: array, across
+   - =(array|across VAR EXPR)= :: Loop through the elements of the array =EXPR=.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (array i [1 2 3])
               (do (message "%d" i)))
      #+END_SRC
 
-   #+findex: array-ref, arrayf
-   - =(array-ref|arrayf VAR EXPR)= :: Loop through the elements of the array
+   #+findex: array-ref, arrayf, across-ref
+   - =(array-ref|arrayf|across-ref VAR EXPR)= :: Loop through the elements of the array
      =EXPR=, binding =VAR= as a ~setf~-able place.
 
      #+BEGIN_SRC emacs-lisp
@@ -590,8 +606,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-str)) ; => "aaa"
      #+END_SRC
 
-   #+findex: cons, conses
-   - =(cons|conses VAR EXPR [FUNC])= :: Loop through the cons cells of =EXPR=.
+   #+findex: cons, conses, on
+   - =(cons|conses|on VAR EXPR [FUNC])= :: Loop through the cons cells of =EXPR=.
      Optionally, find the cons cells via =FUNC= instead of =cdr=.
 
      To avoid unneeded variables, when not destructuring, =VAR= is initialized
@@ -603,8 +619,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return coll)) ; => ((1 2 3) (2 3) (3))
      #+END_SRC
 
-   #+findex: list
-   - =(list VAR EXPR [FUNC])= :: Loop through the elements of the list =EXPR=.
+   #+findex: list, in
+   - =(list|in VAR EXPR [FUNC])= :: Loop through the elements of the list =EXPR=.
      Optionally, update the list by =FUNC= instead of =cdr=.
 
      #+BEGIN_SRC emacs-lisp
@@ -612,10 +628,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (do (message "%d" i)))
      #+END_SRC
 
-   #+findex: list-ref, listf
-   - =(list-ref|listf VAR EXPR [FUNC])= :: Loop through the elements of the
-     list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update the
-     list by =FUNC= instead of =cdr=.
+   #+findex: list-ref, listf, in-ref
+   - =(list-ref|listf|in-ref VAR EXPR [FUNC])= :: Loop through the elements of
+     the list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update
+     the list by =FUNC= instead of =cdr=.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (with (my-list '(1 2 3)))
@@ -625,26 +641,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: repeat
-   - =(repeat EXPR)= :: Add a condition that the loop should stop after
-     =EXPR= iterations.
+   - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
+     =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
+     1 at the end of the loop.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (repeat 3)
               (do (message "Messaged three times.")))
-     #+END_SRC
 
-   - =(repeat VAR EXPR)= :: Add a condition that the loop should stop after
-     =EXPR= iterations.  =VAR= starts at 0, and is incremented by 1 at the
-     end of the loop.
-
-     #+BEGIN_SRC emacs-lisp
        (loopy (repeat i 3)
               (do (message "%d" i)))
      #+END_SRC
 
-   #+findex: seq
-   - =(seq VAR EXPR)= :: Loop through the sequence =val=, binding =var= to
-     the elements of the sequence.
+   #+findex: seq, sequence, elements
+   - =(seq|sequence|elements VAR EXPR)= :: Loop through the sequence =EXPR=,
+     binding =VAR= to the elements of the sequence.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (seq i [1 2 3])
@@ -652,9 +663,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return coll)) ; => (1 2 3)
      #+END_SRC
 
-   #+findex: seq-ref, seqf
-   - =(seq-ref|seqf VAR EXPR)= :: Loop through the elements of the sequence
-     =val=, binding =var= as a ~setf~-able place.
+   #+findex: seq-ref, seqf, sequence-ref, sequencef, elements-ref
+   - =(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)= :: Loop
+     through the elements of the sequence =EXPR=, binding =VAR= as a ~setf~-able
+     place.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (with (my-seq '(1 2 3 4)))
