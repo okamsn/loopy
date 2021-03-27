@@ -631,6 +631,10 @@ have different behavior than their explicit counterparts.
 
 NAME is the command name.  VALUE-EXPRESSION is an expression
 whose value is to be accumulated."
+  ;; NOTE: This function only applies to commands whose implicit behavior
+  ;;       differs from the explicit behavior.  For commands that don't differ,
+  ;;       we call back into `loopy--parse-accumulation-commands' with
+  ;;       a `value-holder' as the explicit variable.
 
   (let* ((value-holder (if loopy--split-implied-accumulation-results
                            (gensym (concat (symbol-name name) "-implicit-"))
@@ -686,18 +690,6 @@ whose value is to be accumulated."
                     . (setq ,value-holder (apply #'vconcat
                                                  (nreverse ,value-holder))))
                   `(loopy--implicit-return . ,value-holder)))))
-          ((count counting)
-           `((loopy--main-body
-              . (if ,value-expression (setq ,value-holder (1+ ,value-holder))))
-             (loopy--implicit-return . ,value-holder)))
-          ((max maxing maximize maximizing)
-           `((loopy--main-body
-              . (setq ,value-holder (max ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
-          ((min minning minimize minimizing)
-           `((loopy--main-body
-              . (setq ,value-holder (min ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
           ((nconc nconcing)
            `((loopy--main-body
               . (setq ,value-holder (nconc (nreverse ,value-expression) ,value-holder)))
@@ -712,13 +704,13 @@ whose value is to be accumulated."
               . (setq ,value-holder (nconc ,value-expression
                                            ,value-holder)))
              (loopy--implicit-return . ,value-holder)))
-          ((pushing-into pushing)
-           `((loopy--main-body . (push ,value-expression ,value-holder))
-             (loopy--implicit-return . ,value-holder)))
-          ((sum summing)
-           `((loopy--main-body
-              . (setq ,value-holder (+ ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))))))
+          ;; Feed back into `loopy--parse-accumulation-commands' to avoid
+          ;; duplicating code.  We remove any setting of accumulation vars,
+          ;; which we already do above.
+          (t
+           (cl-remove-if (lambda (x) (eq (car x) 'loopy--accumulation-vars))
+                         (loopy--parse-accumulation-commands
+                          (list name value-holder value-expression))))))))
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
