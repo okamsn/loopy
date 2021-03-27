@@ -1513,7 +1513,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
 * Custom Aliases
   :PROPERTIES:
-  :CUSTOM_ID: custom-behavior
+  :CUSTOM_ID: custom-aliases
   :DESCRIPTION: How to add one's own aliases.
   :END:
 
