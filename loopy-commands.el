@@ -576,6 +576,16 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
       (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
       (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
 
+(defun loopy--accumulation-starting-value (command-name)
+  "Get the appropriate starting value for COMMAND-NAME."
+  (cl-case command-name
+    ((sum summing count counting)    0)
+    ((max maxing maximize maximizing)
+     -1.0e+INF)
+    ((min minning minimize minimizing)
+     +1.0e+INF)
+    (t nil)))
+
 ;;;;; Accumulation
 (defun loopy--parse-accumulation-commands (accumulation-command)
   "Pass ACCUMULATION-COMMAND to the appropriate parser, returning instructions.
@@ -592,11 +602,8 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
    ;; normal.
    ((symbolp (cl-second accumulation-command))
     (cl-destructuring-bind (name var val) accumulation-command
-      `((loopy--accumulation-vars . (,var ,(cl-case name
-                                             ((sum count)    0)
-                                             ((max maximize) -1.0e+INF)
-                                             ((min minimize) +1.0e+INF)
-                                             (t nil))))
+      `((loopy--accumulation-vars . (,var ,(loopy--accumulation-starting-value
+                                            name)))
         (loopy--implicit-return . ,var)
         (loopy--main-body
          . ,(cl-ecase name
@@ -630,10 +637,8 @@ whose value is to be accumulated."
                          ;; Note: This must be `intern', not `make-symbol', as
                          ;;       the user can refer to it later.
                          (intern "loopy-result"))))
-    `((loopy--accumulation-vars . (,value-holder ,(cl-case name
-                                                    ((sum count)    0)
-                                                    ((max maximize) -1.0e+INF)
-                                                    ((min minimize) +1.0e+INF))))
+    `((loopy--accumulation-vars
+       . (,value-holder ,(loopy--accumulation-starting-value name)))
       ,@(cl-ecase name
           ;; NOTE: Some commands have different behavior when a
           ;;       variable is not specified.
