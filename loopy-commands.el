@@ -640,7 +640,7 @@ whose value is to be accumulated."
           ;;       - `collect' uses the `push'-`nreverse' idiom.
           ;;       - `append' uses the `reverse'-`nconc'-`nreverse' idiom.
           ;;       - `nconc' uses the `nreverse'-`nconc'-`nreverse' idiom.
-          (append
+          ((append appending)
            `((loopy--main-body
               . (setq ,value-holder (nconc (reverse ,value-expression)
                                            ,value-holder)))
@@ -650,7 +650,7 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (collect
+          ((collect collecting)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -659,7 +659,7 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (concat
+          ((concat concating)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -670,7 +670,7 @@ whose value is to be accumulated."
                     . (setq ,value-holder (apply #'concat
                                                  (nreverse ,value-holder))))
                   `(loopy--implicit-return . ,value-holder)))))
-          (vconcat
+          ((vconcat vconcating)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -681,19 +681,19 @@ whose value is to be accumulated."
                     . (setq ,value-holder (apply #'vconcat
                                                  (nreverse ,value-holder))))
                   `(loopy--implicit-return . ,value-holder)))))
-          (count
+          ((count counting)
            `((loopy--main-body
               . (if ,value-expression (setq ,value-holder (1+ ,value-holder))))
              (loopy--implicit-return . ,value-holder)))
-          ((max maximize)
+          ((max maxing maximize maximizing)
            `((loopy--main-body
               . (setq ,value-holder (max ,value-holder ,value-expression)))
              (loopy--implicit-return . ,value-holder)))
-          ((min minimize)
+          ((min minning minimize minimizing)
            `((loopy--main-body
               . (setq ,value-holder (min ,value-holder ,value-expression)))
              (loopy--implicit-return . ,value-holder)))
-          (nconc
+          ((nconc nconcing)
            `((loopy--main-body
               . (setq ,value-holder (nconc (nreverse ,value-expression) ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -702,15 +702,15 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (prepend
+          ((prepend prepending)
            `((loopy--main-body
               . (setq ,value-holder (nconc ,value-expression
                                            ,value-holder)))
              (loopy--implicit-return . ,value-holder)))
-          ((push-into push)
+          ((pushing-into pushing)
            `((loopy--main-body . (push ,value-expression ,value-holder))
              (loopy--implicit-return . ,value-holder)))
-          (sum
+          ((sum summing)
            `((loopy--main-body
               . (setq ,value-holder (+ ,value-holder ,value-expression)))
              (loopy--implicit-return . ,value-holder)))))))
