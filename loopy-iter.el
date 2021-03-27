@@ -119,7 +119,7 @@ list.  For example, by default, \"(for collect i)\" and
 
 This variable is used to signal an error instead of silently failing.")
 
-(defvar loopy-iter--let-forms '(let let*)
+(defvar loopy-iter--let-forms '(let let* pcase-let pcase-let*)
   "Forms to treat like `let'.
 
 `let' forms might use constructs wrapped in variable definitions.")
