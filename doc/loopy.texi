@@ -186,6 +186,11 @@ values must be stated explicitly, either as an early return in the loop body
 via the @samp{return} or @samp{return-from} commands, or as part of the @samp{finally-return}
 macro argument.  @samp{nil} is returned by default.
 
+The macro is configurable.  One can add custom commands (@ref{Custom Commands}), add
+custom command aliases (@ref{Custom Aliases}), and specify macro options for a
+particular loop (@ref{Using Flags}).  Each of these ideas is explained in detail
+later in this document.
+
 @node Special Macro Arguments
 @chapter Special Macro Arguments
 
@@ -414,43 +419,30 @@ and this is not:
 Trying to use loop commands where they don't belong will result in errors
 when the code is evaluated.
 
-Underneath, interpreting a command results in ``instructions'' that describe how
-to substitute code into the loop body and other locations.  This process is
-described in detail later in this document (@ref{Background Info, , Background Information}).
+You should keep in mind that commands are evaluated in order.  This means that
+attempting to do something like the below example might not do what you
+expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
+@samp{coll}.
 
-Some examples of instructions are:
-@itemize
-@item
-Declaring a given variable in a let form to make sure it's locally
-scoped.
-@item
-Declaring a generated variable in a let form to contain a given value.
-@item
-Adding a condition for continuing/exiting the loop.
-@item
-Adding code to be run during the main loop body.
-@item
-Adding code to be run after the main loop body.
-@end itemize
-
-Unless you are writing custom commands, you should not need to know about a
-command’s underlying instructions.  However, you should keep in mind that
-commands and their resulting instructions are evaluated in order.  This means
-that attempting to do something like
-
+@float Listing,orgc30f11b
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
        (list i '(1 2 3))
        (finally-return coll))
 @end lisp
+@caption{An example of how loop commands are evaluated in order.}
+@end float
 
-might not do what you expect, as @samp{i} is assigned a value from the list after
-collecting @samp{i} into @samp{coll}.
+For convenience and understanding, the same command might have multiple names,
+called @dfn{aliases}.  For example, the command @samp{expr} has an alias
+@samp{set}, because @samp{expr} is used to set a variable to the value of an expression.
+You can add custom aliases using the function @code{loopy-defalias}, which modifies
+the user option @code{loopy-custom-command-aliases} (@ref{Custom Aliases}).
 
-For convenience and understanding, the same command might have multiple names
-(such as @samp{expr} having the alias @samp{set}), and some commands can take optional
-arguments (such as @samp{list}).
+Some commands take optional arguments.  For example, the command @samp{list} can
+take a function as an optional argument, which affects how that iterates
+through the elements in the list.
 
 For simplicity, the commands are described using the following notation:
 
@@ -495,6 +487,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
+@float Listing,org9214f59
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -530,6 +523,8 @@ the final @code{cdr} of a destructured list, use dotted notation.
        (do (setf j '(22)))
        (finally-return my-array))
 @end lisp
+@caption{Several examples of destructuring.}
+@end float
 
 Most commands that assign variables (even the @samp{-ref} commands, which use
 @code{setf}-able places instead of actual variables) can use destructuring, but
@@ -1727,6 +1722,9 @@ Using an alias does not change that the special arguments are parsed before
 @node Custom Commands
 @chapter Custom Commands
 
+This section contains information about how loop commands work and how one can
+add custom commands to @code{loopy}.  Two examples are provided.
+
 @menu
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
@@ -1736,8 +1734,26 @@ Using an alias does not change that the special arguments are parsed before
 @node Background Info
 @section Background Info
 
+@cindex instruction, instructions
 The core working of @samp{loopy} is taking a command and generating code that is
-substituted into or around a loop body.
+substituted into or around a loop body.  This code is transmitted between
+functions as @dfn{instructions}, which describe how the code is to be
+used.
+
+Some examples of instructions are:
+@itemize
+@item
+Declaring a given variable in a let form to make sure it's locally
+scoped.
+@item
+Declaring a generated variable in a let form to contain a given value.
+@item
+Adding a condition for continuing/exiting the loop.
+@item
+Adding code to be run during the main loop body.
+@item
+Adding code to be run after the main loop body.
+@end itemize
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
 list of instructions.  Some commands require the creation of unique temporary

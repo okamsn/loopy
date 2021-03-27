@@ -173,6 +173,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   via the =return= or =return-from= commands, or as part of the =finally-return=
   macro argument.  =nil= is returned by default.
 
+  The macro is configurable.  One can add custom commands ([[#adding-custom-commands][Custom Commands]]), add
+  custom command aliases ([[#custom-aliases][Custom Aliases]]), and specify macro options for a
+  particular loop ([[#flags][Using Flags]]).  Each of these ideas is explained in detail
+  later in this document.
+
 * Special Macro Arguments
   :PROPERTIES:
   :CUSTOM_ID: macro-arguments
@@ -382,23 +387,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   Trying to use loop commands where they don't belong will result in errors
   when the code is evaluated.
 
-  Underneath, interpreting a command results in "instructions" that describe how
-  to substitute code into the loop body and other locations.  This process is
-  described in detail later in this document ([[#background-info][Background Information]]).
+  You should keep in mind that commands are evaluated in order.  This means that
+  attempting to do something like the below example might not do what you
+  expect, as =i= is assigned a value from the list after collecting =i= into
+  =coll=.
 
-  Some examples of instructions are:
-  - Declaring a given variable in a let form to make sure it's locally
-    scoped.
-  - Declaring a generated variable in a let form to contain a given value.
-  - Adding a condition for continuing/exiting the loop.
-  - Adding code to be run during the main loop body.
-  - Adding code to be run after the main loop body.
-
- Unless you are writing custom commands, you should not need to know about a
- command’s underlying instructions.  However, you should keep in mind that
- commands and their resulting instructions are evaluated in order.  This means
- that attempting to do something like
-
+  #+caption: An example of how loop commands are evaluated in order.
   #+BEGIN_SRC emacs-lisp
     ;; => (nil 1 2)
     (loopy (collect coll i)
@@ -406,12 +400,15 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
            (finally-return coll))
   #+END_SRC
 
-  might not do what you expect, as =i= is assigned a value from the list after
-  collecting =i= into =coll=.
+  For convenience and understanding, the same command might have multiple names,
+  called {{{dfn(aliases)}}}.  For example, the command =expr= has an alias
+  =set=, because =expr= is used to set a variable to the value of an expression.
+  You can add custom aliases using the function ~loopy-defalias~, which modifies
+  the user option ~loopy-custom-command-aliases~ ([[#custom-aliases][Custom Aliases]]).
 
-  For convenience and understanding, the same command might have multiple names
-  (such as =expr= having the alias =set=), and some commands can take optional
-  arguments (such as =list=).
+  Some commands take optional arguments.  For example, the command =list= can
+  take a function as an optional argument, which affects how that iterates
+  through the elements in the list.
 
   For simplicity, the commands are described using the following notation:
 
@@ -447,6 +444,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   shorter, the unassigned elements of the list are simply ignored.  To assign
   the final ~cdr~ of a destructured list, use dotted notation.
 
+  #+caption: Several examples of destructuring.
   #+begin_src emacs-lisp
     ;; => [(9 10 11 4) (9 10 11 8)]
     (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -486,6 +484,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   Most commands that assign variables (even the =-ref= commands, which use
   ~setf~-able places instead of actual variables) can use destructuring, but
   not all kinds of destructuring make sense in all situations.
+
 
 ** Generic Evaluation
    :PROPERTIES:
@@ -1576,14 +1575,28 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :DESCRIPTION: Extending `loopy' with personal commands.
   :END:
 
+  This section contains information about how loop commands work and how one can
+  add custom commands to ~loopy~.  Two examples are provided.
+
 ** Background Info
    :PROPERTIES:
    :CUSTOM_ID: background-info
    :DESCRIPTION: The internals of `loopy'.
    :END:
 
+   #+cindex: instruction, instructions
    The core working of =loopy= is taking a command and generating code that is
-   substituted into or around a loop body.
+   substituted into or around a loop body.  This code is transmitted between
+   functions as {{{dfn(instructions)}}}, which describe how the code is to be
+   used.
+
+   Some examples of instructions are:
+   - Declaring a given variable in a let form to make sure it's locally
+     scoped.
+   - Declaring a generated variable in a let form to contain a given value.
+   - Adding a condition for continuing/exiting the loop.
+   - Adding code to be run during the main loop body.
+   - Adding code to be run after the main loop body.
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
