@@ -598,18 +598,19 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
                                              ((min minimize) +1.0e+INF)
                                              (t nil))))
         (loopy--implicit-return . ,var)
-        (loopy--main-body . ,(cl-ecase name
-                               (append `(setq ,var (append ,var ,val)))
-                               (collect `(setq ,var (append ,var (list ,val))))
-                               (concat `(setq ,var (concat ,var ,val)))
-                               (vconcat `(setq ,var (vconcat ,var ,val)))
-                               (count `(if ,val (setq ,var (1+ ,var))))
-                               ((max maximize) `(setq ,var (max ,val ,var)))
-                               ((min minimize) `(setq ,var (min ,val ,var)))
-                               (nconc `(setq ,var (nconc ,var ,val)))
-                               (prepend `(setq ,var (append ,val ,var)))
-                               ((push-into push) `(push ,val ,var))
-                               (sum `(setq ,var (+ ,val ,var))))))))
+        (loopy--main-body
+         . ,(cl-ecase name
+              ((append appending) `(setq ,var (append ,var ,val)))
+              ((collect collecting) `(setq ,var (append ,var (list ,val))))
+              ((concat concating) `(setq ,var (concat ,var ,val)))
+              ((vconcat vconcating) `(setq ,var (vconcat ,var ,val)))
+              ((count counting) `(if ,val (setq ,var (1+ ,var))))
+              ((max maxing maximize maximizing) `(setq ,var (max ,val ,var)))
+              ((min minning minimize minimizing) `(setq ,var (min ,val ,var)))
+              ((nconc nconcing) `(setq ,var (nconc ,var ,val)))
+              ((prepend prepending) `(setq ,var (append ,val ,var)))
+              ((push-into pushing-into push pushing) `(push ,val ,var))
+              ((sum summing) `(setq ,var (+ ,val ,var))))))))
    (t
     (funcall (or loopy--destructuring-accumulation-parser
                  #'loopy--parse-destructuring-accumulation-command)
