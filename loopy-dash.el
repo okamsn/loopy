@@ -128,47 +128,34 @@ For accumulation, we don't want Dash to assign to the named
 NAME is the name of the command.  VAR-OR-VAL is a variable name
 or, if using implicit variables, a value .  VAL is a value, and
 should only be used if VAR-OR-VAL is a variable."
-  (let* ((loopy-dash--accumulation-destructured-symbols nil)
+  (let* (;; An alist of (given-name . dash-copy).  We let Dash produce the
+         ;; bindings it needs, then copy those values into the explicitly
+         ;; given variables.
+         (loopy-dash--accumulation-destructured-symbols nil)
+         ;; The new variable list that Dash will destructure:
          (copied-var-list (loopy-dash--transform-var-list var))
+         ;; The bindings produced by Dash's destructuring on those
+         ;; new variable names:
          (destructurings (dash--match copied-var-list val)))
 
     ;; Make sure variables are in order of appearance for the loop body.
     (setq loopy-dash--accumulation-destructured-symbols
           (reverse loopy-dash--accumulation-destructured-symbols))
 
-    `(;; Declare what Dash will assign to as implicit.
+    `(;; Bind the variables that Dash uses for destructuring to nil.
       ,@(--map `(loopy--accumulation-vars . (,(car it) nil))
                destructurings)
-      ;; Declare as explicit what the user actually named.
-      ,@(--map `(loopy--accumulation-vars . (,(car it) ,(cl-case name
-                                                          ((sum count)    0)
-                                                          ((max maximize) -1.0e+INF)
-                                                          ((min minimize) +1.0e+INF)
-                                                          (t nil))))
-               ;; Alist of (old-name . new-name)
-               loopy-dash--accumulation-destructured-symbols)
-      ;; Declare the explicitly given variables as implicit returns.
-      ,@(--map `(loopy--implicit-return . ,(car it))
-               loopy-dash--accumulation-destructured-symbols)
       ;; Let Dash perform the destructuring on the copied variable names.
       (loopy--main-body . (setq ,@(-flatten-n 1 destructurings)))
       ;; Accumulate the values of those copied variable names into the
       ;; explicitly given variables.
-      ,@(-map (-lambda ((given-var . dash-copy))
-                `(loopy--main-body
-                  . ,(cl-ecase name
-                       (append `(setq ,given-var (append ,given-var ,dash-copy)))
-                       (collect `(setq ,given-var (append ,given-var (list ,dash-copy))))
-                       (concat `(setq ,given-var (concat ,given-var ,dash-copy)))
-                       (vconcat `(setq ,given-var (vconcat ,given-var ,dash-copy)))
-                       (count `(if ,dash-copy (setq ,given-var (1+ ,given-var))))
-                       ((max maximize) `(setq ,given-var (max ,dash-copy ,given-var)))
-                       ((min minimize) `(setq ,given-var (min ,dash-copy ,given-var)))
-                       (nconc `(setq ,given-var (nconc ,given-var ,dash-copy)))
-                       ((push-into push) `(push ,dash-copy ,given-var))
-                       (prepend `(setq ,given-var (append ,dash-copy ,given-var)))
-                       (sum `(setq ,given-var (+ ,dash-copy ,given-var))))))
-              loopy-dash--accumulation-destructured-symbols))))
+      ;;
+      ;; This gives instructions for the main body, the implicit result,
+      ;; and the explicitly named accumulation vars.
+      ,@(mapcan (-lambda ((given-var . dash-copy))
+                  (loopy--parse-accumulation-commands
+                   (list name given-var dash-copy)))
+                loopy-dash--accumulation-destructured-symbols))))
 
 (provide 'loopy-dash)
 ;;; loopy-dash.el ends here
