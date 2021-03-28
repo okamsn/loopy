@@ -194,7 +194,8 @@ Other instructions are just pushed to their variables."
                ;; If it's a special macro argument, just remove it from the tree.
                ;; By this point, it's already been interpreted.
                ((and (not loopy--in-sub-level)
-                     (memq key loopy-iter--valid-macro-arguments))
+                     (loopy--special-macro-argument-p
+                      key loopy-iter--valid-macro-arguments))
                 t)
 
                ;; Check if it's a lambda form

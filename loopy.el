@@ -385,6 +385,18 @@ Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
   (memq var-name loopy--implicit-return))
 
+(defun loopy--special-macro-argument-p (symbol arguments-list)
+  "Whether SYMBOL is a special macro argument (including aliases).
+
+Special macro arguments are listed in ARGUMENTS-LIST
+or `loopy-custom-command-aliases'."
+  (memq symbol (append arguments-list
+                       (let ((results))
+                         (dolist (alias loopy-custom-command-aliases)
+                           (when (memq (cdr alias) arguments-list)
+                             (push (car alias) results)))
+                         results))))
+
 ;;;; Destructuring functions.
 ;; Note that functions which are only used for commands are found in
 ;; `loopy-commands.el'.  The functions found here are used generally.
@@ -843,67 +855,63 @@ Info node `(loopy)' distributed with this package."
 
 ;;;;; Check the loop name and loop commands.
 
-   (let ((non-command-arguments
-          (append loopy--valid-macro-arguments
-                  (let ((results))
-                    (dolist (alias loopy-custom-command-aliases)
-                      (when (memq (cdr alias) loopy--valid-macro-arguments)
-                        (push (car alias) results)))
-                    results))))
-     (dolist (arg body)
-       (cond
-        ((symbolp arg)
-         (setq loopy--loop-name arg))
-        ((memq (car-safe arg) non-command-arguments) t) ; Do nothing.
-        (t
-         ;; Body forms have the most variety.
-         ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
-         ;; Things added are expanded in place.
-         (dolist (instruction (loopy--parse-loop-command arg))
-           ;; Do it this way instead of with `set', cause was getting errors
-           ;; about void variables.
-           (cl-case (car instruction)
-             (loopy--generalized-vars
-              (push (cdr instruction) loopy--generalized-vars))
-             (loopy--iteration-vars
-              ;; Don't want to accidentally rebind variables to `nil'.
-              (unless (loopy--bound-p (cadr instruction))
-                (push (cdr instruction) loopy--iteration-vars)))
-             (loopy--accumulation-vars
-              ;; Don't want to accidentally rebind variables to `nil'.
-              (unless (loopy--bound-p (cadr instruction))
-                (push (cdr instruction) loopy--accumulation-vars)))
-             (loopy--pre-conditions
-              (push (cdr instruction) loopy--pre-conditions))
-             (loopy--main-body
-              (push (cdr instruction) loopy--main-body))
-             (loopy--latter-body
-              (push (cdr instruction) loopy--latter-body))
-             (loopy--post-conditions
-              (push (cdr instruction) loopy--post-conditions))
-             (loopy--implicit-return
-              (unless (loopy--already-implicit-return (cdr instruction))
-                (push (cdr instruction) loopy--implicit-return)))
-             (loopy--implicit-accumulation-final-update
-              (push (cdr instruction) loopy--implicit-accumulation-final-update))
+   (dolist (arg body)
+     (cond
+      ((symbolp arg)
+       (setq loopy--loop-name arg))
+      ;; Do nothing for macro arguments, since they were already processed.
+      ((loopy--special-macro-argument-p
+        (car-safe arg) loopy--valid-macro-arguments)
+       t)
+      (t
+       ;; Body forms have the most variety.
+       ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
+       ;; Things added are expanded in place.
+       (dolist (instruction (loopy--parse-loop-command arg))
+         ;; Do it this way instead of with `set', cause was getting errors
+         ;; about void variables.
+         (cl-case (car instruction)
+           (loopy--generalized-vars
+            (push (cdr instruction) loopy--generalized-vars))
+           (loopy--iteration-vars
+            ;; Don't want to accidentally rebind variables to `nil'.
+            (unless (loopy--bound-p (cadr instruction))
+              (push (cdr instruction) loopy--iteration-vars)))
+           (loopy--accumulation-vars
+            ;; Don't want to accidentally rebind variables to `nil'.
+            (unless (loopy--bound-p (cadr instruction))
+              (push (cdr instruction) loopy--accumulation-vars)))
+           (loopy--pre-conditions
+            (push (cdr instruction) loopy--pre-conditions))
+           (loopy--main-body
+            (push (cdr instruction) loopy--main-body))
+           (loopy--latter-body
+            (push (cdr instruction) loopy--latter-body))
+           (loopy--post-conditions
+            (push (cdr instruction) loopy--post-conditions))
+           (loopy--implicit-return
+            (unless (loopy--already-implicit-return (cdr instruction))
+              (push (cdr instruction) loopy--implicit-return)))
+           (loopy--implicit-accumulation-final-update
+            (push (cdr instruction) loopy--implicit-accumulation-final-update))
 
-             ;; Code for conditionally constructing the loop body.
-             (loopy--skip-used
-              (setq loopy--skip-used t))
-             (loopy--tagbody-exit-used
-              (setq loopy--tagbody-exit-used t))
+           ;; Code for conditionally constructing the loop body.
+           (loopy--skip-used
+            (setq loopy--skip-used t))
+           (loopy--tagbody-exit-used
+            (setq loopy--tagbody-exit-used t))
 
-             ;; Places users probably shouldn't push to, but can if they want:
-             (loopy--before-do
-              (push (cdr instruction) loopy--before-do))
-             (loopy--after-do
-              (push (cdr instruction) loopy--after-do))
-             (loopy--final-do
-              (push (cdr instruction) loopy--final-do))
-             (loopy--final-return
-              (push (cdr instruction) loopy--final-return))
-             (t
-              (error "Loopy: Unknown body instruction: %s" instruction))))))))
+           ;; Places users probably shouldn't push to, but can if they want:
+           (loopy--before-do
+            (push (cdr instruction) loopy--before-do))
+           (loopy--after-do
+            (push (cdr instruction) loopy--after-do))
+           (loopy--final-do
+            (push (cdr instruction) loopy--final-do))
+           (loopy--final-return
+            (push (cdr instruction) loopy--final-return))
+           (t
+            (error "Loopy: Unknown body instruction: %s" instruction)))))))
 
    ;; Make sure the order-dependent lists are in the correct order.
    (setq loopy--main-body (nreverse loopy--main-body)
