@@ -11,10 +11,9 @@
 (require 'loopy "./loopy.el")
 (require 'loopy-dash "./loopy-dash.el")
 
-(defvar loopy-default-destructuring-function)
-(setq loopy-default-destructuring-function
-      #'loopy--create-destructured-assignment-dash)
 (load-file "tests/tests.el")
+
+(setq loopy-default-flags '(dash))
 
 (ert-deftest dash-flag-default ()
   (should (equal '(5 6)
