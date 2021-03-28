@@ -119,7 +119,7 @@ list.  For example, by default, \"(for collect i)\" and
 
 This variable is used to signal an error instead of silently failing.")
 
-(defvar loopy-iter--let-forms '(let let* pcase-let pcase-let*)
+(defvar loopy-iter--let-forms '(let let*)
   "Forms to treat like `let'.
 
 `let' forms might use constructs wrapped in variable definitions.")
@@ -182,8 +182,10 @@ Other instructions are just pushed to their variables."
     (let ((new-tree))
       ;; TODO: How to handle macro expansion?  Ideally, we only need to parse
       ;; the fundamental building blocks of source code, and macros would expand
-      ;; to usages of these blocks.
-      (dolist (elem (macroexpand-1 tree))
+      ;; to usages of these blocks.  Should this be `macroexpand-all'?
+      (dolist (elem (if (not loopy--in-sub-level)
+                        (macroexpand-all tree)
+                      tree))
         (if (consp elem)
             ;; Depending on the structure that we're dealing with, we need to
             ;; expand differently.
