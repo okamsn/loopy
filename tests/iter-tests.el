@@ -14,10 +14,15 @@
                                           (accum collect i)))))))
 
 (ert-deftest wrap-in-let ()
-  (should (equal '(2 4 6)
-                 (eval (quote (loopy-iter (for list i '(1 2 3))
-                                          (let ((a i))
-                                            (accum collect (+ a i)))))))))
+  (should
+   (equal '(2 4 6)
+           (eval (quote
+                  (loopy-iter (for list i '(1 2 3))
+                              (let ((a i)
+                                    ;; A single symbol shouldn't cause an error,
+                                    ;; and should be ignored.
+                                    b)
+                                (accum collect (+ a i)))))))))
 
 (ert-deftest dont-swap-let-var-args ()
   "Parse `let'-like forms correctly.

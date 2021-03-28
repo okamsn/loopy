@@ -269,14 +269,19 @@ These forms can have loop commands in the values of variables or in the body."
   (let ((new-var-list))
     ;; Handle the var-list
     (dolist (pair (cl-second tree))
-      ;; TODO: Why do we need to deal with quoted forms here specifically?
-      ;;       The `quote' doesn't seem to be passed along.
-      (let ((value (cl-second pair)))
-        (if (loopy-iter--literal-form-p value)
-            (push pair new-var-list)
-          (push (list (cl-first pair)
-                      (loopy-iter--replace-in-tree value))
-                new-var-list))))
+      ;; If the pair is not the expected list (e.g., a single symbol which `let'
+      ;; treats as variable bound to nil), just push into the list.  Otherwise,
+      ;; we need to interpret the value being assigned to the variable.
+      (if (nlistp pair)
+          (push pair new-var-list)
+        ;; TODO: Why do we need to deal with quoted forms here specifically?
+        ;;       The `quote' doesn't seem to be passed along.
+        (let ((value (cl-second pair)))
+          (if (loopy-iter--literal-form-p value)
+              (push pair new-var-list)
+            (push (list (cl-first pair)
+                        (loopy-iter--replace-in-tree value))
+                  new-var-list)))))
     ;; Return value
     `(,(cl-first tree) ,(nreverse new-var-list)
       ,@(loopy-iter--replace-in-tree (cddr tree)))))
