@@ -372,117 +372,88 @@ See `loopy' for information about BODY.  One difference is that
 `let*' is not an alias of the `with' special macro argument.  See
 the Info node `(loopy)' for information on how to use `loopy' and
 `loopy-iter'."
-  (let (;; -- Top-level expressions other than loop body --
-        (loopy--loop-name)
-        (loopy--with-vars)
-        (loopy--without-vars)
-        (loopy--before-do)
-        (loopy--after-do)
-        (loopy--final-do)
-        (loopy--final-return)
+  (loopy--wrap-variables-around-body
 
-        ;; -- Vars for processing loop commands --
-        (loopy--iteration-vars)
-        (loopy--accumulation-vars)
-        (loopy--generalized-vars)
-        (loopy--pre-conditions)
-        (loopy--main-body)
-        (loopy--latter-body)
-        (loopy--post-conditions)
-        (loopy--implicit-return)
+   ;; Process the special macro arguments.
+   ;; For now, allow aliases, but don't allow `let*' for `with'.
 
-        ;; -- Variables for constructing code --
-        (loopy--skip-used)
-        (loopy--tagbody-exit-used)
-        (loopy--implicit-accumulation-final-update)
-        (loopy--in-sub-level)
+   ;; There should be only one of each of these arguments.
 
-        ;; -- Flag Variables --
-        (loopy-iter--lax-naming)
-        (loopy--basic-destructuring-function)
-        (loopy--destructuring-accumulation-parser)
-        (loopy--split-implied-accumulation-results))
+   ;; Flags
 
-    ;; Process the special macro arguments.
-    ;; For now, allow aliases, but don't allow `let*' for `with'.
+   ;; Process any flags passed to the macro.  In case of conflicts, the
+   ;; processing order is:
+   ;;
+   ;; 1. Flags in `loopy-default-flags'.
+   ;; 2. Flags in the `flag' macro argument, which can
+   ;;    undo the first group.
 
-    ;; There should be only one of each of these arguments.
+   (when-let ((loopy--all-flags
+               (append loopy-default-flags
+                       (loopy--find-special-macro-arguments '(flag flags)
+                                                            body))))
+     (dolist (flag loopy--all-flags)
+       (if-let ((func (cdr (assq flag loopy--flag-settings))))
+           (funcall func)
+         (error "Loopy: Flag not defined: %s" flag))))
 
-    ;; Flags
+   ;; With
+   (setq loopy--with-vars
+         ;; Process `with' for destructuring.
+         (mapcan (lambda (var)
+                   (loopy--destructure-variables (cl-first var)
+                                                 (cl-second var)))
+                 (loopy--find-special-macro-arguments ;; '(with let*)
+                  '(with) ; No `let*'.
+                  body)))
 
-    ;; Process any flags passed to the macro.  In case of conflicts, the
-    ;; processing order is:
-    ;;
-    ;; 1. Flags in `loopy-default-flags'.
-    ;; 2. Flags in the `flag' macro argument, which can
-    ;;    undo the first group.
+   ;; Without
+   (setq loopy--without-vars
+         (loopy--find-special-macro-arguments '(without no-init) body))
 
-    (when-let ((loopy--all-flags
-                (append loopy-default-flags
-                        (loopy--find-special-macro-arguments '(flag flags)
-                                                             body))))
-      (dolist (flag loopy--all-flags)
-        (if-let ((func (cdr (assq flag loopy--flag-settings))))
-            (funcall func)
-          (error "Loopy: Flag not defined: %s" flag))))
+   ;; Before do
+   (setq loopy--before-do
+         (loopy--find-special-macro-arguments '( before-do before
+                                                 initially-do initially)
+                                              body))
 
-    ;; With
-    (setq loopy--with-vars
-          ;; Process `with' for destructuring.
-          (mapcan (lambda (var)
-                    (loopy--destructure-variables (cl-first var)
-                                                  (cl-second var)))
-                  (loopy--find-special-macro-arguments ;; '(with let*)
-                   '(with) ; No `let*'.
-                   body)))
+   ;; After do
+   (setq loopy--after-do
+         (loopy--find-special-macro-arguments '( after-do after
+                                                 else-do else)
+                                              body))
 
-    ;; Without
-    (setq loopy--without-vars
-          (loopy--find-special-macro-arguments '(without no-init) body))
+   ;; Finally Do
+   (setq loopy--final-do
+         (loopy--find-special-macro-arguments '(finally-do finally) body))
 
-    ;; Before do
-    (setq loopy--before-do
-          (loopy--find-special-macro-arguments '( before-do before
-                                                  initially-do initially)
-                                               body))
-
-    ;; After do
-    (setq loopy--after-do
-          (loopy--find-special-macro-arguments '( after-do after
-                                                  else-do else)
-                                               body))
-
-    ;; Finally Do
-    (setq loopy--final-do
-          (loopy--find-special-macro-arguments '(finally-do finally) body))
-
-    ;; Final Return
-    (setq loopy--final-return
-          (when-let ((return-val
-                      (loopy--find-special-macro-arguments 'finally-return
-                                                           body)))
-            (if (= 1 (length return-val))
-                (car return-val)
-              (cons 'list return-val))))
+   ;; Final Return
+   (setq loopy--final-return
+         (when-let ((return-val
+                     (loopy--find-special-macro-arguments 'finally-return
+                                                          body)))
+           (if (= 1 (length return-val))
+               (car return-val)
+             (cons 'list return-val))))
 
 
-    ;; Process the main body.
-    (setq loopy--main-body
-          (loopy-iter--replace-in-tree body))
+   ;; Process the main body.
+   (setq loopy--main-body
+         (loopy-iter--replace-in-tree body))
 
-    ;; Make sure the order-dependent lists are in the correct order.
-    (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
-          loopy--implicit-return (when (consp loopy--implicit-return)
-                                   (if (= 1 (length loopy--implicit-return))
-                                       ;; If implicit return is just a single thing,
-                                       ;; don't use a list.
-                                       (car loopy--implicit-return)
-                                     ;; If multiple items, be sure to use a list
-                                     ;; in the correct order.
-                                     `(list ,@(nreverse loopy--implicit-return)))))
+   ;; Make sure the order-dependent lists are in the correct order.
+   (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
+         loopy--implicit-return (when (consp loopy--implicit-return)
+                                  (if (= 1 (length loopy--implicit-return))
+                                      ;; If implicit return is just a single thing,
+                                      ;; don't use a list.
+                                      (car loopy--implicit-return)
+                                    ;; If multiple items, be sure to use a list
+                                    ;; in the correct order.
+                                    `(list ,@(nreverse loopy--implicit-return)))))
 
-    ;; Produce the expanded code, based on the `let'-bound variables.
-    (loopy--expand-to-loop)))
+   ;; Produce the expanded code, based on the `let'-bound variables.
+   (loopy--expand-to-loop)))
 
 (provide 'loopy-iter)
 ;;; loopy-iter.el ends here
