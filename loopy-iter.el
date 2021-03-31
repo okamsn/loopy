@@ -294,19 +294,13 @@ These forms can have loop commands in the values of variables or in the body."
 
 These forms can have loop commands in every other expression
 starting at the third element in TREE."
-  (let ((new-var-val-pairs)
-        (name (cl-first tree))
-        ;; Just to make the `while' loop easier.
-        (tree (cdr tree)))
-    (while tree
-      (push (list (pop tree)
-                  (let ((val (pop tree)))
-                    (if (loopy-iter--literal-form-p val)
-                        val
-                      (loopy-iter--replace-in-tree val))))
-            new-var-val-pairs))
-    ;; Return new tree.
-    `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))
+  (loopy (with ((name . tree) tree))
+	 (while tree)
+	 (expr first (pop tree))
+	 (expr val (pop tree))
+	 (expr second (if (loopy-iter--literal-form val) val (loopy-iter--replace-in-tree val)))
+	 (collect new-var-val-pairs (list first second))
+	 (finally-return `(name ,@(apply #'append new-var-val-pairs)))))
 
 (defun loopy-iter--replace-in-lambda-form (tree)
   "Replace loop commands in `lambda'-like expression TREE.
