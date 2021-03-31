@@ -136,24 +136,6 @@ still evaluated.")
   "Special forms that work like `setq'.")
 
 ;;;; Miscellaneous Helper Functions
-(defun loopy-iter--extract-main-body (instructions)
-  "Separate main-body instructions from others in INSTRUCTIONS.
-
-This returns a list of two sub-lists:
-1. Expression that should be inserted into a main-body instruction.
-2. Other instructions.
-
-The lists will be in the order parsed (correct for insertion)."
-  (let ((wrapped-main-body)
-        (other-instructions))
-    (dolist (instruction instructions)
-      (if (eq (car instruction) 'loopy--main-body)
-          (push (cdr instruction) wrapped-main-body)
-        (push instruction other-instructions)))
-
-    ;; Return the sub-lists.
-    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
-
 (defun loopy-iter--valid-loop-command (name)
   "Check if NAME is a known command.
 
@@ -236,7 +218,7 @@ Other instructions are just pushed to their variables."
                        (loopy-iter--valid-loop-command (cl-second elem))))
 
                 (seq-let (main-body other-instructions)
-                    (loopy-iter--extract-main-body
+                    (loopy--extract-main-body
                      ;; If using lax naming, then the entire `elem' is the loop
                      ;; command.  Otherwise, it is the `cdr'.
                      (loopy--parse-loop-command (if loopy-iter--lax-naming

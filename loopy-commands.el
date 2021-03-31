@@ -161,6 +161,25 @@ expansion, we generally only want the actual symbol."
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
 
+(defun loopy--extract-main-body (instructions)
+  "Separate main-body instructions from others in INSTRUCTIONS.
+
+This returns a list of two sub-lists:
+1. Expression that should be inserted into a main-body instruction.
+2. Other instructions.
+
+The lists will be in the order parsed (correct for insertion)."
+  (let ((wrapped-main-body)
+        (other-instructions))
+    (dolist (instruction instructions)
+      (if (eq (car instruction) 'loopy--main-body)
+          (push (cdr instruction) wrapped-main-body)
+        (push instruction other-instructions)))
+
+    ;; Return the sub-lists.
+    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
+
+
 ;;;; Included parsing functions.
 ;;;;; Misc.
 (cl-defun loopy--parse-sub-loop-command ((_ &rest body))
