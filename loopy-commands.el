@@ -599,6 +599,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
                                              (t nil))))
         (loopy--implicit-return . ,var)
         (loopy--main-body . ,(cl-ecase name
+			       (adjoining `(setq ,var (cl-adjoin ,val ,var)))
                                (append `(setq ,var (append ,var ,val)))
                                (collect `(setq ,var (append ,var (list ,val))))
                                (concat `(setq ,var (concat ,var ,val)))
@@ -646,6 +647,15 @@ whose value is to be accumulated."
              ,@(if loopy--split-implied-accumulation-results
                    (list `(loopy--implicit-return . (nreverse ,value-holder)))
                  (list
+                  `(loopy--implicit-accumulation-final-update
+                    . (setq ,value-holder (nreverse ,value-holder)))
+                  `(loopy--implicit-return . ,value-holder)))))
+	  (adjoining
+	   `((loopy--main-body
+	      . (setq ,value-holder (cl-adjoin ,value-expression ,value-holder)))
+	     ,@(if loopy--split-implied-accumulation-results
+		   (list `(loopy--implicit-return . (nreverse ,value-holder)))
+		 (list
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
@@ -922,7 +932,8 @@ COMMAND-LIST."
 ;; TODO: Is there a cleaner way than this?  Symbol properties?
 (defconst loopy--builtin-command-parsers
   ;; A few of these are just aliases.
-  '((append      . loopy--parse-accumulation-commands)
+  '((adjoining   . loopy--parse-accumulation-commands)
+    (append      . loopy--parse-accumulation-commands)
     (array       . loopy--parse-array-command)
     (array-ref   . loopy--parse-array-ref-command)
     (arrayf      . loopy--parse-array-ref-command)
