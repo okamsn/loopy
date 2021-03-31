@@ -47,6 +47,7 @@
 (require 'loopy)
 (require 'seq)
 (require 'pcase)
+(require 'loopy-pcase)
 (require 'macroexp)
 (require 'cl-lib)
 
@@ -103,54 +104,45 @@ VAR should be a normal `seq-let' destructuring pattern, such as
 \"(a &rest b)\" or \"[_ _ _ &rest rest]\"."
   (apply #'append (loopy-seq--get-variable-values var val)))
 
-(cl-defun loopy-seq--parse-destructuring-accumulation-command ((name var val))
-  "Parse the accumulation loop command using `seq-let' for destructuring.
+(defun loopy-seq--get-variables (var)
+  "Get the variables in sequence VAR, as a list."
+  (let ((var-list))
+    (seq-doseq (sym-or-seq var)
+      (cond
 
-NAME is the name of the command.  VAR-OR-VAL is a variable name
-or, if using implicit variables, a value .  VAL is a value, and
-should only be used if VAR-OR-VAL is a variable."
-  (seq-let (generated-vars named-vars)
-      (loopy-seq--get-variable-values var val)
-    (let ((instructions))
-      (dolist (required-var generated-vars)
-        (push `(loopy--accumulation-vars . (,(car required-var) nil))
-              instructions))
-      (dolist (named-var named-vars)
-        (push `(loopy--accumulation-vars
-                . (,(car named-var) ,(cl-case name
-                                       ((sum count)    0)
-                                       ((max maximize) -1.0e+INF)
-                                       ((min minimize) +1.0e+INF)
-                                       (t nil))))
-              instructions))
-      ;; While `pcase-let*' might bind named vars in reverse order,
-      ;; it seems `seq-let' binds them in the correct order.
-      (dolist (named-var (reverse named-vars))
-        (push `(loopy--implicit-return . ,(car named-var))
-              instructions))
-      ;; Push update of accumulation variables before setting required
-      ;; variables to avoid needing to reverse the list of instructions.
-      (push `(loopy--main-body
-              . (setq ,@(mapcan
-                         (pcase-lambda (`(,var ,val))
-                           (cl-ecase name
-                             (append `(,var (append ,var ,val)))
-                             (collect `(,var (append ,var (list ,val))))
-                             (concat `(,var (concat ,var ,val)))
-                             (vconcat `(,var (vconcat ,var ,val)))
-                             (count `(if ,val (,var (1+ ,var))))
-                             ((max maximize) `(,var (max ,val ,var)))
-                             ((min minimize) `(,var (min ,val ,var)))
-                             (nconc `(,var (nconc ,var ,val)))
-                             (prepend `(setq ,var (append ,val ,var)))
-                             ((push-into push) `(push ,val ,var))
-                             (sum `(,var (+ ,val ,var)))))
-                         named-vars)))
-            instructions)
-      ;; Finally, push the setting of the generated variables required by
-      ;; `seq-let', which should happen first in the loop body.
-      (push `(loopy--main-body . (setq ,@(apply #'append generated-vars)))
-            instructions))))
+       ((sequencep sym-or-seq)
+        (dolist (symbol (loopy-seq--get-variables sym-or-seq))
+          (push symbol var-list)))
+
+       ((and (not (eq sym-or-seq '&rest))
+             (not (eq sym-or-seq '_)))
+        (push sym-or-seq var-list))))
+    ;; Return the list of symbols in order of appearance.
+    (nreverse var-list)))
+
+(cl-defun loopy-seq--parse-destructuring-accumulation-command ((name var val))
+  "Destructure an accumulation loop command as if by `seq-let'.
+
+NAME is the command name.  VAR is the variable sequence.  VAL is
+the value to accumulate."
+  ;; `seq-let' is really just a wrapper around `pcase-let' using a special
+  ;; Pcase macro, so we can use functions from loopy-pcase.el.  The `setq'
+  ;; bindings in the instruction should not be order-sensitive for accumulation
+  ;; commands; the bindings should be independent.
+  ;;
+  ;; However, it might not parse the bindings in the right order, so while the
+  ;; main-body instruction is correct, instructions for things like
+  ;; implicit-return might be in the wrong order.  Therefore, we must still
+  ;; produce the other instructions ourselves.
+  `((loopy--main-body
+     . ,(cl-first (loopy--extract-main-body
+                   (loopy-pcase--parse-destructuring-accumulation-command
+                    (list name (seq--make-pcase-patterns var) val)))))
+    ,@(let ((starting-val (loopy--accumulation-starting-value name)))
+        (mapcan (lambda (var)
+                  `((loopy--accumulation-vars . (,var ,starting-value))
+                    (loopy--implicit-return . ,var)))
+                (loopy-seq--get-variables var)))))
 
 (provide 'loopy-seq)
 ;;; loopy-seq.el ends here

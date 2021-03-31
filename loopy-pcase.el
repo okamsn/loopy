@@ -108,46 +108,64 @@ VAR should be a normal `pcase' destructuring pattern, such as
 NAME is the name of the command.  VAR-OR-VAL is a variable name
 or, if using implicit variables, a value .  VAL is a value, and
 should only be used if VAR-OR-VAL is a variable."
-  (pcase-let ((`(,generated-vars ,named-vars)
-               (loopy-pcase--get-variable-values var val)))
-    (let ((instructions))
-      (dolist (required-var generated-vars)
-        (push `(loopy--accumulation-vars . (,(car required-var) nil))
-              instructions))
-      ;; NOTE: Named variables might be in reverse order.  Not sure if this is
-      ;; reliable behavior.
-      (dolist (named-var named-vars)
-        (push `(loopy--accumulation-vars . (,(car named-var) ,(cl-case name
-                                                                ((sum count)    0)
-                                                                ((max maximize) -1.0e+INF)
-                                                                ((min minimize) +1.0e+INF)
-                                                                (t nil))))
-              instructions)
-        (push `(loopy--implicit-return . ,(car named-var))
-              instructions))
-      ;; Push update of accumulation variables before setting required
-      ;; variables to avoid needing to reverse the list of instructions.
-      (push `(loopy--main-body
-              . (setq ,@(mapcan
-                         (pcase-lambda (`(,var ,val))
-                           (cl-ecase name
-                             (append `(,var (append ,var ,val)))
-                             (collect `(,var (append ,var (list ,val))))
-                             (concat `(,var (concat ,var ,val)))
-                             (vconcat `(,var (vconcat ,var ,val)))
-                             (count `(if ,val (,var (1+ ,var))))
-                             ((max maximize) `(,var (max ,val ,var)))
-                             ((min minimize) `(,var (min ,val ,var)))
-                             (nconc `(,var (nconc ,var ,val)))
-                             (prepend `(setq ,var (append ,val ,var)))
-                             ((push-into push) `(push ,val ,var))
-                             (sum `(,var (+ ,val ,var)))))
-                         named-vars)))
-            instructions)
-      ;; Finally, push the setting of the generated variables required by
-      ;; `pcase', which should happen first in the loop body.
-      (push `(loopy--main-body . (setq ,@(apply #'append generated-vars)))
-            instructions))))
+  (let* ((instructions)
+         (full-main-body))
+    (if (fboundp 'pcase-compile-patterns)
+        (setq full-main-body
+              (pcase-compile-patterns
+               val
+               (list
+                (cons var
+                      (lambda (varvals &rest _)
+                        (let ((destr-main-body))
+                          (dolist (varval varvals)
+                            (let ((destr-var (cl-first varval))
+                                  (destr-val (cl-second varval)))
+                              (seq-let (main-body other-instructions)
+                                  (loopy--extract-main-body
+                                   (loopy--parse-accumulation-commands
+                                    (list name destr-var destr-val)))
+                                ;; Just push the other instructions, but
+                                ;; gather the main body expressions.
+                                (dolist (instr other-instructions)
+                                  (push instr instructions))
+                                (push main-body destr-main-body))))
+
+                          ;; The lambda returns the destructured main body,
+                          ;; which needs to be wrapped by Pcase's
+                          ;; destructured bindings.
+                          (macroexp-progn (apply #'append destr-main-body))))))))
+      ;; NOTE: In Emacs versions less than 28, this functionality technically
+      ;; isn't public, but this is what the developers recommend.
+      (setq full-main-body
+            (pcase--u `((,(pcase--match val
+                                        (pcase--macroexpand
+                                         `(or ,var pcase--dontcare)))
+                         ,(lambda (vars)
+                            (let ((destr-main-body))
+                              (dolist (v vars)
+                                (let ((destr-var (car v))
+                                      ;; Use `cadr' for Emacs 28+, `cdr' for less.
+                                      (destr-val (if (version< emacs-version "28")
+                                                     (cdr v)
+                                                   (warn "loopy-pcase: Update Emacs 28 to use `pcase-compile-patterns'.")
+                                                   (cadr v))))
+                                  (seq-let (main-body other-instructions)
+                                      (loopy--extract-main-body
+                                       (loopy--parse-accumulation-commands
+                                        (list name destr-var destr-val)))
+                                    ;; Just push the other instructions, but
+                                    ;; gather the main body expressions.
+                                    (dolist (instr other-instructions)
+                                      (push instr instructions))
+                                    (push main-body destr-main-body))))
+                              ;; The lambda returns the destructured main body,
+                              ;; which needs to be wrapped by Pcase's
+                              ;; destructured bindings.
+                              (macroexp-progn (apply #'append destr-main-body)))))))))
+    ;; Finally, return the instructions.
+    `((loopy--main-body . ,full-main-body)
+      ,@(nreverse instructions))))
 
 (provide 'loopy-pcase)
 ;;; loopy-pcase.el ends here
