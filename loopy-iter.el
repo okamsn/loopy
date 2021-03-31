@@ -266,25 +266,23 @@ Other instructions are just pushed to their variables."
   "Replace loop commands in `let'-like form TREE.
 
 These forms can have loop commands in the values of variables or in the body."
-  (let ((new-var-list))
-    ;; Handle the var-list
-    (dolist (pair (cl-second tree))
-      ;; If the pair is not the expected list (e.g., a single symbol which `let'
-      ;; treats as variable bound to nil), just push into the list.  Otherwise,
-      ;; we need to interpret the value being assigned to the variable.
-      (if (nlistp pair)
-          (push pair new-var-list)
-        ;; TODO: Why do we need to deal with quoted forms here specifically?
-        ;;       The `quote' doesn't seem to be passed along.
-        (let ((value (cl-second pair)))
-          (if (loopy-iter--literal-form-p value)
-              (push pair new-var-list)
-            (push (list (cl-first pair)
-                        (loopy-iter--replace-in-tree value))
-                  new-var-list)))))
-    ;; Return value
-    `(,(cl-first tree) ,(nreverse new-var-list)
-      ,@(loopy-iter--replace-in-tree (cddr tree)))))
+  (loopy (with ((name values . rest) tree))
+	 (list pair values)
+	 ;; If the pair is not the expected list (e.g., a single symbol which `let'
+	 ;; treats as variable bound to nil), just push into the list.  Otherwise,
+	 ;; we need to interpret the value being assigned to the variable.
+	 (when (nlistp pair)
+	   (collect pair)
+	   (skip))
+	 (expr (first value) pair)
+         ;; TODO: Why do we need to deal with quoted forms here specifically?
+         ;;       The `quote' doesn't seem to be passed along.
+	 (cond ((loopy-iter--literal-form-p value)
+		(collect pair))
+	       (t
+		(collect (list first (loopy-iter--replace-in-tree value)))))
+	 ;; Return value.
+	 (finally-return `(,name ,loopy-result ,@(loopy-iter--replace-in-tree rest)))))
 
 (defun loopy-iter--replace-in-setq-form (tree)
   "Replace loop commands in `setq'-like form TREE.
