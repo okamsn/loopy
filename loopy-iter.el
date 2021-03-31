@@ -144,15 +144,12 @@ This returns a list of two sub-lists:
 2. Other instructions.
 
 The lists will be in the order parsed (correct for insertion)."
-  (let ((wrapped-main-body)
-        (other-instructions))
-    (dolist (instruction instructions)
-      (if (eq (car instruction) 'loopy--main-body)
-          (push (cdr instruction) wrapped-main-body)
-        (push instruction other-instructions)))
-
-    ;; Return the sub-lists.
-    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
+  (loopy (list instruction instructions)
+	 (expr (name . rest) instruction)
+	 (if (eq name 'loopy--main-body)
+	     (collect rest wrapped-main-body)
+	   (collect instruction other-instructions))
+	 (finally-return (list wrapped-main-body other-instructions))))
 
 (defun loopy-iter--valid-loop-command (name)
   "Check if NAME is a known command.
