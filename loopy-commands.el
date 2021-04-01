@@ -742,7 +742,7 @@ Otherwise the loop continues and nil is returned."
   (let ((thereis-var (gensym "thereis-var-")))
     `((loopy--after-do . (cl-return nil))
       ,@(mapcar (lambda (condition)
-		  `(loopy--post-conditions . (let ((,thereis-var (progn ,condition)))
+		  `(loopy--post-conditions . (let ((,thereis-var ,condition))
 					       (if ,thereis-var (cl-return ,thereis-var) t))))
 		conditions))))
 
