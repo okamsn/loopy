@@ -743,7 +743,7 @@ Otherwise the loop continues and nil is returned."
     `((loopy--after-do . (cl-return nil))
       ,@(mapcar (lambda (condition)
 		  `(loopy--post-conditions . (let ((,thereis-var (progn ,condition)))
-					       (when ,thereis-var (cl-return ,thereis-var)))))
+					       (if ,thereis-var (cl-return ,thereis-var) t))))
 		conditions))))
 
 ;;;;; Exiting and Skipping
