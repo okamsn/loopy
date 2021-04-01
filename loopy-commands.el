@@ -50,12 +50,14 @@
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
+(declare-function loopy--destructure-variables-default "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--split-implied-accumulation-results)
 (defvar loopy--basic-destructuring-function)
+(defvar loopy--destructuring-for-iteration-function)
 
 ;;;; Variables from macro arguments
 (defvar loopy--loop-name)
@@ -845,6 +847,18 @@ VALUE-EXPRESSION."
 
 ;; Note that function `loopy--destructure-variables-default' is defined in
 ;; 'loop.el', as it is also used for `with' variables.
+(defun loopy--destructure-for-iteration-default (var val)
+  "Destructure VAL according to VAR.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((bindings (loopy--destructure-variables-default var val)))
+    (list (cons 'setq (apply #'append bindings))
+          (cl-remove-duplicates (mapcar #'cl-first bindings)))))
+
 (defun loopy--destructure-for-iteration-command (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR for a loop command.
 
@@ -854,15 +868,13 @@ variables (`setf'-able places).  For that, see the function
 
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
-  (let ((destructurings
-         (loopy--destructure-variables var value-expression))
-        (instructions nil))
-    (dolist (destructuring destructurings)
-      (push `(loopy--iteration-vars . (,(cl-first destructuring) nil))
-            instructions))
-    (cons `(loopy--main-body
-            . (setq ,@(apply #'append destructurings)))
-          instructions)))
+  (cl-destructuring-bind (destructuring-expression var-list)
+      (funcall (or loopy--destructuring-for-iteration-function
+                   #'loopy--destructure-for-iteration-default)
+               var value-expression)
+    `((loopy--main-body . ,destructuring-expression)
+      ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
+                var-list))))
 
 (cl-defun loopy--parse-destructuring-accumulation-command
     ((name var val))

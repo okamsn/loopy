@@ -118,6 +118,19 @@ variable `loopy--destructuring-accumulation-parser'.
 
 If nil, use `loopy--destructure-variables-default'.")
 
+(defvar loopy--destructuring-for-iteration-function nil
+  "The function to use for destructuring during iteration commands.
+
+The function named by this variable receives a sequence of
+variable names and a value expression.  It should return an
+expression that can be used in the loop's main body and a list of
+variables which must be initialized in the loop.
+
+Generally, the main-body expression should use `setq' to assign
+to the variables found in the sequence of variable names, and the
+list of variables to initialize will include the variables in
+said sequence and any others that might leek through.")
+
 (defvar loopy--destructuring-accumulation-parser nil
   "The function used to parse destructuring accumulation commands.
 
