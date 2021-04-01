@@ -712,6 +712,52 @@ whose value is to be accumulated."
                          (loopy--parse-accumulation-commands
                           (list name value-holder value-expression))))))))
 
+;;;; Boolean
+
+(cl-defun loopy--always-command-parser ((_ &rest conditions))
+  "Parse a command of the form `(always [CONDITIONS])'.
+     If any condition is `nil', `loopy' should immediately return nil.
+     Otherwise, `loopy' should return t."
+  (let (instructions)
+    ;; Return t if loop completes successfully.
+    (push `(loopy--after-do . (cl-return t)) instructions)
+    ;; Check all conditions at the end of the loop body, forcing an exit if any
+    ;; evaluate to nil.  Since the default return value of the macro is nil, we
+    ;; don’t need to do anything else.
+    ;;
+    ;; NOTE: We must not add anything to `loopy--final-return', since that
+    ;;       would override the value of any early returns.
+    (dolist (condition conditions)
+      (push `(loopy--post-conditions . ,condition) instructions))
+    instructions))
+
+(cl-defun loopy--parse-always-command ((_ &rest conditions))
+  "Parse a command of the form `(always [CONDITIONS])'.
+If any condition is `nil', `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+  (let (instructions)
+    ;; Return t if loop completes successfully.
+    (push `(loopy--after-do . (cl-return t)) instructions)
+    ;; Check all conditions at the end of the loop body, forcing an exit if any
+    ;; evaluate to nil.  Since the default return value of the macro is nil, we
+    ;; don’t need to do anything else.
+    ;;
+    ;; NOTE: We must not add anything to `loopy--final-return', since that
+    ;;       would override the value of any early returns.
+    (dolist (condition conditions)
+      (push `(loopy--post-conditions . ,condition) instructions))
+    instructions))
+
+(cl-defun loopy--never-command-parser ((_ &rest conditions))
+  (let (instructions)
+    (push `(loopy--after-do . (cl-return t)) instructions)
+    (dolist (condition conditions)
+      (push `(loopy--post-conditions . (not ,condition)) instructions))
+    instructions))
+
+(cl-defun loopy--thereis-command-parser ((_ &rest conditions))
+  )
+
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
   "Parse the  `return' and `return-from' loop commands.
@@ -920,7 +966,10 @@ COMMAND-LIST."
 ;; TODO: Is there a cleaner way than this?  Symbol properties?
 (defconst loopy--builtin-command-parsers
   ;; A few of these are just aliases.
-  '((append       . loopy--parse-accumulation-commands)
+  '((always       . loopy--parse-always-command)
+    (never        . loopy--parse-never-command)
+    (thereis      . loopy--parse-thereis-command)
+    (append       . loopy--parse-accumulation-commands)
     (appending    . loopy--parse-accumulation-commands)
     (across       . loopy--parse-array-command)
     (across-ref   . loopy--parse-array-ref-command)

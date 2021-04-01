@@ -1384,8 +1384,22 @@ Not multiple of 3: 7")))
 (ert-deftest until ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                                     (until (> i 3))
-                                     (collect i)))))))
+                               (until (> i 3))
+                               (collect i)))))))
+
+;;;;; Always
+
+(ert-deftest always ()
+  (should (equal t
+		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			       (always (> i 7))))))))
+
+;;;;; Never
+
+(ert-deftest never ()
+  (should (equal t
+		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			       (never (< i 0))))))))
 
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()
