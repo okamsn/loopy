@@ -619,7 +619,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
               ((prepend prepending) `(setq ,var (append ,val ,var)))
               ((push-into pushing-into push pushing) `(push ,val ,var))
               ((sum summing) `(setq ,var (+ ,val ,var)))
-	      ((multiply multiplying) `(setq ,var (* ,var ,var))))))))
+	      ((multiply multiplying) `(setq ,var (* ,var ,val))))))))
    (t
     (funcall (or loopy--destructuring-accumulation-parser
                  #'loopy--parse-destructuring-accumulation-command)
