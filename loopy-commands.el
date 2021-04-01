@@ -754,6 +754,10 @@ Otherwise, `loopy' should return t."
 	      conditions)))
 
 (cl-defun loopy--thereis-command-parser ((_ &rest conditions))
+  "Parse a command of the form `(thereis [CONDITIONS]).'
+If any condition is non-nil, its value is immediately returned and the loop is exited.
+Otherwise the loop continues and nil is returned."
+  ()
   )
 
 ;;;;; Exiting and Skipping
