@@ -757,8 +757,10 @@ Otherwise, `loopy' should return t."
   "Parse a command of the form `(thereis [CONDITIONS]).'
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
-  ()
-  )
+  `((loopy--after-do . (cl-return nil))
+    ,@(mapcar (lambda (condition)
+		`(loopy--post-conditions . (when (progn ,condition) (cl-return t))))
+	      conditions)))
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
