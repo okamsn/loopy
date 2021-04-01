@@ -713,23 +713,6 @@ whose value is to be accumulated."
                           (list name value-holder value-expression))))))))
 
 ;;;; Boolean Commands
-(cl-defun loopy--always-command-parser ((_ &rest conditions))
-  "Parse a command of the form `(always [CONDITIONS])'.
-     If any condition is `nil', `loopy' should immediately return nil.
-     Otherwise, `loopy' should return t."
-  (let (instructions)
-    ;; Return t if loop completes successfully.
-    (push `(loopy--after-do . (cl-return t)) instructions)
-    ;; Check all conditions at the end of the loop body, forcing an exit if any
-    ;; evaluate to nil.  Since the default return value of the macro is nil, we
-    ;; don’t need to do anything else.
-    ;;
-    ;; NOTE: We must not add anything to `loopy--final-return', since that
-    ;;       would override the value of any early returns.
-    (dolist (condition conditions)
-      (push `(loopy--post-conditions . ,condition) instructions))
-    instructions))
-
 (cl-defun loopy--parse-always-command ((_ &rest conditions))
   "Parse a command of the form `(always [CONDITIONS])'.
 If any condition is nil, `loopy' should immediately return nil.
