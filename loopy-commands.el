@@ -749,6 +749,9 @@ Otherwise, `loopy' should return t."
     instructions))
 
 (cl-defun loopy--never-command-parser ((_ &rest conditions))
+  "Parse a command of the form `(never [CONDITIONS])'.
+If any condition is t, `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
   (let (instructions)
     (push `(loopy--after-do . (cl-return t)) instructions)
     (dolist (condition conditions)
