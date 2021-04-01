@@ -1406,9 +1406,8 @@ Not multiple of 3: 7")))
 
 ;;;;; Thereis
 (ert-deftest thereis ()
-  (should (equal t
-		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			       (thereis (> i 5)))))))
+  (should (= 6 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			     (thereis (> i 5)))))))
   (should (equal t
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (thereis (> i 7))))))))
