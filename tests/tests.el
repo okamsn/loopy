@@ -1399,7 +1399,7 @@ Not multiple of 3: 7")))
 ;;;;; Never
 
 (ert-deftest never ()
-  (should (equal t
+  (should (equal nil
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (never (> i 0)))))))
   (should (equal t
