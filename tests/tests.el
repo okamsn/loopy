@@ -1388,7 +1388,6 @@ Not multiple of 3: 7")))
                                (collect i)))))))
 
 ;;;;; Always
-
 (ert-deftest always ()
   (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			      (always (< i 7)))))))
@@ -1397,7 +1396,6 @@ Not multiple of 3: 7")))
 			       (always (> i 7))))))))
 
 ;;;;; Never
-
 (ert-deftest never ()
   (should (equal nil
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
@@ -1407,7 +1405,6 @@ Not multiple of 3: 7")))
 			       (never (< i 0))))))))
 
 ;;;;; Thereis
-
 (ert-deftest thereis ()
   (should (equal t
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
