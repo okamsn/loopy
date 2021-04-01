@@ -60,6 +60,8 @@
   (setq
    loopy--basic-destructuring-function
    #'loopy-seq--destructure-variables
+   loopy--destructuring-for-iteration-function
+   #'loopy-seq--destructure-for-iteration
    loopy--destructuring-accumulation-parser
    #'loopy-seq--parse-destructuring-accumulation-command))
 
@@ -69,6 +71,10 @@
           #'loopy-seq--destructure-variables)
       (setq loopy--basic-destructuring-function
             #'loopy--destructure-variables-default))
+  (if (eq loopy--destructuring-for-iteration-function
+          #'loopy-seq--destructure-for-iteration)
+      (setq loopy--destructuring-for-iteration-function
+            #'loopy--destructure-for-iteration-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-seq--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -119,6 +125,16 @@ VAR should be a normal `seq-let' destructuring pattern, such as
         (push sym-or-seq var-list))))
     ;; Return the list of symbols in order of appearance.
     (nreverse var-list)))
+
+(cl-defun loopy-seq--destructure-for-iteration (var val)
+  "Destructure VAL according to VAR, as if by `seq-let'.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (loopy-pcase--destructure-for-iteration (seq--make-pcase-patterns var) val))
 
 (cl-defun loopy-seq--parse-destructuring-accumulation-command ((name var val))
   "Destructure an accumulation loop command as if by `seq-let'.

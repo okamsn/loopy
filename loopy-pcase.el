@@ -50,6 +50,8 @@
 (defun loopy-pcase--enable-flag-pcase ()
   "Make this `loopy' loop use `pcase' destructuring."
   (setq
+   loopy--destructuring-for-iteration-function
+   #'loopy-pcase--destructure-for-iteration
    loopy--basic-destructuring-function
    #'loopy-pcase--destructure-variables
    loopy--destructuring-accumulation-parser
@@ -61,6 +63,10 @@
           #'loopy-pcase--destructure-variables)
       (setq loopy--basic-destructuring-function
             #'loopy--destructure-variables-default))
+  (if (eq loopy--destructuring-for-iteration-function
+          #'loopy-pcase--destructure-for-iteration)
+      (setq loopy--destructuring-for-iteration-function
+            #'loopy--destructure-for-iteration-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-pcase--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -94,6 +100,50 @@ VAR should be a normal `pcase' destructuring pattern, such as
   (pcase-let* ((`(let* ,temp-vars (let ,true-vars . ,_))
                 (macroexpand `(pcase-let* ((,var ,val)) ,var))))
     (list temp-vars true-vars)))
+
+(defun loopy-pcase--destructure-for-iteration (var val)
+  "Destructure VAL according to VAR as by `pcase-let'.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((var-list)
+        (destructuring-expression))
+    ;; This sets `destructuring-expression' and `var-list'.
+    (setq destructuring-expression
+          (if (fboundp 'pcase-compile-patterns)
+              (pcase-compile-patterns
+               val
+               (list
+                (cons var
+                      (lambda (varvals &rest _)
+                        (cons 'setq (mapcan (cl-function
+                                             (lambda ((var val &rest _))
+                                               (push var var-list)
+                                               (list var val)))
+                                            varvals))))))
+            ;; NOTE: In Emacs versions less than 28, this functionality
+            ;;       technically isn't public, but this is what the developers
+            ;;       recommend.
+            (pcase--u
+             `((,(pcase--match val
+                               (pcase--macroexpand
+                                `(or ,var pcase--dontcare)))
+                ,(lambda (vars)
+                   (cons 'setq
+                         (mapcan (lambda (v)
+                                   (let ((destr-var (car v))
+                                         ;; Use `cadr' for Emacs 28+, `cdr' for less.
+                                         (destr-val (if (version< emacs-version "28")
+                                                        (cdr v)
+                                                      (warn "loopy-pcase: Update Emacs 28 to use `pcase-compile-patterns'.")
+                                                      (cadr v))))
+                                     (push destr-var var-list)
+                                     (list destr-var destr-val)))
+                                 vars))))))))
+    (list destructuring-expression var-list)))
 
 (defun loopy-pcase--destructure-variables (var val)
   "Destructure VAL according to VAR using `pcase'.

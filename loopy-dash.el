@@ -52,6 +52,8 @@
   (setq
    loopy--basic-destructuring-function
    #'loopy-dash--destructure-variables
+   loopy--destructuring-for-iteration-function
+   #'loopy-dash--destructure-for-iteration
    loopy--destructuring-accumulation-parser
    #'loopy-dash--parse-destructuring-accumulation-command))
 
@@ -61,6 +63,10 @@
           #'loopy-dash--destructure-variables)
       (setq loopy--basic-destructuring-function
             #'loopy--destructure-variables-default))
+  (if (eq loopy--destructuring-for-iteration-function
+          #'loopy-dash--destructure-for-iteration)
+      (setq loopy--destructuring-for-iteration-function
+            #'loopy--destructure-for-iteration-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-dash--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -79,6 +85,20 @@ Return a list of variable-value pairs (not dotted), suitable for
 substituting into a `let*' form or being combined under a
 `setq' form."
   (dash--match var value-expression))
+
+(defun loopy-dash--destructure-for-iteration (var val)
+  "Destructure VAL according to VAR as if by `-let'.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((bindings (dash--match var val)))
+    (list (cons 'setq (apply #'append bindings))
+          ;; Note: This includes the named variables and the needed generated
+          ;;       variables.
+          (mapcar #'car bindings))))
 
 (defvar loopy-dash--accumulation-destructured-symbols nil
   "The names of copies of variable names that Dash will destructure.
