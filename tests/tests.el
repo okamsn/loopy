@@ -1390,6 +1390,8 @@ Not multiple of 3: 7")))
 ;;;;; Always
 
 (ert-deftest always ()
+  (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			      (always (< i 7)))))))
   (should (equal t
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (always (> i 7))))))))
