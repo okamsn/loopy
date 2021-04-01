@@ -1401,6 +1401,9 @@ Not multiple of 3: 7")))
 (ert-deftest never ()
   (should (equal t
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			       (never (> i 0)))))))
+  (should (equal t
+		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (never (< i 0))))))))
 
 ;;; Custom Commands
