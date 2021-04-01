@@ -733,7 +733,7 @@ whose value is to be accumulated."
 
 (cl-defun loopy--parse-always-command ((_ &rest conditions))
   "Parse a command of the form `(always [CONDITIONS])'.
-If any condition is `nil', `loopy' should immediately return nil.
+If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
   (let (instructions)
     ;; Return t if loop completes successfully.
