@@ -752,11 +752,9 @@ Otherwise, `loopy' should return t."
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  (let (instructions)
-    (push `(loopy--after-do . (cl-return t)) instructions)
-    (dolist (condition conditions)
-      (push `(loopy--post-conditions . (not ,condition)) instructions))
-    instructions))
+  `((loopy--after-do . (cl-return t))
+    ,@(mapcar (lambda (condition) `(loopy--post-conditions . (not ,condition)))
+	      conditions)))
 
 (cl-defun loopy--thereis-command-parser ((_ &rest conditions))
   )
