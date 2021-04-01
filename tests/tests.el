@@ -1406,6 +1406,8 @@ Not multiple of 3: 7")))
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (never (< i 0))))))))
 
+;;;;; Thereis
+
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()
   (cl-defun my-loopy-sum-command ((_ target &rest items))
