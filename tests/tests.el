@@ -1423,8 +1423,8 @@ Not multiple of 3: 7")))
               (list (cons 'target-sum #'my-loopy-sum-command)))
   (should (= 6
              (eval (quote (loopy  (target-sum my-target 1 2 3)
-                                  (return nil)
-                                  (finally-return my-target)))))))
+                           (return nil)
+                           (finally-return my-target)))))))
 
 ;; NOTE: Also tests that post-conditions work as expected.
 (ert-deftest custom-command-always ()

@@ -727,7 +727,7 @@ Otherwise, `loopy' should return t."
     ,@(mapcar (lambda (condition) `(loopy--post-conditions . ,condition))
 	      conditions)))
 
-(cl-defun loopy--never-command-parser ((_ &rest conditions))
+(cl-defun loopy--parse-never-command ((_ &rest conditions))
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
@@ -735,7 +735,7 @@ Otherwise, `loopy' should return t."
     ,@(mapcar (lambda (condition) `(loopy--post-conditions . (not ,condition)))
 	      conditions)))
 
-(cl-defun loopy--thereis-command-parser ((_ &rest conditions))
+(cl-defun loopy--parse-thereis-command ((_ &rest conditions))
   "Parse a command of the form `(thereis [CONDITIONS]).'
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
