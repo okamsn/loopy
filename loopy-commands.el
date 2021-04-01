@@ -712,8 +712,7 @@ whose value is to be accumulated."
                          (loopy--parse-accumulation-commands
                           (list name value-holder value-expression))))))))
 
-;;;; Boolean
-
+;;;; Boolean Commands
 (cl-defun loopy--always-command-parser ((_ &rest conditions))
   "Parse a command of the form `(always [CONDITIONS])'.
      If any condition is `nil', `loopy' should immediately return nil.
