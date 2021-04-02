@@ -868,13 +868,16 @@ variables (`setf'-able places).  For that, see the function
 
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
-  (cl-destructuring-bind (destructuring-expression var-list)
-      (funcall (or loopy--destructuring-for-iteration-function
-                   #'loopy--destructure-for-iteration-default)
-               var value-expression)
-    `((loopy--main-body . ,destructuring-expression)
-      ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
-                var-list))))
+  (if (symbolp var)
+      `((loopy--iteration-vars . (,var nil))
+        (loopy--main-body . (setq ,var ,value-expression)))
+    (cl-destructuring-bind (destructuring-expression var-list)
+        (funcall (or loopy--destructuring-for-iteration-function
+                     #'loopy--destructure-for-iteration-default)
+                 var value-expression)
+      `((loopy--main-body . ,destructuring-expression)
+        ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
+                  var-list)))))
 
 (cl-defun loopy--parse-destructuring-accumulation-command
     ((name var val))
