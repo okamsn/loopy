@@ -1947,13 +1947,19 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    will be evaluated in the body of the main loop. This form tells loopy to
    return nil (thereby exiting the main loop) if any of the provided conditions
    fail. In =loopy--after-do=, a variable that contains forms that are evaluated
-   after the loop has finished we add a form to return t (Note that we use
-   =loopy--loop-name=, the name of the =cl-block= surrounding the loopy loop, so
-   that we ensure we exit the loop itself and not some other cl-block). The
-   result is what we wanted:
+   after the loop has finished, we add a form to return t. Collectively these
+   changes give loopy the behavior of either returning nil if any of the always
+   conditions fail or returning t by default if that doesn't happen. This is
+   what we want.
+
+   Note that we use =loopy--loop-name=, the name of the =cl-block= surrounding the
+   loopy loop, so that we ensure we exit the loop itself and not some other
+   cl-block.
 
    Finally, we ensure the command as well as the keyword that triggers it is
-   added to =loopy-custom-command-parsers= so that loopy knows about it.
+   added to =loopy-custom-command-parsers= so that loopy knows about it. If you
+   define it like this, =always= would take precedent over its built-in
+   counterpart.
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
