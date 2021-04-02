@@ -305,12 +305,15 @@ These expressions can have loop commands in the body."
   (dolist (instruction instructions)
     (cl-case (car instruction)
       (loopy--generalized-vars
+       (loopy--validate-binding (cdr instruction))
        (push (cdr instruction) loopy--generalized-vars))
       (loopy--iteration-vars
+       (loopy--validate-binding (cdr instruction))
        ;; Don't want to accidentally rebind variables to `nil'.
        (unless (loopy--bound-p (cadr instruction))
          (push (cdr instruction) loopy--iteration-vars)))
       (loopy--accumulation-vars
+       (loopy--validate-binding (cdr instruction))
        ;; Don't want to accidentally rebind variables to `nil'.
        (unless (loopy--bound-p (cadr instruction))
          (push (cdr instruction) loopy--accumulation-vars)))
@@ -418,7 +421,6 @@ the Info node `(loopy)' for information on how to use `loopy' and
            (if (= 1 (length return-val))
                (car return-val)
              (cons 'list return-val))))
-
 
    ;; Process the main body.
    (setq loopy--main-body

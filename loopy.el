@@ -410,6 +410,19 @@ or `loopy-custom-command-aliases'."
                              (push (car alias) results)))
                          results))))
 
+(defun loopy--validate-binding (binding)
+  "Validate the form of BINDING.  Signal error if invalid.
+
+BINDING should be a list of two elements.  To avoid mistakes,
+this means that an explicit \"nil\" is always required."
+  (unless (and (consp binding)
+               (= 2 (length binding)))
+    (error "Invalid binding in `loopy' expansion: %s" binding)))
+
+(defun loopy--ensure-valid-bindings (bindings)
+  "Ensure BINDINGS valid according to `loopy--validate-binding'."
+  (mapc #'loopy--validate-binding bindings))
+
 ;;;; Destructuring functions.
 ;; Note that functions which are only used for commands are found in
 ;; `loopy-commands.el'.  The functions found here are used generally.
@@ -885,12 +898,15 @@ Info node `(loopy)' distributed with this package."
          ;; about void variables.
          (cl-case (car instruction)
            (loopy--generalized-vars
+            (loopy--validate-binding (cdr instruction))
             (push (cdr instruction) loopy--generalized-vars))
            (loopy--iteration-vars
+            (loopy--validate-binding (cdr instruction))
             ;; Don't want to accidentally rebind variables to `nil'.
             (unless (loopy--bound-p (cadr instruction))
               (push (cdr instruction) loopy--iteration-vars)))
            (loopy--accumulation-vars
+            (loopy--validate-binding (cdr instruction))
             ;; Don't want to accidentally rebind variables to `nil'.
             (unless (loopy--bound-p (cadr instruction))
               (push (cdr instruction) loopy--accumulation-vars)))
