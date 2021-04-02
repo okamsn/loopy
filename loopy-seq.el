@@ -149,16 +149,12 @@ the value to accumulate."
   ;; However, it might not parse the bindings in the right order, so while the
   ;; main-body instruction is correct, instructions for things like
   ;; implicit-return might be in the wrong order.  Therefore, we must still
-  ;; produce the other instructions ourselves.
-  `((loopy--main-body
-     . ,(cl-first (loopy--extract-main-body
-                   (loopy-pcase--parse-destructuring-accumulation-command
-                    (list name (seq--make-pcase-patterns var) val)))))
-    ,@(let ((starting-val (loopy--accumulation-starting-value name)))
-        (mapcan (lambda (var)
-                  `((loopy--accumulation-vars . (,var ,starting-value))
-                    (loopy--implicit-return . ,var)))
-                (loopy-seq--get-variables var)))))
+  ;; produce some instructions ourselves.
+  `(,@(cl-remove-if (lambda (x) (eq (car-safe x) 'loopy--implicit-return))
+                    (loopy-pcase--parse-destructuring-accumulation-command
+                     (list name (seq--make-pcase-patterns var) val)))
+    ,@(mapcar (lambda (var) `(loopy--implicit-return . ,var))
+              (loopy-seq--get-variables var))))
 
 (provide 'loopy-seq)
 ;;; loopy-seq.el ends here
