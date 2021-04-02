@@ -732,7 +732,7 @@ Otherwise, `loopy' should return t."
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--after-do . (cl-return t))
+  `((loopy--after-do  . (cl-return t))
     (loopy--main-body . (unless ,condition (cl-return-from ,loopy--loop-name t)))))
 
 (cl-defun loopy--parse-thereis-command ((_ condition))
@@ -740,7 +740,7 @@ Otherwise, `loopy' should return t."
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
   (let ((value (gensym "thereis-var-")))
-    `((loopy--after-do . (cl-return nil))
+    `((loopy--after-do  . (cl-return nil))
       (loopy--main-body . (if-let (,value ,condition) (cl-return-from ,loopy--loop-name ,value) t)))))
 
 ;;;;; Exiting and Skipping
