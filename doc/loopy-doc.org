@@ -1930,7 +1930,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      (cl-loop for i in (number-sequence 1 9) always (< i 10))
    #+END_SRC
 
-   Without a custom command, you could translate this using the following.
+   Actually, loopy already has such a clause. But for the sake of this example
+   let's assume that it doesn't. Without a custom command, you could translate
+   this using the following.
 
    #+BEGIN_SRC emacs-lisp
      (loopy (list i (number-sequence 1 9))
