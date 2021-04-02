@@ -987,6 +987,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      To concatenate values as strings, see the command =concat= above.
 
+** Boolean
+   :PROPERTIES:
+   :CUSTOM_ID: boolean-commands
+   :DESCRIPTION: test whether a condition holds true
+   :END:
+
+   Boolean commands are used to test whether a condition holds true for elements of a sequence.
+
+   #+begin_src emacs-lisp
+   #+end_src
+   
 ** Control Flow
    :PROPERTIES:
    :CUSTOM_ID: control-flow
