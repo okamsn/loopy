@@ -40,10 +40,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   - [[#generic-evaluation][Generic Evaluation]]
   - [[#iteration][Iteration]]
   - [[#accumulation][Accumulation]]
+  - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
-    - [[#conditionals][Conditionals]]
-    - [[#skipping-cycles][Skipping Cycles]]
-    - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-loops]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
 - [[#using-flags][Using Flags]]
@@ -918,6 +916,16 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-min))
      #+END_SRC
 
+   #+findex: multiply, multiplying
+   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR=.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => 0
+       (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+              (multiply my-multiply i)
+              (finally-return my-multiply))
+     #+END_SRC
+     
    #+findex: nconc
    - =(nconc VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto
      =VAR= via the function ~nconc~.
