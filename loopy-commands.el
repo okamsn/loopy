@@ -719,7 +719,7 @@ whose value is to be accumulated."
   "Parse a command of the form `(always [CONDITIONS])'.
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--after-do . (cl-return-from ,loopy--loop-name t))
+  `((loopy--after-do  . (cl-return-from ,loopy--loop-name t))
     (loopy--main-body . (unless (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-never-command ((_ &rest conditions))
