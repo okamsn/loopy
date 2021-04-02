@@ -116,7 +116,7 @@ Th function is not used for accumulation commands, since those
 commands have their own kind of destructuring.  For that, see the
 variable `loopy--destructuring-accumulation-parser'.
 
-If nil, use `loopy--destructure-variables-default'.")
+If nil, use `loopy--basic-builtin-destructuring'.")
 
 (defvar loopy--destructuring-for-iteration-function nil
   "The function to use for destructuring during iteration commands.
@@ -176,7 +176,7 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
   "Set `loopy' behavior back to its default state for the loop."
   (setq loopy--split-implied-accumulation-results nil
         loopy--basic-destructuring-function
-        #'loopy--destructure-variables-default
+        #'loopy--basic-builtin-destructuring
         loopy--destructuring-accumulation-parser
         #'loopy--parse-destructuring-accumulation-command
         loopy-iter--lax-naming nil))
@@ -436,10 +436,10 @@ substituting into a `let*' form or being combined under a
   (if (symbolp var)
       `((,var ,value-expression))
     (funcall (or loopy--basic-destructuring-function
-                 #'loopy--destructure-variables-default)
+                 #'loopy--basic-builtin-destructuring)
              var value-expression)))
 
-(defun loopy--destructure-variables-default (var value-expression)
+(defun loopy--basic-builtin-destructuring (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR.
 
 Return a list of variable-value pairs (not dotted), suitable for
@@ -487,7 +487,7 @@ substituting into a `let*' form or being combined under a
 
          (let ((passed-value-expression `(pop ,value-holder)))
            (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
-             (push (loopy--destructure-variables-default
+             (push (loopy--basic-builtin-destructuring
                     symbol-or-seq passed-value-expression)
                    destructurings)))
 
@@ -504,12 +504,12 @@ substituting into a `let*' form or being combined under a
            (if is-proper-list
                ;; If `var' is a proper list, then we now have a list like ((C
                ;; D)) from (A B (C D)).  We only want to pass in the (C D).
-               (push (loopy--destructure-variables-default
+               (push (loopy--basic-builtin-destructuring
                       last-var `(car ,value-holder))
                      destructurings)
              ;; Otherwise, we might have something like [C D] from
              ;; (A B . [C D]), where we don't need to take the `car'.
-             (push (loopy--destructure-variables-default
+             (push (loopy--basic-builtin-destructuring
                     last-var value-holder)
                    destructurings)))
 
@@ -524,7 +524,7 @@ substituting into a `let*' form or being combined under a
              `(((,value-holder ,value-expression)))))
        (cl-loop for symbol-or-seq across var
                 for index from 0
-                do (push (loopy--destructure-variables-default
+                do (push (loopy--basic-builtin-destructuring
                           symbol-or-seq `(aref ,value-holder ,index))
                          destructurings))
 

@@ -70,7 +70,7 @@
   (if (eq loopy--basic-destructuring-function
           #'loopy-seq--destructure-variables)
       (setq loopy--basic-destructuring-function
-            #'loopy--destructure-variables-default))
+            #'loopy--basic-builtin-destructuring))
   (if (eq loopy--destructuring-for-iteration-function
           #'loopy-seq--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function

@@ -50,7 +50,7 @@
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
-(declare-function loopy--destructure-variables-default "loopy")
+(declare-function loopy--basic-builtin-destructuring "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
@@ -848,7 +848,7 @@ VALUE-EXPRESSION."
     (t
      (error "Don't know how to destructure this: %s" var))))
 
-;; Note that function `loopy--destructure-variables-default' is defined in
+;; Note that function `loopy--basic-builtin-destructuring' is defined in
 ;; 'loop.el', as it is also used for `with' variables.
 (defun loopy--destructure-for-iteration-default (var val)
   "Destructure VAL according to VAR.
@@ -858,7 +858,7 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
-  (let ((bindings (loopy--destructure-variables-default var val)))
+  (let ((bindings (loopy--basic-builtin-destructuring var val)))
     (list (cons 'setq (apply #'append bindings))
           (cl-remove-duplicates (mapcar #'cl-first bindings)))))
 
@@ -886,7 +886,7 @@ destructuring into them in the loop body."
     ((name var val))
   "Return instructions for destructuring accumulation commands.
 
-Unlike `loopy--destructure-variables-default', this function
+Unlike `loopy--basic-builtin-destructuring', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
