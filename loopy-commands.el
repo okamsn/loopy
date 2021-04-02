@@ -164,11 +164,14 @@ expansion, we generally only want the actual symbol."
       (t (error "This function form is unrecognized: %s" function-form)))))
 
 (defun loopy--extract-main-body (instructions)
-  "Separate main-body instructions from others in INSTRUCTIONS.
+  "Extract main-body expressions from INSTRUCTIONS.
 
 This returns a list of two sub-lists:
-1. Expression that should be inserted into a main-body instruction.
-2. Other instructions.
+
+1. A list of expressions (not instructions) that are meant to be
+   use in the main body of the loop.
+
+2. A list of instructions for places other than the main body.
 
 The lists will be in the order parsed (correct for insertion)."
   (let ((wrapped-main-body)
