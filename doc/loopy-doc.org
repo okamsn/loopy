@@ -1925,7 +1925,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    Here is an example:
 
    #+BEGIN_SRC emacs-lisp
-     (cl-loop for i in (number-sequence 1 9) always (< i 10)) ; => t
+     ;; => t
+     (cl-loop for i in (number-sequence 1 9) always (< i 10))
    #+END_SRC
 
    Without a custom command, you could translate this using the following.
