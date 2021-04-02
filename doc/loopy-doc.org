@@ -1943,11 +1943,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    While its meaning is clear, this approach is certainly wordier. Here's how
    you could do it with a custom command (note this is taken directly from
    =loopy-commands.el=). So what is this doing? We add a lisp form into the
-   variable =loopy--main-body= which contains, as the name suggests. This form
-   tells loopy to return nil (thereby exiting the main loop) if any of the
-   conditions fail. =loopy--after-do= is a variable that contains forms excecuted
-   after to loop has finished. Here we add a form that tells loopy to return t
-   after the loop body.
+   variable =loopy--main-body= which contains, as the name suggests forms that
+   will be evaluated in the body of the main loop. This form tells loopy to
+   return nil (thereby exiting the main loop) if any of the provided conditions
+   fail. =loopy--after-do= is a variable that contains forms excecuted after to
+   loop has finished. Here we add a form that tells loopy to return t after the
+   loop body.
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
