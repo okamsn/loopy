@@ -920,10 +920,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR=.
 
      #+BEGIN_SRC emacs-lisp
-       ;; => 0
+       ;; => 120
        (loopy (list i '(1 2 3 4 5))
-              (multiply i)
-              (finally-return my-multiply))
+              (multiply 5-factorial i)
+              (finally-return 5-factorial))
      #+END_SRC
      
    #+findex: nconc
