@@ -1955,9 +1955,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
-  "Parse a command of the form `(always [CONDITIONS])'.
-If any condition is nil, `loopy' should immediately return nil.
-Otherwise, `loopy' should return t."
+        "Parse a command of the form `(always [CONDITIONS])'.
+     If any condition is nil, `loopy' should immediately return nil.
+     Otherwise, `loopy' should return t."
        `((loopy--after-do . (cl-return t))
          (loopy--main-body . (unless (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
