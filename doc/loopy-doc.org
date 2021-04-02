@@ -1958,7 +1958,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
         "Parse a command of the form `(always [CONDITIONS])'.
      If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-       `((loopy--after-do . (cl-return t))
+       `((loopy--after-do . (cl-return-from ,loopy--loop-name nil))
          (loopy--main-body . (unless (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
      (add-to-list 'loopy-custom-command-parsers (cons 'always #'my--loopy-always-command-parser))
