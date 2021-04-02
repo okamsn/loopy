@@ -952,8 +952,6 @@ COMMAND-LIST."
 (defconst loopy--builtin-command-parsers
   ;; A few of these are just aliases.
   '((always       . loopy--parse-always-command)
-    (never        . loopy--parse-never-command)
-    (thereis      . loopy--parse-thereis-command)
     (append       . loopy--parse-accumulation-commands)
     (appending    . loopy--parse-accumulation-commands)
     (across       . loopy--parse-array-command)
@@ -998,6 +996,7 @@ COMMAND-LIST."
     (minimizing   . loopy--parse-accumulation-commands)
     (multipy      . loopy--parse-accumulation-commands)
     (multiplying  . loopy--parse-accumulation-commands)
+    (never        . loopy--parse-never-command)
     (nconc        . loopy--parse-accumulation-commands)
     (nconcing     . loopy--parse-accumulation-commands)
     (on           . loopy--parse-cons-command)
@@ -1021,6 +1020,7 @@ COMMAND-LIST."
     (sub-loop     . loopy--parse-sub-loop-command)
     (sum          . loopy--parse-accumulation-commands)
     (summing      . loopy--parse-accumulation-commands)
+    (thereis      . loopy--parse-thereis-command)
     (unless       . loopy--parse-when-unless-command)
     (until        . loopy--parse-while-until-commands)
     (vconcat      . loopy--parse-accumulation-commands)
