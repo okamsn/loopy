@@ -720,12 +720,6 @@ whose value is to be accumulated."
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
   `((loopy--after-do . (cl-return t))
-    ;; Check all conditions at the end of the loop body, forcing an exit if any
-    ;; evaluate to nil.  Since the default return value of the macro is nil, we
-    ;; don’t need to do anything else.
-    ;;
-    ;; NOTE: We must not add anything to `loopy--final-return', since that
-    ;;       would override the value of any early returns.
     (loopy--main-body . (unless ,condition (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-never-command ((_ condition))
