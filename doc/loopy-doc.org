@@ -1950,6 +1950,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    loop has finished. Here we add a form that tells loopy to return t after the
    loop body.
 
+   Finally, we ensure the command as well as the keyword that triggers it is
+   added to =loopy-custom-command-parsers= so that loopy knows about it.
+
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
   "Parse a command of the form `(always [CONDITIONS])'.
