@@ -1939,7 +1939,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+END_SRC
 
    While its meaning is clear, this approach is certainly wordier.  Here's how
-   you could do it with a custom command (note this is taken directly from =loopy-commands.el=):
+   you could do it with a custom command (note this is taken directly from
+   =loopy-commands.el=).
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
