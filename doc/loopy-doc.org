@@ -1011,6 +1011,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (never (> i 2)))
      #+END_SRC
      
+   #+findex: thereis
+   - =(thereis CONDITION)= :: Return
+
+     #+BEGIN_SRC emacs-lisp
+       (loopy (list i '(1 0 1 0 1))
+              (thereis (> i 2)))
+     #+END_SRC
+     
 ** Control Flow
    :PROPERTIES:
    :CUSTOM_ID: control-flow
