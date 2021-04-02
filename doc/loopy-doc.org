@@ -917,7 +917,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: multiply, multiplying
-   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR=.
+   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of the
+     values of EXPR.  =VAR= starts at 1.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 120
