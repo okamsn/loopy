@@ -719,14 +719,14 @@ whose value is to be accumulated."
   "Parse a command of the form `(always [CONDITIONS])'.
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--after-do . (cl-return t))
+  `((loopy--after-do . (cl-return-from ,loopy--loop-name t))
     (loopy--main-body . (unless (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-never-command ((_ &rest conditions))
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--after-do  . (cl-return t))
+  `((loopy--after-do  . (cl-return-from ,loopy--loop-name t))
     (loopy--main-body . (when (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-thereis-command ((_ &rest conditions))
@@ -734,7 +734,7 @@ Otherwise, `loopy' should return t."
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
   (let ((value (gensym "thereis-var-")))
-    `((loopy--after-do  . (cl-return nil))
+    `((loopy--after-do  . (cl-return-from ,loopy--loop-name nil))
       (loopy--main-body . (if-let (,value (and ,@conditions)) (cl-return-from ,loopy--loop-name ,value) t)))))
 
 ;;;;; Exiting and Skipping
