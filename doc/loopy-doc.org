@@ -1946,8 +1946,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    variable =loopy--main-body= which contains, as the name suggests. This form
    tells loopy to return nil (thereby exiting the main loop) if any of the
    conditions fail. =loopy--after-do= is a variable that contains forms excecuted
-   after to loop has finished. Here we tell loopy that if the forms. The result
-   is that.
+   after to loop has finished. Here we add a form that tells loopy to return t
+   after the loop body.
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-always-command ((_ &rest conditions))
