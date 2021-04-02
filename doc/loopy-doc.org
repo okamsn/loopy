@@ -996,15 +996,20 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    Boolean commands are used to test whether a condition holds true for elements of a sequence.
 
    #+findex: always
-   - =(always CONDITION)= :: Return
+   - =(always CONDITION)= :: Return t if all values of sequence satisfy CONDITON. Otherwise return nil.
 
      #+BEGIN_SRC emacs-lisp
+       ;; => t
        (loopy (list i '(1 0 1 0 1))
               (always (< i 2)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+              (always (< i 1)))
      #+END_SRC
    
    #+findex: never
-   - =(never CONDITION)= :: Return
+   - =(never CONDITION)= :: Return t if all values of a sequence never satisfy CONDITION. Otherwise return nil.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (list i '(1 0 1 0 1))
