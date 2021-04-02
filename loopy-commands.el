@@ -715,7 +715,7 @@ whose value is to be accumulated."
                           (list name value-holder value-expression))))))))
 
 ;;;; Boolean Commands
-(cl-defun loopy--parse-always-command ((_ &rest conditions))
+(cl-defun loopy--parse-always-command ((_ condition))
   "Parse a command of the form `(always [CONDITIONS])'.
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
@@ -726,26 +726,22 @@ Otherwise, `loopy' should return t."
     ;;
     ;; NOTE: We must not add anything to `loopy--final-return', since that
     ;;       would override the value of any early returns.
-    ,@(mapcar (lambda (condition) `(loopy--post-conditions . ,condition))
-	      conditions)))
+    (loopy--main-body . (when ,condition (cl-return-from ,loopy--loop-name t)))))
 
-(cl-defun loopy--parse-never-command ((_ &rest conditions))
+(cl-defun loopy--parse-never-command ((_ condition))
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
   `((loopy--after-do . (cl-return t))
-    ,@(mapcar (lambda (condition) `(loopy--post-conditions . (not ,condition)))
-	      conditions)))
+    (loopy--main-body . (unless ,condition (cl-return-from ,loopy--loop-name t)))))
 
-(cl-defun loopy--parse-thereis-command ((_ &rest conditions))
+(cl-defun loopy--parse-thereis-command ((_ condition))
   "Parse a command of the form `(thereis [CONDITIONS]).'
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
-  (let ((thereis-var (gensym "thereis-var-")))
+  (let ((value (gensym "thereis-var-")))
     `((loopy--after-do . (cl-return nil))
-      ,@(mapcar (lambda (condition)
-		  `(loopy--post-conditions . (if-let (,thereis-var ,condition) (cl-return ,thereis-var) t)))
-		conditions))))
+      (loopy--main-body . (if-let (,value ,condition) (cl-return-from ,loopy--loop-name ,value) t)))))
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
