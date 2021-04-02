@@ -726,14 +726,14 @@ Otherwise, `loopy' should return t."
     ;;
     ;; NOTE: We must not add anything to `loopy--final-return', since that
     ;;       would override the value of any early returns.
-    (loopy--main-body . (when ,condition (cl-return-from ,loopy--loop-name t)))))
+    (loopy--main-body . (unless ,condition (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-never-command ((_ condition))
   "Parse a command of the form `(never [CONDITIONS])'.
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
   `((loopy--after-do  . (cl-return t))
-    (loopy--main-body . (unless ,condition (cl-return-from ,loopy--loop-name t)))))
+    (loopy--main-body . (when ,condition (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-thereis-command ((_ condition))
   "Parse a command of the form `(thereis [CONDITIONS]).'
