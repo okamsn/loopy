@@ -995,8 +995,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    Boolean commands are used to test whether a condition holds true for elements of a sequence.
 
-   #+begin_src emacs-lisp
-   #+end_src
+   #+findex: always
+   - =(always CONDITION)= :: Return
+
+     #+BEGIN_SRC emacs-lisp
+       (loopy (list i '(1 0 1 0 1))
+              (always (< i 2)))
+     #+END_SRC
    
 ** Control Flow
    :PROPERTIES:
