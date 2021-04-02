@@ -921,8 +921,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      #+BEGIN_SRC emacs-lisp
        ;; => 0
-       (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-              (multiply my-multiply i)
+       (loopy (list i '(1 2 3 4 5))
+              (multiply i)
               (finally-return my-multiply))
      #+END_SRC
      
