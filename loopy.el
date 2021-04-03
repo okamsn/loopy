@@ -116,7 +116,9 @@ For example, an acceptable return value might be something like
 
     (list 'pcase-let* BINDINGS)
 
-which will be used to wrap the loop and other code.")
+which will be used to wrap the loop and other code.
+
+If nil, use `loopy--destructure-for-with-vars-default'.")
 
 (defvar loopy--destructuring-for-iteration-function nil
   "The function to use for destructuring during iteration commands.
@@ -129,20 +131,16 @@ variables which must be initialized in the loop.
 Generally, the main-body expression should use `setq' to assign
 to the variables found in the sequence of variable names, and the
 list of variables to initialize will include the variables in
-said sequence and any others that might leek through.")
+said sequence and any others that might leek through.
+
+If nil, use `loopy--destructure-for-iteration-default'.")
 
 (defvar loopy--destructuring-accumulation-parser nil
   "The function used to parse destructuring accumulation commands.
 
-Accumulation commands are generally incompatible with the
-destructuring produced by the function named by the variable
-`loopy--basic-destructuring-function'.  Instead, parsers for
-destructuring accumulation commands are able to produce
-instructions however they see fit.
-
-Unlike `loopy--basic-destructuring-function', the function named
-by this variable returns instructions, not a list of
-variable-value pairs.
+Unlike `loopy--destructuring-for-iteration-function', the
+function named by this variable returns instructions, not a list
+of variable-value pairs.
 
 If nil, use `loopy--parse-destructuring-accumulation-command'.")
 

@@ -96,7 +96,10 @@ Returns a list of two elements:
   (list 'loopy-seq--seq-let* bindings))
 
 (defmacro loopy-seq--seq-let* (bindings &rest body)
-  "Bind variables in BINDINGS according via `seq-let' and `let'."
+  "Bind variables in BINDINGS according via `seq-let' and `let'.
+
+BODY is the normal list of expressions around which to bind the
+variables."
   (let ((result body)
         (result-is-one-expression (cdr-safe body)))
     (cl-flet ((get-result () (if result-is-one-expression
