@@ -118,6 +118,23 @@ variable `loopy--destructuring-accumulation-parser'.
 
 If nil, use `loopy--basic-builtin-destructuring'.")
 
+(defvar loopy--destructuring-for-with-vars-function nil
+  "The function used for destructuring `with' variables.
+
+This function named by this variables receives the bindings given
+to the `with' macro argument and should usually return a list of
+two elements:
+
+1. A function/macro that works like `let*' and can be used to wrap
+   the expanded macro code.
+2. The bindings that will be given to this macro.
+
+For example, an acceptable return value might be something like
+
+    (list 'pcase-let* BINDINGS)
+
+which will be used to wrap the loop and other code.")
+
 (defvar loopy--destructuring-for-iteration-function nil
   "The function to use for destructuring during iteration commands.
 
@@ -177,6 +194,8 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
   (setq loopy--split-implied-accumulation-results nil
         loopy--basic-destructuring-function
         #'loopy--basic-builtin-destructuring
+        loopy--destructuring-for-with-vars-function
+        #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
         #'loopy--parse-destructuring-accumulation-command
         loopy-iter--lax-naming nil))
@@ -206,9 +225,14 @@ This variable is used to signal an error instead of silently failing.")
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
 
-This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).
-They are inserted into the variable declarations of a `let*' binding.
-They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to `loopy'.")
+This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).  If VAR is a
+sequence, then it will be destructured.  How VAR and VAL are
+used, as well as how the bindings are expanded into the loop's
+surrounding code, is determined by the destructuring system being
+used.
+
+They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to
+`loopy'.")
 
 (defvar loopy--without-vars nil
   "A list of variables that `loopy' won't try to initialize.
@@ -372,6 +396,7 @@ t.")
     ;; -- Flag Variables --
     loopy-iter--lax-naming
     loopy--basic-destructuring-function
+    loopy--destructuring-for-with-vars-function
     loopy--destructuring-accumulation-parser
     loopy--split-implied-accumulation-results))
 
@@ -532,6 +557,38 @@ substituting into a `let*' form or being combined under a
        (apply #'append (nreverse destructurings))))
     (t
      (error "Don't know how to destructure this: %s" var))))
+
+(defun loopy--destructure-for-with-vars (bindings)
+  "Destructure BINDINGS into bindings suitable for something like `let*'.
+
+This function named by this variables receives the bindings given
+to the `with' macro argument and should usually return a list of
+two elements:
+
+1. A function/macro that works like `let*' and can be used to wrap
+   the expanded macro code.
+2. The bindings that will be given to this macro.
+
+For example, an acceptable return value might be something like
+
+    (list 'pcase-let* BINDINGS)
+
+which will be used to wrap the loop and other code."
+  (funcall (or loopy--destructuring-for-with-vars-function
+               #'loopy--destructure-for-with-vars-default)
+           bindings))
+
+(defun loopy--destructure-for-with-vars-default (bindings)
+  "Destructure BINDINGS into bindings suitable for something like `let*'.
+
+Returns a list of two elements:
+1. The symbol `let*'.
+2. A new list of bindings."
+  (list 'let*
+        (mapcan (cl-function
+                 (lambda ((var val))
+                   (loopy--basic-builtin-destructuring var val)))
+                bindings)))
 
 (cl-defun loopy--find-special-macro-arguments (names body)
   "Find any usages of special macro arguments NAMES in BODY, given aliases.
@@ -728,7 +785,8 @@ The function creates quoted code that should be used by a macro."
 
       ;; Declare the With variables.
       (when loopy--with-vars
-        (setq result `(let* ,loopy--with-vars ,@(get-result))
+        (setq result `(,@(loopy--destructure-for-with-vars loopy--with-vars)
+                       ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare the symbol macros.
