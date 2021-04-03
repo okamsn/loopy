@@ -51,6 +51,7 @@
 (require 'macroexp)
 (require 'cl-lib)
 
+(defvar loopy--destructuring-for-with-vars-function)
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--flag-settings nil)
 

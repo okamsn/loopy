@@ -43,6 +43,7 @@
 (require 'cl-lib)
 
 (defvar loopy--destructuring-accumulation-parser)
+(defvar loopy--destructuring-for-with-vars-function)
 (defvar loopy--flag-settings nil)
 
 ;;;###autoload
