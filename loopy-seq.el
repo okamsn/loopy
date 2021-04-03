@@ -62,6 +62,8 @@
    #'loopy-seq--destructure-variables
    loopy--destructuring-for-iteration-function
    #'loopy-seq--destructure-for-iteration
+   loopy--destructuring-for-with-vars-function
+   #'loopy-seq--destructure-for-with-vars
    loopy--destructuring-accumulation-parser
    #'loopy-seq--parse-destructuring-accumulation-command))
 
@@ -75,6 +77,10 @@
           #'loopy-seq--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function
             #'loopy--destructure-for-iteration-default))
+  (if (eq loopy--destructuring-for-with-vars-function
+          #'loopy-seq--destructure-for-with-vars)
+      (setq loopy--destructuring-for-with-vars-function
+            #'loopy--destructure-for-with-vars-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-seq--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -109,6 +115,32 @@ VAR should be a normal `seq' destructuring pattern, such as
 VAR should be a normal `seq-let' destructuring pattern, such as
 \"(a &rest b)\" or \"[_ _ _ &rest rest]\"."
   (apply #'append (loopy-seq--get-variable-values var val)))
+
+(defun loopy-seq--destructure-for-with-vars (bindings)
+  "Return a way to destructure BINDINGS as if by a `seq-let*'.
+
+Returns a list of two elements:
+1. The symbol `loopy-seq--seq-let*'.
+2. A new list of bindings."
+  (list 'loopy-seq--seq-let* bindings))
+
+(defmacro loopy-seq--seq-let* (bindings &rest body)
+  "Bind variables in BINDINGS according via `seq-let' and `let'."
+  (let ((result body)
+        (result-is-one-expression (cdr-safe body)))
+    (cl-flet ((get-result () (if result-is-one-expression
+                                 (list result)
+                               result)))
+      (dolist (binding (reverse bindings))
+        (let ((var   (cl-first binding))
+              (value (cl-second binding)))
+          (setq result
+                `(,@(if (sequencep var)
+                        (list 'seq-let var value)
+                      (list 'let `(,binding)))
+                  ,@(get-result))
+                result-is-one-expression t))))
+    result))
 
 (defun loopy-seq--get-variables (var)
   "Get the variables in sequence VAR, as a list."

@@ -52,6 +52,8 @@
   (setq
    loopy--destructuring-for-iteration-function
    #'loopy-pcase--destructure-for-iteration
+   loopy--destructuring-for-with-vars-function
+   #'loopy-pcase--destructure-for-with-vars
    loopy--basic-destructuring-function
    #'loopy-pcase--destructure-variables
    loopy--destructuring-accumulation-parser
@@ -63,6 +65,10 @@
           #'loopy-pcase--destructure-variables)
       (setq loopy--basic-destructuring-function
             #'loopy--basic-builtin-destructuring))
+  (if (eq loopy--destructuring-for-with-vars-function
+          #'loopy-pcase--destructure-for-with-vars)
+      (setq loopy--destructuring-for-with-vars-function
+            #'loopy--destructure-for-with-vars-default))
   (if (eq loopy--destructuring-for-iteration-function
           #'loopy-pcase--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function
@@ -144,6 +150,14 @@ Returns a list.  The elements are:
                                      (list destr-var destr-val)))
                                  vars))))))))
     (list destructuring-expression var-list)))
+
+(defun loopy-pcase--destructure-for-with-vars (bindings)
+  "Return a way to destructure BINDINGS by `pcase-let*'.
+
+Returns a list of two elements:
+1. The symbol `pcase-let*'.
+2. A new list of bindings."
+  (list 'pcase-let* bindings))
 
 (defun loopy-pcase--destructure-variables (var val)
   "Destructure VAL according to VAR using `pcase'.

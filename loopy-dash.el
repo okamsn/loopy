@@ -54,6 +54,8 @@
    #'loopy-dash--destructure-variables
    loopy--destructuring-for-iteration-function
    #'loopy-dash--destructure-for-iteration
+   loopy--destructuring-for-with-vars-function
+   #'loopy-dash--destructure-for-with-vars
    loopy--destructuring-accumulation-parser
    #'loopy-dash--parse-destructuring-accumulation-command))
 
@@ -67,6 +69,10 @@
           #'loopy-dash--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function
             #'loopy--destructure-for-iteration-default))
+  (if (eq loopy--destructuring-for-with-vars-function
+          #'loopy-dash--destructure-for-with-vars)
+      (setq loopy--destructuring-for-with-vars-function
+            #'loopy--destructure-for-with-vars-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-dash--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -85,6 +91,14 @@ Return a list of variable-value pairs (not dotted), suitable for
 substituting into a `let*' form or being combined under a
 `setq' form."
   (dash--match var value-expression))
+
+(defun loopy-dash--destructure-for-with-vars (bindings)
+  "Return a way to destructure BINDINGS as if by `-let*'.
+
+Returns a list of two elements:
+1. The symbol `-let*'.
+2. A new list of bindings."
+  (list '-let* bindings))
 
 (defun loopy-dash--destructure-for-iteration (var val)
   "Destructure VAL according to VAR as if by `-let'.
