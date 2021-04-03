@@ -124,8 +124,9 @@ This variable is used to signal an error instead of silently failing.")
 
 `let' forms might use constructs wrapped in variable definitions.")
 
-;; TODO: Get this to eval to '(quote function) without need of fist symbol.
-(defvar loopy-iter--literal-forms '(loopy-iter--junk-symbol quote)
+;; NOTE: The code "(list 'quote 'a)" is the same as "'a".  Therefore, "quote"
+;; should be the last symbol in the list.
+(defvar loopy-iter--literal-forms '(declare quote)
   "Forms that shouldn't be evaluated.
 
 Currently, `lambda' forms (which are automatically quoted) are
