@@ -38,3 +38,10 @@
                                      (list (&plist :a a  :b b)
                                            '((:a 3  :b 4) (:a 5 :b 6)))
                                      (finally-return a b)))))))
+
+
+(ert-deftest dash-with-destructuring ()
+  (should (= 7 (eval (quote (loopy (flag dash)
+                                   (with ((&plist :a a  :b b) '(:a 3 :b 4)))
+                                   (repeat 1)
+                                   (return (+ a b))))))))
