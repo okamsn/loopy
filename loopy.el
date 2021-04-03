@@ -101,23 +101,6 @@ Nil means that each accumulation command without a named
 accumulation variable should accumulate into the same variable,
 by default named `loopy-result'.")
 
-(defvar loopy--basic-destructuring-function nil
-  "The basic destructuring function to use.
-
-The function named by this variable is used to produce lists of
-undotted variable-value pairs, suitable for substituting into a
-`let*' form or being combined under a `setq' form.
-
-The function is used for destructuring in iteration loop
-commands (like `list' or `array') and for destructuring the
-variables given in the `with' macro argument.
-
-Th function is not used for accumulation commands, since those
-commands have their own kind of destructuring.  For that, see the
-variable `loopy--destructuring-accumulation-parser'.
-
-If nil, use `loopy--basic-builtin-destructuring'.")
-
 (defvar loopy--destructuring-for-with-vars-function nil
   "The function used for destructuring `with' variables.
 
@@ -192,8 +175,6 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 (defun loopy--enable-flag-default ()
   "Set `loopy' behavior back to its default state for the loop."
   (setq loopy--split-implied-accumulation-results nil
-        loopy--basic-destructuring-function
-        #'loopy--basic-builtin-destructuring
         loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
@@ -395,7 +376,6 @@ t.")
 
     ;; -- Flag Variables --
     loopy-iter--lax-naming
-    loopy--basic-destructuring-function
     loopy--destructuring-for-with-vars-function
     loopy--destructuring-accumulation-parser
     loopy--split-implied-accumulation-results))

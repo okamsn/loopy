@@ -42,7 +42,6 @@
 (require 'dash)
 (require 'cl-lib)
 
-(defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--flag-settings nil)
 
@@ -50,8 +49,6 @@
 (defun loopy-dash--enable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."
   (setq
-   loopy--basic-destructuring-function
-   #'loopy-dash--destructure-variables
    loopy--destructuring-for-iteration-function
    #'loopy-dash--destructure-for-iteration
    loopy--destructuring-for-with-vars-function
@@ -61,10 +58,6 @@
 
 (defun loopy-dash--disable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."
-  (if (eq loopy--basic-destructuring-function
-          #'loopy-dash--destructure-variables)
-      (setq loopy--basic-destructuring-function
-            #'loopy--basic-builtin-destructuring))
   (if (eq loopy--destructuring-for-iteration-function
           #'loopy-dash--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function

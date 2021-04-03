@@ -55,7 +55,6 @@
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--split-implied-accumulation-results)
-(defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-for-iteration-function)
 
 ;;;; Variables from macro arguments

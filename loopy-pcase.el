@@ -43,7 +43,6 @@
 (require 'pcase)
 (require 'cl-lib)
 
-(defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--flag-settings nil)
 
@@ -54,17 +53,11 @@
    #'loopy-pcase--destructure-for-iteration
    loopy--destructuring-for-with-vars-function
    #'loopy-pcase--destructure-for-with-vars
-   loopy--basic-destructuring-function
-   #'loopy-pcase--destructure-variables
    loopy--destructuring-accumulation-parser
    #'loopy-pcase--parse-destructuring-accumulation-command))
 
 (defun loopy-pcase--disable-flag-pcase ()
   "Make this `loopy' loop use `pcase' destructuring."
-  (if (eq loopy--basic-destructuring-function
-          #'loopy-pcase--destructure-variables)
-      (setq loopy--basic-destructuring-function
-            #'loopy--basic-builtin-destructuring))
   (if (eq loopy--destructuring-for-with-vars-function
           #'loopy-pcase--destructure-for-with-vars)
       (setq loopy--destructuring-for-with-vars-function

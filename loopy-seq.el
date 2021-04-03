@@ -51,15 +51,12 @@
 (require 'macroexp)
 (require 'cl-lib)
 
-(defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--flag-settings nil)
 
 (defun loopy-seq--enable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."
   (setq
-   loopy--basic-destructuring-function
-   #'loopy-seq--destructure-variables
    loopy--destructuring-for-iteration-function
    #'loopy-seq--destructure-for-iteration
    loopy--destructuring-for-with-vars-function
@@ -69,10 +66,6 @@
 
 (defun loopy-seq--disable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."
-  (if (eq loopy--basic-destructuring-function
-          #'loopy-seq--destructure-variables)
-      (setq loopy--basic-destructuring-function
-            #'loopy--basic-builtin-destructuring))
   (if (eq loopy--destructuring-for-iteration-function
           #'loopy-seq--destructure-for-iteration)
       (setq loopy--destructuring-for-iteration-function
