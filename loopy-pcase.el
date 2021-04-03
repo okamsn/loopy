@@ -78,28 +78,6 @@
 (add-to-list 'loopy--flag-settings
              (cons '-pcase #'loopy-pcase--disable-flag-pcase))
 
-(defun loopy-pcase--get-variable-values (var val)
-  "Destructure VAL according to VAR using `pcase'.
-
-Return a list of 2 sublists: (1) the needed generated variables
-and (2) the variables actually named in VAR.
-
-VAR should be a normal `pcase' destructuring pattern, such as
-\"`(a . ,b)\" or \"`(1 2 3 . ,rest)\"."
-  ;; Using `pcase-let*' as an interface, since it is a public function.
-  ;; `pcase' knows to not assign variables if they are unused, so we pass
-  ;; back in `var' (a backquoted list) so that it thinks the variables
-  ;; are used.
-  ;;
-  ;; This will give a form like
-  ;; (let* (temp-vars) (let (actual-vars) VAR))
-  ;;
-  ;; NOTE: Named variables might be in reverse order.  Not sure if this is
-  ;; reliable behavior.
-  (pcase-let* ((`(let* ,temp-vars (let ,true-vars . ,_))
-                (macroexpand `(pcase-let* ((,var ,val)) ,var))))
-    (list temp-vars true-vars)))
-
 (defun loopy-pcase--destructure-for-iteration (var val)
   "Destructure VAL according to VAR as by `pcase-let'.
 
@@ -151,13 +129,6 @@ Returns a list of two elements:
 1. The symbol `pcase-let*'.
 2. A new list of bindings."
   (list 'pcase-let* bindings))
-
-(defun loopy-pcase--destructure-variables (var val)
-  "Destructure VAL according to VAR using `pcase'.
-
-VAR should be a normal `pcase' destructuring pattern, such as
-\"`(a . ,b)\" or \"`(1 2 3 . ,rest)\"."
-  (apply #'append (loopy-pcase--get-variable-values var val)))
 
 (cl-defun loopy-pcase--parse-destructuring-accumulation-command ((name var val))
   "Parse the accumulation loop command using `pcase' for destructuring.

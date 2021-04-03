@@ -76,15 +76,6 @@
 (add-to-list 'loopy--flag-settings (cons '-dash #'loopy-dash--disable-flag-dash))
 
 ;;;; The actual functions:
-(defun loopy-dash--destructure-variables
-    (var value-expression)
-  "Destructure VALUE-EXPRESSION into VAR using `dash'.
-
-Return a list of variable-value pairs (not dotted), suitable for
-substituting into a `let*' form or being combined under a
-`setq' form."
-  (dash--match var value-expression))
-
 (defun loopy-dash--destructure-for-with-vars (bindings)
   "Return a way to destructure BINDINGS as if by `-let*'.
 

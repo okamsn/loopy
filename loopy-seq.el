@@ -86,29 +86,6 @@
 (add-to-list 'loopy--flag-settings
              (cons '-seq #'loopy-seq--disable-flag-seq))
 
-(defun loopy-seq--get-variable-values (var val)
-  "Destructure VAL according to VAR using `seq-let'.
-
-Return a list of 2 sublists: (1) the needed generated variables
-and (2) the variables actually named in VAR.
-
-VAR should be a normal `seq' destructuring pattern, such as
-\"(a . b)\" or \"`(a b c &rest rest)\"."
-  ;; Using `seq-let' as an interface, since it is a public function.  This
-  ;; itself uses `pcase-let'.  `pcase' knows to not assign variables if they are
-  ;; unused, so we pass back in `var' (a quoted list) so that it thinks the
-  ;; variables are used.
-  (pcase-let* ((`(let* ,generated-vars (let ,named-vars . ,_))
-                (macroexpand `(seq-let ,var ,val ,var))))
-    (list generated-vars named-vars)))
-
-(defun loopy-seq--destructure-variables (var val)
-  "Destructure VAL according to VAR using `seq-let'.
-
-VAR should be a normal `seq-let' destructuring pattern, such as
-\"(a &rest b)\" or \"[_ _ _ &rest rest]\"."
-  (apply #'append (loopy-seq--get-variable-values var val)))
-
 (defun loopy-seq--destructure-for-with-vars (bindings)
   "Return a way to destructure BINDINGS as if by a `seq-let*'.
 
