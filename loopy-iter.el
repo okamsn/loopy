@@ -384,14 +384,21 @@ the Info node `(loopy)' for information on how to use `loopy' and
          (error "Loopy: Flag not defined: %s" flag))))
 
    ;; With
+   ;; Note: These values don't have to be used literally, due to
+   ;; destructuring.
    (setq loopy--with-vars
-         ;; Process `with' for destructuring.
-         (mapcan (lambda (var)
-                   (loopy--destructure-variables (cl-first var)
-                                                 (cl-second var)))
-                 (loopy--find-special-macro-arguments ;; '(with let*)
-                  '(with) ; No `let*'.
-                  body)))
+         (let ((result))
+           (dolist (binding (loopy--find-special-macro-arguments
+                             '(with let*) body))
+             (push (cond
+                    ((symbolp binding)
+                     (list binding nil))
+                    ((= 1 (length binding))
+                     (list (cl-first binding) nil))
+                    (t
+                     binding))
+                   result))
+           (nreverse result)))
 
    ;; Without
    (setq loopy--without-vars
