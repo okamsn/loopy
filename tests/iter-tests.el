@@ -399,4 +399,27 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                     (accum sum important-val val)))
                                 (finally-return important-val)))))))
 
+
+(ert-deftest sub-loop ()
+  (should (equal '(2 3 4 5 6)
+                 (eval (quote (loopy-iter (for list i '(1 2 3 4 5))
+                                          (for loop
+                                               (for repeat 1)
+                                               (for expr j (1+ i))
+                                               (accum collect j)))))))
+
+  (should (equal '(2 3 4 5 6)
+                 (eval (quote (loopy-iter (for list i '(1 2 3 4 5))
+                                          (let ((j nil))
+                                            (for loop
+                                                 (for repeat 1)
+                                                 (setq j (1+ i))
+                                                 (accum collect j))))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy-iter (for list i '((1 2) (3 4)))
+                                          (for loop
+                                               (for list j i)
+                                               (accum collect j))))))))
+
 ;; end

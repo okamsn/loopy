@@ -153,6 +153,13 @@ and `loopy--builtin-command-parsers', in that order."
            (memq (cl-first form) loopy-iter--literal-forms))
       (arrayp form)))
 
+(defun loopy-iter--sub-loop-command-p (name)
+  "Whether command named NAME is a sub-loop."
+  (let ((built-in-aliases '(loop sub-loop subloop)))
+    (or (memq name built-in-aliases)
+        (memq (cdr (assq name loopy-custom-command-aliases))
+              built-in-aliases))))
+
 ;;;; Replacement functions
 (defun loopy-iter--replace-in-tree (tree)
   "Replace loop commands in TREE in-place with their main-body code.
@@ -198,6 +205,17 @@ Other instructions are just pushed to their variables."
                ;; Check if it's a `setq'-like form.
                ((memq key loopy-iter--setq-forms)
                 (push (loopy-iter--replace-in-setq-form elem)
+                      new-tree))
+
+               ;; Check if it's the special `sub-loop' command before checking
+               ;; if it's any other kind of loop command.
+               ((loopy-iter--sub-loop-command-p (if loopy-iter--lax-naming
+                                                    key
+                                                  (cl-second elem)))
+                (push (loopy-iter--replace-in-sub-loop-command
+                       (if loopy-iter--lax-naming
+                           (cdr elem)
+                         (cddr elem)))
                       new-tree))
 
                ;; Check if it's a loop command
@@ -297,6 +315,89 @@ starting at the third element in TREE."
 These expressions can have loop commands in the body."
   `(lambda ,(cl-second tree)
      ,@(loopy-iter--replace-in-tree (cddr tree))))
+
+(cl-defun loopy-iter--replace-in-sub-loop-command (tree)
+  "Replace loop commands in the `sub-loop' command.
+
+Unlike in `loopy', this allows arbitrary expressions."
+  (let ((loopy--in-sub-level nil)
+        (loopy--main-body)
+        (loopy--latter-body)
+        (loopy--pre-conditions)
+        (loopy--post-conditions)
+        (loopy--iteration-vars)
+        (non-wrapped-instructions)
+        (loopy--skip-used)
+        (loopy--tagbody-exit-used)
+        (loopy--loop-name (gensym "sub-loop-")))
+
+    (setq loopy--main-body (loopy-iter--replace-in-tree tree))
+
+    ;; Make sure lists are in the correct order.
+    (setq loopy--iteration-vars (nreverse loopy--iteration-vars))
+
+    ;; Create the sub-loop code.
+    ;; See the main macro `loopy' for a more detailed version of this.
+    (let ((result nil)
+          (result-is-one-expression nil))
+      (cl-flet ((get-result () (if result-is-one-expression
+                                   (list result)
+                                 result)))
+        (setq result loopy--main-body)
+
+        (when loopy--skip-used
+          ;; This must stay `loopy--continue-tag', as
+          ;; this name is used by `loopy--parse-skip-command'.
+          (setq result `(cl-tagbody ,@result loopy--continue-tag)
+                result-is-one-expression t))
+
+        (when loopy--latter-body
+          (setq result (append result loopy--latter-body)))
+
+        (when loopy--post-conditions
+          (setq result
+                (append result
+                        `((unless ,(cl-case (length loopy--post-conditions)
+                                     (0 t)
+                                     (1 (car loopy--post-conditions))
+                                     (t (cons 'and loopy--post-conditions)))
+                            ;; Unlike the normal loop, sub-loops don't have a
+                            ;; return value, so we can just return nil.
+                            (cl-return-from ,loopy--loop-name nil))))))
+        (setq result `(while ,(cl-case (length loopy--pre-conditions)
+                                (0 t)
+                                (1 (car loopy--pre-conditions))
+                                (t (cons 'and loopy--pre-conditions)))
+                        ;; If using a `cl-tag-body', just insert that one
+                        ;; expression, but if not, break apart into the while
+                        ;; loop's body.
+                        ,@(get-result))
+              ;; Will always be a single expression after wrapping with `while'.
+              result-is-one-expression t)
+
+        (when loopy--tagbody-exit-used
+          (setq result `(cl-tagbody
+                         ,@(get-result)
+                         ;; This must stay `loopy--non-returning-exit-tag', as
+                         ;; this name is used by `loopy--parse-leave-command'.
+                         loopy--non-returning-exit-tag)
+                result-is-one-expression t))
+
+        (setq result `(cl-block ,loopy--loop-name ,@(get-result) nil)
+              ;; Will always be a single expression after wrapping with
+              ;; `cl-block'.
+              result-is-one-expression t)
+
+        (when loopy--iteration-vars
+          (setq result `(let* ,loopy--iteration-vars
+                          ,@(get-result))
+                result-is-one-expression t))
+
+        (unless result-is-one-expression
+          (push 'progn result)))
+
+      ;; Return the wrapped loop.
+      result)))
 
 ;;;; Functions for building the macro.
 
