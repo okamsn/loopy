@@ -376,7 +376,10 @@ t.")
     loopy-iter--lax-naming
     loopy--destructuring-for-with-vars-function
     loopy--destructuring-accumulation-parser
-    loopy--split-implied-accumulation-results))
+    loopy--split-implied-accumulation-results)
+  "These variables must be `let'-bound around the loop.
+
+This list is mainly fed to the macro `loopy--wrap-variables-around-body'.")
 
 ;;;; Miscellaneous and Utility Functions
 (defun loopy--bound-p (var-name)
