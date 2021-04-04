@@ -355,10 +355,16 @@ These expressions can have loop commands in the body."
 (defmacro loopy-iter (&rest body)
   "An `iter'-like `loopy' macro.
 
-See `loopy' for information about BODY.  One difference is that
-`let*' is not an alias of the `with' special macro argument.  See
-the Info node `(loopy)' for information on how to use `loopy' and
-`loopy-iter'."
+See `loopy' for information about BODY.
+
+This macro allows for embedding many loop commands in arbitrary
+code.  This can be more flexible than using the `do' loop command
+in `loopy'.
+
+One useful difference is that `let*' is not an alias of the
+`with' special macro argument.  See the Info node `(loopy)' for
+information on how to use `loopy' and `loopy-iter'."
+
   (loopy--wrap-variables-around-body
 
    ;; Process the special macro arguments.
