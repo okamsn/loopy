@@ -973,6 +973,7 @@ COMMAND-LIST."
     (count        . loopy--parse-accumulation-commands)
     (counting     . loopy--parse-accumulation-commands)
     (do           . loopy--parse-do-command)
+    (each         . loopy--parse-list-command)
     (elements     . loopy--parse-seq-command)
     (elements-ref . loopy--parse-seq-ref-command)
     (expr         . loopy--parse-expr-command)

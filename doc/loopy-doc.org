@@ -618,9 +618,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return coll)) ; => ((1 2 3) (2 3) (3))
      #+END_SRC
 
-   #+findex: list, in
-   - =(list|in VAR EXPR [FUNC])= :: Loop through the elements of the list =EXPR=.
-     Optionally, update the list by =FUNC= instead of =cdr=.
+   #+findex: list, in, each
+   - =(list|in|each VAR EXPR [FUNC])= :: Loop through each element of the list
+     =EXPR=.  Optionally, update the list by =FUNC= instead of =cdr=.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
