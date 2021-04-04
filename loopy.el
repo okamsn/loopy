@@ -489,20 +489,21 @@ substituting into a `let*' form or being combined under a
          ;; `last-var' is a symbol (as with the B in '(A . B)) , then B is now
          ;; already the correct value (which is the ending `cdr' of the list),
          ;; and we don't have to do anything else.
-         (if (and last-var-is-symbol is-proper-list)
-             ;; Otherwise, if `var' is a proper list and `last-var' is a
-             ;; symbol, then we need to take the `car' of that `cdr'.
-             (push `((,value-holder (car ,value-holder)))
-                   destructurings)
-           ;; Otherwise, `last-var' is a sequence.
-           (if is-proper-list
-               ;; If `var' is a proper list, then we now have a list like ((C
-               ;; D)) from (A B (C D)).  We only want to pass in the (C D).
+         (if is-proper-list
+             (if last-var-is-symbol
+                 ;; Otherwise, if `var' is a proper list and `last-var' is a
+                 ;; symbol, then we need to take the `car' of that `cdr'.
+                 (push `((,value-holder (car ,value-holder)))
+                       destructurings)
+               ;; If `last-var' is not a symbol, then if `var' is a proper list,
+               ;; then we now have a list like ((C D)) from (A B (C D)).  We
+               ;; only want to pass in the (C D).
                (push (loopy--basic-builtin-destructuring
                       last-var `(car ,value-holder))
-                     destructurings)
-             ;; Otherwise, we might have something like [C D] from
-             ;; (A B . [C D]), where we don't need to take the `car'.
+                     destructurings))
+           ;; Otherwise, we might have something like [C D] from
+           ;; (A B . [C D]), where we don't need to take the `car'.
+           (unless last-var-is-symbol
              (push (loopy--basic-builtin-destructuring
                     last-var value-holder)
                    destructurings)))
