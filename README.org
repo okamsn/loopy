@@ -32,6 +32,7 @@ please let me know.
 - [[#similar-libraries][Similar Libraries]]
 - [[#how-to-install][How to Install]]
 - [[#multiple-kinds-of-destructuring][Multiple Kinds of Destructuring]]
+- [[#loop-commands-in-arbitrary-code][Loop Commands in Arbitrary Code]]
 - [[#adding-custom-commands][Adding Custom Commands]]
 - [[#comparing-to-cl-loop][Comparing to =cl-loop=]]
 - [[#real-world-examples][Real-World Examples]]
@@ -107,13 +108,10 @@ please let me know.
   iteration.
 
 * Similar Libraries
-  Loopy is not the only Lisp library that uses expressions instead of keyword
-  clauses (like in =cl-loop=).  [[https://common-lisp.net/project/iterate/][=iterate=]] and [[https://github.com/Shinmera/for/][=for=]] are two examples in Common
-  Lisp.  I know of no examples for Emacs Lisp.
 
-  Though I am not familiar with either, it seems to me that the =loopy= macro is
-  more like =for= than it is like =iterate=.  I suspect that, given it’s youth,
-  Loopy is much simpler than both.
+  Loopy is not the only Lisp library that uses expressions instead of keyword
+  clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from Common
+  Lisp.
 
   #+begin_src emacs-lisp
     ;; Collecting 10 random numbers:
@@ -128,16 +126,25 @@ please let me know.
     (loopy (repeat 10) (collect (random 10)))
   #+end_src
 
-  Generally, I’d expect that all of the packages handle basic use cases in
-  similar ways.  While =iterate= can apparently embed its looping constructs in
-  arbitrary code, =loopy= doesn’t allow that, and I believe that the same is
-  true of =for=.
+  Generally, all of the packages handle basic use cases in similar ways.  One
+  large difference is that ~iterate~ can embed its looping constructs in
+  arbitrary code.  Loopy is currently experimenting with this feature using a
+  separate macro, ~loopy-iter~.
 
-  However, Loopy is not yet feature complete.  Please request features or report
-  problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most things are covered,
-  full feature parity with =cl-loop= is still being worked on.
+  #+begin_src emacs-lisp
+    (require 'loopy-iter)
+
+    (loopy-iter (for repeat 10)          ; Use `for' and `accum'
+                (let ((var (random 10))) ; to recognize looping constructs
+                  (accum collect var)))  ; `repeat' and `collect'.
+  #+end_src
+
+  Loopy is not yet feature complete.  Please request features or report problems
+  in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While basic uses are covered, some of the
+  more niche features of ~cl-loop~ and ~iterate~ are still being added.
 
 * How to Install
+
   Currently, Loopy must be installed manually.  Here is how one could use
   ~straight.el~ with ~use-package~
 
@@ -198,6 +205,39 @@ please let me know.
 
   For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
   form.
+
+* Loop Commands in Arbitrary Code
+
+  The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
+  It requires using a keyword =for=, =accum=, or =exit= before a loop command to
+  distinguish loop commands from built-in Emacs features (though this can be
+  disabled with the flag =lax-naming=).
+
+  #+begin_center
+  *NOTE: This feature is still experimental.  Please report any problems you
+   come across.*
+  #+end_center
+
+  #+begin_src emacs-lisp
+    (require 'loopy-iter)
+
+    ;; => (2 4 6)
+    (loopy-iter (for list i '(1 2 3))
+                (let ((a (* 2 i)))
+                  (accum collect a)))
+
+    ;; => (8 9 10 11 12)
+    (loopy-iter (let ((a (progn
+                           (for expr j 8 (1+ j))
+                           (when (> j 12)
+                             ;; Leave the loop without preventing the use of the
+                             ;; implicit return value created by `collect'.
+                             (exit leave))
+                           j)))
+                  (accum collect a)))
+  #+end_src
+
+  For more on this, [[file:doc/loopy-doc.org::#loopy-iter][see the documentation]].
 
 * Adding Custom Commands
   :PROPERTIES:

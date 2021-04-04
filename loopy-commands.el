@@ -44,18 +44,18 @@
 
 ;;; Code:
 ;; Cant require `loopy', as that would be recursive.
-(declare-function loopy--destructure-variables "loopy")
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
+(declare-function loopy--basic-builtin-destructuring "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--split-implied-accumulation-results)
-(defvar loopy--basic-destructuring-function)
+(defvar loopy--destructuring-for-iteration-function)
 
 ;;;; Variables from macro arguments
 (defvar loopy--loop-name)
@@ -160,6 +160,28 @@ expansion, we generally only want the actual symbol."
       ((function quote) (cadr function-form))
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
+
+(defun loopy--extract-main-body (instructions)
+  "Extract main-body expressions from INSTRUCTIONS.
+
+This returns a list of two sub-lists:
+
+1. A list of expressions (not instructions) that are meant to be
+   use in the main body of the loop.
+
+2. A list of instructions for places other than the main body.
+
+The lists will be in the order parsed (correct for insertion)."
+  (let ((wrapped-main-body)
+        (other-instructions))
+    (dolist (instruction instructions)
+      (if (eq (car instruction) 'loopy--main-body)
+          (push (cdr instruction) wrapped-main-body)
+        (push instruction other-instructions)))
+
+    ;; Return the sub-lists.
+    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
+
 
 ;;;; Included parsing functions.
 ;;;;; Misc.
@@ -576,6 +598,16 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
       (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
       (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
 
+(defun loopy--accumulation-starting-value (command-name)
+  "Get the appropriate starting value for COMMAND-NAME."
+  (cl-case command-name
+    ((sum summing count counting)    0)
+    ((max maxing maximize maximizing)
+     -1.0e+INF)
+    ((min minning minimize minimizing)
+     +1.0e+INF)
+    (t nil)))
+
 ;;;;; Accumulation
 (defun loopy--parse-accumulation-commands (accumulation-command)
   "Pass ACCUMULATION-COMMAND to the appropriate parser, returning instructions.
@@ -592,24 +624,22 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
    ;; normal.
    ((symbolp (cl-second accumulation-command))
     (cl-destructuring-bind (name var val) accumulation-command
-      `((loopy--accumulation-vars . (,var ,(cl-case name
-                                             ((sum count)    0)
-                                             ((max maximize) -1.0e+INF)
-                                             ((min minimize) +1.0e+INF)
-                                             (t nil))))
+      `((loopy--accumulation-vars . (,var ,(loopy--accumulation-starting-value
+                                            name)))
         (loopy--implicit-return . ,var)
-        (loopy--main-body . ,(cl-ecase name
-                               (append `(setq ,var (append ,var ,val)))
-                               (collect `(setq ,var (append ,var (list ,val))))
-                               (concat `(setq ,var (concat ,var ,val)))
-                               (vconcat `(setq ,var (vconcat ,var ,val)))
-                               (count `(if ,val (setq ,var (1+ ,var))))
-                               ((max maximize) `(setq ,var (max ,val ,var)))
-                               ((min minimize) `(setq ,var (min ,val ,var)))
-                               (nconc `(setq ,var (nconc ,var ,val)))
-                               (prepend `(setq ,var (append ,val ,var)))
-                               ((push-into push) `(push ,val ,var))
-                               (sum `(setq ,var (+ ,val ,var))))))))
+        (loopy--main-body
+         . ,(cl-ecase name
+              ((append appending) `(setq ,var (append ,var ,val)))
+              ((collect collecting) `(setq ,var (append ,var (list ,val))))
+              ((concat concating) `(setq ,var (concat ,var ,val)))
+              ((vconcat vconcating) `(setq ,var (vconcat ,var ,val)))
+              ((count counting) `(if ,val (setq ,var (1+ ,var))))
+              ((max maxing maximize maximizing) `(setq ,var (max ,val ,var)))
+              ((min minning minimize minimizing) `(setq ,var (min ,val ,var)))
+              ((nconc nconcing) `(setq ,var (nconc ,var ,val)))
+              ((prepend prepending) `(setq ,var (append ,val ,var)))
+              ((push-into pushing-into push pushing) `(push ,val ,var))
+              ((sum summing) `(setq ,var (+ ,val ,var))))))))
    (t
     (funcall (or loopy--destructuring-accumulation-parser
                  #'loopy--parse-destructuring-accumulation-command)
@@ -623,23 +653,25 @@ have different behavior than their explicit counterparts.
 
 NAME is the command name.  VALUE-EXPRESSION is an expression
 whose value is to be accumulated."
+  ;; NOTE: This function only applies to commands whose implicit behavior
+  ;;       differs from the explicit behavior.  For commands that don't differ,
+  ;;       we call back into `loopy--parse-accumulation-commands' with
+  ;;       a `value-holder' as the explicit variable.
 
   (let* ((value-holder (if loopy--split-implied-accumulation-results
                            (gensym (concat (symbol-name name) "-implicit-"))
                          ;; Note: This must be `intern', not `make-symbol', as
                          ;;       the user can refer to it later.
                          (intern "loopy-result"))))
-    `((loopy--accumulation-vars . (,value-holder ,(cl-case name
-                                                    ((sum count)    0)
-                                                    ((max maximize) -1.0e+INF)
-                                                    ((min minimize) +1.0e+INF))))
+    `((loopy--accumulation-vars
+       . (,value-holder ,(loopy--accumulation-starting-value name)))
       ,@(cl-ecase name
           ;; NOTE: Some commands have different behavior when a
           ;;       variable is not specified.
           ;;       - `collect' uses the `push'-`nreverse' idiom.
           ;;       - `append' uses the `reverse'-`nconc'-`nreverse' idiom.
           ;;       - `nconc' uses the `nreverse'-`nconc'-`nreverse' idiom.
-          (append
+          ((append appending)
            `((loopy--main-body
               . (setq ,value-holder (nconc (reverse ,value-expression)
                                            ,value-holder)))
@@ -649,7 +681,7 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (collect
+          ((collect collecting)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -658,7 +690,7 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (concat
+          ((concat concating)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -669,7 +701,7 @@ whose value is to be accumulated."
                     . (setq ,value-holder (apply #'concat
                                                  (nreverse ,value-holder))))
                   `(loopy--implicit-return . ,value-holder)))))
-          (vconcat
+          ((vconcat vconcating)
            `((loopy--main-body
               . (setq ,value-holder (cons ,value-expression ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -680,19 +712,7 @@ whose value is to be accumulated."
                     . (setq ,value-holder (apply #'vconcat
                                                  (nreverse ,value-holder))))
                   `(loopy--implicit-return . ,value-holder)))))
-          (count
-           `((loopy--main-body
-              . (if ,value-expression (setq ,value-holder (1+ ,value-holder))))
-             (loopy--implicit-return . ,value-holder)))
-          ((max maximize)
-           `((loopy--main-body
-              . (setq ,value-holder (max ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
-          ((min minimize)
-           `((loopy--main-body
-              . (setq ,value-holder (min ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))
-          (nconc
+          ((nconc nconcing)
            `((loopy--main-body
               . (setq ,value-holder (nconc (nreverse ,value-expression) ,value-holder)))
              ,@(if loopy--split-implied-accumulation-results
@@ -701,18 +721,18 @@ whose value is to be accumulated."
                   `(loopy--implicit-accumulation-final-update
                     . (setq ,value-holder (nreverse ,value-holder)))
                   `(loopy--implicit-return . ,value-holder)))))
-          (prepend
+          ((prepend prepending)
            `((loopy--main-body
               . (setq ,value-holder (nconc ,value-expression
                                            ,value-holder)))
              (loopy--implicit-return . ,value-holder)))
-          ((push-into push)
-           `((loopy--main-body . (push ,value-expression ,value-holder))
-             (loopy--implicit-return . ,value-holder)))
-          (sum
-           `((loopy--main-body
-              . (setq ,value-holder (+ ,value-holder ,value-expression)))
-             (loopy--implicit-return . ,value-holder)))))))
+          ;; Feed back into `loopy--parse-accumulation-commands' to avoid
+          ;; duplicating code.  We remove any setting of accumulation vars,
+          ;; which we already do above.
+          (t
+           (cl-remove-if (lambda (x) (eq (car x) 'loopy--accumulation-vars))
+                         (loopy--parse-accumulation-commands
+                          (list name value-holder value-expression))))))))
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
@@ -826,8 +846,20 @@ VALUE-EXPRESSION."
     (t
      (error "Don't know how to destructure this: %s" var))))
 
-;; Note that function `loopy--destructure-variables-default' is defined in
+;; Note that function `loopy--basic-builtin-destructuring' is defined in
 ;; 'loop.el', as it is also used for `with' variables.
+(defun loopy--destructure-for-iteration-default (var val)
+  "Destructure VAL according to VAR.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((bindings (loopy--basic-builtin-destructuring var val)))
+    (list (cons 'setq (apply #'append bindings))
+          (cl-remove-duplicates (mapcar #'cl-first bindings)))))
+
 (defun loopy--destructure-for-iteration-command (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR for a loop command.
 
@@ -837,21 +869,22 @@ variables (`setf'-able places).  For that, see the function
 
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
-  (let ((destructurings
-         (loopy--destructure-variables var value-expression))
-        (instructions nil))
-    (dolist (destructuring destructurings)
-      (push `(loopy--iteration-vars . (,(cl-first destructuring) nil))
-            instructions))
-    (cons `(loopy--main-body
-            . (setq ,@(apply #'append destructurings)))
-          instructions)))
+  (if (symbolp var)
+      `((loopy--iteration-vars . (,var nil))
+        (loopy--main-body . (setq ,var ,value-expression)))
+    (cl-destructuring-bind (destructuring-expression var-list)
+        (funcall (or loopy--destructuring-for-iteration-function
+                     #'loopy--destructure-for-iteration-default)
+                 var value-expression)
+      `((loopy--main-body . ,destructuring-expression)
+        ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
+                  var-list)))))
 
 (cl-defun loopy--parse-destructuring-accumulation-command
     ((name var val))
   "Return instructions for destructuring accumulation commands.
 
-Unlike `loopy--destructure-variables-default', this function
+Unlike `loopy--basic-builtin-destructuring', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
@@ -922,51 +955,78 @@ COMMAND-LIST."
 ;; TODO: Is there a cleaner way than this?  Symbol properties?
 (defconst loopy--builtin-command-parsers
   ;; A few of these are just aliases.
-  '((append      . loopy--parse-accumulation-commands)
-    (array       . loopy--parse-array-command)
-    (array-ref   . loopy--parse-array-ref-command)
-    (arrayf      . loopy--parse-array-ref-command)
-    (collect     . loopy--parse-accumulation-commands)
-    (concat      . loopy--parse-accumulation-commands)
-    (cond        . loopy--parse-cond-command)
-    (cons        . loopy--parse-cons-command)
-    (conses      . loopy--parse-cons-command)
-    (continue    . loopy--parse-skip-command)
-    (count       . loopy--parse-accumulation-commands)
-    (do          . loopy--parse-do-command)
-    (expr        . loopy--parse-expr-command)
-    (exprs       . loopy--parse-expr-command)
-    (group       . loopy--parse-group-command)
-    (if          . loopy--parse-if-command)
-    (leave       . loopy--parse-leave-command)
-    (list        . loopy--parse-list-command)
-    (list-ref    . loopy--parse-list-ref-command)
-    (listf       . loopy--parse-list-ref-command)
-    (loop        . loopy--parse-sub-loop-command)
-    (max         . loopy--parse-accumulation-commands)
-    (maximize    . loopy--parse-accumulation-commands)
-    (min         . loopy--parse-accumulation-commands)
-    (minimize    . loopy--parse-accumulation-commands)
-    (nconc       . loopy--parse-accumulation-commands)
-    (prepend     . loopy--parse-accumulation-commands)
-    (push        . loopy--parse-accumulation-commands)
-    (push-into   . loopy--parse-accumulation-commands)
-    (repeat      . loopy--parse-repeat-command)
-    (return      . loopy--parse-early-exit-commands)
-    (return-from . loopy--parse-early-exit-commands)
-    (seq         . loopy--parse-seq-command)
-    (seq-ref     . loopy--parse-seq-ref-command)
-    (seqf        . loopy--parse-seq-ref-command)
-    (set         . loopy--parse-expr-command)
-    (skip        . loopy--parse-skip-command)
-    (subloop     . loopy--parse-sub-loop-command)
-    (sub-loop    . loopy--parse-sub-loop-command)
-    (sum         . loopy--parse-accumulation-commands)
-    (unless      . loopy--parse-when-unless-command)
-    (until       . loopy--parse-while-until-commands)
-    (vconcat     . loopy--parse-accumulation-commands)
-    (when        . loopy--parse-when-unless-command)
-    (while       . loopy--parse-while-until-commands))
+  '((append       . loopy--parse-accumulation-commands)
+    (appending    . loopy--parse-accumulation-commands)
+    (across       . loopy--parse-array-command)
+    (across-ref   . loopy--parse-array-ref-command)
+    (array        . loopy--parse-array-command)
+    (array-ref    . loopy--parse-array-ref-command)
+    (arrayf       . loopy--parse-array-ref-command)
+    (collect      . loopy--parse-accumulation-commands)
+    (collecting   . loopy--parse-accumulation-commands)
+    (concat       . loopy--parse-accumulation-commands)
+    (concating    . loopy--parse-accumulation-commands)
+    (cond         . loopy--parse-cond-command)
+    (cons         . loopy--parse-cons-command)
+    (conses       . loopy--parse-cons-command)
+    (continue     . loopy--parse-skip-command)
+    (count        . loopy--parse-accumulation-commands)
+    (counting     . loopy--parse-accumulation-commands)
+    (do           . loopy--parse-do-command)
+    (each         . loopy--parse-list-command)
+    (elements     . loopy--parse-seq-command)
+    (elements-ref . loopy--parse-seq-ref-command)
+    (expr         . loopy--parse-expr-command)
+    (exprs        . loopy--parse-expr-command)
+    (group        . loopy--parse-group-command)
+    (if           . loopy--parse-if-command)
+    (in           . loopy--parse-list-command)
+    (in-ref       . loopy--parse-list-ref-command)
+    (leave        . loopy--parse-leave-command)
+    (list         . loopy--parse-list-command)
+    (list-ref     . loopy--parse-list-ref-command)
+    (listf        . loopy--parse-list-ref-command)
+    (loop         . loopy--parse-sub-loop-command)
+    (max          . loopy--parse-accumulation-commands)
+    (maxing       . loopy--parse-accumulation-commands)
+    (maximize     . loopy--parse-accumulation-commands)
+    (maximizing   . loopy--parse-accumulation-commands)
+    (min          . loopy--parse-accumulation-commands)
+    ;; Unlike "maxing", there doesn't seem to be much on-line about the word
+    ;; "minning", but the double-N follows conventional spelling rules, such as
+    ;; in "sum" and "summing".
+    (minning      . loopy--parse-accumulation-commands)
+    (minimize     . loopy--parse-accumulation-commands)
+    (minimizing   . loopy--parse-accumulation-commands)
+    (nconc        . loopy--parse-accumulation-commands)
+    (nconcing     . loopy--parse-accumulation-commands)
+    (on           . loopy--parse-cons-command)
+    (prepend      . loopy--parse-accumulation-commands)
+    (prepending   . loopy--parse-accumulation-commands)
+    (push         . loopy--parse-accumulation-commands)
+    (pushing      . loopy--parse-accumulation-commands)
+    (push-into    . loopy--parse-accumulation-commands)
+    (pushing-into . loopy--parse-accumulation-commands)
+    (repeat       . loopy--parse-repeat-command)
+    (return       . loopy--parse-early-exit-commands)
+    (return-from  . loopy--parse-early-exit-commands)
+    (seq          . loopy--parse-seq-command)
+    (seq-ref      . loopy--parse-seq-ref-command)
+    (seqf         . loopy--parse-seq-ref-command)
+    (sequence     . loopy--parse-seq-command)
+    (sequencef    . loopy--parse-seq-ref-command)
+    (set          . loopy--parse-expr-command)
+    (skip         . loopy--parse-skip-command)
+    (subloop      . loopy--parse-sub-loop-command)
+    (sub-loop     . loopy--parse-sub-loop-command)
+    (sum          . loopy--parse-accumulation-commands)
+    (summing      . loopy--parse-accumulation-commands)
+    (unless       . loopy--parse-when-unless-command)
+    (until        . loopy--parse-while-until-commands)
+    (vconcat      . loopy--parse-accumulation-commands)
+    (vconcating   . loopy--parse-accumulation-commands)
+    (when         . loopy--parse-when-unless-command)
+    (while        . loopy--parse-while-until-commands))
   "An alist of pairs of command names and built-in parser functions.")
 
 (defun loopy--get-command-parser (command)

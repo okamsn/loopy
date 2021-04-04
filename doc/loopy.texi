@@ -38,6 +38,7 @@ and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and ma
 * Basic Concepts::               Basic information about `loopy' and its loops.
 * Special Macro Arguments::      Creating the environment of the loop.
 * Loop Commands::                The main features of `loopy'.
+* The @code{loopy-iter} Macro::  Embedding loop commands in arbitrary code.
 * Using Flags::                  Using flags to change behavior.
 * Custom Aliases::               How to add one's own aliases.
 * Custom Commands::              Extending `loopy' with personal commands.
@@ -184,6 +185,11 @@ Except when using accumulating loop commands (@ref{Accumulation, , Accumulation 
 values must be stated explicitly, either as an early return in the loop body
 via the @samp{return} or @samp{return-from} commands, or as part of the @samp{finally-return}
 macro argument.  @samp{nil} is returned by default.
+
+The macro is configurable.  One can add custom commands (@ref{Custom Commands}), add
+custom command aliases (@ref{Custom Aliases}), and specify macro options for a
+particular loop (@ref{Using Flags}).  Each of these ideas is explained in detail
+later in this document.
 
 @node Special Macro Arguments
 @chapter Special Macro Arguments
@@ -413,43 +419,30 @@ and this is not:
 Trying to use loop commands where they don't belong will result in errors
 when the code is evaluated.
 
-Underneath, interpreting a command results in ``instructions'' that describe how
-to substitute code into the loop body and other locations.  This process is
-described in detail later in this document (@ref{Background Info, , Background Information}).
+You should keep in mind that commands are evaluated in order.  This means that
+attempting to do something like the below example might not do what you
+expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
+@samp{coll}.
 
-Some examples of instructions are:
-@itemize
-@item
-Declaring a given variable in a let form to make sure it's locally
-scoped.
-@item
-Declaring a generated variable in a let form to contain a given value.
-@item
-Adding a condition for continuing/exiting the loop.
-@item
-Adding code to be run during the main loop body.
-@item
-Adding code to be run after the main loop body.
-@end itemize
-
-Unless you are writing custom commands, you should not need to know about a
-command’s underlying instructions.  However, you should keep in mind that
-commands and their resulting instructions are evaluated in order.  This means
-that attempting to do something like
-
+@float Listing,orgc30f11b
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
        (list i '(1 2 3))
        (finally-return coll))
 @end lisp
+@caption{An example of how loop commands are evaluated in order.}
+@end float
 
-might not do what you expect, as @samp{i} is assigned a value from the list after
-collecting @samp{i} into @samp{coll}.
+For convenience and understanding, the same command might have multiple names,
+called @dfn{aliases}.  For example, the command @samp{expr} has an alias
+@samp{set}, because @samp{expr} is used to set a variable to the value of an expression.
+You can add custom aliases using the function @code{loopy-defalias}, which modifies
+the user option @code{loopy-custom-command-aliases} (@ref{Custom Aliases}).
 
-For convenience and understanding, the same command might have multiple names
-(such as @samp{expr} having the alias @samp{set}), and some commands can take optional
-arguments (such as @samp{list}).
+Some commands take optional arguments.  For example, the command @samp{list} can
+take a function as an optional argument, which affects how that iterates
+through the elements in the list.
 
 For simplicity, the commands are described using the following notation:
 
@@ -494,6 +487,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
+@float Listing,org9214f59
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -529,6 +523,8 @@ the final @code{cdr} of a destructured list, use dotted notation.
        (do (setf j '(22)))
        (finally-return my-array))
 @end lisp
+@caption{Several examples of destructuring.}
+@end float
 
 Most commands that assign variables (even the @samp{-ref} commands, which use
 @code{setf}-able places instead of actual variables) can use destructuring, but
@@ -625,13 +621,29 @@ error.
 @end lisp
 
 The @samp{-ref} (as in “reference”) commands create @code{setf}-able places instead of
-true variables.  Like other commands, they can also use destructuring.  In
-such cases, the variables in the sequence @samp{VAR} are also @code{setf}-able places
+true variables.  Like other commands, they too can use destructuring, in
+which case the variables in the sequence @samp{VAR} are also @code{setf}-able places
 instead of true variables.
 
-@findex array
+@quotation Note
+In @code{loopy}, iteration commands are named after what they iterate through.
+For example, @samp{array} and @samp{list} iterate through the elements of arrays and
+lists, respectively.  For the convenience of familiarity, these commands also
+have aliases based on their equivalent @samp{for}-clause from @code{cl-loop}.
+
+To translate @samp{for VAR in LIST} from @code{cl-loop} to @code{loopy}, one can use either
+@samp{(list VAR LIST)} or @samp{(in VAR LIST)}.  This can be helpful when using
+@code{loopy-iter} (@ref{The @code{loopy-iter} Macro}), in which case you could write any of
+@samp{(for list VAR LIST)}, @samp{(for in VAR LIST)}, or @samp{(in VAR LIST)}, depending on
+whether you have enabled the @samp{lax-naming} flag.
+
+@end quotation
+
+The available iteration commands are:
+
+@findex array, across
 @table @asis
-@item @samp{(array VAR EXPR)}
+@item @samp{(array|across VAR EXPR)}
 Loop through the elements of the array @samp{EXPR}.
 
 @lisp
@@ -640,9 +652,9 @@ Loop through the elements of the array @samp{EXPR}.
 @end lisp
 @end table
 
-@findex array-ref, arrayf
+@findex array-ref, arrayf, across-ref
 @table @asis
-@item @samp{(array-ref|arrayf VAR EXPR)}
+@item @samp{(array-ref|arrayf|across-ref VAR EXPR)}
 Loop through the elements of the array
 @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.
 
@@ -654,9 +666,9 @@ Loop through the elements of the array
 @end lisp
 @end table
 
-@findex cons, conses
+@findex cons, conses, on
 @table @asis
-@item @samp{(cons|conses VAR EXPR [FUNC])}
+@item @samp{(cons|conses|on VAR EXPR [FUNC])}
 Loop through the cons cells of @samp{EXPR}.
 Optionally, find the cons cells via @samp{FUNC} instead of @samp{cdr}.
 
@@ -670,9 +682,9 @@ to @samp{EXPR} instead of @code{nil}.
 @end lisp
 @end table
 
-@findex list
+@findex list, in
 @table @asis
-@item @samp{(list VAR EXPR [FUNC])}
+@item @samp{(list|in VAR EXPR [FUNC])}
 Loop through the elements of the list @samp{EXPR}.
 Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 
@@ -682,12 +694,12 @@ Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 @end lisp
 @end table
 
-@findex list-ref, listf
+@findex list-ref, listf, in-ref
 @table @asis
-@item @samp{(list-ref|listf VAR EXPR [FUNC])}
-Loop through the elements of the
-list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update the
-list by @samp{FUNC} instead of @samp{cdr}.
+@item @samp{(list-ref|listf|in-ref VAR EXPR [FUNC])}
+Loop through the elements of
+the list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update
+the list by @samp{FUNC} instead of @samp{cdr}.
 
 @lisp
 (loopy (with (my-list '(1 2 3)))
@@ -699,31 +711,25 @@ list by @samp{FUNC} instead of @samp{cdr}.
 
 @findex repeat
 @table @asis
-@item @samp{(repeat EXPR)}
+@item @samp{(repeat [VAR] EXPR)}
 Add a condition that the loop should stop after
-@samp{EXPR} iterations.
+@samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is incremented by
+1 at the end of the loop.
 
 @lisp
 (loopy (repeat 3)
        (do (message "Messaged three times.")))
-@end lisp
 
-@item @samp{(repeat VAR EXPR)}
-Add a condition that the loop should stop after
-@samp{EXPR} iterations.  @samp{VAR} starts at 0, and is incremented by 1 at the
-end of the loop.
-
-@lisp
 (loopy (repeat i 3)
        (do (message "%d" i)))
 @end lisp
 @end table
 
-@findex seq
+@findex seq, sequence, elements
 @table @asis
-@item @samp{(seq VAR EXPR)}
-Loop through the sequence @samp{val}, binding @samp{var} to
-the elements of the sequence.
+@item @samp{(seq|sequence|elements VAR EXPR)}
+Loop through the sequence @samp{EXPR},
+binding @samp{VAR} to the elements of the sequence.
 
 @lisp
 (loopy (seq i [1 2 3])
@@ -732,11 +738,12 @@ the elements of the sequence.
 @end lisp
 @end table
 
-@findex seq-ref, seqf
+@findex seq-ref, seqf, sequence-ref, sequencef, elements-ref
 @table @asis
-@item @samp{(seq-ref|seqf VAR EXPR)}
-Loop through the elements of the sequence
-@samp{val}, binding @samp{var} as a @code{setf}-able place.
+@item @samp{(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)}
+Loop
+through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able
+place.
 
 @lisp
 (loopy (with (my-seq '(1 2 3 4)))
@@ -896,6 +903,16 @@ accumulation commands.
        (collect k))       ; (1 2 3 4 5 6).
 @end lisp
 
+@quotation Note
+In addition to those listed below, each accumulation command has an alias of
+the command name in the present participle form (the ``-ing'' form).
+
+For example, instead of ``min'' or ``minimize'', you can use ``minning'' or
+``minimizing''.  Instead of ``sum'' and ``append'', you can use ``summing'' and
+``appending''.  This helps to avoid name collisions when using the @code{loopy-iter}
+macro with the @samp{lax-naming} flag enabled (@ref{The @code{loopy-iter} Macro}).
+
+@end quotation
 
 The available accumulation commands are:
 
@@ -1364,6 +1381,130 @@ variables used for accumulation.
 @end lisp
 @end enumerate
 
+@node The @code{loopy-iter} Macro
+@chapter The @code{loopy-iter} Macro
+
+@cindex loopy-iter
+@findex loopy-iter
+@code{loopy-iter} is a macro that allows for the embedding of loop commands inside
+arbitrary code, instead of trying to use the @samp{do} loop command to embed
+arbitrary code in a loop.  You must use @code{require} to load this feature.
+
+@quotation Warning
+@strong{This feature is still experimental.}  It might not work correctly in all
+circumstances.
+
+@end quotation
+
+This macro is meant to be conceptually similar to the @code{iterate} or @code{iter}
+macro provided by the Common Lisp package ``Iterate'' @footnote{@uref{https://common-lisp.net/project/iterate/}} (not to be
+confused with the @code{iter-*} functions provided by Emacs).
+
+@lisp
+(require 'loopy-iter) ; <- Must `require' to load feature.
+
+;; => (2 4 6)
+(loopy-iter (for list i '(1 2 3))
+            (let ((a (* 2 i)))
+              (accum collect a)))
+@end lisp
+
+@cindex loopy-iter keywords
+@vindex loopy-iter-command-keywords
+To clearly distinguish between loop commands and Emacs features (such as the
+loop command @samp{list} and the function @code{list}), a loop command must be preceded
+by one of the keywords @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not share
+a name with any built-in Emacs feature and are similar to the keywords used by
+other packages.
+
+Any keyword in the user option @code{loopy-iter-command-keywords} can be used to
+identify any loop command.  For example, @samp{(accum collect a)} and
+@samp{(for collect a)} are both valid ways of referring to the @samp{collect} loop
+command in @code{loopy-iter}.
+
+To disable this requirement, use the flag @samp{lax-naming} (@ref{Using Flags}).  When
+using @samp{lax-naming}, @code{loopy-iter} will always prefer built-in features to loop
+commands.  E.g., ``list'' will always be understood as referring to the function
+@code{list} and not the loop command @samp{list}.
+
+@vindex loopy-iter-ignored-commands
+If for some reason you wish for @code{loopy-iter} to ignore a loop command while
+using @samp{lax-naming}, you can add that symbol to @code{loopy-iter-ignored-commands}.
+
+Special macro arguments, already having clearly distinguishable names, do not
+need to be preceded by one of the above keywords.  However, some aliases (such
+as @samp{let*} for @samp{with}) will not work in @code{loopy-iter}.
+
+@lisp
+;; => ((1 8) (2 9) (3 10))
+(loopy-iter (with (a 7))                ; <- Set once around loop.
+            (for list elem '(1 2 3))
+            (let* ((c elem)             ; <- These set inside of loop.
+                   (d (+ a c)))
+              (accum collect (list c d))))
+@end lisp
+
+Restrictions on the placement of loop commands and special macro arguments
+still apply in @code{loopy-iter}.  For example, iteration commands must still occur
+at the top level of @code{loopy-iter} or a sub-loop.
+
+@lisp
+;; BAD
+(loopy-iter (let ((a (progn
+                       ;; ERROR: `list' must occur at top level.
+                       (for list j '(8 9 10 11 12))
+                       j)))
+              (accum collect a)))
+
+;; GOOD
+;; => (8 9 10 11 12)
+(loopy-iter (let ((a (progn
+                       ;; NOTE: No restriction on placement of `expr'.
+                       (for expr j 8 (1+ j))
+                       (when (> j 12)
+                         ;; Leave loop but don't force return value,
+                         ;; allowing implicit result to be returned.
+                         (exit leave))
+                       j)))
+              (accum collect a)))
+@end lisp
+
+You should not rely on the values of the code into which loop commands
+translate.  For example, the above usage of @samp{expr} might become a @code{setq} form,
+but that is an implementation detail and subject to change.  Best practice is
+to instead use a variable as the last expression in a @code{progn} form.
+
+For convenience, @code{loopy-iter} will not attempt to interpret loop commands in
+quoted code, except in sharp-quoted @code{lambda} forms.  This is because the
+@code{lambda} macro is self-quoting, and so Emacs might quote the form before it is
+seen by @code{loopy-iter}.
+
+@lisp
+;; => (1 2 3)
+(loopy-iter (for list elem '(1 2 3))
+            (funcall (lambda (x)
+                       (accum collect x))
+                     elem))
+
+;; => (1 2 3)
+(loopy-iter (for list elem '(1 2 3))
+            (funcall #'(lambda (x) ; <- sharp-quoted, but still interpreted
+                         (accum collect x))
+                     elem))
+@end lisp
+
+@quotation Note
+Nesting arbitrary code in the loop requires knowing how to understand the
+code.  You might find cases where @code{loopy-iter} interprets code incorrectly.
+
+Please report such cases on this project's @uref{https://github.com/okamsn/loopy/issues, issues tracker}.
+
+@end quotation
+
+@code{loopy} (and so @code{loopy-iter}) does not currently have all of the features of
+Common Lisp's @code{iter} macro.  Think of it more as a way to use loop commands
+embedded in arbitrary code.
+
 @node Using Flags
 @chapter Using Flags
 
@@ -1406,6 +1547,12 @@ Use the style of destructuring found in the @samp{dash} library
 @item @samp{split}
 Make accumulation commands with implicit variables accumulate into
 separate variables instead of into @code{loopy-result}.
+@end table
+@cindex lax-naming flag
+@table @asis
+@item @samp{lax-naming}
+In @code{loopy-iter}, don't require keywords when using loop
+commands (@ref{The @code{loopy-iter} Macro}).
 @end table
 @cindex default flag
 @table @asis
@@ -1575,6 +1722,9 @@ Using an alias does not change that the special arguments are parsed before
 @node Custom Commands
 @chapter Custom Commands
 
+This section contains information about how loop commands work and how one can
+add custom commands to @code{loopy}.  Two examples are provided.
+
 @menu
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
@@ -1584,8 +1734,26 @@ Using an alias does not change that the special arguments are parsed before
 @node Background Info
 @section Background Info
 
+@cindex instruction, instructions
 The core working of @samp{loopy} is taking a command and generating code that is
-substituted into or around a loop body.
+substituted into or around a loop body.  This code is transmitted between
+functions as @dfn{instructions}, which describe how the code is to be
+used.
+
+Some examples of instructions are:
+@itemize
+@item
+Declaring a given variable in a let form to make sure it's locally
+scoped.
+@item
+Declaring a generated variable in a let form to contain a given value.
+@item
+Adding a condition for continuing/exiting the loop.
+@item
+Adding code to be run during the main loop body.
+@item
+Adding code to be run after the main loop body.
+@end itemize
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
 list of instructions.  Some commands require the creation of unique temporary

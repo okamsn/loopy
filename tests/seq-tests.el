@@ -17,12 +17,13 @@
 ;; For now, just test the important cases.
 
 (ert-deftest seq-with-destructuring ()
-  (should (= -2
-             (eval (quote (loopy (flag seq)
-                                 (with ((a b) '(1 2))
-                                       ([c d] `[,(1+ a) ,(1+ b)]))
-                                 (return (+ (- a b)
-                                            (- c d)))))))))
+  (should (= 5 (eval (quote (loopy (flag seq)
+                                   (with ((a b) '(1 2))
+                                         ([c d] `[,(1+ a) ,(1+ b)])
+                                         (e 7))
+                                   (return (+ (- a b)
+                                              (- c d)
+                                              e))))))))
 
 (ert-deftest seq-array-recursive-destructuring ()
   (should

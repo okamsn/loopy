@@ -765,17 +765,36 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
                                      (append coll i)
+                                     (finally-return coll))))))
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (appending coll i)
                                      (finally-return coll)))))))
+
+(ert-deftest append-destructuring ()
+  (should (equal '((1 2 5 6) (3 4 7 8))
+                 (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
+                                     (append (j k) i))))))
+  (should (equal '((1 2 5 6) (3 4 7 8))
+                 (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
+                                     (appending (j k) i)))))))
 
 (ert-deftest append-implicit ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (append i)))))))
+                                     (append i))))))
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (appending i)))))))
 
 (ert-deftest collect ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list j '(1 2 3))
                                      (collect coll j)
+                                     (finally-return coll))))))
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (collecting coll j)
                                      (finally-return coll)))))))
 
 (ert-deftest collect-destructuring ()
@@ -792,16 +811,37 @@ implicit variable without knowing it's name, even for named loops."
                (equal '((1 4) (2 5) (3 6))
                       (eval (quote (loopy (list j '([1 2 3] [4 5 6]))
                                           (collect [coll1 coll2 coll3] j)
+                                          (finally-return coll1 coll2 coll3)))))))
+  (should (and (equal '((1 4) ((2 3) (5 6)))
+                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
+                                          (collecting (coll1 . coll2) j)
+                                          (finally-return coll1 coll2)))))
+
+               (equal '((1 4) (2 5) (3 6))
+                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
+                                          (collecting (coll1 coll2 coll3) j)
+                                          (finally-return coll1 coll2 coll3)))))
+
+               (equal '((1 4) (2 5) (3 6))
+                      (eval (quote (loopy (list j '([1 2 3] [4 5 6]))
+                                          (collecting [coll1 coll2 coll3] j)
                                           (finally-return coll1 coll2 coll3))))))))
 (ert-deftest collect-implicit ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list j '(1 2 3))
-                                     (collect j)))))))
+                                     (collect j))))))
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (collecting j)))))))
 
 (ert-deftest concat ()
   (should (equal "catdog"
                  (eval (quote (loopy (list j '("cat" "dog"))
                                      (concat coll j)
+                                     (finally-return coll))))))
+  (should (equal "catdog"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concating coll j)
                                      (finally-return coll)))))))
 
 (ert-deftest concat-destructuring ()
@@ -813,17 +853,33 @@ implicit variable without knowing it's name, even for named loops."
                (equal '("ad" "be" "cf")
                       (eval (quote (loopy (list j '(["a" "b" "c"] ["d" "e" "f"]))
                                           (concat [coll1 coll2 coll3] j)
+                                          (finally-return coll1 coll2 coll3)))))))
+  (should (and (equal '("ad" "be" "cf")
+                      (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
+                                          (concating (coll1 coll2 coll3) j)
+                                          (finally-return coll1 coll2 coll3)))))
+
+               (equal '("ad" "be" "cf")
+                      (eval (quote (loopy (list j '(["a" "b" "c"] ["d" "e" "f"]))
+                                          (concating [coll1 coll2 coll3] j)
                                           (finally-return coll1 coll2 coll3))))))))
 
 (ert-deftest concat-implict ()
   (should (equal "catdog"
                  (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat j)))))))
+                                     (concat j))))))
+  (should (equal "catdog"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concating j)))))))
 
 (ert-deftest count ()
   (should (= 2
              (eval (quote (loopy (list i '(t nil t nil))
                                  (count c i)
+                                 (finally-return c))))))
+  (should (= 2
+             (eval (quote (loopy (list i '(t nil t nil))
+                                 (counting c i)
                                  (finally-return c)))))))
 
 (ert-deftest count-destructuring ()
@@ -831,17 +887,37 @@ implicit variable without knowing it's name, even for named loops."
    (equal '(2 1)
           (eval (quote (loopy (list elem '((t nil) (t t)))
                               (count (c1 c2) elem)
+                              (finally-return c1 c2))))))
+  (should
+   (equal '(2 1)
+          (eval (quote (loopy (list elem '((t nil) (t t)))
+                              (counting (c1 c2) elem)
                               (finally-return c1 c2)))))))
 
 (ert-deftest count-implict ()
   (should (= 2
              (eval (quote (loopy (list i '(t nil t nil))
-                                 (count i)))))))
+                                 (count i))))))
+  (should (= 2
+             (eval (quote (loopy (list i '(t nil t nil))
+                                 (counting i)))))))
 
 (ert-deftest max ()
   (should (= 11
              (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
                                  (max my-max i)
+                                 (finally-return my-max))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maxing my-max i)
+                                 (finally-return my-max))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maximize my-max i)
+                                 (finally-return my-max))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maximizing my-max i)
                                  (finally-return my-max)))))))
 
 (ert-deftest max-destructuring ()
@@ -849,18 +925,57 @@ implicit variable without knowing it's name, even for named loops."
    (equal '(9 11)
           (eval (quote (loopy (list elem '((1 11) (9 4)))
                               (max (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(9 11)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (maxing (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(9 11)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (maximize (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(9 11)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (maximizing (m1 m2) elem)
                               (finally-return m1 m2)))))))
 
 (ert-deftest max-implict ()
   (should (= 11
              (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (max i)))))))
+                                 (max i))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maxing i))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maximize i))))))
+  (should (= 11
+             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
+                                 (maximizing i)))))))
 
 (ert-deftest min ()
   (should
    (= 0
       (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
                           (min my-min i)
+                          (finally-return my-min))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minimize my-min i)
+                          (finally-return my-min))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minimizing my-min i)
+                          (finally-return my-min))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minning my-min i)
                           (finally-return my-min)))))))
 
 (ert-deftest min-destructuring ()
@@ -868,18 +983,49 @@ implicit variable without knowing it's name, even for named loops."
    (equal '(1 4)
           (eval (quote (loopy (list elem '((1 11) (9 4)))
                               (min (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(1 4)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (minimize (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(1 4)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (minning (m1 m2) elem)
+                              (finally-return m1 m2))))))
+  (should
+   (equal '(1 4)
+          (eval (quote (loopy (list elem '((1 11) (9 4)))
+                              (minimizing (m1 m2) elem)
                               (finally-return m1 m2)))))))
 
 (ert-deftest min-implict ()
   (should
    (= 0
       (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (min i)))))))
+                          (min i))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minning i))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minimize i))))))
+  (should
+   (= 0
+      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+                          (minimizing i)))))))
 
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
                                      (nconc l i)
+                                     (finally-return l))))))
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconcing l i)
                                      (finally-return l)))))))
 
 (ert-deftest nconc-destructuring ()
@@ -887,12 +1033,20 @@ implicit variable without knowing it's name, even for named loops."
    (equal '((1 4) ((2 3) (5 6)))
           (eval (quote (loopy (list elem '(((1) (2 3)) ((4) (5 6))))
                               (nconc (n1 . n2) elem)
+                              (finally-return n1 n2))))))
+  (should
+   (equal '((1 4) ((2 3) (5 6)))
+          (eval (quote (loopy (list elem '(((1) (2 3)) ((4) (5 6))))
+                              (nconcing (n1 . n2) elem)
                               (finally-return n1 n2)))))))
 
 (ert-deftest nconc-implict ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc l i)))))))
+                                     (nconc l i))))))
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconcing l i)))))))
 
 (ert-deftest prepend ()
   (should (equal '(5 6 3 4 1 2)
@@ -901,12 +1055,22 @@ implicit variable without knowing it's name, even for named loops."
                                      (finally-return my-list))))))
   (should (equal '(5 6 3 4 1 2)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend my-list i)))))))
+                                     (prepending my-list i)
+                                     (finally-return my-list))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend my-list i))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepending my-list i)))))))
 
 (ert-deftest prepend-destructuring ()
   (should (equal '((5 6 1 2) (7 8 3 4))
                  (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
-                                     (prepend [my-list1 my-list2] i)))))))
+                                     (prepend [my-list1 my-list2] i))))))
+  (should (equal '((5 6 1 2) (7 8 3 4))
+                 (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
+                                     (prepending [my-list1 my-list2] i)))))))
 
 (ert-deftest prepend-implicit ()
   (should (equal '(5 6 3 4 1 2)
@@ -915,48 +1079,104 @@ implicit variable without knowing it's name, even for named loops."
                                      (finally-return loopy-result))))))
   (should (equal '(5 6 3 4 1 2)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend i)))))))
+                                     (prepending i)
+                                     (finally-return loopy-result))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepend i))))))
+  (should (equal '(5 6 3 4 1 2)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (prepending i)))))))
 
 
 (ert-deftest push-into ()
   (should (equal '(3 2 1)
                  (eval (quote (loopy (list j '(1 2 3))
                                      (push-into coll j)
+                                     (finally-return coll))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (pushing-into coll j)
+                                     (finally-return coll))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (push coll j)
+                                     (finally-return coll))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (pushing coll j)
                                      (finally-return coll)))))))
 
 (ert-deftest push-into-destructuring ()
   (should (equal '((5 3 1) (6 4 2))
                  (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
                                      (push-into (p1 p2) elem)
+                                     (finally-return p1 p2))))))
+  (should (equal '((5 3 1) (6 4 2))
+                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
+                                     (pushing-into (p1 p2) elem)
+                                     (finally-return p1 p2))))))
+  (should (equal '((5 3 1) (6 4 2))
+                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
+                                     (push (p1 p2) elem)
+                                     (finally-return p1 p2))))))
+  (should (equal '((5 3 1) (6 4 2))
+                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
+                                     (pushing (p1 p2) elem)
                                      (finally-return p1 p2)))))))
 
 (ert-deftest push-into-implict ()
   (should (equal '(3 2 1)
                  (eval (quote (loopy (list j '(1 2 3))
-                                     (push-into j)))))))
+                                     (push-into coll j))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (pushing-into coll j))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (push coll j))))))
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (pushing coll j)))))))
 
 (ert-deftest sum ()
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
                                  (sum s i)
+                                 (finally-return s))))))
+  (should (= 6
+             (eval (quote (loopy (list i '(1 2 3))
+                                 (summing s i)
                                  (finally-return s)))))))
 
 (ert-deftest sum-destructuring ()
   (should (equal '(5 7 9)
                  (loopy (list elem '((1 2 3) (4 5 6)))
                         (sum (sum1 sum2 sum3) elem)
+                        (finally-return sum1 sum2 sum3))))
+  (should (equal '(5 7 9)
+                 (loopy (list elem '((1 2 3) (4 5 6)))
+                        (summing (sum1 sum2 sum3) elem)
                         (finally-return sum1 sum2 sum3)))))
 
 (ert-deftest sum-implict ()
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
-                                 (sum i)))))))
+                                 (sum i))))))
+  (should (= 6
+             (eval (quote (loopy (list i '(1 2 3))
+                                 (summing i)))))))
 
 (ert-deftest vconcat ()
   (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
                  (eval (quote (loopy (list elem '([1 2 3 4 5 6]
                                                   [7 8 9 10 11 12]))
                                      (vconcat v elem)
+                                     (finally-return v))))))
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcating v elem)
                                      (finally-return v)))))))
 
 (ert-deftest vconcat-destructuring ()
@@ -964,13 +1184,22 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
                                                   ([7 8 9] [10 11 12])))
                                      (vconcat (v1 v2) elem)
+                                     (finally-return v1 v2))))))
+  (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
+                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
+                                                  ([7 8 9] [10 11 12])))
+                                     (vconcating (v1 v2) elem)
                                      (finally-return v1 v2)))))))
 
 (ert-deftest vconcat-implict ()
   (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
                  (eval (quote (loopy (list elem '([1 2 3 4 5 6]
                                                   [7 8 9 10 11 12]))
-                                     (vconcat elem)))))))
+                                     (vconcat elem))))))
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcating elem)))))))
 
 (ert-deftest accumulation-recursive-destructuring ()
   (should

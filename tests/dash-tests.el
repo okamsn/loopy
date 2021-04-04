@@ -11,10 +11,9 @@
 (require 'loopy "./loopy.el")
 (require 'loopy-dash "./loopy-dash.el")
 
-(defvar loopy-default-destructuring-function)
-(setq loopy-default-destructuring-function
-      #'loopy--create-destructured-assignment-dash)
 (load-file "tests/tests.el")
+
+(setq loopy-default-flags '(dash))
 
 (ert-deftest dash-flag-default ()
   (should (equal '(5 6)
@@ -39,3 +38,10 @@
                                      (list (&plist :a a  :b b)
                                            '((:a 3  :b 4) (:a 5 :b 6)))
                                      (finally-return a b)))))))
+
+
+(ert-deftest dash-with-destructuring ()
+  (should (= 7 (eval (quote (loopy (flag dash)
+                                   (with ((&plist :a a  :b b) '(:a 3 :b 4)))
+                                   (repeat 1)
+                                   (return (+ a b))))))))
