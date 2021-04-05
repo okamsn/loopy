@@ -864,7 +864,7 @@ Info node `(loopy)' distributed with this package."
    (when-let ((loopy--all-flags
                (append loopy-default-flags
                        (loopy--find-special-macro-arguments '(flag flags)
-                                                       body))))
+                                                            body))))
      (dolist (flag loopy--all-flags)
        (if-let ((func (cdr (assq flag loopy--flag-settings))))
            (funcall func)
@@ -894,14 +894,14 @@ Info node `(loopy)' distributed with this package."
    ;; Before do
    (setq loopy--before-do
          (loopy--find-special-macro-arguments '( before-do before
-                                            initially-do initially)
-                                         body))
+                                                 initially-do initially)
+                                              body))
 
    ;; After do
    (setq loopy--after-do
          (loopy--find-special-macro-arguments '( after-do after
-                                            else-do else)
-                                         body))
+                                                 else-do else)
+                                              body))
 
    ;; Finally Do
    (setq loopy--final-do
@@ -983,13 +983,13 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--main-body (nreverse loopy--main-body)
          loopy--iteration-vars (nreverse loopy--iteration-vars)
          loopy--implicit-return (when (consp loopy--implicit-return)
-                             (if (= 1 (length loopy--implicit-return))
-                                 ;; If implicit return is just a single thing,
-                                 ;; don't use a list.
-                                 (car loopy--implicit-return)
-                               ;; If multiple items, be sure to use a list
-                               ;; in the correct order.
-                               `(list ,@(nreverse loopy--implicit-return)))))
+                                  (if (= 1 (length loopy--implicit-return))
+                                      ;; If implicit return is just a single thing,
+                                      ;; don't use a list.
+                                      (car loopy--implicit-return)
+                                    ;; If multiple items, be sure to use a list
+                                    ;; in the correct order.
+                                    `(list ,@(nreverse loopy--implicit-return)))))
 
 ;;;;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))
