@@ -42,25 +42,31 @@
 (require 'dash)
 (require 'cl-lib)
 
-(defvar loopy--basic-destructuring-function)
 (defvar loopy--destructuring-accumulation-parser)
+(defvar loopy--destructuring-for-with-vars-function)
 (defvar loopy--flag-settings nil)
 
 ;;;###autoload
 (defun loopy-dash--enable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."
   (setq
-   loopy--basic-destructuring-function
-   #'loopy-dash--destructure-variables
+   loopy--destructuring-for-iteration-function
+   #'loopy-dash--destructure-for-iteration
+   loopy--destructuring-for-with-vars-function
+   #'loopy-dash--destructure-for-with-vars
    loopy--destructuring-accumulation-parser
    #'loopy-dash--parse-destructuring-accumulation-command))
 
 (defun loopy-dash--disable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."
-  (if (eq loopy--basic-destructuring-function
-          #'loopy-dash--destructure-variables)
-      (setq loopy--basic-destructuring-function
-            #'loopy--destructure-variables-default))
+  (if (eq loopy--destructuring-for-iteration-function
+          #'loopy-dash--destructure-for-iteration)
+      (setq loopy--destructuring-for-iteration-function
+            #'loopy--destructure-for-iteration-default))
+  (if (eq loopy--destructuring-for-with-vars-function
+          #'loopy-dash--destructure-for-with-vars)
+      (setq loopy--destructuring-for-with-vars-function
+            #'loopy--destructure-for-with-vars-default))
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-dash--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
@@ -71,14 +77,27 @@
 (add-to-list 'loopy--flag-settings (cons '-dash #'loopy-dash--disable-flag-dash))
 
 ;;;; The actual functions:
-(defun loopy-dash--destructure-variables
-    (var value-expression)
-  "Destructure VALUE-EXPRESSION into VAR using `dash'.
+(defun loopy-dash--destructure-for-with-vars (bindings)
+  "Return a way to destructure BINDINGS as if by `-let*'.
 
-Return a list of variable-value pairs (not dotted), suitable for
-substituting into a `let*' form or being combined under a
-`setq' form."
-  (dash--match var value-expression))
+Returns a list of two elements:
+1. The symbol `-let*'.
+2. A new list of bindings."
+  (list '-let* bindings))
+
+(defun loopy-dash--destructure-for-iteration (var val)
+  "Destructure VAL according to VAR as if by `-let'.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((bindings (dash--match var val)))
+    (list (cons 'setq (apply #'append bindings))
+          ;; Note: This includes the named variables and the needed generated
+          ;;       variables.
+          (mapcar #'car bindings))))
 
 (defvar loopy-dash--accumulation-destructured-symbols nil
   "The names of copies of variable names that Dash will destructure.

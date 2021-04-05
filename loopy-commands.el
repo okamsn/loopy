@@ -44,18 +44,18 @@
 
 ;;; Code:
 ;; Cant require `loopy', as that would be recursive.
-(declare-function loopy--destructure-variables "loopy")
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
+(declare-function loopy--basic-builtin-destructuring "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
 (defvar loopy--destructuring-accumulation-parser)
 (defvar loopy--split-implied-accumulation-results)
-(defvar loopy--basic-destructuring-function)
+(defvar loopy--destructuring-for-iteration-function)
 
 ;;;; Variables from macro arguments
 (defvar loopy--loop-name)
@@ -160,6 +160,28 @@ expansion, we generally only want the actual symbol."
       ((function quote) (cadr function-form))
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
+
+(defun loopy--extract-main-body (instructions)
+  "Extract main-body expressions from INSTRUCTIONS.
+
+This returns a list of two sub-lists:
+
+1. A list of expressions (not instructions) that are meant to be
+   use in the main body of the loop.
+
+2. A list of instructions for places other than the main body.
+
+The lists will be in the order parsed (correct for insertion)."
+  (let ((wrapped-main-body)
+        (other-instructions))
+    (dolist (instruction instructions)
+      (if (eq (car instruction) 'loopy--main-body)
+          (push (cdr instruction) wrapped-main-body)
+        (push instruction other-instructions)))
+
+    ;; Return the sub-lists.
+    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
+
 
 ;;;; Included parsing functions.
 ;;;;; Misc.
@@ -849,8 +871,20 @@ VALUE-EXPRESSION."
     (t
      (error "Don't know how to destructure this: %s" var))))
 
-;; Note that function `loopy--destructure-variables-default' is defined in
+;; Note that function `loopy--basic-builtin-destructuring' is defined in
 ;; 'loop.el', as it is also used for `with' variables.
+(defun loopy--destructure-for-iteration-default (var val)
+  "Destructure VAL according to VAR.
+
+Returns a list.  The elements are:
+1. An expression which binds the variables in VAR to the values
+   in VAL.
+2. A list of variables which exist outside of this expression and
+   need to be `let'-bound."
+  (let ((bindings (loopy--basic-builtin-destructuring var val)))
+    (list (cons 'setq (apply #'append bindings))
+          (cl-remove-duplicates (mapcar #'cl-first bindings)))))
+
 (defun loopy--destructure-for-iteration-command (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR for a loop command.
 
@@ -860,21 +894,22 @@ variables (`setf'-able places).  For that, see the function
 
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
-  (let ((destructurings
-         (loopy--destructure-variables var value-expression))
-        (instructions nil))
-    (dolist (destructuring destructurings)
-      (push `(loopy--iteration-vars . (,(cl-first destructuring) nil))
-            instructions))
-    (cons `(loopy--main-body
-            . (setq ,@(apply #'append destructurings)))
-          instructions)))
+  (if (symbolp var)
+      `((loopy--iteration-vars . (,var nil))
+        (loopy--main-body . (setq ,var ,value-expression)))
+    (cl-destructuring-bind (destructuring-expression var-list)
+        (funcall (or loopy--destructuring-for-iteration-function
+                     #'loopy--destructure-for-iteration-default)
+                 var value-expression)
+      `((loopy--main-body . ,destructuring-expression)
+        ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
+                  var-list)))))
 
 (cl-defun loopy--parse-destructuring-accumulation-command
     ((name var val))
   "Return instructions for destructuring accumulation commands.
 
-Unlike `loopy--destructure-variables-default', this function
+Unlike `loopy--basic-builtin-destructuring', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
@@ -964,6 +999,7 @@ COMMAND-LIST."
     (count        . loopy--parse-accumulation-commands)
     (counting     . loopy--parse-accumulation-commands)
     (do           . loopy--parse-do-command)
+    (each         . loopy--parse-list-command)
     (elements     . loopy--parse-seq-command)
     (elements-ref . loopy--parse-seq-ref-command)
     (expr         . loopy--parse-expr-command)

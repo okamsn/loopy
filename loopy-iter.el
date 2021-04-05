@@ -124,8 +124,9 @@ This variable is used to signal an error instead of silently failing.")
 
 `let' forms might use constructs wrapped in variable definitions.")
 
-;; TODO: Get this to eval to '(quote function) without need of fist symbol.
-(defvar loopy-iter--literal-forms '(loopy-iter--junk-symbol quote)
+;; NOTE: The code "(list 'quote 'a)" is the same as "'a".  Therefore, "quote"
+;; should be the last symbol in the list.
+(defvar loopy-iter--literal-forms '(declare quote)
   "Forms that shouldn't be evaluated.
 
 Currently, `lambda' forms (which are automatically quoted) are
@@ -136,24 +137,6 @@ still evaluated.")
   "Special forms that work like `setq'.")
 
 ;;;; Miscellaneous Helper Functions
-(defun loopy-iter--extract-main-body (instructions)
-  "Separate main-body instructions from others in INSTRUCTIONS.
-
-This returns a list of two sub-lists:
-1. Expression that should be inserted into a main-body instruction.
-2. Other instructions.
-
-The lists will be in the order parsed (correct for insertion)."
-  (let ((wrapped-main-body)
-        (other-instructions))
-    (dolist (instruction instructions)
-      (if (eq (car instruction) 'loopy--main-body)
-          (push (cdr instruction) wrapped-main-body)
-        (push instruction other-instructions)))
-
-    ;; Return the sub-lists.
-    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
-
 (defun loopy-iter--valid-loop-command (name)
   "Check if NAME is a known command.
 
@@ -169,6 +152,13 @@ and `loopy--builtin-command-parsers', in that order."
   (or (and (consp form)
            (memq (cl-first form) loopy-iter--literal-forms))
       (arrayp form)))
+
+(defun loopy-iter--sub-loop-command-p (name)
+  "Whether command named NAME is a sub-loop."
+  (let ((built-in-aliases '(loop sub-loop subloop)))
+    (or (memq name built-in-aliases)
+        (memq (cdr (assq name loopy-custom-command-aliases))
+              built-in-aliases))))
 
 ;;;; Replacement functions
 (defun loopy-iter--replace-in-tree (tree)
@@ -217,6 +207,17 @@ Other instructions are just pushed to their variables."
                 (push (loopy-iter--replace-in-setq-form elem)
                       new-tree))
 
+               ;; Check if it's the special `sub-loop' command before checking
+               ;; if it's any other kind of loop command.
+               ((loopy-iter--sub-loop-command-p (if loopy-iter--lax-naming
+                                                    key
+                                                  (cl-second elem)))
+                (push (loopy-iter--replace-in-sub-loop-command
+                       (if loopy-iter--lax-naming
+                           (cdr elem)
+                         (cddr elem)))
+                      new-tree))
+
                ;; Check if it's a loop command
                (;; If lax-naming, just check the first element in the list.
                 ;; Otherwise, check if the first element is an appropriate
@@ -236,7 +237,7 @@ Other instructions are just pushed to their variables."
                        (loopy-iter--valid-loop-command (cl-second elem))))
 
                 (seq-let (main-body other-instructions)
-                    (loopy-iter--extract-main-body
+                    (loopy--extract-main-body
                      ;; If using lax naming, then the entire `elem' is the loop
                      ;; command.  Otherwise, it is the `cdr'.
                      (loopy--parse-loop-command (if loopy-iter--lax-naming
@@ -315,6 +316,89 @@ These expressions can have loop commands in the body."
   `(lambda ,(cl-second tree)
      ,@(loopy-iter--replace-in-tree (cddr tree))))
 
+(cl-defun loopy-iter--replace-in-sub-loop-command (tree)
+  "Replace loop commands in the `sub-loop' command.
+
+Unlike in `loopy', this allows arbitrary expressions."
+  (let ((loopy--in-sub-level nil)
+        (loopy--main-body)
+        (loopy--latter-body)
+        (loopy--pre-conditions)
+        (loopy--post-conditions)
+        (loopy--iteration-vars)
+        (non-wrapped-instructions)
+        (loopy--skip-used)
+        (loopy--tagbody-exit-used)
+        (loopy--loop-name (gensym "sub-loop-")))
+
+    (setq loopy--main-body (loopy-iter--replace-in-tree tree))
+
+    ;; Make sure lists are in the correct order.
+    (setq loopy--iteration-vars (nreverse loopy--iteration-vars))
+
+    ;; Create the sub-loop code.
+    ;; See the main macro `loopy' for a more detailed version of this.
+    (let ((result nil)
+          (result-is-one-expression nil))
+      (cl-flet ((get-result () (if result-is-one-expression
+                                   (list result)
+                                 result)))
+        (setq result loopy--main-body)
+
+        (when loopy--skip-used
+          ;; This must stay `loopy--continue-tag', as
+          ;; this name is used by `loopy--parse-skip-command'.
+          (setq result `(cl-tagbody ,@result loopy--continue-tag)
+                result-is-one-expression t))
+
+        (when loopy--latter-body
+          (setq result (append result loopy--latter-body)))
+
+        (when loopy--post-conditions
+          (setq result
+                (append result
+                        `((unless ,(cl-case (length loopy--post-conditions)
+                                     (0 t)
+                                     (1 (car loopy--post-conditions))
+                                     (t (cons 'and loopy--post-conditions)))
+                            ;; Unlike the normal loop, sub-loops don't have a
+                            ;; return value, so we can just return nil.
+                            (cl-return-from ,loopy--loop-name nil))))))
+        (setq result `(while ,(cl-case (length loopy--pre-conditions)
+                                (0 t)
+                                (1 (car loopy--pre-conditions))
+                                (t (cons 'and loopy--pre-conditions)))
+                        ;; If using a `cl-tag-body', just insert that one
+                        ;; expression, but if not, break apart into the while
+                        ;; loop's body.
+                        ,@(get-result))
+              ;; Will always be a single expression after wrapping with `while'.
+              result-is-one-expression t)
+
+        (when loopy--tagbody-exit-used
+          (setq result `(cl-tagbody
+                         ,@(get-result)
+                         ;; This must stay `loopy--non-returning-exit-tag', as
+                         ;; this name is used by `loopy--parse-leave-command'.
+                         loopy--non-returning-exit-tag)
+                result-is-one-expression t))
+
+        (setq result `(cl-block ,loopy--loop-name ,@(get-result) nil)
+              ;; Will always be a single expression after wrapping with
+              ;; `cl-block'.
+              result-is-one-expression t)
+
+        (when loopy--iteration-vars
+          (setq result `(let* ,loopy--iteration-vars
+                          ,@(get-result))
+                result-is-one-expression t))
+
+        (unless result-is-one-expression
+          (push 'progn result)))
+
+      ;; Return the wrapped loop.
+      result)))
+
 ;;;; Functions for building the macro.
 
 (defun loopy-iter--process-non-main-body (instructions)
@@ -323,12 +407,15 @@ These expressions can have loop commands in the body."
   (dolist (instruction instructions)
     (cl-case (car instruction)
       (loopy--generalized-vars
+       (loopy--validate-binding (cdr instruction))
        (push (cdr instruction) loopy--generalized-vars))
       (loopy--iteration-vars
+       (loopy--validate-binding (cdr instruction))
        ;; Don't want to accidentally rebind variables to `nil'.
        (unless (loopy--bound-p (cadr instruction))
          (push (cdr instruction) loopy--iteration-vars)))
       (loopy--accumulation-vars
+       (loopy--validate-binding (cdr instruction))
        ;; Don't want to accidentally rebind variables to `nil'.
        (unless (loopy--bound-p (cadr instruction))
          (push (cdr instruction) loopy--accumulation-vars)))
@@ -369,10 +456,16 @@ These expressions can have loop commands in the body."
 (defmacro loopy-iter (&rest body)
   "An `iter'-like `loopy' macro.
 
-See `loopy' for information about BODY.  One difference is that
-`let*' is not an alias of the `with' special macro argument.  See
-the Info node `(loopy)' for information on how to use `loopy' and
-`loopy-iter'."
+See `loopy' for information about BODY.
+
+This macro allows for embedding many loop commands in arbitrary
+code.  This can be more flexible than using the `do' loop command
+in `loopy'.
+
+One useful difference is that `let*' is not an alias of the
+`with' special macro argument.  See the Info node `(loopy)' for
+information on how to use `loopy' and `loopy-iter'."
+
   (loopy--wrap-variables-around-body
 
    ;; Process the special macro arguments.
@@ -399,14 +492,21 @@ the Info node `(loopy)' for information on how to use `loopy' and
          (error "Loopy: Flag not defined: %s" flag))))
 
    ;; With
+   ;; Note: These values don't have to be used literally, due to
+   ;; destructuring.
    (setq loopy--with-vars
-         ;; Process `with' for destructuring.
-         (mapcan (lambda (var)
-                   (loopy--destructure-variables (cl-first var)
-                                                 (cl-second var)))
-                 (loopy--find-special-macro-arguments ;; '(with let*)
-                  '(with) ; No `let*'.
-                  body)))
+         (let ((result))
+           (dolist (binding (loopy--find-special-macro-arguments
+                             '(with let*) body))
+             (push (cond
+                    ((symbolp binding)
+                     (list binding nil))
+                    ((= 1 (length binding))
+                     (list (cl-first binding) nil))
+                    (t
+                     binding))
+                   result))
+           (nreverse result)))
 
    ;; Without
    (setq loopy--without-vars
@@ -436,7 +536,6 @@ the Info node `(loopy)' for information on how to use `loopy' and
            (if (= 1 (length return-val))
                (car return-val)
              (cons 'list return-val))))
-
 
    ;; Process the main body.
    (setq loopy--main-body

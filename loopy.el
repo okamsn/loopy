@@ -101,35 +101,46 @@ Nil means that each accumulation command without a named
 accumulation variable should accumulate into the same variable,
 by default named `loopy-result'.")
 
-(defvar loopy--basic-destructuring-function nil
-  "The basic destructuring function to use.
+(defvar loopy--destructuring-for-with-vars-function nil
+  "The function used for destructuring `with' variables.
 
-The function named by this variable is used to produce lists of
-undotted variable-value pairs, suitable for substituting into a
-`let*' form or being combined under a `setq' form.
+This function named by this variables receives the bindings given
+to the `with' macro argument and should usually return a list of
+two elements:
 
-The function is used for destructuring in iteration loop
-commands (like `list' or `array') and for destructuring the
-variables given in the `with' macro argument.
+1. A function/macro that works like `let*' and can be used to wrap
+   the expanded macro code.
+2. The bindings that will be given to this macro.
 
-Th function is not used for accumulation commands, since those
-commands have their own kind of destructuring.  For that, see the
-variable `loopy--destructuring-accumulation-parser'.
+For example, an acceptable return value might be something like
 
-If nil, use `loopy--destructure-variables-default'.")
+    (list 'pcase-let* BINDINGS)
+
+which will be used to wrap the loop and other code.
+
+If nil, use `loopy--destructure-for-with-vars-default'.")
+
+(defvar loopy--destructuring-for-iteration-function nil
+  "The function to use for destructuring during iteration commands.
+
+The function named by this variable receives a sequence of
+variable names and a value expression.  It should return an
+expression that can be used in the loop's main body and a list of
+variables which must be initialized in the loop.
+
+Generally, the main-body expression should use `setq' to assign
+to the variables found in the sequence of variable names, and the
+list of variables to initialize will include the variables in
+said sequence and any others that might leek through.
+
+If nil, use `loopy--destructure-for-iteration-default'.")
 
 (defvar loopy--destructuring-accumulation-parser nil
   "The function used to parse destructuring accumulation commands.
 
-Accumulation commands are generally incompatible with the
-destructuring produced by the function named by the variable
-`loopy--basic-destructuring-function'.  Instead, parsers for
-destructuring accumulation commands are able to produce
-instructions however they see fit.
-
-Unlike `loopy--basic-destructuring-function', the function named
-by this variable returns instructions, not a list of
-variable-value pairs.
+Unlike `loopy--destructuring-for-iteration-function', the
+function named by this variable returns instructions, not a list
+of variable-value pairs.
 
 If nil, use `loopy--parse-destructuring-accumulation-command'.")
 
@@ -162,8 +173,8 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 (defun loopy--enable-flag-default ()
   "Set `loopy' behavior back to its default state for the loop."
   (setq loopy--split-implied-accumulation-results nil
-        loopy--basic-destructuring-function
-        #'loopy--destructure-variables-default
+        loopy--destructuring-for-with-vars-function
+        #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
         #'loopy--parse-destructuring-accumulation-command
         loopy-iter--lax-naming nil))
@@ -193,9 +204,14 @@ This variable is used to signal an error instead of silently failing.")
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
 
-This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).
-They are inserted into the variable declarations of a `let*' binding.
-They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to `loopy'.")
+This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).  If VAR is a
+sequence, then it will be destructured.  How VAR and VAL are
+used, as well as how the bindings are expanded into the loop's
+surrounding code, is determined by the destructuring system being
+used.
+
+They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to
+`loopy'.")
 
 (defvar loopy--without-vars nil
   "A list of variables that `loopy' won't try to initialize.
@@ -358,9 +374,12 @@ t.")
 
     ;; -- Flag Variables --
     loopy-iter--lax-naming
-    loopy--basic-destructuring-function
+    loopy--destructuring-for-with-vars-function
     loopy--destructuring-accumulation-parser
-    loopy--split-implied-accumulation-results))
+    loopy--split-implied-accumulation-results)
+  "These variables must be `let'-bound around the loop.
+
+This list is mainly fed to the macro `loopy--wrap-variables-around-body'.")
 
 ;;;; Miscellaneous and Utility Functions
 (defun loopy--bound-p (var-name)
@@ -397,23 +416,24 @@ or `loopy-custom-command-aliases'."
                              (push (car alias) results)))
                          results))))
 
+(defun loopy--validate-binding (binding)
+  "Validate the form of BINDING.  Signal error if invalid.
+
+BINDING should be a list of two elements.  To avoid mistakes,
+this means that an explicit \"nil\" is always required."
+  (unless (and (consp binding)
+               (= 2 (length binding)))
+    (error "Invalid binding in `loopy' expansion: %s" binding)))
+
+(defun loopy--ensure-valid-bindings (bindings)
+  "Ensure BINDINGS valid according to `loopy--validate-binding'."
+  (mapc #'loopy--validate-binding bindings))
+
 ;;;; Destructuring functions.
 ;; Note that functions which are only used for commands are found in
 ;; `loopy-commands.el'.  The functions found here are used generally.
 
-(defun loopy--destructure-variables (var value-expression)
-  "Destructure VALUE-EXPRESSION into VAR via `loopy--basic-destructuring-function'.
-
-Return a list of variable-value pairs (not dotted), suitable for
-substituting into a `let*' form or being combined under a
-`setq' form."
-  (if (symbolp var)
-      `((,var ,value-expression))
-    (funcall (or loopy--basic-destructuring-function
-                 #'loopy--destructure-variables-default)
-             var value-expression)))
-
-(defun loopy--destructure-variables-default (var value-expression)
+(defun loopy--basic-builtin-destructuring (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR.
 
 Return a list of variable-value pairs (not dotted), suitable for
@@ -461,7 +481,7 @@ substituting into a `let*' form or being combined under a
 
          (let ((passed-value-expression `(pop ,value-holder)))
            (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
-             (push (loopy--destructure-variables-default
+             (push (loopy--basic-builtin-destructuring
                     symbol-or-seq passed-value-expression)
                    destructurings)))
 
@@ -469,21 +489,22 @@ substituting into a `let*' form or being combined under a
          ;; `last-var' is a symbol (as with the B in '(A . B)) , then B is now
          ;; already the correct value (which is the ending `cdr' of the list),
          ;; and we don't have to do anything else.
-         (if (and last-var-is-symbol is-proper-list)
-             ;; Otherwise, if `var' is a proper list and `last-var' is a
-             ;; symbol, then we need to take the `car' of that `cdr'.
-             (push `((,value-holder (car ,value-holder)))
-                   destructurings)
-           ;; Otherwise, `last-var' is a sequence.
-           (if is-proper-list
-               ;; If `var' is a proper list, then we now have a list like ((C
-               ;; D)) from (A B (C D)).  We only want to pass in the (C D).
-               (push (loopy--destructure-variables-default
+         (if is-proper-list
+             (if last-var-is-symbol
+                 ;; Otherwise, if `var' is a proper list and `last-var' is a
+                 ;; symbol, then we need to take the `car' of that `cdr'.
+                 (push `((,value-holder (car ,value-holder)))
+                       destructurings)
+               ;; If `last-var' is not a symbol, then if `var' is a proper list,
+               ;; then we now have a list like ((C D)) from (A B (C D)).  We
+               ;; only want to pass in the (C D).
+               (push (loopy--basic-builtin-destructuring
                       last-var `(car ,value-holder))
-                     destructurings)
-             ;; Otherwise, we might have something like [C D] from
-             ;; (A B . [C D]), where we don't need to take the `car'.
-             (push (loopy--destructure-variables-default
+                     destructurings))
+           ;; Otherwise, we might have something like [C D] from
+           ;; (A B . [C D]), where we don't need to take the `car'.
+           (unless last-var-is-symbol
+             (push (loopy--basic-builtin-destructuring
                     last-var value-holder)
                    destructurings)))
 
@@ -498,7 +519,7 @@ substituting into a `let*' form or being combined under a
              `(((,value-holder ,value-expression)))))
        (cl-loop for symbol-or-seq across var
                 for index from 0
-                do (push (loopy--destructure-variables-default
+                do (push (loopy--basic-builtin-destructuring
                           symbol-or-seq `(aref ,value-holder ,index))
                          destructurings))
 
@@ -506,6 +527,38 @@ substituting into a `let*' form or being combined under a
        (apply #'append (nreverse destructurings))))
     (t
      (error "Don't know how to destructure this: %s" var))))
+
+(defun loopy--destructure-for-with-vars (bindings)
+  "Destructure BINDINGS into bindings suitable for something like `let*'.
+
+This function named by this variables receives the bindings given
+to the `with' macro argument and should usually return a list of
+two elements:
+
+1. A function/macro that works like `let*' and can be used to wrap
+   the expanded macro code.
+2. The bindings that will be given to this macro.
+
+For example, an acceptable return value might be something like
+
+    (list 'pcase-let* BINDINGS)
+
+which will be used to wrap the loop and other code."
+  (funcall (or loopy--destructuring-for-with-vars-function
+               #'loopy--destructure-for-with-vars-default)
+           bindings))
+
+(defun loopy--destructure-for-with-vars-default (bindings)
+  "Destructure BINDINGS into bindings suitable for something like `let*'.
+
+Returns a list of two elements:
+1. The symbol `let*'.
+2. A new list of bindings."
+  (list 'let*
+        (mapcan (cl-function
+                 (lambda ((var val))
+                   (loopy--basic-builtin-destructuring var val)))
+                bindings)))
 
 (cl-defun loopy--find-special-macro-arguments (names body)
   "Find any usages of special macro arguments NAMES in BODY, given aliases.
@@ -702,7 +755,8 @@ The function creates quoted code that should be used by a macro."
 
       ;; Declare the With variables.
       (when loopy--with-vars
-        (setq result `(let* ,loopy--with-vars ,@(get-result))
+        (setq result `(,@(loopy--destructure-for-with-vars loopy--with-vars)
+                       ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare the symbol macros.
@@ -810,19 +864,28 @@ Info node `(loopy)' distributed with this package."
    (when-let ((loopy--all-flags
                (append loopy-default-flags
                        (loopy--find-special-macro-arguments '(flag flags)
-                                                            body))))
+                                                       body))))
      (dolist (flag loopy--all-flags)
        (if-let ((func (cdr (assq flag loopy--flag-settings))))
            (funcall func)
          (error "Loopy: Flag not defined: %s" flag))))
 
    ;; With
+   ;; Note: These values don't have to be used literally, due to
+   ;; destructuring.
    (setq loopy--with-vars
-         ;; Process `with' for destructuring.
-         (mapcan (lambda (var)
-                   (loopy--destructure-variables (cl-first var)
-                                                 (cl-second var)))
-                 (loopy--find-special-macro-arguments '(with let*) body)))
+         (let ((result))
+           (dolist (binding (loopy--find-special-macro-arguments
+                             '(with let*) body))
+             (push (cond
+                    ((symbolp binding)
+                     (list binding nil))
+                    ((= 1 (length binding))
+                     (list (cl-first binding) nil))
+                    (t
+                     binding))
+                   result))
+           (nreverse result)))
 
    ;; Without
    (setq loopy--without-vars
@@ -831,14 +894,14 @@ Info node `(loopy)' distributed with this package."
    ;; Before do
    (setq loopy--before-do
          (loopy--find-special-macro-arguments '( before-do before
-                                                 initially-do initially)
-                                              body))
+                                            initially-do initially)
+                                         body))
 
    ;; After do
    (setq loopy--after-do
          (loopy--find-special-macro-arguments '( after-do after
-                                                 else-do else)
-                                              body))
+                                            else-do else)
+                                         body))
 
    ;; Finally Do
    (setq loopy--final-do
@@ -872,12 +935,15 @@ Info node `(loopy)' distributed with this package."
          ;; about void variables.
          (cl-case (car instruction)
            (loopy--generalized-vars
+            (loopy--validate-binding (cdr instruction))
             (push (cdr instruction) loopy--generalized-vars))
            (loopy--iteration-vars
+            (loopy--validate-binding (cdr instruction))
             ;; Don't want to accidentally rebind variables to `nil'.
             (unless (loopy--bound-p (cadr instruction))
               (push (cdr instruction) loopy--iteration-vars)))
            (loopy--accumulation-vars
+            (loopy--validate-binding (cdr instruction))
             ;; Don't want to accidentally rebind variables to `nil'.
             (unless (loopy--bound-p (cadr instruction))
               (push (cdr instruction) loopy--accumulation-vars)))
@@ -917,13 +983,13 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--main-body (nreverse loopy--main-body)
          loopy--iteration-vars (nreverse loopy--iteration-vars)
          loopy--implicit-return (when (consp loopy--implicit-return)
-                                  (if (= 1 (length loopy--implicit-return))
-                                      ;; If implicit return is just a single thing,
-                                      ;; don't use a list.
-                                      (car loopy--implicit-return)
-                                    ;; If multiple items, be sure to use a list
-                                    ;; in the correct order.
-                                    `(list ,@(nreverse loopy--implicit-return)))))
+                             (if (= 1 (length loopy--implicit-return))
+                                 ;; If implicit return is just a single thing,
+                                 ;; don't use a list.
+                                 (car loopy--implicit-return)
+                               ;; If multiple items, be sure to use a list
+                               ;; in the correct order.
+                               `(list ,@(nreverse loopy--implicit-return)))))
 
 ;;;;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))
