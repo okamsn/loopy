@@ -347,39 +347,40 @@ set this variable to t if it has run.  This value will be
 checked after the tag-body exit if `loopy--tagbody-exit-used' is
 t.")
 
-(defvar loopy--variables
-  '(loopy--loop-name
-    loopy--with-vars
-    loopy--without-vars
-    loopy--before-do
-    loopy--after-do
-    loopy--final-do
-    loopy--final-return
+(eval-and-compile
+  (defvar loopy--variables
+    '(loopy--loop-name
+      loopy--with-vars
+      loopy--without-vars
+      loopy--before-do
+      loopy--after-do
+      loopy--final-do
+      loopy--final-return
 
-    ;; -- Vars for processing loop commands --
-    loopy--iteration-vars
-    loopy--accumulation-vars
-    loopy--generalized-vars
-    loopy--pre-conditions
-    loopy--main-body
-    loopy--latter-body
-    loopy--post-conditions
-    loopy--implicit-return
+      ;; -- Vars for processing loop commands --
+      loopy--iteration-vars
+      loopy--accumulation-vars
+      loopy--generalized-vars
+      loopy--pre-conditions
+      loopy--main-body
+      loopy--latter-body
+      loopy--post-conditions
+      loopy--implicit-return
 
-    ;; -- Variables for constructing code --
-    loopy--skip-used
-    loopy--tagbody-exit-used
-    loopy--implicit-accumulation-final-update
-    loopy--in-sub-level
+      ;; -- Variables for constructing code --
+      loopy--skip-used
+      loopy--tagbody-exit-used
+      loopy--implicit-accumulation-final-update
+      loopy--in-sub-level
 
-    ;; -- Flag Variables --
-    loopy-iter--lax-naming
-    loopy--destructuring-for-with-vars-function
-    loopy--destructuring-accumulation-parser
-    loopy--split-implied-accumulation-results)
-  "These variables must be `let'-bound around the loop.
+      ;; -- Flag Variables --
+      loopy-iter--lax-naming
+      loopy--destructuring-for-with-vars-function
+      loopy--destructuring-accumulation-parser
+      loopy--split-implied-accumulation-results)
+    "These variables must be `let'-bound around the loop.
 
-This list is mainly fed to the macro `loopy--wrap-variables-around-body'.")
+This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 
 ;;;; Miscellaneous and Utility Functions
 (defun loopy--bound-p (var-name)
