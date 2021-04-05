@@ -42,6 +42,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   - [[#accumulation][Accumulation]]
   - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
+    - [[#conditionals][Conditionals]]
+    - [[#skipping-cycles][Skipping Cycles]]
+    - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-loops]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
 - [[#using-flags][Using Flags]]
@@ -2568,3 +2571,7 @@ To see more examples, I recommend looking at the source code of
 [[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
 
 [fn:iter] https://common-lisp.net/project/iterate/
+
+# Local Variables:
+# toc-org-max-depth: 20
+# End:
