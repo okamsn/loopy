@@ -1946,11 +1946,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    variable =loopy--main-body= which contains, as the name suggests, forms that
    will be evaluated in the body of the main loop. This form tells loopy to
    return nil (thereby exiting the main loop) if any of the provided conditions
-   fail. In =loopy--after-do=, a variable that contains forms that are evaluated
-   after the loop has finished, we add a form to return t. Collectively these
-   changes give loopy the behavior of either returning nil if any of the always
-   conditions fail or returning t by default if that doesn't happen. This is
-   what we want.
+   fail. In =loopy--implicit-return=, a variable that contains what =loopy= returns
+   if nothing is explicitly returned. Collectively these changes give loopy the
+   behavior of either returning nil if any of the always conditions fail or
+   returning t by default if that doesn't happen. This is what we want.
 
    Note that we use =loopy--loop-name=, the name of the =cl-block= surrounding the
    loopy loop, so that we ensure we exit the loop itself and not some other
@@ -1966,7 +1965,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
         "Parse a command of the form `(always [CONDITIONS])'.
      If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-       `((loopy--after-do . (cl-return-from ,loopy--loop-name t))
+       `((loopy--implicit-return . (cl-return-from ,loopy--loop-name t))
          (loopy--main-body . (unless (and ,@conditions) (cl-return-from ,loopy--loop-name nil)))))
 
      (add-to-list 'loopy-custom-command-parsers (cons 'always #'my--loopy-always-command-parser))
@@ -1991,7 +1990,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (list j '(2 4 6 8 9))
             (always (and (< i 10) (cl-evenp j))))
    #+end_src
-   
+
 ** Finding More Examples
 :PROPERTIES:
 :ID:       bb8a79c1-1a85-463b-9349-7ee01b42c38c
