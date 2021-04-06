@@ -1019,12 +1019,29 @@ implicit variable without knowing it's name, even for named loops."
                           (minimizing i)))))))
 
 (ert-deftest multiply ()
-  (should 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-			    (multiply product i)
-			    (finally-return product)))))
-  (should 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-			    (multiplying product i)
-			    (finally-return product))))))
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiply product i)
+                                     (finally-return product))))))
+
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiplying product i)
+                                     (finally-return product)))))))
+
+(ert-deftest multiply-destructuring ()
+  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
+                                            (multiply (x y) i)
+                                            (finally-return x y))))))
+
+  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
+                                            (multiplying (x y) i)
+                                            (finally-return x y)))))))
+
+(ert-deftest multiply-implicit ()
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiply i))))))
+
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiplying i)))))))
 
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
