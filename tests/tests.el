@@ -1018,6 +1018,31 @@ implicit variable without knowing it's name, even for named loops."
       (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
                           (minimizing i)))))))
 
+(ert-deftest multiply ()
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiply product i)
+                                     (finally-return product))))))
+
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiplying product i)
+                                     (finally-return product)))))))
+
+(ert-deftest multiply-destructuring ()
+  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
+                                            (multiply (x y) i)
+                                            (finally-return x y))))))
+
+  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
+                                            (multiplying (x y) i)
+                                            (finally-return x y)))))))
+
+(ert-deftest multiply-implicit ()
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiply i))))))
+
+  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (multiplying i)))))))
+
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
@@ -1384,8 +1409,38 @@ Not multiple of 3: 7")))
 (ert-deftest until ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                                     (until (> i 3))
-                                     (collect i)))))))
+                               (until (> i 3))
+                               (collect i)))))))
+
+;;;;; Always
+(ert-deftest always ()
+  (should (equal t (eval (quote (loopy (list i '(1 2 3 4 5 6))
+				       (always (< i 7)))))))
+
+  (should (null
+	   (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			       (always (> i 7))))))))
+
+;;;;; Never
+(ert-deftest never ()
+  (should (equal nil
+		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			             (never (> i 0)))))))
+
+  (should (equal t
+		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			             (never (< i 0))))))))
+
+;;;;; Thereis
+(ert-deftest thereis ()
+  (should (= 6 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			           (thereis (and (> i 5) i)))))))
+
+  (should (= 9 (eval (quote (loopy (list i (number-sequence 1 9))
+			           (thereis (and (> i 8) i)))))))
+
+  (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
+			            (thereis (> i 7))))))))
 
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()
@@ -1397,8 +1452,8 @@ Not multiple of 3: 7")))
               (list (cons 'target-sum #'my-loopy-sum-command)))
   (should (= 6
              (eval (quote (loopy  (target-sum my-target 1 2 3)
-                                  (return nil)
-                                  (finally-return my-target)))))))
+                           (return nil)
+                           (finally-return my-target)))))))
 
 ;; NOTE: Also tests that post-conditions work as expected.
 (ert-deftest custom-command-always ()

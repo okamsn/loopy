@@ -602,6 +602,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
   "Get the appropriate starting value for COMMAND-NAME."
   (cl-case command-name
     ((sum summing count counting)    0)
+    ((multiply multiplying) 1)
     ((max maxing maximize maximizing)
      -1.0e+INF)
     ((min minning minimize minimizing)
@@ -636,6 +637,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
               ((count counting) `(if ,val (setq ,var (1+ ,var))))
               ((max maxing maximize maximizing) `(setq ,var (max ,val ,var)))
               ((min minning minimize minimizing) `(setq ,var (min ,val ,var)))
+              ((multiply multiplying) `(setq ,var (* ,var ,val)))
               ((nconc nconcing) `(setq ,var (nconc ,var ,val)))
               ((prepend prepending) `(setq ,var (append ,val ,var)))
               ((push-into pushing-into push pushing) `(push ,val ,var))
@@ -733,6 +735,40 @@ whose value is to be accumulated."
            (cl-remove-if (lambda (x) (eq (car x) 'loopy--accumulation-vars))
                          (loopy--parse-accumulation-commands
                           (list name value-holder value-expression))))))))
+
+;;;; Boolean Commands
+(cl-defun loopy--parse-always-command ((_ &rest conditions))
+  "Parse a command of the form `(always [CONDITIONS])'.
+
+If any condition is nil, `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+  `((loopy--implicit-return . t)
+    (loopy--main-body . (unless ,(if (= 1 (length conditions))
+                                     (cl-first conditions)
+                                   `(and ,@conditions))
+                          (cl-return-from ,loopy--loop-name nil)))))
+
+(cl-defun loopy--parse-never-command ((_ &rest conditions))
+  "Parse a command of the form `(never [CONDITIONS])'.
+
+If any condition is t, `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+  `((loopy--implicit-return  . t)
+    (loopy--main-body . (when ,(if (= 1 (length conditions))
+                                   (cl-first conditions)
+                                 `(and ,@conditions))
+                          (cl-return-from ,loopy--loop-name nil)))))
+
+(cl-defun loopy--parse-thereis-command ((_ &rest conditions))
+  "Parse a command of the form `(thereis [CONDITIONS]).'
+
+If any condition is non-nil, its value is immediately returned and the loop is exited.
+Otherwise the loop continues and nil is returned."
+  (let ((value-holder (gensym "thereis-var-")))
+    `((loopy--implicit-return  . nil)
+      (loopy--main-body
+       . (if-let ((,value-holder (and ,@conditions)))
+	     (cl-return-from ,loopy--loop-name ,value-holder))))))
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
@@ -955,7 +991,8 @@ COMMAND-LIST."
 ;; TODO: Is there a cleaner way than this?  Symbol properties?
 (defconst loopy--builtin-command-parsers
   ;; A few of these are just aliases.
-  '((append       . loopy--parse-accumulation-commands)
+  '((always       . loopy--parse-always-command)
+    (append       . loopy--parse-accumulation-commands)
     (appending    . loopy--parse-accumulation-commands)
     (across       . loopy--parse-array-command)
     (across-ref   . loopy--parse-array-ref-command)
@@ -998,6 +1035,9 @@ COMMAND-LIST."
     (minning      . loopy--parse-accumulation-commands)
     (minimize     . loopy--parse-accumulation-commands)
     (minimizing   . loopy--parse-accumulation-commands)
+    (multiply     . loopy--parse-accumulation-commands)
+    (multiplying  . loopy--parse-accumulation-commands)
+    (never        . loopy--parse-never-command)
     (nconc        . loopy--parse-accumulation-commands)
     (nconcing     . loopy--parse-accumulation-commands)
     (on           . loopy--parse-cons-command)
@@ -1021,6 +1061,7 @@ COMMAND-LIST."
     (sub-loop     . loopy--parse-sub-loop-command)
     (sum          . loopy--parse-accumulation-commands)
     (summing      . loopy--parse-accumulation-commands)
+    (thereis      . loopy--parse-thereis-command)
     (unless       . loopy--parse-when-unless-command)
     (until        . loopy--parse-while-until-commands)
     (vconcat      . loopy--parse-accumulation-commands)

@@ -40,6 +40,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   - [[#generic-evaluation][Generic Evaluation]]
   - [[#iteration][Iteration]]
   - [[#accumulation][Accumulation]]
+  - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
     - [[#conditionals][Conditionals]]
     - [[#skipping-cycles][Skipping Cycles]]
@@ -52,6 +53,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   - [[#background-info][Background Info]]
   - [[#hello-world][Hello World]]
   - [[#an-always-command][An ~always~ Command]]
+  - [[#finding-more-examples][Finding More Examples]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
 - [[#translating-cl-loop][Translating =cl-loop=]]
   - [[#for-clauses][For Clauses]]
@@ -918,6 +920,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-min))
      #+END_SRC
 
+   #+findex: multiply, multiplying
+   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of the
+     values of EXPR.  =VAR= starts at 1.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => 120
+       (loopy (list i '(1 2 3 4 5))
+              (multiply 5-factorial i)
+              (finally-return 5-factorial))
+     #+END_SRC
+     
    #+findex: nconc
    - =(nconc VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto
      =VAR= via the function ~nconc~.
@@ -987,6 +1000,70 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      To concatenate values as strings, see the command =concat= above.
 
+** Boolean
+   :PROPERTIES:
+   :CUSTOM_ID: boolean-commands
+   :DESCRIPTION: Testing whether a condition holds true.
+   :END:
+
+   Boolean commands are used to test whether a condition holds true for elements
+   of a sequence.  Under certain conditions, they cause the loop to exit and
+   return a value.  Like accumulation commands, they have an implicit return
+   value (~t~ for =always= and =never=, ~nil~ for =thereis=).
+
+   It is incorrect to use both =thereis= and one of =always= or =never= in the
+   same loop, as this leads to conflicting implicit return values.
+
+   For convenience, these commands can be passed multiple conditions, in which
+   case the conditions are ~and~-ed.
+
+   #+findex: always
+   - =(always COND)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
+     Otherwise, the loop returns ~t~.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => t
+       (loopy (list i '(1 0 1 0 1))
+              (always (< i 2)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+              (always (< i 1)))
+     #+END_SRC
+   
+   #+findex: never
+   - =(never COND)= :: Immediately return ~nil~ if =COND= is ever non-nil.
+     Otherwise, the loop returns ~t~.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => t
+       (loopy (list i '(1 0 1 0 1))
+              (never (= i 3)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+              (never (= i 0)))
+     #+END_SRC
+     
+   #+findex: thereis
+   - =(thereis COND)= :: Immediately return the value of =COND= if said value is
+     ever non-nil.  Otherwise, the loop returns ~nil~.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => 3
+       (loopy (list i '(1 0 1 3 1))
+              ;; Note: `and' returns the last value it evaluates.
+              (thereis (and (> i 2) i)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+              (thereis (and (> i 2) i)))
+
+       ;; => 3
+       (loopy (list i '(nil nil 3 nil))
+              (thereis i))
+     #+END_SRC
+     
 ** Control Flow
    :PROPERTIES:
    :CUSTOM_ID: control-flow
@@ -1003,7 +1080,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     like their Lisp counterparts.  There is therefore no need for an =and=
     command as used in =cl-loop=.
 
-   #+findex: when
+    #+findex: when
     - =(when EXPR CMDS)= :: Run =CMDS= only if =EXPR= is non-nil.
 
       #+BEGIN_SRC emacs-lisp
@@ -1018,7 +1095,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (finally-return only-evens))
       #+END_SRC
 
-   #+findex: if
+    #+findex: if
     - =(if EXPR CMDS)= :: Run the first command if =EXPR= is non-nil.
       Otherwise, run the remaining commands.
 
@@ -1034,7 +1111,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                                      some-threes)))
       #+END_SRC
 
-   #+findex: cond
+    #+findex: cond
     - =(cond [(EXPR CMDS) [...]])= :: For the first =EXPR= to evaluate to
       non-nil, run the following commands =CMDS=.
 
@@ -1724,11 +1801,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+vindex: loopy--implicit-return
    - =loopy--implicit-return= :: A list of values to be returned by the loop if
-     no other return value is specified. All accumulation commands can add a
-     value to this list, which can include the variable ~loopy-result~ if an
-     accumulation command is used without specifying a variable.
+     no other return value is specified/reached.  All accumulation commands can
+     add a value to this list, which can include the variable ~loopy-result~ if
+     an accumulation command is used without specifying a variable.
 
-     For example, =(collect my-coll my-val)= would add =my-coll= to this list.
+     For example, =(collect my-collection my-value)= would add =my-collection=
+     to this list.
 
    #+vindex: loopy--implicit-accumulation-final-update
    - =loopy--implicit-accumulation-final-update= :: Actions to perform on
@@ -1760,6 +1838,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    - =loopy--final-return= :: An expression that is always returned by the
      macro, regardless of any early returns in the loop body.  This is
      derived from the =finally-return= macro argument.
+
+
+   #+vindex: loopy--loop-name
+   Some commands might depend on the name of the loop.  The symbol which names
+   the loop is stored in the variable ~loopy--loop-name~.  The default value is
+   ~nil~ for normal loop and uniquely generated for sub-loops created with the
+   =sub-loop= command.
 
    The structure of the macro’s expanded code depends on the features used
    (e.g., =loopy= won’t try to declare variables if none exist), but the result
@@ -1861,47 +1946,147 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :DESCRIPTION: Adding a feature from `cl-loop'.
    :END:
 
-   Lets say we want to emulate =cl-loop='s =always= clause, which causes the
+   Lets say we want to emulate ~cl-loop~'s =always= clause, which causes the
    loop to return =nil= if an expression evaluates to =nil= and =t= otherwise.
+   This is similar to the functions ~cl-every~ and ~seq-every-p~.
 
    Here is an example:
 
    #+BEGIN_SRC emacs-lisp
-     (cl-loop for i in (number-sequence 1 9) always (< i 10)) ; => t
+     ;; => t
+     (cl-loop for i in (number-sequence 1 9) always (< i 10))
    #+END_SRC
 
-   Without a custom command, you could translate this using the following.
+   Actually, =loopy= already has an =always= command, but for the sake of this
+   example let's assume that it doesn't.  Without a custom command, you could
+   translate this using the following code:
 
    #+BEGIN_SRC emacs-lisp
+     ;; => t
      (loopy (list i (number-sequence 1 9))
-            (unless (< i 10) (return nil))
+            (when (< i 10) (return nil))
             (else-do (cl-return t)))
    #+END_SRC
 
-   While its meaning is clear, this approach is certainly wordier.  Here's how
-   you could do it with a custom command:
+   This is similar to what you might write in other languages, such as Python.
 
-   #+BEGIN_SRC emacs-lisp
-     (cl-defun my--loopy-always-command-parser ((_ &rest conditions))
-       "Parse a command of the form `(always [CONDITIONS])'.
-     If any condition is `nil', `loopy' should immediately return nil.
+   #+begin_src python
+     # In some testing Python function:
+     for i in range(1, 10):
+         if i < 10:
+             return False
+     else:
+         return True
+   #+end_src
+
+   While the meaning of the code is clear, this approach is certainly wordier.
+
+   Here's how one could do this using a custom command.  Again, =loopy= already
+   comes with a built-in =always= command.  This example is taken directly
+   from the file =loopy-comands.el=, which contains the code of all of ~loopy~'s
+   built-in parsers.
+
+   We can describe the command's desired behavior in two sentences:
+   1. The loop should immediately return ~nil~ if the expression ever evaluates
+      to ~nil~.
+   2. The loop should return ~t~ if the loop is able to complete successfully.
+
+
+   This simplest way to satisfy the first requirement is to conditionally use
+   ~cl-return~ if the expressions ever evaluates to ~nil~.  We want to do this
+   while the loop is running, so we should use an instruction for
+   ~loopy--main-body~.
+
+   #+begin_src emacs-lisp
+     ;; We want to insert the below code into the loop
+     (when CONDITION
+       (cl-return nil))
+
+     ;; so we use the instruction
+     `(loopy--main-body . (when ,CONDITION (cl-return nil)))
+
+     ;; where CONDITION is supplied by the parsing function.
+   #+end_src
+
+   For a simple loop, this works well enough.  However, the function ~cl-return~
+   only works with blocks that are named ~nil~.  If we have named the loop, then
+   ~cl-return~ won't work, and might instead cause unexpected errors.
+   Therefore, it is better to use ~cl-return-from~ with the variable
+   ~loopy--loop-name~.  As noted in the previous section, ~loopy--loop-name~
+   stores the symbol which names the loop.
+
+   #+begin_src emacs-lisp
+     `(loopy--main-body
+       . (when ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+   #+end_src
+
+   The best way to satisfy the second requirement is to use an instruction for
+   ~loopy--implicit-return~.  One /could/ try to insert code using
+   ~cl-return-from~ into ~loopy--after-do~, and this /would/ cause a value to be
+   returned after the loop had successfully completed, but doing it that way
+   could unexpectedly prevent other code in =after-do= from running.  Using an
+   implicit return value does not have that problem.
+
+   This gives us the following instruction, which will add ~t~ to the list of
+   values the macro returns if nothing else would be returned.  If that list is
+   just ~'(t)~, then the macro knows to just return ~t~.
+
+   #+begin_src emacs-lisp
+     '(loopy--implicit-return . t)
+   #+end_src
+
+   Once we've chosen our instructions, we need to tell =loopy= what function to
+   use to produce these instructions.  Like in the previous example, we define
+   are parsing function and add it to the alist ~loopy-custom-command-parsers~.
+
+   #+begin_src emacs-lisp
+     ;; As noted in the previous section, the parsing function is always
+     ;; passed the entire command as `(always CONDTION)', not just the
+     ;; command arguments as `CONDITION'.
+
+     (cl-defun my--loopy-always-command-parser ((_ condition))
+       "Parse a command of the form `(always CONDITION)'.
+
+     If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-       (let (instructions)
-         ;; Return t if loop completes successfully.
-         (push `(loopy--after-do . (cl-return t)) instructions)
-         ;; Check all conditions at the end of the loop body, forcing an exit if any
-         ;; evaluate to nil.  Since the default return value of the macro is nil, we
-         ;; don’t need to do anything else.
-         ;;
-         ;; NOTE: We must not add anything to `loopy--final-return', since that
-         ;;       would override the value of any early returns.
-         (dolist (condition conditions)
-           (push `(loopy--post-conditions . ,condition) instructions))
-         instructions))
+       `((loopy--implicit-return . t)
+         (loopy--main-body . (unless condition
+                               (cl-return-from ,loopy--loop-name nil)))))
 
      (add-to-list 'loopy-custom-command-parsers
                   (cons 'always #'my--loopy-always-command-parser))
+   #+end_src
 
+   Once we've added our parsing function to ~loopy-custom-command-parsers~,
+   =loopy= will use that function whenever it tries to understand the =always=
+   command.  In this case, this custom parser would supercede the built-in
+   parser.
+
+   With that done, our custom =always= command is as useful as the corresponding
+   ~cl-loop~ clause.  However, because ~loopy~ uses expressions instead of
+   keyword clauses like ~cl-loop~, we can do slightly better.  For convenience,
+   we can easily allow passing multiple conditions to the command instead of
+   just one.  In such cases, the conditions should be wrapped in an ~and~ form,
+   and that is indeed what the built-in parser does.
+
+   #+begin_src emacs-lisp
+     ;; The built-in parser, taken from `loopy-commands.el':
+     (cl-defun loopy--parse-always-command ((_ &rest conditions))
+       "Parse a command of the form `(always [CONDITIONS])'.
+
+     If any condition is nil, `loopy' should immediately return nil.
+     Otherwise, `loopy' should return t."
+       `((loopy--implicit-return . t)
+         ;; If there are multiple conditions, wrap these conditions in `and'.
+         (loopy--main-body . (unless ,(if (= 1 (length conditions))
+                                          (cl-first conditions)
+                                        `(and ,@conditions))
+                               (cl-return-from ,loopy--loop-name nil)))))
+   #+end_src
+
+   Here are some examples of the command in action:
+
+   #+begin_src emacs-lisp
      ;; One condition: => t
      (loopy (list i (number-sequence 1 9)) (always (< i 10)))
 
@@ -1909,11 +2094,20 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      (loopy (list i (number-sequence 1 9))
             (list j '(2 4 6 8 9))
             (always (< i 10) (cl-evenp j)))
-   #+END_SRC
 
-   This command (and equivalents of the =never= and =thereis= clauses) aren’t
-   provided by default on the assumption that modifying values normally derived
-   from macro arguments might prove confusing and unexpected.
+     ;; The previous example is equivalent to this.
+     (loopy (list i (number-sequence 1 9))
+            (list j '(2 4 6 8 9))
+            (always (and (< i 10) (cl-evenp j))))
+   #+end_src
+
+** Finding More Examples
+:PROPERTIES:
+:ID:       bb8a79c1-1a85-463b-9349-7ee01b42c38c
+:END:
+
+To see more examples, I recommend looking at the source code of
+=loopy-commands.el= which contains all of loopy's built-in commands.
 
 * Comparing to ~cl-loop~
   :PROPERTIES:
@@ -2484,3 +2678,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 [[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
 
 [fn:iter] https://common-lisp.net/project/iterate/
+
+# Local Variables:
+# toc-org-max-depth: 20
+# End:

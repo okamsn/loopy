@@ -291,7 +291,10 @@ These run in a `progn'.")
   "What the macro finally returns.  This overrides any early return value.")
 
 (defvar loopy--implicit-return nil
-  "The implicit return value of loops that use accumulation commands.")
+  "The implicit return value of loops that use accumulation commands.
+
+This variable will contain a list of expressions that will be
+returned by the macro if no other value is returned.")
 
 (defvar loopy-result nil
   "The result of using implicit accumulation commands in `loopy'.
@@ -398,12 +401,12 @@ The variable can exist in `loopy--with-vars',
       (memq var-name (mapcar #'car loopy--generalized-vars))
       (memq var-name loopy--without-vars)))
 
-(defun loopy--already-implicit-return (var-name)
-  "Check whether variable VAR-NAME is in the list of implied return values.
+(defun loopy--already-implicit-return (expression)
+  "Check whether EXPRESSION is in the list of implied return values.
 
 Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
-  (memq var-name loopy--implicit-return))
+  (member expression loopy--implicit-return))
 
 (defun loopy--special-macro-argument-p (symbol arguments-list)
   "Whether SYMBOL is a special macro argument (including aliases).
