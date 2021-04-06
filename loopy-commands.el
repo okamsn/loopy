@@ -602,7 +602,7 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
   "Get the appropriate starting value for COMMAND-NAME."
   (cl-case command-name
     ((sum summing count counting)    0)
-    ((multipy multiplying) 1)
+    ((multiply multiplying) 1)
     ((max maxing maximize maximizing)
      -1.0e+INF)
     ((min minning minimize minimizing)
@@ -637,11 +637,11 @@ VALUE-HOLDER, once VALUE-HOLDER is initialized."
               ((count counting) `(if ,val (setq ,var (1+ ,var))))
               ((max maxing maximize maximizing) `(setq ,var (max ,val ,var)))
               ((min minning minimize minimizing) `(setq ,var (min ,val ,var)))
+              ((multiply multiplying) `(setq ,var (* ,var ,val)))
               ((nconc nconcing) `(setq ,var (nconc ,var ,val)))
               ((prepend prepending) `(setq ,var (append ,val ,var)))
               ((push-into pushing-into push pushing) `(push ,val ,var))
-              ((sum summing) `(setq ,var (+ ,val ,var)))
-	      ((multiply multiplying) `(setq ,var (* ,var ,val))))))))
+              ((sum summing) `(setq ,var (+ ,val ,var))))))))
    (t
     (funcall (or loopy--destructuring-accumulation-parser
                  #'loopy--parse-destructuring-accumulation-command)
@@ -1035,7 +1035,7 @@ COMMAND-LIST."
     (minning      . loopy--parse-accumulation-commands)
     (minimize     . loopy--parse-accumulation-commands)
     (minimizing   . loopy--parse-accumulation-commands)
-    (multipy      . loopy--parse-accumulation-commands)
+    (multiply     . loopy--parse-accumulation-commands)
     (multiplying  . loopy--parse-accumulation-commands)
     (never        . loopy--parse-never-command)
     (nconc        . loopy--parse-accumulation-commands)
