@@ -1833,6 +1833,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      macro, regardless of any early returns in the loop body.  This is
      derived from the =finally-return= macro argument.
 
+
+   #+vindex: loopy--loop-name
+   Some commands might depend on the name of the loop.  The symbol which names
+   the loop is stored in the variable ~loopy--loop-name~.  The default value is
+   ~nil~ for normal loop and uniquely generated for sub-loops created with the
+   =sub-loop= command.
+
    The structure of the macro’s expanded code depends on the features used
    (e.g., =loopy= won’t try to declare variables if none exist), but the result
    will work similar to the below example.
