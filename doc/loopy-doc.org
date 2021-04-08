@@ -15,6 +15,9 @@
 #+TEXINFO_DIR_DESC: A looping and iteration macro.
 
 #+MACRO: dfn @@texinfo:@dfn{$1}@@
+#+MACRO: kbd @@texinfo:@kbd{$1}@@
+#+MACRO: file @@texinfo:@file{$1}@@
+#+MACRO: var @@texinfo:@var{$1}@@
 
 #+begin_export html
 NOTE: This file is meant for viewing in Org mode or for exporting to Texinfo.
@@ -2028,9 +2031,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    While the meaning of the code is clear, this approach is certainly wordier.
 
    Here's how one could do this using a custom command.  Again, =loopy= already
-   comes with a built-in =always= command.  This example is taken directly
-   from the file =loopy-comands.el=, which contains the code of all of ~loopy~'s
-   built-in parsers.
+   comes with a built-in =always= command.  This example is taken directly from
+   the file {{{file(loopy-commands.el)}}}, which contains the code of all of
+   ~loopy~'s built-in parsers.
 
    We can describe the command's desired behavior in two sentences:
    1. The loop should immediately return ~nil~ if the expression ever evaluates
