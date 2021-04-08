@@ -2150,13 +2150,16 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (always (and (< i 10) (cl-evenp j))))
    #+end_src
 
-** Finding More Examples
-:PROPERTIES:
-:ID:       bb8a79c1-1a85-463b-9349-7ee01b42c38c
-:END:
 
-To see more examples, I recommend looking at the source code of
-=loopy-commands.el= which contains all of loopy's built-in commands.
+** Finding More Examples
+   :PROPERTIES:
+   :CUSTOM_ID: finding-more-examples
+   :END:
+
+   If you would like to see more examples, consider reading through the source
+   code of {{{file(loopy-commands.el)}}}, which contains the code of all of the
+   built-in loop commands.  You can easily find this file using
+   {{{kbd(M-x find-library loopy-commands RET)}}}.
 
 * Comparing to ~cl-loop~
   :PROPERTIES:
