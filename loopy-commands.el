@@ -736,6 +736,77 @@ whose value is to be accumulated."
                          (loopy--parse-accumulation-commands
                           (list name value-holder value-expression))))))))
 
+(defmacro loopy--defaccumulation-command (names keyword-args docstring &rest body)
+  "Convenience macro for defining accumulation commands.
+NAMES are the names of the commands to be defined. NAMES can be a list of
+command names or a single command name."
+  (declare (indent defun) (doc-string 3))
+  (let* ((name (or (car-safe names) names))
+	 (aliases (cdr-safe names))
+	 (main-fn (intern (format "loopy--parse-%s-command" name)))
+	 (explicit-fn (intern (format "loopy--parse-%s-command-explicit" name)))
+	 (no-split-implicit-fn (intern (format "loopy--parse-%s-command-implicit-no-split" name)))
+	 (split-implicit-fn (intern (format "loopy--parse-%s-command-implicit-no-split" name)))
+	 (max-plist-length (* 2 (length keyword-args)))
+	 (split-p 'loopy--split-implied-accumulation-results))
+    `(progn
+       (cl-defun ,main-fn ((_ &rest args))
+	 ,docstring
+	 (cond ((cl-member (length args) ',(number-sequence 1 max-plist-length 2) :test #'=)
+		(funcall (if ,split-p #',split-implicit-fn #',no-split-implicit-fn) arg))
+	       ((cl-member (length args) ',(number-sequence 2 max-plist-length 2) :test #'=)
+		(if (symbolp (cl-first args))
+		    (,explicit-fn args)
+		  (funcall (or loopy--destructuring-accumulation-parser
+			       #'loopy--parse-destructuring-accumulation-command)
+			   ',name)))
+	       (t
+		(error "Invalid command args: %S" args))))
+       
+       (cl-defun ,explicit-fn ((name var value &key ,@keyword-args))
+	 `((loopy--accumulation-vars . (,var . ,(loopy--accumulation-starting-value name)))
+	   (loopy--implicit-return . ,var)
+	   (loopy--main-body ,',body)))
+       
+       (cl-defun ,no-split-implicit-fn ((name value &key ,@keyword-args))
+	 (let ((value-holder (intern "loopy-result")))
+	   `((loopy--accumulation-vars . (,value-holder ,(loopy--accumulation-starting-value name)))
+	     (loopy--implicit-return . ,',body)
+	     (loopy--implicit-accumulation-final-update . (setq ,value-holder ,body)))))
+       
+       (cl-defun ,split-implicit-fn ((name value &key ,@keyword-args))
+	 (let ((value-holder (concat (symbol-name name) "-implicit-")))
+	   `((loopy--accumulation-vars . (,value-holder ,(loopy--accumulation-starting-value name)))
+	     (loopy--implict-return . ,',body))))
+
+       (cl-callf2 cl-adjoin '(,name . ,main-fn) loopy-custom-command-parsers :test #'equal))))
+
+(defun loopy--convert-split-return)
+
+(loopy--defaccumulation-command (append appending) ()
+  (split-implicit-return . (nreverse ,var))
+  (main-body . (setq ,var (nconc (reverse ,expr) ,var))))
+
+(loopy--defaccumulation-command collect ()
+  (split-implicit-return . (nreverse ,value-holder)))
+
+(loopy--defaccumulation-command adjoining (test)
+  "Parse a command of the form `(adjoining)'."
+  (main-body . (callf2 cl-adjoin ,value ,var :test ,test)))
+
+(loopy--defaccumulation-command (union unioning) (test)
+  "Parse a command of the form `(union[ing])'"
+  (main-body . `(callf2 cl-union ,value ,var :test ,test)))
+
+(loopy--defaccumulation-command (nunion nunioning) (test)
+  "Parse a command of the form `(nunion[ing])'."
+  (main-body . `(callf2 cl-nunion ,value ,var :test ,test)))
+
+(loopy--defaccumulation-command reducing (init)
+  "Parse a command of the form `(reducing)'."
+  ;; `(setq ,var (funcall ,fn ))
+  )
+
 ;;;; Boolean Commands
 (cl-defun loopy--parse-always-command ((_ &rest conditions))
   "Parse a command of the form `(always [CONDITIONS])'.
