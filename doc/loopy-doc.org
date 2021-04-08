@@ -641,6 +641,52 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-list)) ; Returns '(7 7 7).
      #+END_SRC
 
+   #+findex: map
+   - =(map VAR EXPR)= :: Iterate through the key-value pairs of =EXPR=, using
+     the =map.el= library.  This library generalizes working with association
+     lists ("alists"), property lists ("plists"), hash-tables, and vectors.
+
+     In each undotted pair assigned to =VAR=, the first element is the key and
+     the second element is the value.  For vectors, the key is the index.  You
+     should not rely on the order in which the key-value pairs are found.
+
+     These pairs are created before the loop begins.  In other words, the map
+     =EXPR= is not processed progressively, but all at once.  Therefore, this
+     command can have a noticeable start-up cost when working with very large
+     maps.
+
+     #+begin_src emacs-lisp
+       ;; NOTE: `pair' is not dotted.
+       ;; => ((a 1) (b 2))
+       (loopy (map pair '((a . 1) (b . 2)))
+              (collect pair))
+
+       ;; => ((a b) (1 2))
+       (loopy (map (key value) '((a . 1) (b . 2)))
+              (collect keys key)
+              (collect values value))
+
+       ;; => ((:a :b) (1 2))
+       (loopy (map (key value) '(:a  1 :b 2))
+              (collect keys key)
+              (collect values value))
+
+       ;; NOTE: For vectors, the keys are indices.
+       ;; => ((0 1) (1 2))
+       (loopy (map (key value) [1 2])
+              (collect keys key)
+              (collect values value))
+
+       ;; => ((a b) (1 2))
+       (let ((my-table (make-hash-table)))
+         (puthash 'a 1 my-table)
+         (puthash 'b 2 my-table)
+
+         (loopy (map (key value) my-table)
+                (collect keys key)
+                (collect values value)))
+     #+end_src
+
    #+findex: repeat
    - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
      =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
@@ -2682,3 +2728,5 @@ To see more examples, I recommend looking at the source code of
 # Local Variables:
 # toc-org-max-depth: 20
 # End:
+
+#  LocalWords:  alists plists

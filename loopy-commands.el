@@ -8,7 +8,7 @@
 ;; Version: 0.4
 ;; Package-Requires: ((emacs "27.1") (loopy "0.4"))
 ;; Keywords: extensions
-;; LocalWords:  Loopy's emacs
+;; LocalWords:  Loopy's emacs alists
 
 ;;; Disclaimer:
 ;; This file is not part of GNU Emacs.
@@ -47,6 +47,7 @@
 (require 'cl-lib)
 (require 'seq)
 (require 'subr-x)
+(require 'map)
 
 (declare-function loopy--bound-p "loopy")
 (declare-function loopy--basic-builtin-destructuring "loopy")
@@ -536,6 +537,20 @@ a variable name that holds the list."
                                              ,val-holder)))
     (loopy--pre-conditions . (consp ,val-holder))))
 
+(cl-defun loopy--parse-map-command ((_ var val))
+  "Parse the `map' loop command.
+
+Iterates through an alist of (key value) un-dotted pairs,
+extracted from a hash-map, association list, property list, or
+vector using the library `map.el'."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'map))
+  (let ((value-holder (gensym "map-")))
+    `((loopy--iteration-vars . (,value-holder (map-apply #'list ,val)))
+      ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
+      (loopy--pre-conditions . (consp ,value-holder))
+      (loopy--latter-body . (setq ,value-holder (cdr ,value-holder))))))
+
 (cl-defun loopy--parse-repeat-command ((_ var-or-count &optional count))
   "Parse the `repeat' loop command.
 
@@ -1024,6 +1039,7 @@ COMMAND-LIST."
     (list-ref     . loopy--parse-list-ref-command)
     (listf        . loopy--parse-list-ref-command)
     (loop         . loopy--parse-sub-loop-command)
+    (map          . loopy--parse-map-command)
     (max          . loopy--parse-accumulation-commands)
     (maxing       . loopy--parse-accumulation-commands)
     (maximize     . loopy--parse-accumulation-commands)
