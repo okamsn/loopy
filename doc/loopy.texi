@@ -57,6 +57,7 @@ Loop Commands
 * Generic Evaluation::           Setting variables, evaluating expressions, etc.
 * Iteration::                    Iterating through sequences, etc.
 * Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
+* Boolean::                      Testing whether a condition holds true.
 * Control Flow::                 When to run loop commands.
 * Sub-loops::                    Running a loop within a loop.
 
@@ -71,6 +72,7 @@ Custom Commands
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
 * An @code{always} Command::     Adding a feature from `cl-loop'.
+* Finding More Examples::
 
 Translating @samp{cl-loop}
 
@@ -424,7 +426,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgc30f11b
+@float Listing,org77d561c
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -487,7 +489,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org9214f59
+@float Listing,org160057c
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -534,6 +536,7 @@ not all kinds of destructuring make sense in all situations.
 * Generic Evaluation::           Setting variables, evaluating expressions, etc.
 * Iteration::                    Iterating through sequences, etc.
 * Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
+* Boolean::                      Testing whether a condition holds true.
 * Control Flow::                 When to run loop commands.
 * Sub-loops::                    Running a loop within a loop.
 @end menu
@@ -682,11 +685,11 @@ to @samp{EXPR} instead of @code{nil}.
 @end lisp
 @end table
 
-@findex list, in
+@findex list, in, each
 @table @asis
-@item @samp{(list|in VAR EXPR [FUNC])}
-Loop through the elements of the list @samp{EXPR}.
-Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
+@item @samp{(list|in|each VAR EXPR [FUNC])}
+Loop through each element of the list
+@samp{EXPR}.  Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
 
 @lisp
 (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
@@ -706,6 +709,55 @@ the list by @samp{FUNC} instead of @samp{cdr}.
        (list-ref i my-list)
        (do (setf i 7))
        (finally-return my-list)) ; Returns '(7 7 7).
+@end lisp
+@end table
+
+@findex map
+@table @asis
+@item @samp{(map VAR EXPR)}
+Iterate through the key-value pairs of @samp{EXPR}, using
+the @samp{map.el} library.  This library generalizes working with association
+lists (``alists''), property lists (``plists''), hash-tables, and vectors.
+
+In each undotted pair assigned to @samp{VAR}, the first element is the key and
+the second element is the value.  For vectors, the key is the index.  You
+should not rely on the order in which the key-value pairs are found.
+
+These pairs are created before the loop begins.  In other words, the map
+@samp{EXPR} is not processed progressively, but all at once.  Therefore, this
+command can have a noticeable start-up cost when working with very large
+maps.
+
+@lisp
+;; NOTE: `pair' is not dotted.
+;; => ((a 1) (b 2))
+(loopy (map pair '((a . 1) (b . 2)))
+       (collect pair))
+
+;; => ((a b) (1 2))
+(loopy (map (key value) '((a . 1) (b . 2)))
+       (collect keys key)
+       (collect values value))
+
+;; => ((:a :b) (1 2))
+(loopy (map (key value) '(:a  1 :b 2))
+       (collect keys key)
+       (collect values value))
+
+;; NOTE: For vectors, the keys are indices.
+;; => ((0 1) (1 2))
+(loopy (map (key value) [1 2])
+       (collect keys key)
+       (collect values value))
+
+;; => ((a b) (1 2))
+(let ((my-table (make-hash-table)))
+  (puthash 'a 1 my-table)
+  (puthash 'b 2 my-table)
+
+  (loopy (map (key value) my-table)
+         (collect keys key)
+         (collect values value)))
 @end lisp
 @end table
 
@@ -1012,6 +1064,20 @@ value should be less than it.
 @end lisp
 @end table
 
+@findex multiply, multiplying
+@table @asis
+@item @samp{(multiply|multiplying VAR EXPR)}
+Repeatedly set @samp{VAR} to the product of the
+values of EXPR@.  @samp{VAR} starts at 1.
+
+@lisp
+;; => 120
+(loopy (list i '(1 2 3 4 5))
+       (multiply 5-factorial i)
+       (finally-return 5-factorial))
+@end lisp
+@end table
+
 @findex nconc
 @table @asis
 @item @samp{(nconc VAR EXPR)}
@@ -1094,6 +1160,76 @@ end of @samp{VAR} via the function @code{vconcat}.
 @end lisp
 
 To concatenate values as strings, see the command @samp{concat} above.
+@end table
+
+@node Boolean
+@section Boolean
+
+Boolean commands are used to test whether a condition holds true for elements
+of a sequence.  Under certain conditions, they cause the loop to exit and
+return a value.  Like accumulation commands, they have an implicit return
+value (@code{t} for @samp{always} and @samp{never}, @code{nil} for @samp{thereis}).
+
+It is incorrect to use both @samp{thereis} and one of @samp{always} or @samp{never} in the
+same loop, as this leads to conflicting implicit return values.
+
+For convenience, these commands can be passed multiple conditions, in which
+case the conditions are @code{and}-ed.
+
+@findex always
+@table @asis
+@item @samp{(always COND)}
+Immediately return @code{nil} if @samp{COND} is ever @code{nil}.
+Otherwise, the loop returns @code{t}.
+
+@lisp
+;; => t
+(loopy (list i '(1 0 1 0 1))
+       (always (< i 2)))
+
+;; => nil
+(loopy (list i '(1 0 1 0 1))
+       (always (< i 1)))
+@end lisp
+@end table
+
+@findex never
+@table @asis
+@item @samp{(never COND)}
+Immediately return @code{nil} if @samp{COND} is ever non-nil.
+Otherwise, the loop returns @code{t}.
+
+@lisp
+;; => t
+(loopy (list i '(1 0 1 0 1))
+       (never (= i 3)))
+
+;; => nil
+(loopy (list i '(1 0 1 0 1))
+       (never (= i 0)))
+@end lisp
+@end table
+
+@findex thereis
+@table @asis
+@item @samp{(thereis COND)}
+Immediately return the value of @samp{COND} if said value is
+ever non-nil.  Otherwise, the loop returns @code{nil}.
+
+@lisp
+;; => 3
+(loopy (list i '(1 0 1 3 1))
+       ;; Note: `and' returns the last value it evaluates.
+       (thereis (and (> i 2) i)))
+
+;; => nil
+(loopy (list i '(1 0 1 0 1))
+       (thereis (and (> i 2) i)))
+
+;; => 3
+(loopy (list i '(nil nil 3 nil))
+       (thereis i))
+@end lisp
 @end table
 
 @node Control Flow
@@ -1729,6 +1865,7 @@ add custom commands to @code{loopy}.  Two examples are provided.
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
 * An @code{always} Command::     Adding a feature from `cl-loop'.
+* Finding More Examples::
 @end menu
 
 @node Background Info
@@ -1911,11 +2048,12 @@ following:
 @table @asis
 @item @samp{loopy--implicit-return}
 A list of values to be returned by the loop if
-no other return value is specified. All accumulation commands can add a
-value to this list, which can include the variable @code{loopy-result} if an
-accumulation command is used without specifying a variable.
+no other return value is specified/reached.  All accumulation commands can
+add a value to this list, which can include the variable @code{loopy-result} if
+an accumulation command is used without specifying a variable.
 
-For example, @samp{(collect my-coll my-val)} would add @samp{my-coll} to this list.
+For example, @samp{(collect my-collection my-value)} would add @samp{my-collection}
+to this list.
 @end table
 
 @vindex loopy--implicit-accumulation-final-update
@@ -1963,6 +2101,13 @@ An expression that is always returned by the
 macro, regardless of any early returns in the loop body.  This is
 derived from the @samp{finally-return} macro argument.
 @end table
+
+
+@vindex loopy--loop-name
+Some commands might depend on the name of the loop.  The symbol which names
+the loop is stored in the variable @code{loopy--loop-name}.  The default value is
+@code{nil} for normal loop and uniquely generated for sub-loops created with the
+@samp{sub-loop} command.
 
 The structure of the macro’s expanded code depends on the features used
 (e.g., @samp{loopy} won’t try to declare variables if none exist), but the result
@@ -2062,47 +2207,151 @@ see that it expands to do what we want, as expected.
 @node An @code{always} Command
 @section An @code{always} Command
 
-Lets say we want to emulate @samp{cl-loop}'s @samp{always} clause, which causes the
+Lets say we want to emulate @code{cl-loop}'s @samp{always} clause, which causes the
 loop to return @samp{nil} if an expression evaluates to @samp{nil} and @samp{t} otherwise.
+This is similar to the functions @code{cl-every} and @code{seq-every-p}.
 
 Here is an example:
 
 @lisp
-(cl-loop for i in (number-sequence 1 9) always (< i 10)) ; => t
+;; => t
+(cl-loop for i in (number-sequence 1 9) always (< i 10))
 @end lisp
 
-Without a custom command, you could translate this using the following.
+Actually, @samp{loopy} already has an @samp{always} command, but for the sake of this
+example let's assume that it doesn't.  Without a custom command, you could
+translate this using the following code:
 
 @lisp
+;; => t
 (loopy (list i (number-sequence 1 9))
-       (unless (< i 10) (return nil))
+       (when (< i 10) (return nil))
        (else-do (cl-return t)))
 @end lisp
 
-While its meaning is clear, this approach is certainly wordier.  Here's how
-you could do it with a custom command:
+This is similar to what you might write in other languages, such as Python.
+
+@example
+# In some testing Python function:
+for i in range(1, 10):
+    if i < 10:
+        return False
+else:
+    return True
+@end example
+
+While the meaning of the code is clear, this approach is certainly wordier.
+
+Here's how one could do this using a custom command.  Again, @samp{loopy} already
+comes with a built-in @samp{always} command.  This example is taken directly
+from the file @samp{loopy-comands.el}, which contains the code of all of @code{loopy}'s
+built-in parsers.
+
+We can describe the command's desired behavior in two sentences:
+@enumerate
+@item
+The loop should immediately return @code{nil} if the expression ever evaluates
+to @code{nil}.
+@item
+The loop should return @code{t} if the loop is able to complete successfully.
+@end enumerate
+
+
+This simplest way to satisfy the first requirement is to conditionally use
+@code{cl-return} if the expressions ever evaluates to @code{nil}.  We want to do this
+while the loop is running, so we should use an instruction for
+@code{loopy--main-body}.
 
 @lisp
-(cl-defun my--loopy-always-command-parser ((_ &rest conditions))
-  "Parse a command of the form `(always [CONDITIONS])'.
-If any condition is `nil', `loopy' should immediately return nil.
+;; We want to insert the below code into the loop
+(when CONDITION
+  (cl-return nil))
+
+;; so we use the instruction
+`(loopy--main-body . (when ,CONDITION (cl-return nil)))
+
+;; where CONDITION is supplied by the parsing function.
+@end lisp
+
+For a simple loop, this works well enough.  However, the function @code{cl-return}
+only works with blocks that are named @code{nil}.  If we have named the loop, then
+@code{cl-return} won't work, and might instead cause unexpected errors.
+Therefore, it is better to use @code{cl-return-from} with the variable
+@code{loopy--loop-name}.  As noted in the previous section, @code{loopy--loop-name}
+stores the symbol which names the loop.
+
+@lisp
+`(loopy--main-body
+  . (when ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+@end lisp
+
+The best way to satisfy the second requirement is to use an instruction for
+@code{loopy--implicit-return}.  One @emph{could} try to insert code using
+@code{cl-return-from} into @code{loopy--after-do}, and this @emph{would} cause a value to be
+returned after the loop had successfully completed, but doing it that way
+could unexpectedly prevent other code in @samp{after-do} from running.  Using an
+implicit return value does not have that problem.
+
+This gives us the following instruction, which will add @code{t} to the list of
+values the macro returns if nothing else would be returned.  If that list is
+just @code{'(t)}, then the macro knows to just return @code{t}.
+
+@lisp
+'(loopy--implicit-return . t)
+@end lisp
+
+Once we've chosen our instructions, we need to tell @samp{loopy} what function to
+use to produce these instructions.  Like in the previous example, we define
+are parsing function and add it to the alist @code{loopy-custom-command-parsers}.
+
+@lisp
+;; As noted in the previous section, the parsing function is always
+;; passed the entire command as `(always CONDTION)', not just the
+;; command arguments as `CONDITION'.
+
+(cl-defun my--loopy-always-command-parser ((_ condition))
+  "Parse a command of the form `(always CONDITION)'.
+
+If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  (let (instructions)
-    ;; Return t if loop completes successfully.
-    (push `(loopy--after-do . (cl-return t)) instructions)
-    ;; Check all conditions at the end of the loop body, forcing an exit if any
-    ;; evaluate to nil.  Since the default return value of the macro is nil, we
-    ;; don’t need to do anything else.
-    ;;
-    ;; NOTE: We must not add anything to `loopy--final-return', since that
-    ;;       would override the value of any early returns.
-    (dolist (condition conditions)
-      (push `(loopy--post-conditions . ,condition) instructions))
-    instructions))
+  `((loopy--implicit-return . t)
+    (loopy--main-body . (unless condition
+                          (cl-return-from ,loopy--loop-name nil)))))
 
 (add-to-list 'loopy-custom-command-parsers
              (cons 'always #'my--loopy-always-command-parser))
+@end lisp
 
+Once we've added our parsing function to @code{loopy-custom-command-parsers},
+@samp{loopy} will use that function whenever it tries to understand the @samp{always}
+command.  In this case, this custom parser would supercede the built-in
+parser.
+
+With that done, our custom @samp{always} command is as useful as the corresponding
+@code{cl-loop} clause.  However, because @code{loopy} uses expressions instead of
+keyword clauses like @code{cl-loop}, we can do slightly better.  For convenience,
+we can easily allow passing multiple conditions to the command instead of
+just one.  In such cases, the conditions should be wrapped in an @code{and} form,
+and that is indeed what the built-in parser does.
+
+@lisp
+;; The built-in parser, taken from `loopy-commands.el':
+(cl-defun loopy--parse-always-command ((_ &rest conditions))
+  "Parse a command of the form `(always [CONDITIONS])'.
+
+If any condition is nil, `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+  `((loopy--implicit-return . t)
+    ;; If there are multiple conditions, wrap these conditions in `and'.
+    (loopy--main-body . (unless ,(if (= 1 (length conditions))
+                                     (cl-first conditions)
+                                   `(and ,@@conditions))
+                          (cl-return-from ,loopy--loop-name nil)))))
+@end lisp
+
+Here are some examples of the command in action:
+
+@lisp
 ;; One condition: => t
 (loopy (list i (number-sequence 1 9)) (always (< i 10)))
 
@@ -2110,11 +2359,18 @@ Otherwise, `loopy' should return t."
 (loopy (list i (number-sequence 1 9))
        (list j '(2 4 6 8 9))
        (always (< i 10) (cl-evenp j)))
+
+;; The previous example is equivalent to this.
+(loopy (list i (number-sequence 1 9))
+       (list j '(2 4 6 8 9))
+       (always (and (< i 10) (cl-evenp j))))
 @end lisp
 
-This command (and equivalents of the @samp{never} and @samp{thereis} clauses) aren’t
-provided by default on the assumption that modifying values normally derived
-from macro arguments might prove confusing and unexpected.
+@node Finding More Examples
+@section Finding More Examples
+
+To see more examples, I recommend looking at the source code of
+@samp{loopy-commands.el} which contains all of loopy's built-in commands.
 
 @node Comparing to @code{cl-loop}
 @chapter Comparing to @code{cl-loop}
