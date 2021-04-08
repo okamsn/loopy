@@ -426,7 +426,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org77d561c
+@float Listing,org15bd2d7
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -489,7 +489,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org160057c
+@float Listing,org3eabb4d
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2243,9 +2243,9 @@ else:
 While the meaning of the code is clear, this approach is certainly wordier.
 
 Here's how one could do this using a custom command.  Again, @samp{loopy} already
-comes with a built-in @samp{always} command.  This example is taken directly
-from the file @samp{loopy-comands.el}, which contains the code of all of @code{loopy}'s
-built-in parsers.
+comes with a built-in @samp{always} command.  This example is taken directly from
+the file @file{loopy-commands.el}, which contains the code of all of
+@code{loopy}'s built-in parsers.
 
 We can describe the command's desired behavior in two sentences:
 @enumerate
@@ -2369,8 +2369,10 @@ Here are some examples of the command in action:
 @node Finding More Examples
 @section Finding More Examples
 
-To see more examples, I recommend looking at the source code of
-@samp{loopy-commands.el} which contains all of loopy's built-in commands.
+If you would like to see more examples, consider reading through the source
+code of @file{loopy-commands.el}, which contains the code of all of the
+built-in loop commands.  You can easily find this file using
+@kbd{M-x find-library loopy-commands RET}.
 
 @node Comparing to @code{cl-loop}
 @chapter Comparing to @code{cl-loop}
