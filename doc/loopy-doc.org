@@ -2340,43 +2340,15 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :CUSTOM_ID: iteration-clauses
    :END:
 
-   | =cl-loop=          | =loopy=        |
-   |--------------------+----------------|
-   | =repeat INT=       | =(repeat INT)= |
-   | =while COND=       | =(while COND)= |
-   | =until COND=       | =(until COND)= |
-   | =iter-by iterator= | None so far.   |
-
-   The clauses =always=, =never=, and =thereis= can be replaced by a
-   combination of an exiting command and the =after-do= (also written
-   =else-do=) macro argument.  Below is an example from the CL Lib manual.
-
-   #+BEGIN_SRC emacs-lisp
-     ;; With `cl-loop':
-     (if (cl-loop for size in size-list always (> size 10))
-         (only-big-sizes)
-       (some-small-sizes))
-
-     ;; With `loopy':
-     ;; Depends on whether the functions have return values.
-     (loopy (list size size-list)
-            ;; `return` is just a wrapper for `cl-return`.
-            (when (< size 10) (return (some-small-sizes)))
-            ;; Only runs if loop doesn't exit early.
-            (else-do (cl-return (only-big-sizes))))
-   #+END_SRC
-
-   A seen in the above example, =loopy= does not always have a one-to-one
-   translation to =cl-loop=.  For the above, an example is provided for adding
-   an =always= custom command ([[#always-example]]).
-
-   It is not an explicit goal to be able to replace all uses of =cl-loop= with
-   =loopy=.  I'd prefer that =loopy= be useful in places where =cl-loop= might
-   not be enough, instead of forcing =loopy= into places where =cl-loop=
-   already works well.
-
-   Other options in the above example include using =cl-every=,
-   =seq-every-p=, Dash’s =-all?=, etc.
+   | =cl-loop=          | =loopy=          |
+   |--------------------+------------------|
+   | =repeat INT=       | =(repeat INT)=   |
+   | =while COND=       | =(while COND)=   |
+   | =until COND=       | =(until COND)=   |
+   | =iter-by iterator= | None so far.     |
+   | =never=            | =(never COND)=   |
+   | =always=           | =(always COND)=  |
+   | =thereis=          | =(thereis COND)= |
 
 ** Accumulation Clauses
    :PROPERTIES:
