@@ -426,7 +426,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org15bd2d7
+@float Listing,org7a522f1
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -489,7 +489,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org3eabb4d
+@float Listing,org8c27d74
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2530,8 +2530,8 @@ can just iterate through the return value of the appropriate function using
 the @samp{list} command.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
-@headitem @samp{cl-loop}
-@tab @samp{loopy}
+@headitem @code{cl-loop}
+@tab @code{loopy}
 @item @samp{for VAR from EXPR1 to EXPR2 by EXPR3}
 @tab @samp{(list VAR (number-sequence EXPR1 EXPR2 EXPR3))}
 @item @samp{for VAR in LIST [by FUNCTION]}
@@ -2577,9 +2577,9 @@ the @samp{list} command.
 @node Iteration Clauses
 @section Iteration Clauses
 
-@multitable {aaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaa}
-@headitem @samp{cl-loop}
-@tab @samp{loopy}
+@multitable {aaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaa}
+@headitem @code{cl-loop}
+@tab @code{loopy}
 @item @samp{repeat INT}
 @tab @samp{(repeat INT)}
 @item @samp{while COND}
@@ -2588,49 +2588,25 @@ the @samp{list} command.
 @tab @samp{(until COND)}
 @item @samp{iter-by iterator}
 @tab None so far.
+@item @samp{never}
+@tab @samp{(never COND)}
+@item @samp{always}
+@tab @samp{(always COND)}
+@item @samp{thereis}
+@tab @samp{(thereis COND)}
 @end multitable
-
-The clauses @samp{always}, @samp{never}, and @samp{thereis} can be replaced by a
-combination of an exiting command and the @samp{after-do} (also written
-@samp{else-do}) macro argument.  Below is an example from the CL Lib manual.
-
-@lisp
-;; With `cl-loop':
-(if (cl-loop for size in size-list always (> size 10))
-    (only-big-sizes)
-  (some-small-sizes))
-
-;; With `loopy':
-;; Depends on whether the functions have return values.
-(loopy (list size size-list)
-       ;; `return` is just a wrapper for `cl-return`.
-       (when (< size 10) (return (some-small-sizes)))
-       ;; Only runs if loop doesn't exit early.
-       (else-do (cl-return (only-big-sizes))))
-@end lisp
-
-A seen in the above example, @samp{loopy} does not always have a one-to-one
-translation to @samp{cl-loop}.  For the above, an example is provided for adding
-an @samp{always} custom command (@ref{An @code{always} Command}).
-
-It is not an explicit goal to be able to replace all uses of @samp{cl-loop} with
-@samp{loopy}.  I'd prefer that @samp{loopy} be useful in places where @samp{cl-loop} might
-not be enough, instead of forcing @samp{loopy} into places where @samp{cl-loop}
-already works well.
-
-Other options in the above example include using @samp{cl-every},
-@samp{seq-every-p}, Dash’s @samp{-all?}, etc.
 
 @node Accumulation Clauses
 @section Accumulation Clauses
 
-In @samp{loopy}, when accumulation commands are not given a @samp{VAR}, they
-accumulate into different variables.  If you want accumulations to act on
-the same variable, you must give the same @samp{VAR}.
+Like with @code{cl-loop}, in @code{loopy}, accumulation commands accumulate into the
+same variable when no @samp{VAR} is given (by default, @code{loopy-result}).  If you
+would like accumulation commands to accumulate into separate variables,
+simple provide @samp{VAR} to the command or use the @samp{split} flag (@ref{Using Flags}).
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaa}
-@headitem @samp{cl-loop}
-@tab @samp{loopy}
+@headitem @code{cl-loop}
+@tab @code{loopy}
 @item @samp{append EXPR into VAR}
 @tab @samp{(append VAR EXPR)}
 @item @samp{collect EXPR into VAR}
@@ -2654,16 +2630,16 @@ the same variable, you must give the same @samp{VAR}.
 @node Other Clauses
 @section Other Clauses
 
-In @samp{loopy}, @samp{if}, @samp{when}, and @samp{unless} can take multiple loop commands as
+In @code{loopy}, @samp{if}, @samp{when}, and @samp{unless} can take multiple loop commands as
 arguments, and operate more like their Lisp counterparts.
 
 This means that @samp{if} is not a synonym for @samp{when}.  Just like the normal Lisp
-special form @samp{if}, @samp{(if COND cmd1 cmd2 cmd3)} only runs @samp{cmd1} if @samp{COND}
+special form @code{if}, @samp{(if COND cmd1 cmd2 cmd3)} only runs @samp{cmd1} if @samp{COND}
 evaluates to non-nil, and only runs commands @samp{cmd2} and @samp{cmd3} if @samp{COND}
-evaluates to @samp{nil}.
+evaluates to @code{nil}.
 
-@samp{loopy} also provides the command @samp{cond}, which works like the normal Lisp
-special form @samp{cond}.
+@code{loopy} also provides the command @samp{cond}, which works like the normal Lisp
+special form @code{cond}.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem @samp{cl-loop}
