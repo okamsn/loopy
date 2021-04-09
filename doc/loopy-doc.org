@@ -2355,9 +2355,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :CUSTOM_ID: accumulation-clauses
    :END:
 
-   In =loopy=, when accumulation commands are not given a =VAR=, they
-   accumulate into different variables.  If you want accumulations to act on
-   the same variable, you must give the same =VAR=.
+   Like with ~cl-loop~, in ~loopy~, accumulation commands accumulate into the
+   same variable when no =VAR= is given (by default, ~loopy-result~).  If you
+   would like accumulation commands to accumulate into separate variables,
+   simple provide =VAR= to the command or use the =split= flag ([[#flags][Using Flags]]).
 
    | =cl-loop=                | =loopy=              |
    |--------------------------+----------------------|
