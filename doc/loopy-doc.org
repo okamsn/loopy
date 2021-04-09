@@ -2312,7 +2312,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    can just iterate through the return value of the appropriate function using
    the =list= command.
 
-   | =cl-loop=                                     | =loopy=                                          |
+   | ~cl-loop~                                     | ~loopy~                                          |
    |-----------------------------------------------+--------------------------------------------------|
    | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
    | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
@@ -2340,7 +2340,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :CUSTOM_ID: iteration-clauses
    :END:
 
-   | =cl-loop=          | =loopy=          |
+   | ~cl-loop~          | ~loopy~          |
    |--------------------+------------------|
    | =repeat INT=       | =(repeat INT)=   |
    | =while COND=       | =(while COND)=   |
@@ -2360,7 +2360,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    would like accumulation commands to accumulate into separate variables,
    simple provide =VAR= to the command or use the =split= flag ([[#flags][Using Flags]]).
 
-   | =cl-loop=                | =loopy=              |
+   | ~cl-loop~                | ~loopy~              |
    |--------------------------+----------------------|
    | =append EXPR into VAR=   | =(append VAR EXPR)=  |
    | =collect EXPR into VAR=  | =(collect VAR EXPR)= |
@@ -2377,16 +2377,16 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :CUSTOM_ID: other-clauses
    :END:
 
-   In =loopy=, =if=, =when=, and =unless= can take multiple loop commands as
+   In ~loopy~, =if=, =when=, and =unless= can take multiple loop commands as
    arguments, and operate more like their Lisp counterparts.
 
    This means that =if= is not a synonym for =when=.  Just like the normal Lisp
-   special form =if=, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
+   special form ~if~, =(if COND cmd1 cmd2 cmd3)= only runs =cmd1= if =COND=
    evaluates to non-nil, and only runs commands =cmd2= and =cmd3= if =COND=
-   evaluates to =nil=.
+   evaluates to ~nil~.
 
-   =loopy= also provides the command =cond=, which works like the normal Lisp
-   special form =cond=.
+   ~loopy~ also provides the command =cond=, which works like the normal Lisp
+   special form ~cond~.
 
    | =cl-loop=              | =loopy=                                     |
    |------------------------+---------------------------------------------|
