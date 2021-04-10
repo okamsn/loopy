@@ -332,46 +332,63 @@ BODY is one or more loop commands."
 
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
-  (let ((arg-length (length vals))
-        (value-selector (gensym "expr-value-selector-")))
-    (cl-case arg-length
-      ;; If no values, repeatedly set to `nil'.
-      (0 (loopy--destructure-for-iteration-command
-          var nil))
-      ;; If one value, repeatedly set to that value.
-      (1 (loopy--destructure-for-iteration-command
-          var (car vals)))
-      ;; If two values, repeatedly check against `value-selector' to
-      ;; determine if we should assign the first or second value.  This is
-      ;; how `cl-loop' does it.
-      (2
-       `((loopy--iteration-vars . (,value-selector t))
-         ,@(loopy--destructure-for-iteration-command
-            var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
-         ;; This needs to happen right after running the above.
-         (loopy--main-body . (setq ,value-selector nil))))
-      (t
-       `((loopy--iteration-vars . (,value-selector 0))
-         ;; Assign to var based on the value of value-selector.  For
-         ;; efficiency, we want to check for the last expression first,
-         ;; since it will probably be true the most times.  To enable
-         ;; that, the condition is whether the counter is greater than
-         ;; the index of EXPR in REST minus one.
-         ;;
-         ;; E.g., for '(a b c),
-         ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
-         ,@(loopy--destructure-for-iteration-command
-            var (let ((body-code nil) (index 0))
-                  (dolist (value vals)
-                    (push `((> ,value-selector ,(1- index))
-                            ,value)
-                          body-code)
-                    (setq index (1+ index)))
-                  (cons 'cond body-code)))
-         ;; This needs to happen right after running the above.
-         (loopy--main-body
-          . (when (< ,value-selector ,(1- arg-length))
-              (setq ,value-selector (1+ ,value-selector)))))))))
+  (let* ((length-vals (length vals))
+         (init-arg (when (eq (nth (- length-vals 2) vals)
+                             ':init)
+                     (nth (1- length-vals) vals))))
+    (let ((arg-length (if init-arg
+                          (- length-vals 2)
+                        length-vals))
+          (value-selector (gensym "expr-value-selector-")))
+      (let ((needed-instructions
+             (cl-case arg-length
+               ;; If no values, repeatedly set to `nil'.
+               (0 (loopy--destructure-for-iteration-command
+                   var nil))
+               ;; If one value, repeatedly set to that value.
+               (1 (loopy--destructure-for-iteration-command
+                   var (car vals)))
+               ;; If two values, repeatedly check against `value-selector' to
+               ;; determine if we should assign the first or second value.  This
+               ;; is how `cl-loop' does it.
+               (2
+                `((loopy--iteration-vars . (,value-selector t))
+                  ,@(loopy--destructure-for-iteration-command
+                     var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
+                  ;; This needs to happen right after running the above.
+                  (loopy--main-body . (setq ,value-selector nil))))
+               (t
+                `((loopy--iteration-vars . (,value-selector 0))
+                  ;; Assign to var based on the value of value-selector.  For
+                  ;; efficiency, we want to check for the last expression first,
+                  ;; since it will probably be true the most times.  To enable
+                  ;; that, the condition is whether the counter is greater than
+                  ;; the index of EXPR in REST minus one.
+                  ;;
+                  ;; E.g., for '(a b c),
+                  ;; use '(cond ((> cnt 1) c) ((> cnt 0) b) ((> cnt -1) a))
+                  ,@(loopy--destructure-for-iteration-command
+                     var (let ((body-code nil) (index 0))
+                           (dolist (value vals)
+                             (push `((> ,value-selector ,(1- index))
+                                     ,value)
+                                   body-code)
+                             (setq index (1+ index)))
+                           (cons 'cond body-code)))
+                  ;; This needs to happen right after running the above.
+                  (loopy--main-body
+                   . (when (< ,value-selector ,(1- arg-length))
+                       (setq ,value-selector (1+ ,value-selector)))))))))
+        (if init-arg
+            (loopy--substitute-using-if
+             (cl-function (lambda ((_ . (var _)))
+                            `(loopy--iteration-vars
+                              . (,var ,init-arg))))
+             (lambda (x) (eq (car x) 'loopy--iteration-vars))
+             needed-instructions)
+          needed-instructions)))))
+
+
 
 (cl-defun loopy--parse-group-command ((_ &rest body))
   "Parse the `group' loop command.
