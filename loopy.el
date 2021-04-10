@@ -192,7 +192,7 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 NOTE: This functionality might change in the future.")
 
 (defvar loopy--valid-macro-arguments
-  '( flag flags with let* without no-init before-do before initially-do
+  '( flag flags with let* init without no-with no-init before-do before initially-do
      initially after-do after else-do else finally-do finally finally-return)
   "List of valid keywords for `loopy' macro arguments.
 
@@ -792,9 +792,9 @@ The macro takes several top-level arguments, all, except a loop
 name, being a list beginning with one of the keywords below.  To
 name a loop, pass in an unquoted symbol as an argument.
 
-- `with', `let*': Declare variables before the loop.
+- `with', `init', `let*': Declare variables before the loop.
 
-- `without', `no-init': Variables that `loopy' should not try to
+- `without', `no-with', `no-init': Variables that `loopy' should not try to
   initialize.  `loopy' tries to initialize all the variables it
   uses in a `let'-like form, but that isn’t always desired.
 
@@ -830,8 +830,8 @@ Info node `(loopy)' distributed with this package."
 
   (declare (debug (&rest ;; TODO: Is this correct?
                    [&or
-                    ([&or "with" "let*"] &rest (symbolp &optional form))
-                    ([&or "without" "no-init"] &rest symbolp)
+                    ([&or "with" "let*" "init"] &rest (symbolp &optional form))
+                    ([&or "without" "no-with" "no-init"] &rest symbolp)
                     ([&or "flag" "flags"] &rest symbolp)
                     ([&or "before-do" "before" "initially-do" "initially"] body)
                     [&or (symbolp ;; This one covers most commands.
@@ -880,7 +880,7 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--with-vars
          (let ((result))
            (dolist (binding (loopy--find-special-macro-arguments
-                             '(with let*) body))
+                             '(with let* init) body))
              (push (cond
                     ((symbolp binding)
                      (list binding nil))
@@ -893,7 +893,7 @@ Info node `(loopy)' distributed with this package."
 
    ;; Without
    (setq loopy--without-vars
-         (loopy--find-special-macro-arguments '(without no-init) body))
+         (loopy--find-special-macro-arguments '(without no-with no-init) body))
 
    ;; Before do
    (setq loopy--before-do
