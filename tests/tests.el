@@ -242,7 +242,12 @@ implicit variable without knowing it's name, even for named loops."
                             (finally-return my-val))))
         (equal '(t t) (eval (quote (loopy (expr (i j) '(t t))
                                           (return nil) ; TODO: Change to leave.
-                                          (finally-return i j))))))))
+                                          (finally-return i j)))))
+
+        (equal '(0 1 1 1)
+               (eval (quote (loopy (repeat 4)
+                                   (collect i)
+                                   (expr i 1 :init 0))))))))
 
 (ert-deftest expr-two-values ()
   (should
@@ -256,7 +261,12 @@ implicit variable without knowing it's name, even for named loops."
            (eval (quote (loopy  (repeat 3)
                                 (expr (i j) '(1 1) '(2 2))
                                 (collect my-coll (list i j))
-                                (finally-return my-coll))))))))
+                                (finally-return my-coll)))))
+
+    (equal '(0 1 2 2)
+           (eval (quote (loopy (repeat 4)
+                               (collect i)
+                               (expr i 1 2 :init 0))))))))
 
 (ert-deftest expr-two-values-when ()
   (should (equal '(nil 0 0 1 1 2 2 3)
@@ -285,7 +295,12 @@ implicit variable without knowing it's name, even for named loops."
                                     (expr (i j) '(1 1) '(2 2)
                                           '(3 3) '(4 4) '(5 5))
                                     (collect my-coll (list i j))
-                                    (finally-return my-coll))))))))
+                                    (finally-return my-coll)))))
+
+        (equal '(0 1 2 3 4 5 5 5 5 5)
+               (eval (quote (loopy (repeat 10)
+                                   (collect i)
+                                   (expr i 1 2 3 4 5 :init 0))))))))
 
 (ert-deftest expr-dont-repeat ()
   "Make sure commands don't repeatedly create/declare the same variable."
