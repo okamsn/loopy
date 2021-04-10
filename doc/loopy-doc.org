@@ -510,9 +510,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: expr, exprs, set
-   - =(expr|exprs|set VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.
-     Once the last =EXPR= is reached, it is used repeatedly for the rest of the
-     loop.  With no =EXPR=, =VAR= is repeatedly bound to =nil=.
+   - =(expr|exprs|set VAR [EXPRS] [:init INIT])= :: Bind =VAR= to each =EXPR= in
+     order.  Once the last =EXPR= is reached, it is used repeatedly for the rest
+     of the loop.  With no =EXPR=, =VAR= is repeatedly bound to =nil=.
+
+     If =INIT= is provided, use that as the initial value of =VAR=.  This could
+     also be achieved by specifying a value using the =with= special macro
+     argument.  When destructuring, each variable is initialized to =INIT=, not
+     a destructured part of =INIT=.
 
      #+ATTR_TEXINFO: :tag Note
      #+begin_quote
@@ -531,15 +536,34 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+end_quote
 
      #+BEGIN_SRC emacs-lisp
+       ;; => '(1 2 3 3 3)
        (loopy (repeat 5)
               (expr i 1 2 3)
               (collect coll i)
-              (finally-return coll)) ; => '(1 2 3 3 3)
+              (finally-return coll))
 
+       ;; => '(0 1 2 3 4)
        (loopy (repeat 5)
               (expr i 0 (1+ i))
               (collect coll i)
-              (finally-return coll)) ; => '(0 1 2 3 4)
+              (finally-return coll))
+
+       ;; Note that `i' is initialized to 0, and set to 1 in
+       ;; the middle of the first cycle of the loop.
+       ;;
+       ;; => ((0 1 2) (1 2 3))
+       (loopy (repeat 3)
+              (collect befores i)
+              (expr i 1 (1+ i) :init 0)
+              (collect afters i)
+              (finally-return befores afters))
+
+       ;; Note that using `with' has a similar effect.
+       ;; => (0 1 2)
+       (loopy (with (i 0))
+              (repeat 3)
+              (collect i)
+              (expr i 1 (1+ i)))
      #+END_SRC
 
    #+findex: group
