@@ -1109,6 +1109,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => nil
        (loopy (list i '(1 0 1 0 1))
               (always (< i 1)))
+
+       ;; => t
+       (loopy (list i '(1 0 1 0 1))
+	      ;; Note: can accept multiple conditions.
+	      ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
+              (always (< i 2) (>= i 0)))
      #+END_SRC
    
    #+findex: never
