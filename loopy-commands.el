@@ -183,6 +183,31 @@ The lists will be in the order parsed (correct for insertion)."
     ;; Return the sub-lists.
     (list (nreverse wrapped-main-body) (nreverse other-instructions))))
 
+;; Wrapper to make sure that the output sequence is of the same type.
+(cl-defun loopy--substitute-using (new seq &key test)
+  "Copy SEQ, substituting elements using output of NEW.
+
+NEW receives the element as its only argument.
+
+If given predicate TEST, replace only elements satisfying TEST.
+This testing could also be done in NEW."
+  (cl-map (if (cl-typep seq 'list) 'list 'array)
+          (if test
+              (lambda (x)
+                (if (funcall test x)
+                    (funcall new x)
+                  x))
+            (lambda (x) (funcall new x)))
+          seq))
+
+(cl-defun loopy--substitute-using-if (new test seq)
+  "Copy SEQ, substituting elements satisfying TEST using output of NEW.
+
+NEW receives the element as its only argument.
+
+Unlike `loopy--substitute-using', the test is required."
+  (loopy--substitute-using new seq :test test))
+
 
 ;;;; Included parsing functions.
 ;;;;; Misc.
