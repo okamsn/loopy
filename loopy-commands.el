@@ -813,7 +813,7 @@ Otherwise, `loopy' should return t."
   `((loopy--implicit-return  . t)
     (loopy--main-body . (when ,(if (= 1 (length conditions))
                                    (cl-first conditions)
-                                 `(and ,@conditions))
+                                 `(or ,@conditions))
                           (cl-return-from ,loopy--loop-name nil)))))
 
 (cl-defun loopy--parse-thereis-command ((_ &rest conditions))
