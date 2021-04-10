@@ -11,14 +11,20 @@
 ;;; Macro arguments
 ;;;; With
 (ert-deftest with-arg-order ()
-  (should (and (= 4
-                  (eval (quote (loopy (with (a 2)
-                                            (b (+ a 2)))
-                                      (return b)))))
-               (= 4
-                  (eval (quote (loopy (let* (a 2)
-                                        (b (+ a 2)))
-                                      (return b))))))))
+  (should (= 4
+             (eval (quote (loopy (with (a 2)
+                                       (b (+ a 2)))
+                                 (return b))))))
+
+  (should (= 4
+             (eval (quote (loopy (let* (a 2)
+                                   (b (+ a 2)))
+                                 (return b))))))
+
+  (should (= 4
+             (eval (quote (loopy (init (a 2)
+                                       (b (+ a 2)))
+                                 (return b)))))))
 
 (ert-deftest with-destructuring ()
   (should (= -2
@@ -29,20 +35,29 @@
 
 ;;;; Without
 (ert-deftest without ()
-  (should (and (equal '(4 5)
-                      (let ((a 1) (b 2))
-                        (eval (quote (loopy (with (c 3))
-                                            (without a b)
-                                            (expr a (+ a c))
-                                            (expr b (+ b c))
-                                            (return a b))))))
-               (equal '(4 5)
-                      (let ((a 1) (b 2))
-                        (eval (quote (loopy (with (c 3))
-                                            (no-init a b)
-                                            (expr a (+ a c))
-                                            (expr b (+ b c))
-                                            (return a b)))))))))
+  (should (equal '(4 5)
+                 (let ((a 1) (b 2))
+                   (eval (quote (loopy (with (c 3))
+                                       (without a b)
+                                       (expr a (+ a c))
+                                       (expr b (+ b c))
+                                       (return a b)))))))
+
+  (should (equal '(4 5)
+                 (let ((a 1) (b 2))
+                   (eval (quote (loopy (with (c 3))
+                                       (no-init a b)
+                                       (expr a (+ a c))
+                                       (expr b (+ b c))
+                                       (return a b)))))))
+
+  (should (equal '(4 5)
+                 (let ((a 1) (b 2))
+                   (eval (quote (loopy (with (c 3))
+                                       (no-with a b)
+                                       (expr a (+ a c))
+                                       (expr b (+ b c))
+                                       (return a b))))))))
 
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
