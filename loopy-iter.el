@@ -113,7 +113,7 @@ list.  For example, by default, \"(for collect i)\" and
 
 ;;;;
 (defvar loopy-iter--valid-macro-arguments
-  '( flag flags with without no-init before-do before initially-do
+  '( flag flags with init without no-init no-with before-do before initially-do
      initially after-do after else-do else finally-do finally finally-return)
   "List of valid keywords for `loopy-iter' macro arguments.
 
