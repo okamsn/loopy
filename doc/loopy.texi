@@ -210,18 +210,25 @@ loop commands, they cannot occur in sub-loops (@ref{Sub-loops}).
 
 @findex with, let*
 @table @asis
-@item @samp{with}, @samp{let*}
-Declare variables before the loop.
+@item @samp{with}, @samp{let*}, @samp{init}
+Declare variables before the loop.  This can also
+be used to initialize variables referenced by loop commands.
 
 @lisp
 (loopy (with (a 1) (b 2)) ...)
 (loopy (let* (a 1) (b 2)) ...)
+
+;; => 16
+(loopy (with (my-sum 10))
+       (list i '(1 2 3))
+       (sum my-sum i)
+       (finally-return my-sum))
 @end lisp
 @end table
 
 @findex without, no-init
 @table @asis
-@item @samp{without}, @samp{no-init}
+@item @samp{without}, @samp{no-with}, @samp{no-init}
 Variables that @code{loopy} should not try to
 initialize.  @code{loopy} tries to initialize all the variables it uses in a
 @code{let}-like form, but that isn’t always desired.
@@ -426,7 +433,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgb3a3b7c
+@float Listing,orgc995884
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -489,7 +496,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org36410c0
+@float Listing,orga88168d
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
