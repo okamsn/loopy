@@ -202,7 +202,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   loop commands, they cannot occur in sub-loops ([[*Sub-loops][Sub-loops]]).
 
   #+findex: with, let*
-  - =with=, =let*= :: Declare variables before the loop.
+  - =with=, =let*=, =init= :: Declare variables before the loop.
 
     #+begin_src emacs-lisp
       (loopy (with (a 1) (b 2)) ...)
@@ -210,7 +210,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     #+end_src
 
   #+findex: without, no-init
-  - =without=, =no-init= :: Variables that ~loopy~ should not try to
+  - =without=, =no-with=, =no-init= :: Variables that ~loopy~ should not try to
     initialize.  ~loopy~ tries to initialize all the variables it uses in a
     ~let~-like form, but that isn’t always desired.
 
