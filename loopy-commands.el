@@ -736,76 +736,140 @@ whose value is to be accumulated."
                          (loopy--parse-accumulation-commands
                           (list name value-holder value-expression))))))))
 
-(defmacro loopy--defaccumulation-command (names keyword-args docstring &rest body)
+;; Helpers
+
+;;; Naming
+
+(defun loopy--accumulation-command-name (command &optional explicit-p implicit-p split-p)
+  "Return name for accumulation command auxilaries."
+  (cl-assert (not (and explicit-p implicit-p)))
+  (let* ((prefix "loopy--parse-accumulation-command-")
+	 (explicit-part (if explicit-p "explicit-" ""))
+	 (implicit-part (if implicit-p "implicit-" ""))
+	 (split-part (when implicit-p (if split-p "split-" "no-split-"))))
+    (intern (format "%s%s%s%s" prefix command explicit split))))
+
+(defun loopy--determine-case-args (command-args)
+  "Determine whether implicit, explicit, destructuring or none."
+  (let ((length (length args)))
+    (cond ((cl-member length (number-sequence 1 2) :test #'=) 'implicit)
+	  ((cl-member length ',(number-sequence 2 max-plist-length 2) :test #'=)
+	   (if (symbolp (cl-first args)) (,explicit-fn args)))
+	  (t
+	   (error "Invalid command args: %S" args)))))
+
+(defun loopy--generate-main-accumulation-fn (command args body)
+  "Return main accumulation function for COMMAND."
+  `(cl-defun (loopy--accumulation-command-name command) ((_ &rest args))
+     ,docstring
+     (pcase (loopy--determine-accumulation-case args ,non-keyword-args ,keyword-args)
+       ('explicit
+	(apply #',(loopy--accumulation-command-name command t) args))
+       ((and 'implicit (guard loopy--split-implied-accumulation-results))
+	(apply #',(loopy--accumulation-command-name command nil t)))
+       ('implicit
+	(apply #',(loopy--accumulation-command-name command nil nil)))
+       ('destructuring
+	(funcall (or loopy--destructuring-accumulation-parser
+		     #'loopy--parse-destructuring-accumulation-command)
+		 ',command-name))
+       (t
+	(error "Invalid arguments.")))))
+
+;; Auxiliaries
+
+(defun loopy--generate-explicit-fn (command arguments instructions)
+  "Return the explicit function for COMMAND."
+  (let ((explicit-fn (intern (format "loopy--parse-%s-command-explicit" command))))
+    `(cl-defun ,(loopy--accumulation-command-name command t) (_ ,arguments)
+       `(,@instructions
+	 (loopy--accumulation-vars . (,var . ,(loopy--accumulation-starting-value name)))
+	 (loopy--implicit-return . ,var)
+	 (loopy--main-body ,',body)))))
+
+(defun loopy--generate-no-split-implicit-fn (command arguments instructions)
+  "Return the no-split implicit function for COMMAND."
+  `(cl-defun ,(loopy--accumulation-command-name command nil t) (_ ,arguments)
+     `(,@instructions
+       (loopy--accumulation-vars . (loopy-result ,(loopy--accumulation-starting-value command)))
+       (loopy--implicit-return . ,',body)
+       (loopy--implicit-accumulation-final-update . (setq ,value-holder ,body)))))
+
+(defun loopy--generate-split-implicit-fn (command arguments instructions)
+  "Return the split implicit function for COMMAND."
+  (let ((gsym-prefix (concat (symbol-command command) "-implicit-")))
+    `(cl-defun ,(loopy--accumulation-command-name command nil t t) (_ ,arguments)
+       `(,@instructions
+	 (loopy--accumulation-vars . (,(gensym ,gsym-prefix) ,(loopy--accumulation-starting-value ',command)))
+	 (loopy--implict-return ,',body)))))
+
+;; Generating aliases
+
+(defun loopy--generate-aliases (command &rest aliases)
+  "Return forms used to create ALIASES form ORIG-FN."
+  (cons (cl-callf2 cl-adjoin '(,command . ,main-fn) loopy--builtin-command-parsers :test #'equal)
+	(mapcan (lambda (alias)
+		  `((defalias ',alias ,main-fn)
+		    (cl-callf2 cl-adjoin '(,alias . ,orig-fn) loopy--builtin-command-parsers)))
+		aliases)))
+
+;; main macro
+
+(defmacro loopy--defaccumulation-command (names args docstring &rest instructions)
   "Convenience macro for defining accumulation commands.
 NAMES are the names of the commands to be defined. NAMES can be a list of
 command names or a single command name."
   (declare (indent defun) (doc-string 3))
-  (let* ((name (or (car-safe names) names))
-	 (aliases (cdr-safe names))
-	 (main-fn (intern (format "loopy--parse-%s-command" name)))
-	 (explicit-fn (intern (format "loopy--parse-%s-command-explicit" name)))
-	 (no-split-implicit-fn (intern (format "loopy--parse-%s-command-implicit-no-split" name)))
-	 (split-implicit-fn (intern (format "loopy--parse-%s-command-implicit-no-split" name)))
-	 (max-plist-length (* 2 (length keyword-args)))
-	 (split-p 'loopy--split-implied-accumulation-results))
+  (let* ((command (or (car-safe names) names))
+	 (aliases (cdr-safe names)))
     `(progn
-       (cl-defun ,main-fn ((_ &rest args))
-	 ,docstring
-	 (cond ((cl-member (length args) ',(number-sequence 1 max-plist-length 2) :test #'=)
-		(funcall (if ,split-p #',split-implicit-fn #',no-split-implicit-fn) arg))
-	       ((cl-member (length args) ',(number-sequence 2 max-plist-length 2) :test #'=)
-		(if (symbolp (cl-first args))
-		    (,explicit-fn args)
-		  (funcall (or loopy--destructuring-accumulation-parser
-			       #'loopy--parse-destructuring-accumulation-command)
-			   ',name)))
-	       (t
-		(error "Invalid command args: %S" args))))
-       
-       (cl-defun ,explicit-fn ((name var value &key ,@keyword-args))
-	 `((loopy--accumulation-vars . (,var . ,(loopy--accumulation-starting-value name)))
-	   (loopy--implicit-return . ,var)
-	   (loopy--main-body ,',body)))
-       
-       (cl-defun ,no-split-implicit-fn ((name value &key ,@keyword-args))
-	 (let ((value-holder (intern "loopy-result")))
-	   `((loopy--accumulation-vars . (,value-holder ,(loopy--accumulation-starting-value name)))
-	     (loopy--implicit-return . ,',body)
-	     (loopy--implicit-accumulation-final-update . (setq ,value-holder ,body)))))
-       
-       (cl-defun ,split-implicit-fn ((name value &key ,@keyword-args))
-	 (let ((value-holder (concat (symbol-name name) "-implicit-")))
-	   `((loopy--accumulation-vars . (,value-holder ,(loopy--accumulation-starting-value name)))
-	     (loopy--implict-return . ,',body))))
+       ,@(mapcar (lambda (fn) (apply fn (list command args instructions)))
+		 (list #'loopy--generate-explicit-fn
+		       #'loopy--generate-implicit-split-fn
+		       #'loopy--generate-implicit-no-split-fn
+		       #'loopy--generate-main-accumulation-fn))
+       ,@(loopy--generate-aliases command aliases))))
 
-       (cl-callf2 cl-adjoin '(,name . ,main-fn) loopy-custom-command-parsers :test #'equal))))
+;;; Define Accumulation Commands
 
-(defun loopy--convert-split-return)
+(loopy--defaccumulation-command adjoining (var val &key test)
+  "A `loopy` command that adjoins VAL into VAR."
+  `((main-body . (cl-callf2 cl-adjoin ,value ,var :test ,test))))
 
-(loopy--defaccumulation-command (append appending) ()
-  (split-implicit-return . (nreverse ,var))
-  (main-body . (setq ,var (nconc (reverse ,expr) ,var))))
+(loopy--defaccumulation-command (append appending) (var val)
+  `((split:implicit-return . (nreverse ,var))
+    (main-body . (cl-callf2 nconc (reverse ,val) ,var))))
 
-(loopy--defaccumulation-command collect ()
-  (split-implicit-return . (nreverse ,value-holder)))
+(loopy--defaccumulation-command (collect collecting) (var val)
+  `((split:implicit-return . (nreverse ,value-holder))
+    (main-body . (cl-callf2 cons ,val ,var))))
 
-(loopy--defaccumulation-command adjoining (test)
-  "Parse a command of the form `(adjoining)'."
-  (main-body . (callf2 cl-adjoin ,value ,var :test ,test)))
+(loopy--defaccumulation-command (concat concating) (var val)
+  `((split:implicit-return . (apply #'concat (nreverse ,val)))
+    (main-body . (cl-callf2 cons ,val ,var))))
 
-(loopy--defaccumulation-command (union unioning) (test)
-  "Parse a command of the form `(union[ing])'"
-  (main-body . `(callf2 cl-union ,value ,var :test ,test)))
+(loopy--defaccumulation-command (nconc nconcing) (var val)
+  `((split:implicit-return . (nreverse ,var))
+    (main-body . (cl-callf2 nconc (nreverse ,val) ,var))))
 
-(loopy--defaccumulation-command (nunion nunioning) (test)
-  "Parse a command of the form `(nunion[ing])'."
-  (main-body . `(callf2 cl-nunion ,value ,var :test ,test)))
+(loopy--defaccumulation-command (nunion nunioning) (var val &key test)
+  `((main-body . (cl-callf2 cl-nunion ,value ,var :test ,test))))
 
-(loopy--defaccumulation-command reducing (init)
-  "Parse a command of the form `(reducing)'."
-  ;; `(setq ,var (funcall ,fn ))
-  )
+(loopy--defaccumulation-command (prepend prepending) (var val)
+  `((implicit-return . ,var)
+    (main-body . (cl-callf2 nconc ,val ,var))))
+
+(loopy--defaccumulation-command reducing (var val fn &key init)
+  `((accumulation-vars . ,(or init (loopy--accumulation-starting-value name)))
+    (implicit-return . ,var)
+    (main-body . (cl-callf2 funcall ,fn ,var ,val))))
+
+(loopy--defaccumulation-command (union unioning) (var val &key test)
+  `((main-body . (cl-callf2 cl-union ,value ,var :test ,test))))
+
+(loopy--defaccumulation-command (vconcat vconcating) (var val)
+  `((split:implicit-return . (apply #'vconcat (nreverse ,var)))
+    (main-body . (cl-callf2 cons ,val ,var))))
 
 ;;;; Boolean Commands
 (cl-defun loopy--parse-always-command ((_ &rest conditions))
@@ -860,15 +924,15 @@ a loop name, return values, or a list of both."
                 ((= 1 arg-length)  (car args))
                 (t                 `(list ,@args)))))))
       (return-from
-       (let ((arg-length (length args)))
-         (when (zerop arg-length) ; Need at least 1 arg.
-           (signal 'loopy-wrong-number-of-arguments command))
-         `((loopy--main-body
-            . (cl-return-from ,(cl-first args)
-                ,(cond
-                  ((= 1 arg-length) nil)
-                  ((= 2 arg-length) (cl-second args))
-                  (t                `(list ,@(cl-rest args))))))))))))
+	  (let ((arg-length (length args)))
+            (when (zerop arg-length) ; Need at least 1 arg.
+              (signal 'loopy-wrong-number-of-arguments command))
+            `((loopy--main-body
+               . (cl-return-from ,(cl-first args)
+                   ,(cond
+                     ((= 1 arg-length) nil)
+                     ((= 2 arg-length) (cl-second args))
+                     (t                `(list ,@(cl-rest args))))))))))))
 
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
