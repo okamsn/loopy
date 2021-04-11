@@ -799,11 +799,16 @@ whose value is to be accumulated."
 
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--implicit-return . t)
-    (loopy--main-body . (unless ,(if (= 1 (length conditions))
-                                     (cl-first conditions)
-                                   `(and ,@conditions))
-                          (cl-return-from ,loopy--loop-name nil)))))
+  (let ((return-val (gensym "always-return-val-")))
+    `((loopy--iteration-vars . (,return-val t))
+      (loopy--implicit-return . ,return-val)
+      (loopy--main-body . (progn
+			    (setq ,return-val
+				  ,(if (= 1 (length conditions))
+				       (cl-first conditions)
+				     `(and ,@conditions)))
+			    (unless ,return-val
+			      (cl-return-from ,loopy--loop-name nil)))))))
 
 (cl-defun loopy--parse-never-command ((_ &rest conditions))
   "Parse a command of the form `(never [CONDITIONS])'.
