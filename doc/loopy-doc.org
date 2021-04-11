@@ -1099,12 +1099,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+findex: always
    - =(always COND)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
-     Otherwise, the loop returns ~t~.
+     Otherwise, the loop returns the return value of =COND=.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
        (loopy (list i '(1 0 1 0 1))
               (always (< i 2)))
+
+       ;; => "hello"
+       (loopy (list i '(1 1 1 1))
+	      ;; The return value of `(and (< i 2) "hello")' is "hello".
+              (always (< i 2) "hello"))
 
        ;; => nil
        (loopy (list i '(1 0 1 0 1))
