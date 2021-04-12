@@ -798,7 +798,8 @@ whose value is to be accumulated."
   "Parse a command of the form `(always [CONDITIONS])'.
 
 If any condition is nil, `loopy' should immediately return nil.
-Otherwise, `loopy' should return t."
+Otherwise, `loopy' should return the final value of CONDITIONS,
+or t if the command is never evaluated."
   ;; NOTE: This cannot be `gensym', as it needs to be the same for all `always'
   ;;       and `never' commands operating in the same loop.
   (let ((return-val (intern (if loopy--loop-name
