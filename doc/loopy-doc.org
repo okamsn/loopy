@@ -1153,6 +1153,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (loopy (list i '(1 0 1 0 1))
               (thereis (and (> i 2) i)))
 
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+	      ;; Same as above. Like `always' uses an explicit `and'.
+              (thereis (> i 2) i))
+
        ;; => 3
        (loopy (list i '(nil nil 3 nil))
               (thereis i))
