@@ -1117,8 +1117,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 	      ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
               (always (< i 2) (>= i 0)))
 
-       ;; Having no conditions makes the return value of `always' expand to
-       ;; `(and)' which evaluates to t.
+       ;; Having no conditions is equivalent to `(always t)'.
 
        ;; => t
        (loopy (list i '(1 0 1 0 1))
