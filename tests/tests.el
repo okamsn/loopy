@@ -1491,6 +1491,11 @@ Not multiple of 3: 7")))
 	   (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			       (always (> i 7))))))))
 
+(ert-deftest multiple-always ()
+  (should (equal t (eval (quote (loopy (list i '(1 3 5 7))
+                                       (always (cl-oddp i))
+                                       (always (< i 10))))))))
+
 ;;;;; Never
 (ert-deftest never ()
   (should (equal nil
@@ -1500,6 +1505,21 @@ Not multiple of 3: 7")))
   (should (equal t
 		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			             (never (< i 0))))))))
+
+(ert-deftest multiple-never ()
+  (should (equal t (eval (quote (loopy (list i '(1 3 5 7))
+                                       (never (cl-evenp i))
+                                       (never (> i 10))))))))
+
+(ert-deftest always-and-never ()
+  ;; A `never' command should not stop `always' from ultimately setting the
+  ;; return value to 2.
+  (should (= 2
+             (eval (quote (loopy (repeat 2)
+                                 (always 2)
+                                 (never nil)))))))
+
+
 
 ;;;;; Thereis
 (ert-deftest thereis ()
