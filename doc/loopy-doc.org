@@ -911,8 +911,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+attr_texinfo: :tag Note
    #+begin_quote
-   In addition to those listed below, each accumulation command has an alias of
-   the command name in the present participle form (the "-ing" form).
+   You will notice that each accumulation command has an alias of the command
+   name in the present participle form (the "-ing" form).
 
    For example, instead of "min" or "minimize", you can use "minning" or
    "minimizing".  Instead of "sum" and "append", you can use "summing" and
@@ -923,8 +923,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    The available accumulation commands are:
 
    #+findex: append
-   - =(append VAR EXPR)= :: Repeatedly concatenate =EXPR= to the end of =VAR=,
-     as if by the function ~append~.
+   - =(append|appending VAR EXPR)= :: Repeatedly concatenate =EXPR= to the end
+     of =VAR=, as if by the function ~append~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3 4 5 6)
@@ -934,8 +934,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: collect
-   - =(collect VAR EXPR)= :: Collect the value of =EXPR= into a list, adding
-     values to the end of =VAR=.
+   - =(collect|collecting VAR EXPR)= :: Collect the value of =EXPR= into a list,
+     adding values to the end of =VAR=.
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3)
@@ -954,9 +954,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      below).
 
    #+findex: concat
-   - =(concat VAR EXPR)= :: Repeatedly =concat= the value of =EXPR= onto the end
-     of =VAR=, as a string.  See the =vconcat= command for concatenating values
-     into a vector.
+   - =(concat|concating VAR EXPR)= :: Repeatedly =concat= the value of =EXPR=
+     onto the end of =VAR=, as a string.  See the =vconcat= command for
+     concatenating values into a vector.
 
      #+BEGIN_SRC emacs-lisp
        ;; => "abc"
@@ -966,8 +966,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: count
-   - =(count VAR EXPR)= :: Count the number of times that =EXPR= evaluates to a
-     non-nil value.  =VAR= starts at 0 and is incremented by 1 each time.
+   - =(count|counting VAR EXPR)= :: Count the number of times that =EXPR=
+     evaluates to a non-nil value.  =VAR= starts at 0 and is incremented by 1
+     each time.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 3
@@ -977,9 +978,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: max, maximize
-   - =(max|maximize VAR EXPR)= :: Repeatedly set =VAR= to the greater of =VAR=
-     and the value of =EXPR=.  =VAR= starts at =-1.0e+INF=, so that any other
-     value should be greater that it.
+   - =(max|maxing|maximize|maximizing VAR EXPR)= :: Repeatedly set =VAR= to the
+     greater of =VAR= and the value of =EXPR=. =VAR= starts at =-1.0e+INF=, so
+     that any other value should be greater that it.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 11
@@ -989,9 +990,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: min, minimize
-   - =(min|minimize VAR EXPR)= :: Repeatedly set =VAR= to the lesser of =VAR=
-     and the value of =EXPR=.  =VAR= starts at =1.0e+INF=, so that any other
-     value should be less than it.
+   - =(min|minning|minimize|minimizing VAR EXPR)= :: Repeatedly set =VAR= to the
+     lesser of =VAR= and the value of =EXPR=.  =VAR= starts at =1.0e+INF=, so
+     that any other value should be less than it.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 0
@@ -1001,8 +1002,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: multiply, multiplying
-   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of the
-     values of EXPR.  =VAR= starts at 1.
+   - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of
+     the values of EXPR.  =VAR= starts at 1.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 120
@@ -1012,8 +1013,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
      
    #+findex: nconc
-   - =(nconc VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto
-     =VAR= via the function ~nconc~.
+   - =(nconc|nconcing VAR EXPR)= :: Repeatedly concatenate the value of =EXPR=
+     onto =VAR= via the function ~nconc~.
 
      #+attr_texinfo: :tag Caution
      #+begin_quote
@@ -1029,8 +1030,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: prepend
-   - =(prepend VAR EXPR)= :: Repeatedly concatenate =EXPR= onto the front of
-     =VAR=.
+   - =(prepend|prepending VAR EXPR)= :: Repeatedly concatenate =EXPR= onto the
+     front of =VAR=.
 
      #+begin_src emacs-lisp
        ;; => (5 6 3 4 1 2)
@@ -1045,8 +1046,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+end_src
 
    #+findex: push, push-into
-   - =(push|push-into VAR EXPR)= :: Collect the value of =EXPR= into a list,
-     adding values to the front of =VAR= via the function ~push~.
+   - =(push|push-into|pushing|pushing-into VAR EXPR)= :: Collect the value of
+     =EXPR= into a list, adding values to the front of =VAR= via the function
+     ~push~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => (3 2 1)
@@ -1057,8 +1059,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      To add values to the end of a list, use the =collect= command (see above).
 
    #+findex: sum
-   - =(sum VAR EXPR)= :: Repeatedly set =VAR= to the sum of the values of =EXPR=
-     and =VAR=.  =VAR= starts at 0.
+   - =(sum|summing VAR EXPR)= :: Repeatedly set =VAR= to the sum of the values
+     of =EXPR= and =VAR=.  =VAR= starts at 0.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 10
@@ -1068,8 +1070,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: vconcat
-   - =(vconcat VAR EXPR)= :: Repeatedly concatenate the value of =EXPR= onto the
-     end of =VAR= via the function ~vconcat~.
+   - =(vconcat|vconcating VAR EXPR)= :: Repeatedly concatenate the value of
+     =EXPR= onto the end of =VAR= via the function ~vconcat~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => [1 2 3 4 5 6]
