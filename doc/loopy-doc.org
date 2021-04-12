@@ -1089,7 +1089,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    Boolean commands are used to test whether a condition holds true for elements
    of a sequence.  Under certain conditions, they cause the loop to exit and
    return a value.  Like accumulation commands, they have an implicit return
-   value (~t~ for =always= and =never=, ~nil~ for =thereis=).
+   value which is used if these commands do not cause the loop to exit.
 
    It is incorrect to use both =thereis= and one of =always= or =never= in the
    same loop, as this leads to conflicting implicit return values.
@@ -1099,7 +1099,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+findex: always
    - =(always COND)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
-     Otherwise, the loop returns the return value of =COND=.
+     Otherwise, the loop returns the final value of =COND= or ~t~ if =COND= is
+     never evaluated.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
@@ -1108,12 +1109,18 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
        ;; => "hello"
        (loopy (list i '(1 1 1 1))
-	      ;; The return value of `(and (< i 2) "hello")' is "hello".
+              ;; The return value of `(and (< i 2) "hello")' is "hello".
               (always (< i 2) "hello"))
 
-       ;; => nil
-       (loopy (list i '(1 0 1 0 1))
-              (always (< i 1)))
+       ;; NOTE: Here, the implicit return value is `t' because an
+       ;;       `always' command was used, and that return value
+       ;;       is never updated to "hello" because the `always'
+       ;;       command is never actually used.
+       ;;
+       ;; => t
+       (loopy (list i '(1 1 1 1))
+              (when nil
+                (always (> i 5) "hello")))
      #+END_SRC
    
    #+findex: never
@@ -1129,6 +1136,18 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (loopy (list i '(1 0 1 0 1))
               (never (= i 0)))
      #+END_SRC
+
+     =never= does not affect the loop's implicit return value when using the
+     =always= command.
+
+     #+begin_src emacs-lisp
+       ;; This example taken from the documentation of CL's Iterate package.
+       ;;
+       ;; => 2, not t
+       (loopy (repeat 2)
+              (always 2)
+              (never nil))
+     #+end_src
      
    #+findex: thereis
    - =(thereis COND)= :: Immediately return the value of =COND= if said value is
