@@ -1098,8 +1098,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    case the conditions are ~and~-ed.
 
    #+findex: always
-   - =(always COND &rest CONDS)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
-     Otherwise, the loop returns ~t~.
+   - =(always &rest CONDS)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
+     Otherwise, the loop returns ~t~. If more than one condition is specified
+     treat them as one condition joined by =and=.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
@@ -1118,8 +1119,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
    
    #+findex: never
-   - =(never COND &rest CONDS)= :: Immediately return ~nil~ if =COND= is ever non-nil.
-     Otherwise, the loop returns ~t~.
+   - =(never &rest CONDS)= :: Immediately return ~nil~ if =COND= is ever non-nil.
+     Otherwise, the loop returns ~t~. If more than one condition is specified
+     treat them as one condition joined by =or=.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
