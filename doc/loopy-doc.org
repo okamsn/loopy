@@ -1178,6 +1178,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => 3
        (loopy (list i '(nil nil 3 nil))
               (thereis i))
+
+       ;; Having no conditions in `thereis' makes loopy always return true. It
+       ;; is equivalent to `(thereis t)'.
+
+       ;; => t
+       (loopy (list i '(nil nil 3 nil))
+              (thereis))
      #+END_SRC
      
 ** Control Flow
