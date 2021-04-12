@@ -798,23 +798,41 @@ whose value is to be accumulated."
   "Parse a command of the form `(always [CONDITIONS])'.
 
 If any condition is nil, `loopy' should immediately return nil.
-Otherwise, `loopy' should return t."
-  `((loopy--implicit-return . t)
-    (loopy--main-body . (unless ,(if (= 1 (length conditions))
-                                     (cl-first conditions)
-                                   `(and ,@conditions))
-                          (cl-return-from ,loopy--loop-name nil)))))
+Otherwise, `loopy' should return the final value of CONDITIONS,
+or t if the command is never evaluated."
+  ;; NOTE: This cannot be `gensym', as it needs to be the same for all `always'
+  ;;       and `never' commands operating in the same loop.
+  (let ((return-val (intern (if loopy--loop-name
+                                (format "loopy--%s-always-never-return-val"
+                                        loopy--loop-name)
+                              "loopy-always-never-return-val"))))
+    `((loopy--iteration-vars . (,return-val t))
+      (loopy--implicit-return . ,return-val)
+      (loopy--main-body . (progn
+			    (setq ,return-val
+				  ,(if (= 1 (length conditions))
+				       (cl-first conditions)
+				     `(and ,@conditions)))
+			    (unless ,return-val
+			      (cl-return-from ,loopy--loop-name nil)))))))
 
 (cl-defun loopy--parse-never-command ((_ &rest conditions))
   "Parse a command of the form `(never [CONDITIONS])'.
 
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--implicit-return  . t)
-    (loopy--main-body . (when ,(if (= 1 (length conditions))
-                                   (cl-first conditions)
-                                 `(and ,@conditions))
-                          (cl-return-from ,loopy--loop-name nil)))))
+  ;; NOTE: This cannot be `gensym', as it needs to be the same for all `always'
+  ;;       and `never' commands operating in the same loop.
+  (let ((return-val (intern (if loopy--loop-name
+                                (format "loopy--%s-always-never-return-val"
+                                        loopy--loop-name)
+                              "loopy-always-never-return-val"))))
+    `((loopy--iteration-vars . (,return-val t))
+      (loopy--implicit-return  . ,return-val)
+      (loopy--main-body . (when ,(if (= 1 (length conditions))
+                                     (cl-first conditions)
+                                   `(and ,@conditions))
+                            (cl-return-from ,loopy--loop-name nil))))))
 
 (cl-defun loopy--parse-thereis-command ((_ &rest conditions))
   "Parse a command of the form `(thereis [CONDITIONS]).'
