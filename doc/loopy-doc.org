@@ -1142,8 +1142,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
      
    #+findex: thereis
-   - =(thereis COND &rest CONDS)= :: Immediately return the value of =COND= if said value is
-     ever non-nil.  Otherwise, the loop returns ~nil~.
+   - =(thereis &rest CONDS)= :: Immediately return the value of =COND= if said value is
+     ever non-nil.  Otherwise, the loop returns ~nil~. If more than one
+     condition is specified treat them as one condition joined by =and=.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 3
