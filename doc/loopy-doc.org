@@ -1097,10 +1097,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    For convenience, these commands can be passed multiple conditions.
 
    #+findex: always
-   - =(always COND [CONDS])= :: Immediately return ~nil~ if =COND= is ever ~nil~.
-     Otherwise, the loop returns the final value of =COND= or ~t~ if =COND= is
-     never evaluated.  If more than one condition is specified treat them as one
-     condition joined by =and=.
+   - =(always COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
+     ~nil~.  Otherwise, the loop returns the final value of the last =COND= or
+     ~t~ if no =COND= is ever evaluated.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
@@ -1134,9 +1133,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
    
    #+findex: never
-   - =(never COND [CONDS])= :: Immediately return ~nil~ if =COND= is ever non-nil.
-     Otherwise, the loop returns ~t~. If more than one condition is specified
-     treat them as one condition joined by =or=.
+   - =(never COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
+     non-nil.  Otherwise, the loop returns ~t~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
@@ -1171,7 +1169,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+findex: thereis
    - =(thereis COND [CONDS])= :: Immediately return the value of =COND= if said
      value is ever non-nil.  Otherwise, the loop returns ~nil~.  If more than
-     one condition is specified treat them as one condition joined by =and=.
+     one condition is specified, then they are treated as one condition joined
+     by ~and~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 3
