@@ -794,8 +794,8 @@ whose value is to be accumulated."
                           (list name value-holder value-expression))))))))
 
 ;;;; Boolean Commands
-(cl-defun loopy--parse-always-command ((_ &rest conditions))
-  "Parse a command of the form `(always [CONDITIONS])'.
+(cl-defun loopy--parse-always-command ((_ condition &rest other-conditions))
+  "Parse a command of the form `(always CONDITION [CONDITIONS])'.
 
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return the final value of CONDITIONS,
@@ -810,14 +810,14 @@ or t if the command is never evaluated."
       (loopy--implicit-return . ,return-val)
       (loopy--main-body . (progn
 			    (setq ,return-val
-				  ,(if (= 1 (length conditions))
-				       (cl-first conditions)
-				     `(and ,@conditions)))
+                                  ,(if other-conditions
+                                       `(and ,condition ,@other-conditions)
+                                     condition))
 			    (unless ,return-val
 			      (cl-return-from ,loopy--loop-name nil)))))))
 
-(cl-defun loopy--parse-never-command ((_ &rest conditions))
-  "Parse a command of the form `(never [CONDITIONS])'.
+(cl-defun loopy--parse-never-command ((_ condition &rest other-conditions))
+  "Parse a command of the form `(never CONDITION [CONDITIONS])'.
 
 If any condition is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
@@ -829,20 +829,22 @@ Otherwise, `loopy' should return t."
                               "loopy-always-never-return-val"))))
     `((loopy--iteration-vars . (,return-val t))
       (loopy--implicit-return  . ,return-val)
-      (loopy--main-body . (when ,(if (= 1 (length conditions))
-                                     (cl-first conditions)
-                                   `(and ,@conditions))
+      (loopy--main-body . (when ,(if other-conditions
+                                     `(or ,condition ,@other-conditions)
+                                   condition)
                             (cl-return-from ,loopy--loop-name nil))))))
 
-(cl-defun loopy--parse-thereis-command ((_ &rest conditions))
-  "Parse a command of the form `(thereis [CONDITIONS]).'
+(cl-defun loopy--parse-thereis-command ((_ condition &rest other-conditions))
+  "Parse a command of the form `(thereis CONDITION [CONDITIONS]).'
 
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
   (let ((value-holder (gensym "thereis-var-")))
     `((loopy--implicit-return  . nil)
       (loopy--main-body
-       . (if-let ((,value-holder (and ,@conditions)))
+       . (if-let ((,value-holder ,(if other-conditions
+                                      `(and ,condition ,@other-conditions)
+                                    condition)))
 	     (cl-return-from ,loopy--loop-name ,value-holder))))))
 
 ;;;;; Exiting and Skipping
