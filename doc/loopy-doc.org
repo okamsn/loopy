@@ -1096,18 +1096,27 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    It is incorrect to use both =thereis= and one of =always= or =never= in the
    same loop, as this leads to conflicting implicit return values.
 
-   For convenience, these commands can be passed multiple conditions, in which
-   case the conditions are ~and~-ed.
+   For convenience, these commands can be passed multiple conditions.
 
    #+findex: always
-   - =(always COND)= :: Immediately return ~nil~ if =COND= is ever ~nil~.
-     Otherwise, the loop returns the final value of =COND= or ~t~ if =COND= is
-     never evaluated.
+   - =(always COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
+     ~nil~.  Otherwise, the loop returns the final value of the last =COND= or
+     ~t~ if no =COND= is ever evaluated.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
        (loopy (list i '(1 0 1 0 1))
               (always (< i 2)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+              (always (< i 1)))
+
+       ;; => t
+       (loopy (list i '(1 0 1 0 1))
+              ;; Note: can accept multiple conditions.
+              ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
+              (always (< i 2) (>= i 0)))
 
        ;; => "hello"
        (loopy (list i '(1 1 1 1))
@@ -1126,8 +1135,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
    
    #+findex: never
-   - =(never COND)= :: Immediately return ~nil~ if =COND= is ever non-nil.
-     Otherwise, the loop returns ~t~.
+   - =(never COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
+     non-nil.  Otherwise, the loop returns ~t~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => t
@@ -1137,6 +1146,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => nil
        (loopy (list i '(1 0 1 0 1))
               (never (= i 0)))
+
+       ;; Like `always', `never' can also accept multiple arguments. They are
+       ;; treated as `(never (or COND1 COND2 ... CONDN))'.
+
+       ;; => t
+       (loopy (list i '(1 0 1 0 1))
+	      ;; equivalent to `(never (or (= i 3) (= i 4)))'.
+              (never (= i 3) (= i 4)))
      #+END_SRC
 
      =never= does not affect the loop's implicit return value when using the
@@ -1152,8 +1169,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+end_src
      
    #+findex: thereis
-   - =(thereis COND)= :: Immediately return the value of =COND= if said value is
-     ever non-nil.  Otherwise, the loop returns ~nil~.
+   - =(thereis COND [CONDS])= :: Immediately return the value of =COND= if said
+     value is ever non-nil.  Otherwise, the loop returns ~nil~.  If more than
+     one condition is specified, then they are treated as one condition joined
+     by ~and~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 3
@@ -1164,6 +1183,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => nil
        (loopy (list i '(1 0 1 0 1))
               (thereis (and (> i 2) i)))
+
+       ;; => nil
+       (loopy (list i '(1 0 1 0 1))
+	      ;; Same as above. Like `always' uses an explicit `and'.
+              (thereis (> i 2) i))
 
        ;; => 3
        (loopy (list i '(nil nil 3 nil))
