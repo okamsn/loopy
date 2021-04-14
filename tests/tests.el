@@ -2117,6 +2117,26 @@ Not multiple of 3: 7")))
   (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			            (thereis (> i 7))))))))
 
+;; finding
+(ert-deftest find ()
+  (should (= 3 (eval (quote (loopy (list i '(1 2 3))
+			           (find i (> i 2)))))))
+
+  (should-not (eval (quote (loopy (list i '(1 2 3))
+			          (find i (> i 4))))))
+
+  (should (= 0 (eval (quote (loopy (list i '(1 2 3))
+			           (find i (> i 4) :on-failure 0))))))
+
+  (should (= 3 (eval (quote (loopy (list i '(1 2 3))
+			           (finding i (> i 2)))))))
+
+  (should-not (eval (quote (loopy (list i '(1 2 3))
+			          (finding i (> i 4))))))
+
+  (should (= 0 (eval (quote (loopy (list i '(1 2 3))
+			           (finding i (> i 4) :on-failure 0)))))))
+
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()
   (cl-defun my-loopy-sum-command ((_ target &rest items))

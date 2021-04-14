@@ -1071,6 +1071,41 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (if ,val (setq ,var (1+ ,var))))
               (loopy--implicit-return . ,var)))
 
+(loopy--defaccumulation find
+  "Parse a command of the form `(finding EXPR TEST &key ON-FAILURE)'."
+  :num-args 3
+  :keywords (on-failure)
+  :explicit (let* ((test-arg (cl-third args))
+                   (test-form (if (loopy--quoted-form-p test-arg)
+                                  `(,(loopy--get-function-symbol test-arg) ,val)
+                                test-arg))
+                   (on-failure (plist-get opts :on-failure)))
+              `((loopy--tagbody-exit-used . t)
+                (loopy--accumulation-vars . (,var nil))
+                (loopy--main-body . (when ,test-form
+                                      (setq ,var ,val)
+                                      (go loopy--non-returning-exit-tag)))
+                ;; If VAR nil, bind to ON-FAILURE.
+                ,(when on-failure
+                   `(loopy--accumulation-final-updates
+                     . (,var . (if ,var nil (setq ,var ,on-failure)))))
+                (loopy--implicit-return   . ,var)))
+  :implicit (let* ((test-arg (cl-second args))
+                   (test-form (if (loopy--quoted-form-p test-arg)
+                                  `(,(loopy--get-function-symbol test-arg) ,val)
+                                test-arg))
+                   (on-failure (plist-get opts :on-failure)))
+              `((loopy--tagbody-exit-used . t)
+                (loopy--accumulation-vars . (,var nil))
+                (loopy--main-body . (when ,test-form
+                                      (setq ,var ,val)
+                                      (go loopy--non-returning-exit-tag)))
+                ;; If VAR nil, bind to ON-FAILURE.
+                ,(when on-failure
+                   `(loopy--accumulation-final-updates
+                     . (,var . (if ,var nil (setq ,var ,on-failure)))))
+                (loopy--implicit-return   . ,var))))
+
 (loopy--defaccumulation max
   "Parse the `max' command as (max VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1320,6 +1355,7 @@ Otherwise the loop continues and nil is returned."
                                       `(and ,condition ,@other-conditions)
                                     condition)))
 	     (cl-return-from ,loopy--loop-name ,value-holder))))))
+
 
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
@@ -1575,6 +1611,8 @@ COMMAND-LIST."
     (elements-ref . loopy--parse-seq-ref-command)
     (expr         . loopy--parse-expr-command)
     (exprs        . loopy--parse-expr-command)
+    (find         . loopy--parse-find-command)
+    (finding      . loopy--parse-find-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)
     (in           . loopy--parse-list-command)

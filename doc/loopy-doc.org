@@ -1094,6 +1094,41 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return non-nil-count))
      #+END_SRC
 
+   #+findex: find, finding
+   - =(find|finding VAR EXPR TEST &key ON-FAILURE)= :: If =TEST= is
+     non-nil, the loop stops and =EXPR= is used as a returned value.  If =TEST=
+     is never non-nil, then =ON-FAILURE= is used as a returned value, if
+     provided.
+
+     =VAR= takes the value of =EXPR= if =TEST= is non-nil or =ON-FAILURE= if the
+     loop completes successfully.  It is bound to ~nil~ during  the loop.
+
+     #+BEGIN_SRC emacs-lisp
+       ;; => 3
+       (loopy (list i '(1 2 3))
+              (finding i (> i 2)))
+
+       ;; => nil
+       (loopy (list i '(1 2 3))
+              (finding i (> i 4)))
+
+       ;; => "not found"
+       (loopy (list i '(1 2 3))
+              (finding i (> i 4) :on-failure "not found"))
+
+       ;; => 2
+       ;; Does not display message.
+       (loopy (list i '(1 2 3))
+	      (finding i (= i 2) :into found)
+	      (after-do (message "found: %s" found)))
+
+       ;; => 2
+       ;; Messages "found: 2" in echo area.
+       (loopy (list i '(1 2 3))
+	      (finding found i (= i 2))
+	      (finally-do (message "found: %s" found)))
+     #+END_SRC
+
    #+findex: max, maximize
    - =(max|maxing|maximize|maximizing VAR EXPR)= :: Repeatedly set =VAR= to the
      greater of =VAR= and the value of =EXPR=.  =VAR= starts at =-1.0e+INF=, so
@@ -1410,7 +1445,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (loopy (list i '(nil nil 3 nil))
               (thereis i))
      #+END_SRC
-     
+
+
 ** Control Flow
    :PROPERTIES:
    :CUSTOM_ID: control-flow
