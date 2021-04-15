@@ -744,10 +744,10 @@ whose value is to be accumulated."
   "Return name for accumulation command auxilaries."
   (cl-assert (not (and explicit-p implicit-p)))
   (let* ((prefix "loopy--parse-accumulation-command-")
-	 (explicit-part (if explicit-p "explicit-" ""))
+	 (explicit-part (if explicit-p "explicit" ""))
 	 (implicit-part (if implicit-p "implicit-" ""))
-	 (split-part (when implicit-p (if split-p "split-" "no-split-"))))
-    (intern (format "%s%s%s%s" prefix command explicit split))))
+	 (split-part (if implicit-p (if split-p "split" "no-split") "")))
+    (intern (format "%s%s-%s%s" prefix command explicit-part implicit-part split-part))))
 
 (defun loopy--determine-case-args (command-args)
   "Determine whether implicit, explicit, destructuring or none."
@@ -781,19 +781,19 @@ whose value is to be accumulated."
 (defun loopy--generate-explicit-fn (command arguments instructions)
   "Return the explicit function for COMMAND."
   (let ((explicit-fn (intern (format "loopy--parse-%s-command-explicit" command))))
-    `(cl-defun ,(loopy--accumulation-command-name command t) (_ ,arguments)
-       `(,@instructions
-	 (loopy--accumulation-vars . (,var . ,(loopy--accumulation-starting-value name)))
-	 (loopy--implicit-return . ,var)
-	 (loopy--main-body ,',body)))))
+    `(cl-defun ,(loopy--accumulation-command-name command t) ((command ,@arguments))
+       `(,@,@instructions
+	 (loopy--accumulation-vars . (,var . ,(loopy--accumulation-starting-value command)))
+	 (loopy--implicit-return . ,var)))))
 
 (defun loopy--generate-no-split-implicit-fn (command arguments instructions)
   "Return the no-split implicit function for COMMAND."
   `(cl-defun ,(loopy--accumulation-command-name command nil t) (_ ,arguments)
      `(,@instructions
        (loopy--accumulation-vars . (loopy-result ,(loopy--accumulation-starting-value command)))
-       (loopy--implicit-return . ,',body)
-       (loopy--implicit-accumulation-final-update . (setq ,value-holder ,body)))))
+       ;; (loopy--implicit-return . ,',body)
+       ;; (loopy--implicit-accumulation-final-update . (setq ,value-holder ,body))
+       )))
 
 (defun loopy--generate-split-implicit-fn (command arguments instructions)
   "Return the split implicit function for COMMAND."
@@ -801,7 +801,8 @@ whose value is to be accumulated."
     `(cl-defun ,(loopy--accumulation-command-name command nil t t) (_ ,arguments)
        `(,@instructions
 	 (loopy--accumulation-vars . (,(gensym ,gsym-prefix) ,(loopy--accumulation-starting-value ',command)))
-	 (loopy--implict-return ,',body)))))
+	 ;; (loopy--implict-return ,',body)
+	 ))))
 
 ;; Generating aliases
 
@@ -825,24 +826,26 @@ command names or a single command name."
     `(progn
        ,@(mapcar (lambda (fn) (apply fn (list command args instructions)))
 		 (list #'loopy--generate-explicit-fn
-		       #'loopy--generate-implicit-split-fn
-		       #'loopy--generate-implicit-no-split-fn
-		       #'loopy--generate-main-accumulation-fn))
-       ,@(loopy--generate-aliases command aliases))))
+		       ;; #'loopy--generate-implicit-split-fn
+		       ;; #'loopy--generate-implicit-no-split-fn
+		       ;; #'loopy--generate-main-accumulation-fn
+		       ))
+       ;; ,@(loopy--generate-aliases command aliases)
+       )))
 
 ;;; Define Accumulation Commands
 
 (loopy--defaccumulation-command adjoining (var val &key test)
   "A `loopy` command that adjoins VAL into VAR."
-  `((main-body . (cl-callf2 cl-adjoin ,value ,var :test ,test))))
+  `((loopy--main-body . (cl-callf2 cl-adjoin ,val ,var :test ,test))))
 
 (loopy--defaccumulation-command (append appending) (var val)
   `((split:implicit-return . (nreverse ,var))
-    (main-body . (cl-callf2 nconc (reverse ,val) ,var))))
+    (loopy--main-body . (cl-callf2 nconc (reverse ,val) ,var))))
 
 (loopy--defaccumulation-command (collect collecting) (var val)
   `((split:implicit-return . (nreverse ,value-holder))
-    (main-body . (cl-callf2 cons ,val ,var))))
+    (loopy--main-body . (cl-callf2 cons ,val ,var))))
 
 (loopy--defaccumulation-command (concat concating) (var val)
   `((split:implicit-return . (apply #'concat (nreverse ,val)))
