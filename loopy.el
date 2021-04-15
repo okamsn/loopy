@@ -324,26 +324,23 @@ command) create for themselves a new, local top level.")
 This has the effect of leaving the loop without immediately
 returning a value.")
 
-(defvar loopy--implicit-accumulation-final-update nil
-  "Actions to perform on the implicit accumulation variable.
+(defvar loopy--accumulation-final-updates nil
+  "Alist of actions to perform on accumulation variables after the loop ends.
 
-So as to avoid conflicts, there can be only one final action.
-This variable is a list of such actions, but only the action at
-the head of the list will be performed.
+This variable's instructions are of the form `(VAR . ACTION)'.
+To avoid accidentally updating a variable multiple times (such as
+reversing a list twice), each VARIABLE can only be updated in a
+single way.")
 
-For example, it is usually more efficient to build a list in
-reverse order, so a final update might be to reverse a backwards
-list so that it is in the correct order.")
-
-(defvar loopy--implicit-accumulation-updated nil
-  "Whether the implicit accumulation commands were finally updated.
+(defvar loopy--accumulations-updated nil
+  "Whether the accumulation variables were finally updated.
 
 If a `cl-tagbody' exit is used (such by a `while' or `until'
 command, which don't return values, just leaving the loop), then
 the `after-do' body is skipped.  This also has the consequence of
-skipping the final update to implicit accumulation variables,
-which needs to run before the `after-do' body so that the
-variable is safe when accessed.
+skipping the final update to accumulation variables, which needs
+to run before the `after-do' body so that the variable is safe
+when accessed.
 
 To work around this, the final update before the `after-do' will
 set this variable to t if it has run.  This value will be
@@ -373,7 +370,7 @@ t.")
       ;; -- Variables for constructing code --
       loopy--skip-used
       loopy--tagbody-exit-used
-      loopy--implicit-accumulation-final-update
+      loopy--accumulation-final-updates
       loopy--in-sub-level
 
       ;; -- Flag Variables --
@@ -614,7 +611,7 @@ The function creates quoted code that should be used by a macro."
   ;;                           ,loopy--implicit-return))))
   ;;                    ,@loopy--after-do)
   ;;                   loopy--non-returning-exit-tag
-  ;;                   ,loopy--implicit-accumulation-final-update
+  ;;                   ,loopy--accumulation-final-updates
   ;;                   ,loopy--implicit-return)))
   ;;            ,@loopy--final-do
   ;;            ,(if loopy--final-return
@@ -670,14 +667,14 @@ The function creates quoted code that should be used by a macro."
 
       ;; Make sure that the implicit accumulation variable is correctly
       ;; updated after the loop, if need be.
-      (when loopy--implicit-accumulation-final-update
+      (when loopy--accumulation-final-updates
         (setq result
               (if loopy--tagbody-exit-used
                   `(,@(get-result)
-                    ,(car loopy--implicit-accumulation-final-update)
-                    (setq loopy--implicit-accumulation-updated t))
+                    ,@(mapcar #'cdr loopy--accumulation-final-updates)
+                    (setq loopy--accumulations-updated t))
                 `(,@(get-result)
-                  ,(car loopy--implicit-accumulation-final-update)))
+                  ,@(mapcar #'cdr loopy--accumulation-final-updates)))
               result-is-one-expression nil))
 
       ;; Now ensure return value is nil and add the code to run before and
@@ -694,15 +691,13 @@ The function creates quoted code that should be used by a macro."
               result-is-one-expression nil)))
 
       (when loopy--tagbody-exit-used
-        (setq result (if loopy--implicit-accumulation-final-update
+        (setq result (if loopy--accumulation-final-updates
                          `(cl-tagbody
                            ,@(get-result)
                            loopy--non-returning-exit-tag
-                           ;; Even if leave the loop early, make sure the
-                           ;; update is always run.
-                           (if loopy--implicit-accumulation-updated
+                           (if loopy--accumulations-updated
                                nil
-                             ,(car loopy--implicit-accumulation-final-update)))
+                             ,@(mapcar #'cdr loopy--accumulation-final-updates)))
                        `(cl-tagbody
                          ,@(get-result)
                          loopy--non-returning-exit-tag))
@@ -746,15 +741,16 @@ The function creates quoted code that should be used by a macro."
               result-is-one-expression t))
 
       ;; If there are final updates to made and a tag-body exit that can skip
-      ;; them, then we must initialize `loopy--implicit-accumulation-updated'.
-      (when (and loopy--implicit-accumulation-final-update
+      ;; them, then we must initialize `loopy--accumulations-updated'.
+      (when (and loopy--accumulation-final-updates
                  loopy--tagbody-exit-used)
-        (setq result `(let ((loopy--implicit-accumulation-updated nil))
+        (setq result `(let ((loopy--accumulations-updated nil))
                         ,@(get-result))
               result-is-one-expression t))
 
+      ;; Declare accumulation variables.
       (when loopy--accumulation-vars
-        (setq result `(let ,loopy--accumulation-vars ,@(get-result))
+        (setq result `(let* ,loopy--accumulation-vars ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare the With variables.
@@ -962,9 +958,19 @@ Info node `(loopy)' distributed with this package."
            (loopy--implicit-return
             (unless (loopy--already-implicit-return (cdr instruction))
               (push (cdr instruction) loopy--implicit-return)))
-           (loopy--implicit-accumulation-final-update
-            (push (cdr instruction) loopy--implicit-accumulation-final-update))
-
+           (loopy--accumulation-final-updates
+            ;; These instructions are of the form `(instr . (var . update))'
+            (let* ((update-pair (cdr instruction))
+                   (var-to-update (car update-pair))
+                   (update-code (cdr update-pair)))
+              (if-let ((existing-update (cdr (assq var-to-update
+                                                   loopy--accumulation-final-updates))))
+                  (unless (equal existing-update update-code)
+                    (error "Incompatible final update for %s:\n%s\n%s"
+                           var-to-update
+                           existing-update
+                           update-code))
+                (push update-pair loopy--accumulation-final-updates))))
            ;; Code for conditionally constructing the loop body.
            (loopy--skip-used
             (setq loopy--skip-used t))
@@ -986,6 +992,7 @@ Info node `(loopy)' distributed with this package."
    ;; Make sure the order-dependent lists are in the correct order.
    (setq loopy--main-body (nreverse loopy--main-body)
          loopy--iteration-vars (nreverse loopy--iteration-vars)
+         loopy--accumulation-vars (nreverse loopy--accumulation-vars)
          loopy--implicit-return (when (consp loopy--implicit-return)
                                   (if (= 1 (length loopy--implicit-return))
                                       ;; If implicit return is just a single thing,

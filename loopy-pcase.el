@@ -152,7 +152,7 @@ should only be used if VAR-OR-VAL is a variable."
                                   (destr-val (cl-second varval)))
                               (seq-let (main-body other-instructions)
                                   (loopy--extract-main-body
-                                   (loopy--parse-accumulation-commands
+                                   (loopy--parse-loop-command
                                     (list name destr-var destr-val)))
                                 ;; Just push the other instructions, but
                                 ;; gather the main body expressions.
@@ -181,7 +181,7 @@ should only be used if VAR-OR-VAL is a variable."
                                                    (cadr v))))
                                   (seq-let (main-body other-instructions)
                                       (loopy--extract-main-body
-                                       (loopy--parse-accumulation-commands
+                                       (loopy--parse-loop-command
                                         (list name destr-var destr-val)))
                                     ;; Just push the other instructions, but
                                     ;; gather the main body expressions.

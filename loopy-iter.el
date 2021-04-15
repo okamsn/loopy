@@ -431,8 +431,19 @@ Unlike in `loopy', this allows arbitrary expressions."
       (loopy--implicit-return
        (unless (loopy--already-implicit-return (cdr instruction))
          (push (cdr instruction) loopy--implicit-return)))
-      (loopy--implicit-accumulation-final-update
-       (push (cdr instruction) loopy--implicit-accumulation-final-update))
+      (loopy--accumulation-final-updates
+       ;; These instructions are of the form `(instr . (var . update))'
+       (let* ((update-pair (cdr instruction))
+              (var-to-update (car update-pair))
+              (update-code (cdr update-pair)))
+         (if-let ((existing-update (cdr (assq var-to-update
+                                              loopy--accumulation-final-updates))))
+             (unless (equal existing-update update-code)
+               (error "Incompatible final update for %s:\n%s\n%s"
+                      var-to-update
+                      existing-update
+                      update-code))
+           (push update-pair loopy--accumulation-final-updates))))
 
       ;; Code for conditionally constructing the loop body.
       (loopy--skip-used

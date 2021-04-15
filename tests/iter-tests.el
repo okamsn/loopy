@@ -422,4 +422,13 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                                (for list j i)
                                                (accum collect j))))))))
 
+(ert-deftest collect-coercion ()
+  (should (equal [1 2 3]
+                 (loopy-iter (for list j '(1 2 3))
+                             (accum collect v j :result-type 'vector))))
+  (should (equal [1 2 3]
+                 (loopy-iter
+                  (flag lax-naming)
+                  (each j '(1 2 3))
+                  (collect j :result-type 'vector)))))
 ;; end

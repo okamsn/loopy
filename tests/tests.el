@@ -741,6 +741,35 @@ implicit variable without knowing it's name, even for named loops."
                               (finally-return my-seq)))))))
 
 ;;;; Accumulation Commands
+;;;;; Final updates
+(ert-deftest accumulation-conflicting-final-updates ()
+  :expected-result :failed
+  (should (eval (quote (loopy (list i '((1) (2) (3)))
+                              (collect i)
+                              (vconcat i))))))
+
+;;;;; Into Argument
+(ert-deftest accumulation-into-argument ()
+  (should (equal '((2 3 4) (2 2 2))
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect (1+ i) :into coll1)
+                                     ;; This should be the same value repeated.
+                                     ;; If not, it means `coll1'  is constructed
+                                     ;; in reverse, instead of being treated as
+                                     ;; explicitly named.
+                                     (collect coll2 (cl-first coll1))
+                                     (finally-return coll1 coll2))))))
+
+  (should (= 9 (eval (quote (loopy (list i '(1 2 3))
+                                   (sum (1+ i) :into j)
+                                   (finally-return j)))))))
+
+(ert-deftest accumulation-raise-error-bad-arg ()
+  :expected-result :failed
+  (eval (quote (loopy (list i '(1 2 3))
+                      (collect i :casdfasdf x)))))
+
+
 ;;;;; Order of implicit returns.
 (ert-deftest implicit-collect-order ()
   (should (equal '((2) (1 3))
@@ -830,6 +859,153 @@ implicit variable without knowing it's name, even for named loops."
                                          (collect i)
                                        (collect i))))))))
 
+
+;;;;; Accumulate
+(ert-deftest accumulate ()
+  (should (equal '(2 1)
+                 (eval (quote (loopy (list i '(1 2))
+                                     (accumulate my-accum i #'cons
+                                                 :init nil))))))
+
+  (should (equal '((3 1) (4 2))
+                 (eval (quote (loopy (list i '((1 2) (3 4)))
+                                     (accumulate (accum1 accum2) i #'cons
+                                                 :init nil)))))))
+
+;;;;; Adjoin
+(ert-deftest adjoin ()
+  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
+                                               (1 . 2) (2 . 3)))
+                                     (adjoin a i)
+                                     (finally-return a))))))
+
+  (should (equal '((1 . 1) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                     (adjoin a i :test #'equal)
+                                     (finally-return a))))))
+
+  (should (equal '((1 . 1) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                     (adjoin a i :test #'= :key #'car)
+                                     (finally-return a))))))
+
+  (should (equal '((1 . 1) (2 . 3))
+                 (let ((my-test #'=)
+                       (my-key #'car))
+                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                       (adjoin a i :test my-test :key my-key)
+                                       (finally-return a)))))))
+
+  (should (equal '((1 . 1) (2 . 3))
+                 (let ((my-key #'car))
+                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                       (adjoin a i :key my-key)
+                                       (finally-return a)))))))
+
+  (should (equal '((1 . 1) (1 . 2) (2 . 3))
+                 (let ((my-test #'equal))
+                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                       (adjoin a i :test my-test)
+                                       (finally-return a))))))))
+
+(ert-deftest adjoin-destructuring ()
+  (should (equal '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3)))
+                 (eval (quote (loopy (list i '(((1 . 1) (1 . 2))
+                                               ((1 . 2) (2 . 3))))
+                                     (adjoin (a1 a2) i)
+                                     (finally-return a1 a2))))))
+
+  (should (equal '(((1 . 2)) ((1 . 1) (2 . 3)))
+                 (eval (quote (loopy (list i '(((1 . 2) (1 . 1))
+                                               ((1 . 2) (2 . 3))))
+                                     (adjoin (a1 a2) i :test #'equal)
+                                     (finally-return a1 a2))))))
+
+  (should (equal '(((1 . 1)) ((1 . 2) (2 . 3)))
+                 (eval (quote (loopy (list i '(((1 . 1) (1 . 2))
+                                               ((1 . 2) (2 . 3))))
+                                     (adjoin (a1 a2) i :key #'car)
+                                     (finally-return a1 a2)))))))
+
+(ert-deftest adjoin-implicit ()
+  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
+                                               (1 . 2) (2 . 3)))
+                                     (adjoin i))))))
+
+  (should (equal '((1 . 1) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                     (adjoin i :test #'equal))))))
+
+  (should (equal '((1 . 1) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                                     (adjoin i :test #'= :key #'car)))))))
+
+(ert-deftest adjoin-coercion ()
+  (should (equal [1 2 3 4 5]
+                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
+                                     (adjoin i :result-type 'array))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
+                                     (adjoin i :result-type 'list))))))
+
+  (should (equal "abcd"
+                 (eval (quote (loopy (list i '(?a ?b ?c ?d))
+                                     (adjoin i :result-type 'string))))))
+
+  (should (equal [1 2 3]
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (adjoin my-var i :result-type 'vector))))))
+
+  (should (equal [1 2 3 4 5]
+                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
+                                     (adjoin i :result-type array))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
+                                     (adjoin i :result-type list))))))
+
+  (should (equal "abcd"
+                 (eval (quote (loopy (list i '(?a ?b ?c ?d))
+                                     (adjoin i :result-type string))))))
+
+  (should (equal [1 2 3]
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (adjoin my-var i :result-type vector)))))))
+
+(ert-deftest adjoin-at ()
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
+                                     (adjoin i :at end))))))
+
+  (should (equal '(5 4 3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
+                                     (adjoin i :at start))))))
+
+  (should (equal [5 4 3 2 1]
+                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
+                                     (adjoin i :at start :result-type 'array))))))
+
+  (should
+   (= 1
+      (cl-count-if (lambda (x) (= (cl-second x) 4))
+                   (eval (quote (loopy (list i '((1 2) (3 4) (5 4)))
+                                       (adjoin i
+                                               :at start
+                                               :key #'cl-second)))))))
+
+  (should
+   (= 1
+      (cl-count-if (lambda (x) (equal (cl-second x) '(4 0)))
+                   (eval (quote (loopy (list i '((1 2)
+                                                 (3 (4 0))
+                                                 (5 (4 0))))
+                                       (adjoin i :at start
+                                               :key #'cl-second
+                                               :test #'equal))))))))
+
 ;;;;; Append
 (ert-deftest append ()
   (should (equal '(1 2 3 4 5 6)
@@ -857,6 +1033,16 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
                                      (appending i)))))))
 
+(ert-deftest append-at ()
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (append i :at end))))))
+
+  (should (equal '(4 5 6 1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (append i :at start)))))))
+
+;;;;; Collect
 (ert-deftest collect ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list j '(1 2 3))
@@ -904,6 +1090,54 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list j '(1 2 3))
                                      (collecting j)))))))
 
+(ert-deftest collect-coercion ()
+  (should (equal [1 2 3]
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (collect v j :result-type 'vector))))))
+
+  (should (equal "abc"
+                 (eval (quote (loopy (list j '(?a ?b ?c))
+                                     (collect j :result-type 'string))))))
+
+  (should (equal [1 2 3]
+                 (eval (quote (loopy (list j '(1 2 3))
+                                     (collect v j :result-type vector))))))
+
+  (should (equal "abc"
+                 (eval (quote (loopy (list j '(?a ?b ?c))
+                                     (collect j :result-type string)))))))
+
+(ert-deftest collect-at ()
+  (should (equal (list '(3 2 1) '(1 2 3))
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect coll1 i :at 'beginning)
+                                     (collect coll2 (cl-first coll1))
+                                     (finally-return coll1 coll2))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect i :at beginning))))))
+
+  (should (equal [3 2 1]
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect coll1 i :at 'start :result-type 'array)
+                                     (finally-return coll1))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect i :at start))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect i :at 'start))))))
+
+  (should (equal '((1 2 3) (1 1 1))
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect coll1 i :at 'end)
+                                     (collect coll2 (cl-first coll1))
+                                     (finally-return coll1 coll2)))))))
+
+;;;;; Concat
 (ert-deftest concat ()
   (should (equal "catdog"
                  (eval (quote (loopy (list j '("cat" "dog"))
@@ -942,6 +1176,36 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list j '("cat" "dog"))
                                      (concating j)))))))
 
+(ert-deftest concat-at ()
+  (should (equal "catdog"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concat j :at end))))))
+
+  (should (equal "dogcat"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concat j :at start))))))
+
+  (should (equal "catdog"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concat str j :at end)
+                                     (finally-return str))))))
+
+  (should (equal "dogcat"
+                 (eval (quote (loopy (list j '("cat" "dog"))
+                                     (concat str j :at start)
+                                     (finally-return str))))))
+
+  (should (equal '("ad" "be" "cf")
+                 (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
+                                     (concat (coll1 coll2 coll3) j :at end)
+                                     (finally-return coll1 coll2 coll3))))))
+
+  (should (equal '("da" "eb" "fc")
+                 (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
+                                     (concat (coll1 coll2 coll3) j :at start)
+                                     (finally-return coll1 coll2 coll3)))))))
+
+;;;;; Count
 (ert-deftest count ()
   (should (= 2
              (eval (quote (loopy (list i '(t nil t nil))
@@ -972,6 +1236,7 @@ implicit variable without knowing it's name, even for named loops."
              (eval (quote (loopy (list i '(t nil t nil))
                                  (counting i)))))))
 
+;;;;; Max
 (ert-deftest max ()
   (should (= 11
              (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
@@ -1026,6 +1291,7 @@ implicit variable without knowing it's name, even for named loops."
              (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
                                  (maximizing i)))))))
 
+;;;;; Min
 (ert-deftest min ()
   (should
    (= 0
@@ -1088,6 +1354,7 @@ implicit variable without knowing it's name, even for named loops."
       (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
                           (minimizing i)))))))
 
+;;;;; Multiply
 (ert-deftest multiply ()
   (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
                                      (multiply product i)
@@ -1113,6 +1380,7 @@ implicit variable without knowing it's name, even for named loops."
   (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
                                      (multiplying i)))))))
 
+;;;;; Nconc
 (ert-deftest nconc ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
@@ -1138,11 +1406,157 @@ implicit variable without knowing it's name, even for named loops."
 (ert-deftest nconc-implict ()
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc l i))))))
+                                     (nconc i))))))
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconcing l i)))))))
+                                     (nconcing i)))))))
 
+(ert-deftest nconc-at-literal-lists ()
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc i))))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc i :at end))))))
+
+  (should (equal '(4 5 6 1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc i :at start))))))
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc c i)
+                                     (finally-return c))))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc c i :at end)
+                                     (finally-return c))))))
+
+  (should (equal '(4 5 6 1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+                                     (nconc c i :at start)
+                                     (finally-return c)))))))
+
+(ert-deftest nconc-at-new-lists ()
+
+  (should (equal '(1 2 3 4 5 6)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc i)))))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc i :at end)))))))
+
+  (should (equal '(4 5 6 1 2 3)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc i :at start)))))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc c i)
+                                       (finally-return c)))))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc c i :at end)
+                                       (finally-return c)))))))
+
+  (should (equal '(4 5 6 1 2 3)
+                 (let ((l1 (list 1 2 3))
+                       (l2 (list 4 5 6)))
+                   (eval (quote (loopy (list i (list l1 l2))
+                                       (nconc c i :at start)
+                                       (finally-return c))))))))
+
+;;;;; Nunion
+(ert-deftest nunion ()
+  ;; (should (null (cl-set-difference
+  ;;                '(4 1 2 3)
+  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+  ;;                                    (nunion var i)))))))
+  ;; (should (null (cl-set-difference
+  ;;                '(4 1 2 3)
+  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+  ;;                                    (nunioning var i)
+  ;;                                    (finally-return var)))))))
+  ;;
+  ;; (should (null (cl-set-difference
+  ;;                '(4 2 (1 1) 3)
+  ;;                (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+  ;;                                    (nunioning var i :test #'equal)
+  ;;                                    (finally-return var))))
+  ;;                :test #'equal)))
+  ;;
+  ;; ;; The resulting list should only have one element whose `car' is `a'.
+  ;; (should (= 1 (cl-count-if (lambda (x) (eq (car x) 'a))
+  ;;                           (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
+  ;;                                               (nunioning var i :key #'car)
+  ;;                                               (finally-return var)))))))
+
+  (should (equal
+           '(1 2 3 4)
+           (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+                               (nunion var i))))))
+  (should (equal
+           '(1 2 3 4)
+           (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+                               (nunioning var i)
+                               (finally-return var))))))
+
+  (should (equal '((1 1) 2 3 4)
+                 (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+                                     (nunioning var i :test #'equal)
+                                     (finally-return var))))))
+
+  ;; The resulting list should only have one element whose `car' is `a'.
+  (should (equal '((a . 1)) (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
+                                                (nunioning var i :key #'car)
+                                                (finally-return var)))))))
+
+(ert-deftest nunion-destructuring ()
+  (should (equal '((1 2 3) (2 3 4))
+                 (eval (quote (loopy (array i [((1 2) (2 3))
+                                               ((1 2 3) (3 4))])
+                                     (nunion (var1 var2) i :test #'equal)))))))
+
+(ert-deftest nunion-at ()
+  (should (equal '((1 2) (3 2) (1 1))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (nunion i :at end :key #'cl-second))))))
+
+  (should (equal '((1 2) (3 2) (4 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (nunion i :at end :key #'car))))))
+
+  (should (equal '((4 2) (1 2) (3 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (nunion i :at start :key #'car))))))
+
+  (should (equal '((4 2) (1 2) (3 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (nunion c i :at start :key #'car)
+                                     (finally-return c))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
+                                     (nunion i :test #'equal :at start))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
+                                     (nunion c i :test #'equal :at start)
+                                     (finally-return c)))))))
+;;;;; Prepend
 (ert-deftest prepend ()
   (should (equal '(5 6 3 4 1 2)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
@@ -1184,6 +1598,7 @@ implicit variable without knowing it's name, even for named loops."
                                      (prepending i)))))))
 
 
+;;;;; Push Into
 (ert-deftest push-into ()
   (should (equal '(3 2 1)
                  (eval (quote (loopy (list j '(1 2 3))
@@ -1234,6 +1649,47 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list j '(1 2 3))
                                      (pushing coll j)))))))
 
+;;;;; Reduce
+(ert-deftest reduce ()
+  (should (= 6
+             (eval (quote (loopy (list i '(1 2 3))
+                                 (reduce r i #'+ :init 0)
+                                 (finally-return r))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1) (2) (3)))
+                                     (reduce r i #'append))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1) (2) (3)))
+                                     (reducing r i #'append)))))))
+
+(ert-deftest reduce-destructuring ()
+  (should (equal '(4 6)
+                 (eval (quote (loopy (list i '((1 2) (3 4)))
+                                     (reduce (r1 r2) i #'+ :init 0)
+                                     (finally-return r1 r2))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
+                                     (reduce [r1 r2] i #'append))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
+                                     (reducing [r1 r2] i #'append)))))))
+(ert-deftest reduce-implicit ()
+  (should (= 6
+             (eval (quote (loopy (list i '(1 2 3))
+                                 (reduce i #'+ :init 0))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1) (2) (3)))
+                                     (reduce i #'append))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1) (2) (3)))
+                                     (reducing i #'append)))))))
+;;;;; Sum
 (ert-deftest sum ()
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
@@ -1262,12 +1718,104 @@ implicit variable without knowing it's name, even for named loops."
              (eval (quote (loopy (list i '(1 2 3))
                                  (summing i)))))))
 
+;;;;; Union
+(ert-deftest union ()
+  ;; TODO: `union' currently has predictable behavior due to the `:at' position,
+  ;;       but it might be worthwhile to remove that predictability for speed in
+  ;;       the future.
+  ;;
+  ;; (should (null (cl-set-difference
+  ;;                '(4 1 2 3)
+  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+  ;;                                    (union var i)))))))
+  ;; (should (null (cl-set-difference
+  ;;                '(4 1 2 3)
+  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+  ;;                                    (unioning var i)
+  ;;                                    (finally-return var)))))))
+  ;;
+  ;; (should (null (cl-set-difference
+  ;;                '(4 2 (1 1) 3)
+  ;;                (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+  ;;                                    (unioning var i :test #'equal)
+  ;;                                    (finally-return var))))
+  ;;                :test #'equal)))
+  ;;
+  ;; ;; The resulting list should only have one element whose `car' is `a'.
+  ;; (should (= 1 (cl-count-if (lambda (x) (eq (car x) 'a))
+  ;;                           (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
+  ;;                                               (unioning var i :key #'car)
+  ;;                                               (finally-return var)))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+                                     (union var i))))))
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
+                                     (unioning var i)
+                                     (finally-return var))))))
+
+  (should (equal '((1 1) 2 3 4)
+                 (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+                                     (unioning var i :test #'equal)
+                                     (finally-return var))))))
+
+  (should (equal '((a . 1))
+                 (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
+                                     (unioning var i :key #'car)
+                                     (finally-return var)))))))
+
+(ert-deftest union-destructuring ()
+  ;; TODO: `union' currently has predictable behavior due to the `:at' position,
+  ;;       but it might be worthwhile to remove that predictability for speed in
+  ;;       the future.
+  ;;
+  ;; (should (null (cl-destructuring-bind (first second)
+  ;;                   (eval (quote (loopy (array i [((1 2) (2 3))
+  ;;                                                 ((1 2 3) (3 4))])
+  ;;                                       (union (var1 var2) i :test #'equal))))
+  ;;                 (or (clsetdifference first '(1 2 3))
+  ;;                     (clsetdifference second '(2 3 4))))))
+  (should (equal '((1 2 3) (2 3 4))
+                 (eval (quote (loopy (array i [((1 2) (2 3))
+                                               ((1 2 3) (3 4))])
+                                     (union (var1 var2) i :test #'=)))))))
+
+(ert-deftest union-at ()
+  (should (equal '((1 2) (3 2) (1 1))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (union i :at end :key #'cl-second))))))
+
+  (should (equal '((1 2) (3 2) (4 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (union i :at end :key #'car))))))
+
+  (should (equal '((4 2) (1 2) (3 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (union i :at start :key #'car))))))
+
+  (should (equal '((4 2) (1 2) (3 2))
+                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+                                     (union c i :at start :key #'car)
+                                     (finally-return c))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
+                                     (union i :test #'equal :at start))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
+                                     (union c i :test #'equal :at start)
+                                     (finally-return c)))))))
+
+;;;;; Vconcat
 (ert-deftest vconcat ()
   (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
                  (eval (quote (loopy (list elem '([1 2 3 4 5 6]
                                                   [7 8 9 10 11 12]))
                                      (vconcat v elem)
                                      (finally-return v))))))
+
   (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
                  (eval (quote (loopy (list elem '([1 2 3 4 5 6]
                                                   [7 8 9 10 11 12]))
@@ -1280,6 +1828,7 @@ implicit variable without knowing it's name, even for named loops."
                                                   ([7 8 9] [10 11 12])))
                                      (vconcat (v1 v2) elem)
                                      (finally-return v1 v2))))))
+
   (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
                  (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
                                                   ([7 8 9] [10 11 12])))
@@ -1296,6 +1845,42 @@ implicit variable without knowing it's name, even for named loops."
                                                   [7 8 9 10 11 12]))
                                      (vconcating elem)))))))
 
+(ert-deftest vconcat-at ()
+  (should (equal [7 8 9 10 11 12 1 2 3 4 5 6]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcat v elem :at start)
+                                     (finally-return v))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcat v elem :at end)
+                                     (finally-return v))))))
+
+  (should (equal [7 8 9 10 11 12 1 2 3 4 5 6]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcat elem :at start))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
+                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
+                                                  [7 8 9 10 11 12]))
+                                     (vconcat elem :at end))))))
+
+  (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
+                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
+                                                  ([7 8 9] [10 11 12])))
+                                     (vconcat (v1 v2) elem :at end)
+                                     (finally-return v1 v2))))))
+
+  (should (equal '([7 8 9 1 2 3] [10 11 12 4 5 6])
+                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
+                                                  ([7 8 9] [10 11 12])))
+                                     (vconcat (v1 v2) elem :at start)
+                                     (finally-return v1 v2)))))))
+
+;;;;; Miscellaneous
 (ert-deftest accumulation-recursive-destructuring ()
   (should
    (and

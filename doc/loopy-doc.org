@@ -920,22 +920,121 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    macro with the =lax-naming= flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
    #+end_quote
 
+   #+cindex: accumulation keyword arguments
+   Some accumulation commands have optional keyword parameters, which are listed
+   in the command's definition.  To avoid repetition, the common parameters are
+   all described below.
+
+   #+cindex: accumulation keyword at
+   - =at= :: Where to place a value.  One of =end=, =start=, or =beginning=
+     (equivalent to =start=).  If ungiven, defaults to =end=.  These positions
+     need not be quoted.
+   #+cindex: accumulation keyword into
+   - =into= :: An alternative way to specify the variable into which to
+     accumulate values.  One would normally just give =VAR= as the first
+     argument of the loop command, but if you wish, you can use this keyword
+     argument for a more ~cl-loop~-like syntax.
+
+     As all accumulation commands support this keyword, it is not listed in
+     any command definition.
+   #+cindex: accumulation keyword test
+   - =test= :: A function of two arguments, usually used to test for equality.
+     Most tests default to ~eql~, as in Common Lisp and the =cl-lib= library.
+   #+cindex: accumulation keyword key
+   - =key= :: A function of one argument, used to transform the inputs of
+     =test=.
+   #+cindex: accumulation keyword init
+   - =init= :: The initial value of =VAR=.  For explicitly named variables, one
+     can use this argument or the =with= special macro argument.  When using the
+     =split= flag, this argument is the only way to specify a non-default
+     initial value.
+   #+cindex: accumulation keyword result-type
+   - =result-type= :: A sequence type into which =VAR= is converted /after the
+     loop is over/.  These types need not be quoted.  For example, ='vector= and
+     =vector= are both valid ways to specify the data type vector.
+
+     This argument can be more convenient than writing out a call to ~cl-coerce~
+     or ~seq-into~.
+
+   The arguments to the =test= and =key= parameters can be quoted functions or
+   variables, just like when using ~cl-union~, ~cl-adjoin~, and so on.  ~loopy~
+   knows how to expand efficiently for either case.
+
    The available accumulation commands are:
 
+   - =(accumulate VAR EXPR FUNC &key init)= :: Accumulate the result of applying
+     function =FUNC= to =EXPR= and =VAR=.  =EXPR= and =VAR= are used as the
+     first and second arguments to =FUNC=, respectively.
+
+     This is a generic command in case the others don't meet your needs.
+
+     #+begin_src emacs-lisp
+       ;; Call `(cons i my-accum)'
+       ;;
+       ;; => (2 1)
+       (loopy (list i '(1 2))
+              (accumulate my-accum i #'cons :init nil))
+
+       ;; => ((3 1) (4 2))
+       (loopy (list i '((1 2) (3 4)))
+              (accumulate (accum1 accum2) i #'cons :init nil))
+     #+end_src
+
+   #+findex: adjoin
+   - =(adjoin|adjoining VAR EXPR &key at test key init result-type)= :: Repeatedly
+     add =EXPR= to =VAR= if it is not already present in the list.
+
+     #+begin_src emacs-lisp
+       ;; Without a test, defaults to `eql' as in `cl-adjoin'.
+       ;; => ((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+       (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+              (adjoin i))
+
+       ;; Using `equal' for the test.
+       ;; => ((1 . 1) (1 . 2) (2 . 3))
+       (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+              (adjoin i :test #'equal))
+
+       ;; Using `=' for the test and `car' for the key.  This
+       ;; treats '(1 . 2) as equivalent to '(1 . 1), so it
+       ;; won't be added.
+       ;;
+       ;; => ((1 . 1) (2 . 3))
+       (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+              (adjoin i :test #'= :key #'car))
+
+       ;; Coerced to a vector /after/ the loop ends.
+       ;; => [1 2 3 4]
+       (loopy (list i '(1 2 3 3 4))
+              (adjoin my-var i :result-type 'vector)
+              (when (vectorp my-var)
+                (return 'is-vector)))
+
+       ;; => [4 3 2 1]
+       (loopy (list i '(1 2 3 3 4))
+              (adjoin my-var i :result-type 'vector :at 'start))
+     #+end_src
+
    #+findex: append
-   - =(append|appending VAR EXPR)= :: Repeatedly concatenate =EXPR= to the end
-     of =VAR=, as if by the function ~append~.
+   - =(append|appending VAR EXPR &key at)= :: Repeatedly concatenate =EXPR= to
+     =VAR=, as if by the function ~append~.
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3 4 5 6)
        (loopy (list i '((1 2 3) (4 5 6)))
               (append coll i)
               (finally-return coll))
+
+       ;; => (4 5 6 1 2 3)
+       (loopy (list i '((1 2 3) (4 5 6)))
+              (append coll i :at start)
+              (finally-return coll))
      #+END_SRC
 
    #+findex: collect
-   - =(collect|collecting VAR EXPR)= :: Collect the value of =EXPR= into a list,
-     adding values to the end of =VAR=.
+   - =(collect|collecting VAR EXPR &key result-type at)= :: Collect the value of
+     =EXPR= into the list =VAR=.  By default, elements are added to the end of the
+     list.
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3)
@@ -948,21 +1047,39 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (collect coll1 i)
               ;; Collect `coll1' into a generated variable.
               (collect coll1))
+
+       ;; => [1 2 3]
+       (loopy (list j '(1 2 3))
+              (collect j :result-type 'vector))
+
+       ;; => (3 2 1)
+       (loopy (list j '(1 2 3))
+              (collect j :at start))
+
+       ;; => (1 2 3)
+       (loopy (list j '(1 2 3))
+              (collect j :at 'end))
      #+END_SRC
 
-     To add values to the front of the list, use the =push-into= command (see
-     below).
-
    #+findex: concat
-   - =(concat|concating VAR EXPR)= :: Repeatedly =concat= the value of =EXPR=
-     onto the end of =VAR=, as a string.  See the =vconcat= command for
+   - =(concat|concating VAR EXPR &key at)= :: Repeatedly ~concat~ the value of
+     =EXPR= onto =VAR=, as a string.  See the =vconcat= command for
      concatenating values into a vector.
+
+     Unlike when using the =:result-type= keyword argument for some other
+     commands, =VAR= is a string throughout the loop, not just after the loop
+     ends.
 
      #+BEGIN_SRC emacs-lisp
        ;; => "abc"
        (loopy (list i '("a" "b" "c"))
               (concat str i)
               (finally-return str))
+
+       ;; => ("da" "eb" "fc")
+       (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
+              (concat (str1 str2 str3) j :at 'start)
+              (finally-return str1 str2 str3))
      #+END_SRC
 
    #+findex: count
@@ -979,7 +1096,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+findex: max, maximize
    - =(max|maxing|maximize|maximizing VAR EXPR)= :: Repeatedly set =VAR= to the
-     greater of =VAR= and the value of =EXPR=. =VAR= starts at =-1.0e+INF=, so
+     greater of =VAR= and the value of =EXPR=.  =VAR= starts at =-1.0e+INF=, so
      that any other value should be greater that it.
 
      #+BEGIN_SRC emacs-lisp
@@ -1003,7 +1120,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+findex: multiply, multiplying
    - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of
-     the values of EXPR.  =VAR= starts at 1.
+     the values of =EXPR=.  =VAR= starts at 1.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 120
@@ -1013,13 +1130,15 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
      
    #+findex: nconc
-   - =(nconc|nconcing VAR EXPR)= :: Repeatedly concatenate the value of =EXPR=
-     onto =VAR= via the function ~nconc~.
+   - =(nconc|nconcing VAR EXPR &key at)= :: Repeatedly concatenate the value of
+     =EXPR= onto =VAR= as if via the function ~nconc~.
 
      #+attr_texinfo: :tag Caution
      #+begin_quote
-     Unlike the function ~append~, ~nconc~ does not concatenate copies of the
-     lists, instead modifying =VAR= directly.
+     ~nconc~ is a destructive operation that modifies =VAR= directly
+     ([[info:elisp#Rearrangement]]).  This is important to keep in mind when working
+     with literal values, such as the list ='(1 2 3)=, whose modification could
+     apply wherever that value is used ([[info:elisp#Self-Evaluating Forms]]).
      #+end_quote
 
      #+BEGIN_SRC emacs-lisp
@@ -1027,11 +1146,50 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (loopy (list i '((1 2 3 4) (5 6 7 8)))
               (nconc my-new-list i)
               (finally-return my-new-list))
+
+       ;; => '(3 3 3 2 2 1)
+       (loopy (list i (list (make-list 1 1)
+                            (make-list 2 2)
+                            (make-list 3 3)))
+              (nconc i :at start))
      #+END_SRC
+
+   #+findex: nunion
+   - =(nunion|nunioning VAR EXPR &key test key at)= :: Repeatedly and
+     /destructively/ insert into =VAR= the elements of =EXPR= which are not
+     already present in =VAR=.
+
+     #+begin_src emacs-lisp
+       ;; => (4 1 2 3)
+       (loopy (list i '((1 2) (2 3) (3 4)))
+              (nunion var i))
+
+       ;; => ((a . 2))
+       (loopy (array i [((a . 1)) ((a . 2))])
+              (nunioning var i :key #'car)
+              (finally-return var))
+
+       ;; => (4 2 (1 1) 3)
+       (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+              (nunioning var i :test #'equal)
+              (finally-return var))
+
+       ;; => ((1 2 3) (2 3 4))
+       (loopy (array i [((1 2) (2 3))
+                        ((1 2 3) (3 4))])
+              (nunion (var1 var2) i :test #'equal))
+
+       ;; => ((4 2) (1 2) (3 2))
+       (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+              (nunion i :at start :key #'car))
+     #+end_src
 
    #+findex: prepend
    - =(prepend|prepending VAR EXPR)= :: Repeatedly concatenate =EXPR= onto the
      front of =VAR=.
+
+     This command is equivalent to =(append VAR EXPR :at start)=.  It exists
+     for clarity and convenience.
 
      #+begin_src emacs-lisp
        ;; => (5 6 3 4 1 2)
@@ -1047,8 +1205,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+findex: push, push-into
    - =(push|push-into|pushing|pushing-into VAR EXPR)= :: Collect the value of
-     =EXPR= into a list, adding values to the front of =VAR= via the function
-     ~push~.
+     =EXPR= into a list, adding values to the front of =VAR= as if via the
+     function ~push~.
+
+     This command is equivalent to =(collect VAR EXPR :at start)=.  It exists
+     for clarity and convenience.
 
      #+BEGIN_SRC emacs-lisp
        ;; => (3 2 1)
@@ -1056,7 +1217,24 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (push my-list i))
      #+END_SRC
 
-     To add values to the end of a list, use the =collect= command (see above).
+   #+findex: reduce
+   - =(reduce|reducing VAR EXPR FUNC &key init)= :: Reduce =EXPR= into =VAR= via
+     =FUNC=.  =FUNC= is called with =VAR= as the first argument and =EXPR= as
+     the second argument.  This is unlike =accumulate=, which gives =VAR= and
+     =EXPR= to =FUNC= in the opposite order (i.e., =EXPR= first, then =VAR=).
+
+     =VAR= is initialized to =INIT=, if provided, or ~nil~.
+
+     #+begin_src emacs-lisp
+       ;; = > 6
+       (loopy (list i '(1 2 3))
+              (reduce my-reduction i #'+ :init 0)
+              (finally-return my-reduction))
+
+       ;; => 24
+       (loopy (list i '(1 2 3 4))
+              (reduce i #'* :init 1))
+     #+end_src
 
    #+findex: sum
    - =(sum|summing VAR EXPR)= :: Repeatedly set =VAR= to the sum of the values
@@ -1069,15 +1247,54 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return my-sum))
      #+END_SRC
 
+   #+findex: union
+   + =(union|unioning VAR EXPR &key test key at)= :: Repeatedly insert into =VAR=
+     the elements of the list =EXPR= which are not already present in =VAR=.
+
+     #+begin_src emacs-lisp
+       ;; => (4 1 2 3)
+       (loopy (list i '((1 2) (2 3) (3 4)))
+              (union var i))
+
+       ;; => ((a . 2))
+       (loopy (array i [((a . 1)) ((a . 2))])
+              (unioning var i :key #'car)
+              (finally-return var))
+
+       ;; => (4 2 (1 1) 3)
+       (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+              (unioning var i :test #'equal)
+              (finally-return var))
+
+       ;; => ((1 2 3) (2 3 4))
+       (loopy (array i [((1 2) (2 3))
+                        ((1 2 3) (3 4))])
+              (union (var1 var2) i :test #'=)
+              (finally-return var1 var2))
+
+       ;; => ((4 2) (1 2) (3 2))
+       (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+              (union var i :at 'start :key #'car)
+              (finally-return var))
+     #+end_src
+
    #+findex: vconcat
    - =(vconcat|vconcating VAR EXPR)= :: Repeatedly concatenate the value of
-     =EXPR= onto the end of =VAR= via the function ~vconcat~.
+     =EXPR= onto =VAR= via the function ~vconcat~.
+
+     Unlike when using the =:result-type= keyword argument for some other
+     commands, =VAR= is a vector throughout the loop, not just after the loop
+     ends.
 
      #+BEGIN_SRC emacs-lisp
        ;; => [1 2 3 4 5 6]
        (loopy (list i '([1 2 3] [4 5 6]))
               (vconcat my-vector i)
               (finally-return my-vector))
+
+       ;; => [4 5 6 1 2 3]
+       (loopy (list i '([1 2 3] [4 5 6]))
+              (vconcat i :at 'start))
      #+END_SRC
 
      To concatenate values as strings, see the command =concat= above.

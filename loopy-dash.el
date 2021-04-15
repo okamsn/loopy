@@ -172,7 +172,7 @@ should only be used if VAR-OR-VAL is a variable."
       ;; This gives instructions for the main body, the implicit result,
       ;; and the explicitly named accumulation vars.
       ,@(mapcan (-lambda ((given-var . dash-copy))
-                  (loopy--parse-accumulation-commands
+                  (loopy--parse-loop-command
                    (list name given-var dash-copy)))
                 loopy-dash--accumulation-destructured-symbols))))
 
