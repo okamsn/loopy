@@ -868,7 +868,7 @@ command names or a single command name."
     (loopy--main-body . (cl-callf2 funcall ,fn ,var ,val))))
 
 (loopy--defaccumulation-command (union unioning) (var val &key test)
-  `((main-body . (cl-callf2 cl-union ,value ,var :test ,test))))
+  `((loopy--main-body . (cl-callf2 cl-union ,value ,var :test ,test))))
 
 (loopy--defaccumulation-command (vconcat vconcating) (var val)
   `((split:implicit-return . (apply #'vconcat (nreverse ,var)))
