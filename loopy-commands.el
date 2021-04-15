@@ -548,6 +548,15 @@ is a function by which to update VAR (default `cdr')."
                                 ,value-holder)))
         (loopy--pre-conditions . (consp ,value-holder))))))
 
+(cl-defun loopy--parse-nested-command ((_ var val &rest other-lists))
+  "Parse the `list' loop command."
+  (when loopy--in-sub-level (loopy--signal-bad-iter 'list))
+  `((loopy--iteration-vars . (,val-holder ,val))
+    (loopy--latter-body
+     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
+    (loopy--pre-conditions . (consp ,val-holder))
+    ,@(loopy--destructure-for-iteration-command var `(car ,val-holder))))
+
 (cl-defun loopy--parse-list-command
     ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-")))
   "Parse the `list' loop command.
@@ -847,6 +856,12 @@ Otherwise the loop continues and nil is returned."
                                     condition)))
 	     (cl-return-from ,loopy--loop-name ,value-holder))))))
 
+;;; Wrap Command
+
+(cl-defun loopy--parse-wrap-command ((_ wrapper &rest wrappers))
+  "Wrap wrappers around main body."
+  `((loopy--wrapping-forms ,@(cons wrapper wrappers))))
+
 ;;;;; Exiting and Skipping
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
   "Parse the  `return' and `return-from' loop commands.
@@ -866,15 +881,15 @@ a loop name, return values, or a list of both."
                 ((= 1 arg-length)  (car args))
                 (t                 `(list ,@args)))))))
       (return-from
-       (let ((arg-length (length args)))
-         (when (zerop arg-length) ; Need at least 1 arg.
-           (signal 'loopy-wrong-number-of-arguments command))
-         `((loopy--main-body
-            . (cl-return-from ,(cl-first args)
-                ,(cond
-                  ((= 1 arg-length) nil)
-                  ((= 2 arg-length) (cl-second args))
-                  (t                `(list ,@(cl-rest args))))))))))))
+	  (let ((arg-length (length args)))
+            (when (zerop arg-length) ; Need at least 1 arg.
+              (signal 'loopy-wrong-number-of-arguments command))
+            `((loopy--main-body
+               . (cl-return-from ,(cl-first args)
+                   ,(cond
+                     ((= 1 arg-length) nil)
+                     ((= 2 arg-length) (cl-second args))
+                     (t                `(list ,@(cl-rest args))))))))))))
 
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
@@ -1145,7 +1160,8 @@ COMMAND-LIST."
     (vconcat      . loopy--parse-accumulation-commands)
     (vconcating   . loopy--parse-accumulation-commands)
     (when         . loopy--parse-when-unless-command)
-    (while        . loopy--parse-while-until-commands))
+    (while        . loopy--parse-while-until-commands)
+    (wrap         . loopy--parse-wrap-command))
   "An alist of pairs of command names and built-in parser functions.")
 
 (defun loopy--get-command-parser (command)

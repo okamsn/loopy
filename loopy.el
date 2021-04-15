@@ -350,6 +350,8 @@ set this variable to t if it has run.  This value will be
 checked after the tag-body exit if `loopy--tagbody-exit-used' is
 t.")
 
+(defvar loopy--wrapping-forms nil "Forms that will wrap around the main body.")
+
 (eval-and-compile
   (defvar loopy--variables
     '(loopy--loop-name
@@ -375,6 +377,7 @@ t.")
       loopy--tagbody-exit-used
       loopy--implicit-accumulation-final-update
       loopy--in-sub-level
+      loopy--wrapping-forms
 
       ;; -- Flag Variables --
       loopy-iter--lax-naming
@@ -582,6 +585,16 @@ Aliases can be found in `loopy-custom-command-aliases'."
     (when-let ((target (cdr (assq keyword body))))
       (cl-return-from loopy--find-special-macro-arguments target))))
 
+(defun loopy--wrap-form (wrappers form)
+  "Wrap FORM with each wrapper in WRAPPERS.
+WRAPPERS are a list of forms to wrap around FORM."
+  (declare (pure t) (side-effect-free t))
+  (setq wrappers (reverse wrappers))
+  (if (consp wrappers)
+      (loopy--wrap-form (cdr wrappers)
+			(append (car wrappers)
+				(list form)))
+    form))
 
 ;;;; The Macro Itself
 (defun loopy--expand-to-loop ()
@@ -668,6 +681,10 @@ The function creates quoted code that should be used by a macro."
             ;; Will always be a single expression after wrapping with `while'.
             result-is-one-expression t)
 
+      ;; Wrap while loop in forms specified by `loopy--wrapping-forms`.
+      (when loopy--wrapping-forms
+	(setq result (loopy--wrap-form loopy--wrapping-forms result)))
+      
       ;; Make sure that the implicit accumulation variable is correctly
       ;; updated after the loop, if need be.
       (when loopy--implicit-accumulation-final-update
@@ -868,7 +885,7 @@ Info node `(loopy)' distributed with this package."
    (when-let ((loopy--all-flags
                (append loopy-default-flags
                        (loopy--find-special-macro-arguments '(flag flags)
-                                                            body))))
+							    body))))
      (dolist (flag loopy--all-flags)
        (if-let ((func (cdr (assq flag loopy--flag-settings))))
            (funcall func)
@@ -898,13 +915,13 @@ Info node `(loopy)' distributed with this package."
    ;; Before do
    (setq loopy--before-do
          (loopy--find-special-macro-arguments '( before-do before
-                                                 initially-do initially)
+						 initially-do initially)
                                               body))
 
    ;; After do
    (setq loopy--after-do
          (loopy--find-special-macro-arguments '( after-do after
-                                                 else-do else)
+						 else-do else)
                                               body))
 
    ;; Finally Do
@@ -915,7 +932,7 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--final-return
          (when-let ((return-val
                      (loopy--find-special-macro-arguments 'finally-return
-                                                          body)))
+							  body)))
            (if (= 1 (length return-val))
                (car return-val)
              (cons 'list return-val))))
@@ -980,6 +997,8 @@ Info node `(loopy)' distributed with this package."
             (push (cdr instruction) loopy--final-do))
            (loopy--final-return
             (push (cdr instruction) loopy--final-return))
+	   (loopy--wrapping-forms
+	    (cl-callf2 append (cdr instruction) loopy--wrapping-forms))
            (t
             (error "Loopy: Unknown body instruction: %s" instruction)))))))
 
@@ -987,13 +1006,13 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--main-body (nreverse loopy--main-body)
          loopy--iteration-vars (nreverse loopy--iteration-vars)
          loopy--implicit-return (when (consp loopy--implicit-return)
-                                  (if (= 1 (length loopy--implicit-return))
+				  (if (= 1 (length loopy--implicit-return))
                                       ;; If implicit return is just a single thing,
                                       ;; don't use a list.
                                       (car loopy--implicit-return)
-                                    ;; If multiple items, be sure to use a list
-                                    ;; in the correct order.
-                                    `(list ,@(nreverse loopy--implicit-return)))))
+				    ;; If multiple items, be sure to use a list
+				    ;; in the correct order.
+				    `(list ,@(nreverse loopy--implicit-return)))))
 
 ;;;;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))
