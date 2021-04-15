@@ -849,11 +849,11 @@ command names or a single command name."
 
 (loopy--defaccumulation-command (concat concating) (var val)
   `((split:implicit-return . (apply #'concat (nreverse ,val)))
-    (main-body . (cl-callf2 cons ,val ,var))))
+    (loopy--main-body . (cl-callf2 cons ,val ,var))))
 
 (loopy--defaccumulation-command (nconc nconcing) (var val)
   `((split:implicit-return . (nreverse ,var))
-    (main-body . (cl-callf2 nconc (nreverse ,val) ,var))))
+    (loopy--main-body . (cl-callf2 nconc (nreverse ,val) ,var))))
 
 (loopy--defaccumulation-command (nunion nunioning) (var val &key test)
   `((main-body . (cl-callf2 cl-nunion ,value ,var :test ,test))))
