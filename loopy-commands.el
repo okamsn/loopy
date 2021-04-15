@@ -856,11 +856,11 @@ command names or a single command name."
     (loopy--main-body . (cl-callf2 nconc (nreverse ,val) ,var))))
 
 (loopy--defaccumulation-command (nunion nunioning) (var val &key test)
-  `((main-body . (cl-callf2 cl-nunion ,value ,var :test ,test))))
+  `((loopy--main-body . (cl-callf2 cl-nunion ,value ,var :test ,test))))
 
 (loopy--defaccumulation-command (prepend prepending) (var val)
   `((implicit-return . ,var)
-    (main-body . (cl-callf2 nconc ,val ,var))))
+    (loopy--main-body . (cl-callf2 nconc ,val ,var))))
 
 (loopy--defaccumulation-command reducing (var val fn &key init)
   `((accumulation-vars . ,(or init (loopy--accumulation-starting-value name)))
