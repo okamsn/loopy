@@ -865,7 +865,7 @@ command names or a single command name."
 (loopy--defaccumulation-command reducing (var val fn &key init)
   `((accumulation-vars . ,(or init (loopy--accumulation-starting-value name)))
     (implicit-return . ,var)
-    (main-body . (cl-callf2 funcall ,fn ,var ,val))))
+    (loopy--main-body . (cl-callf2 funcall ,fn ,var ,val))))
 
 (loopy--defaccumulation-command (union unioning) (var val &key test)
   `((main-body . (cl-callf2 cl-union ,value ,var :test ,test))))
