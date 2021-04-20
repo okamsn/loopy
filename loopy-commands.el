@@ -872,15 +872,15 @@ a loop name, return values, or a list of both."
                 ((= 1 arg-length)  (car args))
                 (t                 `(list ,@args)))))))
       (return-from
-	  (let ((arg-length (length args)))
-            (when (zerop arg-length) ; Need at least 1 arg.
-              (signal 'loopy-wrong-number-of-arguments command))
-            `((loopy--main-body
-               . (cl-return-from ,(cl-first args)
-                   ,(cond
-                     ((= 1 arg-length) nil)
-                     ((= 2 arg-length) (cl-second args))
-                     (t                `(list ,@(cl-rest args))))))))))))
+       (let ((arg-length (length args)))
+         (when (zerop arg-length) ; Need at least 1 arg.
+           (signal 'loopy-wrong-number-of-arguments command))
+         `((loopy--main-body
+            . (cl-return-from ,(cl-first args)
+                ,(cond
+                  ((= 1 arg-length) nil)
+                  ((= 2 arg-length) (cl-second args))
+                  (t                `(list ,@(cl-rest args))))))))))))
 
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
