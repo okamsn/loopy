@@ -928,7 +928,7 @@ Info node `(loopy)' distributed with this package."
    (setq loopy--final-return
          (when-let ((return-val
                      (loopy--find-special-macro-arguments 'finally-return
-							  body)))
+                                                          body)))
            (if (= 1 (length return-val))
                (car return-val)
              (cons 'list return-val))))
