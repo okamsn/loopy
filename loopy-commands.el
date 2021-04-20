@@ -548,15 +548,6 @@ is a function by which to update VAR (default `cdr')."
                                 ,value-holder)))
         (loopy--pre-conditions . (consp ,value-holder))))))
 
-(cl-defun loopy--parse-nested-command ((_ var val &rest other-lists))
-  "Parse the `list' loop command."
-  (when loopy--in-sub-level (loopy--signal-bad-iter 'list))
-  `((loopy--iteration-vars . (,val-holder ,val))
-    (loopy--latter-body
-     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
-    (loopy--pre-conditions . (consp ,val-holder))
-    ,@(loopy--destructure-for-iteration-command var `(car ,val-holder))))
-
 (cl-defun loopy--parse-list-command
     ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-")))
   "Parse the `list' loop command.
