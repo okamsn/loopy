@@ -326,7 +326,6 @@ Unlike in `loopy', this allows arbitrary expressions."
         (loopy--pre-conditions)
         (loopy--post-conditions)
         (loopy--iteration-vars)
-        (non-wrapped-instructions)
         (loopy--skip-used)
         (loopy--tagbody-exit-used)
         (loopy--loop-name (gensym "sub-loop-")))
