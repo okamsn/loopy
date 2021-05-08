@@ -443,6 +443,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     expression, and =[CMD]= is an optional command.  By extension,
     =[EXPRS]= is equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to
     =[CMD [CMD [...]]]=.
+  - Optional keyword arguments are shown as =&key key1 key2 ...=, where =key1=,
+    =key2=, and so on are the literal keywords.  Just like in functions,
+    keywords must be prefixed by a colon (":").  For example, the iteration
+    command =nums= has a keyword argument =by=, which can be given a value using
+    =:by SOME-EXPRESSION=.
+
 
   Generally, =VAR= is initialized to ~nil~, but not always.  This document
   tries to note when that is not the case.
@@ -719,6 +725,69 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
          (loopy (map (key value) my-table)
                 (collect keys key)
                 (collect values value)))
+     #+end_src
+
+   #+findex: num, nums, number, numbers
+   - =(nums|num|number|numbers VAR START [END] &key by down)= :: Increment =VAR=
+     from =START= through =END=.  =by= is a _positive_ value used to adjust
+     =VAR=.  =down= determines whether =VAR= is incremented or decremented.
+
+     The values of =START=, =END=, and =by= are all computed during
+     initialization.  They do not change during the loop.
+
+     =VAR= is initialized to =START=.  The loop ends when =VAR= is either
+     greater or less than =END= (if given), depending on the value of =down=.
+
+     Without =by=, the default step is 1.  Without =down=, =VAR= increases.
+
+     This command does not support destructuring.
+
+     #+begin_src emacs-lisp
+       ;; => (1 2 3 4 5)
+       (loopy (nums i 1 5)
+              (collect i))
+
+       ;; => (1 3 5)
+       (loopy (nums i 1 5 :by 2)
+              (collect i))
+
+       ;; => (5 3 1)
+       (loopy (nums i 5 1 :by 2 :down t)
+              (collect i))
+
+       ;; => (0 7 14)
+       (loopy (repeat 3)
+              ;; We can use `repeat' to avoid an infinite loop.
+              (nums i 0 :by 7)
+              (collect i))
+
+       ;; => (0 -7 -14 -21 -28 -35 -42)
+       (loopy (repeat 7)
+              ;; We can use `repeat' to avoid an infinite loop.
+              (nums i 0 :by 7 :down t)
+              (collect i))
+     #+end_src
+
+   #+findix: nums-down, numbers-down
+   - =(nums-down|numsdown|numbers-down VAR START [END] &key by)= :: Equivalent
+     to =(nums VAR START [END] :down t &key by)=.  This command exists only for
+     convenience.
+
+     #+begin_src emacs-lisp
+       ;; => (10 8 6 4 2)
+       (loopy (nums-down i 10 1 :by 2)
+              (collect i))
+     #+end_src
+
+   #+findix: nums-up, numbers-up
+   - =(nums-up|numsup|numbers-up VAR START [END] &key by)= :: Equivalent to
+     =(nums VAR START [END] &key by)=.  This command exists only for
+     convenience.
+
+     #+begin_src emacs-lisp
+       ;; => (1 3 5 7 9)
+       (loopy (nums-up i 1 10 :by 2)
+              (collect i))
      #+end_src
 
    #+findex: repeat

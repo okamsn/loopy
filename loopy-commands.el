@@ -631,6 +631,84 @@ vector using the library `map.el'."
       (loopy--pre-conditions . (consp ,value-holder))
       (loopy--latter-body . (setq ,value-holder (cdr ,value-holder))))))
 
+(cl-defun loopy--parse-nums-command ((&whole cmd _ var start &rest args))
+  "Parse the `nums' command as (nums VAR START [END] &key BY DOWN).
+
+If END is given, end the loop when the value of VAR is greater
+than END.  BY is the positive value used to increment VAR from
+START to END.  IF DOWN is given, end the loop when the value of
+VAR is less than END."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'nums))
+
+  ;; Verify args
+  (when args
+    (unless (and (if (keywordp (cl-first args))
+                     (cl-member (length args) '(2 4) :test #'=)
+                   (cl-member (length args) '(1 3 5) :test #'=))
+                 (loopy--valid-keywords-p '(:by :down)
+                                           (if (keywordp (cl-first args))
+                                               args
+                                             (cl-rest args))))
+      (error "Bad arguments to `nums': %s" cmd)))
+
+
+  (let ((end (unless (keywordp (cl-first args))
+               (cl-first args))))
+    (let ((down (plist-get (if end (cdr args) args) :down))
+          (by   (plist-get (if end (cdr args) args) :by))
+          (increment-val-holder (gensym "nums-increment")))
+
+      `((loopy--iteration-vars . (,var ,start))
+        ,(when by
+           `(loopy--iteration-vars . (,increment-val-holder ,by)))
+        ,(when end
+           `(loopy--pre-conditions . (,(if down #'>= #'<=)
+                                      ,var ,end)))
+        (loopy--latter-body . (setq ,var ,(cond
+                                           (by   `(,(if down #'- #'+)
+                                                   ,var ,increment-val-holder))
+                                           (down `(1- ,var))
+                                           (t    `(1+ ,var)))))))))
+
+(cl-defun loopy--parse-nums-up-command ((&whole cmd _ var start &rest args))
+  "Parse the `nums-up' command as (nums-up START [END] &key by)."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'nums-up))
+
+  (when args
+    (let ((end-given (not (keywordp (cl-first args)))))
+      (unless (and (if end-given
+                       (cl-member (length args) '(1 3) :test #'=)
+                     (= 2 (length args)))
+                   (loopy--valid-keywords-p '(:by)
+                                             (if end-given
+                                                 (cl-rest args)
+                                               args)))
+        (error "Bad arguments to `nums-up': %s" cmd))))
+
+  (loopy--parse-loop-command `(nums ,var ,start ,@args)))
+
+
+(cl-defun loopy--parse-nums-down-command ((&whole cmd _ var start &rest args))
+  "Parse the `nums-down' command as (nums-up START [END] &key by)."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'nums-up))
+
+  (when args
+    (let ((end-given (not (keywordp (cl-first args)))))
+      (unless (and (if end-given
+                       (cl-member (length args) '(1 3) :test #'=)
+                     (= 2 (length args)))
+                   (loopy--valid-keywords-p '(:by)
+                                             (if end-given
+                                                 (cl-rest args)
+                                               args)))
+        (error "Bad arguments to `nums-down': %s" cmd))))
+
+  (loopy--parse-loop-command `(nums ,var ,start ,@args :down t)))
+
+
 (cl-defun loopy--parse-repeat-command ((_ var-or-count &optional count))
   "Parse the `repeat' loop command.
 
@@ -1648,6 +1726,22 @@ COMMAND-LIST."
     (never        . loopy--parse-never-command)
     (nconc        . loopy--parse-nconc-command)
     (nconcing     . loopy--parse-nconc-command)
+    (num          . loopy--parse-nums-command)
+    (number       . loopy--parse-nums-command)
+    (nums         . loopy--parse-nums-command)
+    (numbers      . loopy--parse-nums-command)
+    (numup        . loopy--parse-nums-up-command)
+    (numsup       . loopy--parse-nums-up-command)
+    (num-up       . loopy--parse-nums-up-command)
+    (number-up    . loopy--parse-nums-up-command)
+    (nums-up      . loopy--parse-nums-up-command)
+    (numbers-up   . loopy--parse-nums-up-command)
+    (numdown      . loopy--parse-nums-down-command)
+    (numsdown     . loopy--parse-nums-down-command)
+    (num-down     . loopy--parse-nums-down-command)
+    (number-down  . loopy--parse-nums-down-command)
+    (nums-down    . loopy--parse-nums-down-command)
+    (numbers-down . loopy--parse-nums-down-command)
     (nunion       . loopy--parse-nunion-command)
     (nunioning    . loopy--parse-nunion-command)
     (on           . loopy--parse-cons-command)

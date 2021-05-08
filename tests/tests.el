@@ -633,6 +633,70 @@ implicit variable without knowing it's name, even for named loops."
                                        (collect vals val)
                                        (finally-return keys vals))))))))
 
+;;;;; Nums
+(ert-deftest nums ()
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (nums i 1 5)
+                                     (collect i))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (numbers i 1 5)
+                                     (collect i))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (num i 1 5)
+                                     (collect i))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (number i 1 5)
+                                     (collect i))))))
+
+  (should (equal '(1 3 5)
+                 (eval (quote (loopy (nums i 1 5 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(5 3 1)
+                 (eval (quote (loopy (nums i 5 1 :by 2 :down t)
+                                     (collect i))))))
+
+  (should (equal '(0 7 14)
+                 (eval (quote (loopy (repeat 3)
+                                     (nums i 0 :by 7)
+                                     (collect i))))))
+
+  (should (equal '(0 -7 -14 -21 -28 -35 -42)
+                 (eval (quote (loopy (repeat 7)
+                                     (nums i 0 :by 7 :down t)
+                                     (collect i)))))))
+
+;;;;; Nums-Down
+(ert-deftest nums-down ()
+  (should (equal '(10 8 6 4 2)
+                 (eval (quote (loopy (nums-down i 10 1 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(10 8 6 4 2)
+                 (eval (quote (loopy (numsdown i 10 1 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(10 8 6 4 2)
+                 (eval (quote (loopy (numbers-down i 10 1 :by 2)
+                                     (collect i)))))))
+
+;;;;;; Nums-Up
+(ert-deftest nums-up ()
+  (should (equal '(1 3 5 7 9)
+                 (eval (quote (loopy (nums-up i 1 10 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(1 3 5 7 9)
+                 (eval (quote (loopy (numsup i 1 10 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(1 3 5 7 9)
+                 (eval (quote (loopy (numbers-up i 1 10 :by 2)
+                                     (collect i)))))))
+
 ;;;;; Repeat
 (ert-deftest repeat-no-var ()
   (should (= 3 (length (eval (quote (loopy  (repeat 3)
