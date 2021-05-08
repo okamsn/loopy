@@ -306,6 +306,11 @@ While `loopy-result' is an implied return value, it need not be
 the only implied value, and can still be returned in a list with
 other implied return values, if any.")
 
+(defvar loopy-first-iteration nil
+  "Whether this is the first cycle of the current loop.")
+
+(defvaralias 'loopy-first-iteration-p 'loopy-first-iteration)
+
 ;;;;; Variables for constructing the code
 (defvar loopy--in-sub-level nil
   "Whether the commands parsed are not in the top level of a loop.
@@ -639,6 +644,8 @@ The function creates quoted code that should be used by a macro."
       (when loopy--latter-body
         (setq result (append result loopy--latter-body)))
 
+      (setq result (append result (list '(setq loopy-first-iteration nil))))
+
       (when loopy--post-conditions
         (setq result
               (append result
@@ -734,6 +741,11 @@ The function creates quoted code that should be used by a macro."
         (when loopy--final-do
           (setq result `(prog1 ,result ,@loopy--final-do)
                 result-is-one-expression t)))
+
+      ;; Bind `loopy-first-iteration'.
+      (setq result `(let ((loopy-first-iteration t))
+                      ,@(get-result))
+            result-is-one-expression t)
 
       ;; Declare the loop variables.
       (when loopy--iteration-vars

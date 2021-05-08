@@ -49,6 +49,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     - [[#skipping-cycles][Skipping Cycles]]
     - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-loops]]
+- [[#special-variables][Special Variables]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
 - [[#using-flags][Using Flags]]
 - [[#custom-aliases][Custom Aliases]]
@@ -1770,6 +1771,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (finally-return (cons 0 my-coll)))
       #+end_src
 
+* Special Variables
+
+  Beyond loop commands, there are a few special variables that one can use
+  inside of the loop.
+
+  #+vindex: loopy-first-iteration
+  - =loopy-first-iteration= :: Whether the current loop is in its first
+    iteration.
 
 * The ~loopy-iter~ Macro
   :PROPERTIES:

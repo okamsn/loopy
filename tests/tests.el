@@ -8,6 +8,15 @@
 (require 'ert)
 (require 'loopy "./loopy.el")
 
+;;; Variables
+(ert-deftest first-iteration ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy (repeat 3)
+                                     (if loopy-first-iteration
+                                         (expr i 1)
+                                       (expr i (1+ i)))
+                                     (collect i)))))))
+
 ;;; Macro arguments
 ;;;; With
 (ert-deftest with-arg-order ()
