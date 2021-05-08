@@ -238,6 +238,15 @@ Unlike `loopy--substitute-using', the test is required."
 This is helpful when working with property lists."
   (cl-loop for i in list by #'cddr collect i))
 
+(defun loopy--valid-keywords-p (correct list)
+  "Check that LIST contains only valid keywords in every other position.
+
+Any keyword not in CORRECT is considered invalid.
+
+CORRECT is a list of valid keywords.  The first item in LIST is
+assumed to be a keyword."
+  (null (cl-set-difference (loopy--every-other list) correct)))
+
 ;;;; Included parsing functions.
 ;;;;; Misc.
 (cl-defun loopy--parse-sub-loop-command ((_ &rest body))
