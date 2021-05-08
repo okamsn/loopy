@@ -433,7 +433,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgc995884
+@float Listing,orgbc9e8b2
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -482,7 +482,14 @@ Optional arguments are surround by brackets.  @samp{[EXPR]} is an optional
 expression, and @samp{[CMD]} is an optional command.  By extension,
 @samp{[EXPRS]} is equivalent to @samp{[EXPR [EXPR [...]]]}, and @samp{[CMDS]} to
 @samp{[CMD [CMD [...]]]}.
+@item
+Optional keyword arguments are shown as @samp{&key key1 key2 ...}, where @samp{key1},
+@samp{key2}, and so on are the literal keywords.  Just like in functions,
+keywords must be prefixed by a colon (``:'').  For example, the iteration
+command @samp{nums} has a keyword argument @samp{by}, which can be given a value using
+@samp{:by SOME-EXPRESSION}.
 @end itemize
+
 
 Generally, @samp{VAR} is initialized to @code{nil}, but not always.  This document
 tries to note when that is not the case.
@@ -496,7 +503,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,orga88168d
+@float Listing,org66b92a1
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -792,6 +799,76 @@ maps.
 @end lisp
 @end table
 
+@findex num, nums, number, numbers
+@table @asis
+@item @samp{(nums|num|number|numbers VAR START [END] &key by down)}
+Increment @samp{VAR}
+from @samp{START} through @samp{END}.  @samp{by} is a positive value used to adjust
+@samp{VAR}.  @samp{down} determines whether @samp{VAR} is incremented or decremented.
+
+The values of @samp{START}, @samp{END}, and @samp{by} are all computed during
+initialization.  They do not change during the loop.
+
+@samp{VAR} is initialized to @samp{START}.  The loop ends when @samp{VAR} is either
+greater or less than @samp{END} (if given), depending on the value of @samp{down}.
+
+Without @samp{by}, the default step is 1.  Without @samp{down}, @samp{VAR} increases.
+
+This command does not support destructuring.
+
+@lisp
+;; => (1 2 3 4 5)
+(loopy (nums i 1 5)
+       (collect i))
+
+;; => (1 3 5)
+(loopy (nums i 1 5 :by 2)
+       (collect i))
+
+;; => (5 3 1)
+(loopy (nums i 5 1 :by 2 :down t)
+       (collect i))
+
+;; => (0 7 14)
+(loopy (repeat 3)
+       ;; We can use `repeat' to avoid an infinite loop.
+       (nums i 0 :by 7)
+       (collect i))
+
+;; => (0 -7 -14 -21 -28 -35 -42)
+(loopy (repeat 7)
+       ;; We can use `repeat' to avoid an infinite loop.
+       (nums i 0 :by 7 :down t)
+       (collect i))
+@end lisp
+@end table
+
+@table @asis
+@item @samp{(nums-down|numsdown|numbers-down VAR START [END] &key by)}
+Equivalent
+to @samp{(nums VAR START [END] :down t &key by)}.  This command exists only for
+convenience.
+
+@lisp
+;; => (10 8 6 4 2)
+(loopy (nums-down i 10 1 :by 2)
+       (collect i))
+@end lisp
+@end table
+
+@table @asis
+@item @samp{(nums-up|numsup|numbers-up VAR START [END] &key by)}
+Equivalent to
+@samp{(nums VAR START [END] &key by)}.  This command exists only for
+convenience.
+
+@lisp
+;; => (1 3 5 7 9)
+(loopy (nums-up i 1 10 :by 2)
+       (collect i))
+@end lisp
+@end table
+
 @findex repeat
 @table @asis
 @item @samp{(repeat [VAR] EXPR)}
@@ -987,8 +1064,8 @@ accumulation commands.
 @end lisp
 
 @quotation Note
-In addition to those listed below, each accumulation command has an alias of
-the command name in the present participle form (the ``-ing'' form).
+You will notice that each accumulation command has an alias of the command
+name in the present participle form (the ``-ing'' form).
 
 For example, instead of ``min'' or ``minimize'', you can use ``minning'' or
 ``minimizing''.  Instead of ``sum'' and ``append'', you can use ``summing'' and
@@ -997,27 +1074,150 @@ macro with the @samp{lax-naming} flag enabled (@ref{The @code{loopy-iter} Macro}
 
 @end quotation
 
+@cindex accumulation keyword arguments
+Some accumulation commands have optional keyword parameters, which are listed
+in the command's definition.  To avoid repetition, the common parameters are
+all described below.
+
+@cindex accumulation keyword at
+@table @asis
+@item @samp{at}
+Where to place a value.  One of @samp{end}, @samp{start}, or @samp{beginning}
+(equivalent to @samp{start}).  If ungiven, defaults to @samp{end}.  These positions
+need not be quoted.
+@end table
+@cindex accumulation keyword into
+@table @asis
+@item @samp{into}
+An alternative way to specify the variable into which to
+accumulate values.  One would normally just give @samp{VAR} as the first
+argument of the loop command, but if you wish, you can use this keyword
+argument for a more @code{cl-loop}-like syntax.
+
+As all accumulation commands support this keyword, it is not listed in
+any command definition.
+@end table
+@cindex accumulation keyword test
+@table @asis
+@item @samp{test}
+A function of two arguments, usually used to test for equality.
+Most tests default to @code{eql}, as in Common Lisp and the @samp{cl-lib} library.
+@end table
+@cindex accumulation keyword key
+@table @asis
+@item @samp{key}
+A function of one argument, used to transform the inputs of
+@samp{test}.
+@end table
+@cindex accumulation keyword init
+@table @asis
+@item @samp{init}
+The initial value of @samp{VAR}.  For explicitly named variables, one
+can use this argument or the @samp{with} special macro argument.  When using the
+@samp{split} flag, this argument is the only way to specify a non-default
+initial value.
+@end table
+@cindex accumulation keyword result-type
+@table @asis
+@item @samp{result-type}
+A sequence type into which @samp{VAR} is converted @emph{after the
+loop is over}.  These types need not be quoted.  For example, @samp{'vector} and
+@samp{vector} are both valid ways to specify the data type vector.
+
+This argument can be more convenient than writing out a call to @code{cl-coerce}
+or @code{seq-into}.
+@end table
+
+The arguments to the @samp{test} and @samp{key} parameters can be quoted functions or
+variables, just like when using @code{cl-union}, @code{cl-adjoin}, and so on.  @code{loopy}
+knows how to expand efficiently for either case.
+
 The available accumulation commands are:
+
+@table @asis
+@item @samp{(accumulate VAR EXPR FUNC &key init)}
+Accumulate the result of applying
+function @samp{FUNC} to @samp{EXPR} and @samp{VAR}.  @samp{EXPR} and @samp{VAR} are used as the
+first and second arguments to @samp{FUNC}, respectively.
+
+This is a generic command in case the others don't meet your needs.
+
+@lisp
+;; Call `(cons i my-accum)'
+;;
+;; => (2 1)
+(loopy (list i '(1 2))
+       (accumulate my-accum i #'cons :init nil))
+
+;; => ((3 1) (4 2))
+(loopy (list i '((1 2) (3 4)))
+       (accumulate (accum1 accum2) i #'cons :init nil))
+@end lisp
+@end table
+
+@findex adjoin
+@table @asis
+@item @samp{(adjoin|adjoining VAR EXPR &key at test key init result-type)}
+Repeatedly
+add @samp{EXPR} to @samp{VAR} if it is not already present in the list.
+
+@lisp
+;; Without a test, defaults to `eql' as in `cl-adjoin'.
+;; => ((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+(loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+       (adjoin i))
+
+;; Using `equal' for the test.
+;; => ((1 . 1) (1 . 2) (2 . 3))
+(loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+       (adjoin i :test #'equal))
+
+;; Using `=' for the test and `car' for the key.  This
+;; treats '(1 . 2) as equivalent to '(1 . 1), so it
+;; won't be added.
+;;
+;; => ((1 . 1) (2 . 3))
+(loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+       (adjoin i :test #'= :key #'car))
+
+;; Coerced to a vector /after/ the loop ends.
+;; => [1 2 3 4]
+(loopy (list i '(1 2 3 3 4))
+       (adjoin my-var i :result-type 'vector)
+       (when (vectorp my-var)
+         (return 'is-vector)))
+
+;; => [4 3 2 1]
+(loopy (list i '(1 2 3 3 4))
+       (adjoin my-var i :result-type 'vector :at 'start))
+@end lisp
+@end table
 
 @findex append
 @table @asis
-@item @samp{(append VAR EXPR)}
-Repeatedly concatenate @samp{EXPR} to the end of @samp{VAR},
-as if by the function @code{append}.
+@item @samp{(append|appending VAR EXPR &key at)}
+Repeatedly concatenate @samp{EXPR} to
+@samp{VAR}, as if by the function @code{append}.
 
 @lisp
 ;; => '(1 2 3 4 5 6)
 (loopy (list i '((1 2 3) (4 5 6)))
        (append coll i)
        (finally-return coll))
+
+;; => (4 5 6 1 2 3)
+(loopy (list i '((1 2 3) (4 5 6)))
+       (append coll i :at start)
+       (finally-return coll))
 @end lisp
 @end table
 
 @findex collect
 @table @asis
-@item @samp{(collect VAR EXPR)}
-Collect the value of @samp{EXPR} into a list, adding
-values to the end of @samp{VAR}.
+@item @samp{(collect|collecting VAR EXPR &key result-type at)}
+Collect the value of
+@samp{EXPR} into the list @samp{VAR}.  By default, elements are added to the end of the
+list.
 
 @lisp
 ;; => '(1 2 3)
@@ -1030,32 +1230,51 @@ values to the end of @samp{VAR}.
        (collect coll1 i)
        ;; Collect `coll1' into a generated variable.
        (collect coll1))
-@end lisp
 
-To add values to the front of the list, use the @samp{push-into} command (see
-below).
+;; => [1 2 3]
+(loopy (list j '(1 2 3))
+       (collect j :result-type 'vector))
+
+;; => (3 2 1)
+(loopy (list j '(1 2 3))
+       (collect j :at start))
+
+;; => (1 2 3)
+(loopy (list j '(1 2 3))
+       (collect j :at 'end))
+@end lisp
 @end table
 
 @findex concat
 @table @asis
-@item @samp{(concat VAR EXPR)}
-Repeatedly @samp{concat} the value of @samp{EXPR} onto the end
-of @samp{VAR}, as a string.  See the @samp{vconcat} command for concatenating values
-into a vector.
+@item @samp{(concat|concating VAR EXPR &key at)}
+Repeatedly @code{concat} the value of
+@samp{EXPR} onto @samp{VAR}, as a string.  See the @samp{vconcat} command for
+concatenating values into a vector.
+
+Unlike when using the @samp{:result-type} keyword argument for some other
+commands, @samp{VAR} is a string throughout the loop, not just after the loop
+ends.
 
 @lisp
 ;; => "abc"
 (loopy (list i '("a" "b" "c"))
        (concat str i)
        (finally-return str))
+
+;; => ("da" "eb" "fc")
+(loopy (list j '(("a" "b" "c") ("d" "e" "f")))
+       (concat (str1 str2 str3) j :at 'start)
+       (finally-return str1 str2 str3))
 @end lisp
 @end table
 
 @findex count
 @table @asis
-@item @samp{(count VAR EXPR)}
-Count the number of times that @samp{EXPR} evaluates to a
-non-nil value.  @samp{VAR} starts at 0 and is incremented by 1 each time.
+@item @samp{(count|counting VAR EXPR)}
+Count the number of times that @samp{EXPR}
+evaluates to a non-nil value.  @samp{VAR} starts at 0 and is incremented by 1
+each time.
 
 @lisp
 ;; => 3
@@ -1065,12 +1284,50 @@ non-nil value.  @samp{VAR} starts at 0 and is incremented by 1 each time.
 @end lisp
 @end table
 
+@findex find, finding
+@table @asis
+@item @samp{(find|finding VAR EXPR TEST &key ON-FAILURE)}
+If @samp{TEST} is
+non-nil, the loop stops and @samp{EXPR} is used as a returned value.  If @samp{TEST}
+is never non-nil, then @samp{ON-FAILURE} is used as a returned value, if
+provided.
+
+@samp{VAR} takes the value of @samp{EXPR} if @samp{TEST} is non-nil or @samp{ON-FAILURE} if the
+loop completes successfully.  It is bound to @code{nil} during  the loop.
+
+@lisp
+;; => 3
+(loopy (list i '(1 2 3))
+       (finding i (> i 2)))
+
+;; => nil
+(loopy (list i '(1 2 3))
+       (finding i (> i 4)))
+
+;; => "not found"
+(loopy (list i '(1 2 3))
+       (finding i (> i 4) :on-failure "not found"))
+
+;; => 2
+;; Does not display message.
+(loopy (list i '(1 2 3))
+       (finding i (= i 2) :into found)
+       (after-do (message "found: %s" found)))
+
+;; => 2
+;; Messages "found: 2" in echo area.
+(loopy (list i '(1 2 3))
+       (finding found i (= i 2))
+       (finally-do (message "found: %s" found)))
+@end lisp
+@end table
+
 @findex max, maximize
 @table @asis
-@item @samp{(max|maximize VAR EXPR)}
-Repeatedly set @samp{VAR} to the greater of @samp{VAR}
-and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{-1.0e+INF}, so that any other
-value should be greater that it.
+@item @samp{(max|maxing|maximize|maximizing VAR EXPR)}
+Repeatedly set @samp{VAR} to the
+greater of @samp{VAR} and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{-1.0e+INF}, so
+that any other value should be greater that it.
 
 @lisp
 ;; => 11
@@ -1082,10 +1339,10 @@ value should be greater that it.
 
 @findex min, minimize
 @table @asis
-@item @samp{(min|minimize VAR EXPR)}
-Repeatedly set @samp{VAR} to the lesser of @samp{VAR}
-and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{1.0e+INF}, so that any other
-value should be less than it.
+@item @samp{(min|minning|minimize|minimizing VAR EXPR)}
+Repeatedly set @samp{VAR} to the
+lesser of @samp{VAR} and the value of @samp{EXPR}.  @samp{VAR} starts at @samp{1.0e+INF}, so
+that any other value should be less than it.
 
 @lisp
 ;; => 0
@@ -1098,8 +1355,8 @@ value should be less than it.
 @findex multiply, multiplying
 @table @asis
 @item @samp{(multiply|multiplying VAR EXPR)}
-Repeatedly set @samp{VAR} to the product of the
-values of EXPR@.  @samp{VAR} starts at 1.
+Repeatedly set @samp{VAR} to the product of
+the values of @samp{EXPR}.  @samp{VAR} starts at 1.
 
 @lisp
 ;; => 120
@@ -1111,13 +1368,15 @@ values of EXPR@.  @samp{VAR} starts at 1.
 
 @findex nconc
 @table @asis
-@item @samp{(nconc VAR EXPR)}
-Repeatedly concatenate the value of @samp{EXPR} onto
-@samp{VAR} via the function @code{nconc}.
+@item @samp{(nconc|nconcing VAR EXPR &key at)}
+Repeatedly concatenate the value of
+@samp{EXPR} onto @samp{VAR} as if via the function @code{nconc}.
 
 @quotation Caution
-Unlike the function @code{append}, @code{nconc} does not concatenate copies of the
-lists, instead modifying @samp{VAR} directly.
+@code{nconc} is a destructive operation that modifies @samp{VAR} directly
+(@ref{Rearrangement,,,elisp,}).  This is important to keep in mind when working
+with literal values, such as the list @samp{'(1 2 3)}, whose modification could
+apply wherever that value is used (@ref{Self-Evaluating Forms,,,elisp,}).
 
 @end quotation
 
@@ -1126,14 +1385,56 @@ lists, instead modifying @samp{VAR} directly.
 (loopy (list i '((1 2 3 4) (5 6 7 8)))
        (nconc my-new-list i)
        (finally-return my-new-list))
+
+;; => '(3 3 3 2 2 1)
+(loopy (list i (list (make-list 1 1)
+                     (make-list 2 2)
+                     (make-list 3 3)))
+       (nconc i :at start))
+@end lisp
+@end table
+
+@findex nunion
+@table @asis
+@item @samp{(nunion|nunioning VAR EXPR &key test key at)}
+Repeatedly and
+@emph{destructively} insert into @samp{VAR} the elements of @samp{EXPR} which are not
+already present in @samp{VAR}.
+
+@lisp
+;; => (4 1 2 3)
+(loopy (list i '((1 2) (2 3) (3 4)))
+       (nunion var i))
+
+;; => ((a . 2))
+(loopy (array i [((a . 1)) ((a . 2))])
+       (nunioning var i :key #'car)
+       (finally-return var))
+
+;; => (4 2 (1 1) 3)
+(loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+       (nunioning var i :test #'equal)
+       (finally-return var))
+
+;; => ((1 2 3) (2 3 4))
+(loopy (array i [((1 2) (2 3))
+                 ((1 2 3) (3 4))])
+       (nunion (var1 var2) i :test #'equal))
+
+;; => ((4 2) (1 2) (3 2))
+(loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+       (nunion i :at start :key #'car))
 @end lisp
 @end table
 
 @findex prepend
 @table @asis
-@item @samp{(prepend VAR EXPR)}
-Repeatedly concatenate @samp{EXPR} onto the front of
-@samp{VAR}.
+@item @samp{(prepend|prepending VAR EXPR)}
+Repeatedly concatenate @samp{EXPR} onto the
+front of @samp{VAR}.
+
+This command is equivalent to @samp{(append VAR EXPR :at start)}.  It exists
+for clarity and convenience.
 
 @lisp
 ;; => (5 6 3 4 1 2)
@@ -1150,24 +1451,48 @@ Repeatedly concatenate @samp{EXPR} onto the front of
 
 @findex push, push-into
 @table @asis
-@item @samp{(push|push-into VAR EXPR)}
-Collect the value of @samp{EXPR} into a list,
-adding values to the front of @samp{VAR} via the function @code{push}.
+@item @samp{(push|push-into|pushing|pushing-into VAR EXPR)}
+Collect the value of
+@samp{EXPR} into a list, adding values to the front of @samp{VAR} as if via the
+function @code{push}.
+
+This command is equivalent to @samp{(collect VAR EXPR :at start)}.  It exists
+for clarity and convenience.
 
 @lisp
 ;; => (3 2 1)
 (loopy (array i [1 2 3])
        (push my-list i))
 @end lisp
+@end table
 
-To add values to the end of a list, use the @samp{collect} command (see above).
+@findex reduce
+@table @asis
+@item @samp{(reduce|reducing VAR EXPR FUNC &key init)}
+Reduce @samp{EXPR} into @samp{VAR} via
+@samp{FUNC}.  @samp{FUNC} is called with @samp{VAR} as the first argument and @samp{EXPR} as
+the second argument.  This is unlike @samp{accumulate}, which gives @samp{VAR} and
+@samp{EXPR} to @samp{FUNC} in the opposite order (i.e., @samp{EXPR} first, then @samp{VAR}).
+
+@samp{VAR} is initialized to @samp{INIT}, if provided, or @code{nil}.
+
+@lisp
+;; = > 6
+(loopy (list i '(1 2 3))
+       (reduce my-reduction i #'+ :init 0)
+       (finally-return my-reduction))
+
+;; => 24
+(loopy (list i '(1 2 3 4))
+       (reduce i #'* :init 1))
+@end lisp
 @end table
 
 @findex sum
 @table @asis
-@item @samp{(sum VAR EXPR)}
-Repeatedly set @samp{VAR} to the sum of the values of @samp{EXPR}
-and @samp{VAR}.  @samp{VAR} starts at 0.
+@item @samp{(sum|summing VAR EXPR)}
+Repeatedly set @samp{VAR} to the sum of the values
+of @samp{EXPR} and @samp{VAR}.  @samp{VAR} starts at 0.
 
 @lisp
 ;; => 10
@@ -1177,17 +1502,59 @@ and @samp{VAR}.  @samp{VAR} starts at 0.
 @end lisp
 @end table
 
+@findex union
+@table @asis
+@item @samp{(union|unioning VAR EXPR &key test key at)}
+Repeatedly insert into @samp{VAR}
+the elements of the list @samp{EXPR} which are not already present in @samp{VAR}.
+
+@lisp
+;; => (4 1 2 3)
+(loopy (list i '((1 2) (2 3) (3 4)))
+       (union var i))
+
+;; => ((a . 2))
+(loopy (array i [((a . 1)) ((a . 2))])
+       (unioning var i :key #'car)
+       (finally-return var))
+
+;; => (4 2 (1 1) 3)
+(loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+       (unioning var i :test #'equal)
+       (finally-return var))
+
+;; => ((1 2 3) (2 3 4))
+(loopy (array i [((1 2) (2 3))
+                 ((1 2 3) (3 4))])
+       (union (var1 var2) i :test #'=)
+       (finally-return var1 var2))
+
+;; => ((4 2) (1 2) (3 2))
+(loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
+       (union var i :at 'start :key #'car)
+       (finally-return var))
+@end lisp
+@end table
+
 @findex vconcat
 @table @asis
-@item @samp{(vconcat VAR EXPR)}
-Repeatedly concatenate the value of @samp{EXPR} onto the
-end of @samp{VAR} via the function @code{vconcat}.
+@item @samp{(vconcat|vconcating VAR EXPR)}
+Repeatedly concatenate the value of
+@samp{EXPR} onto @samp{VAR} via the function @code{vconcat}.
+
+Unlike when using the @samp{:result-type} keyword argument for some other
+commands, @samp{VAR} is a vector throughout the loop, not just after the loop
+ends.
 
 @lisp
 ;; => [1 2 3 4 5 6]
 (loopy (list i '([1 2 3] [4 5 6]))
        (vconcat my-vector i)
        (finally-return my-vector))
+
+;; => [4 5 6 1 2 3]
+(loopy (list i '([1 2 3] [4 5 6]))
+       (vconcat i :at 'start))
 @end lisp
 
 To concatenate values as strings, see the command @samp{concat} above.
@@ -1199,19 +1566,19 @@ To concatenate values as strings, see the command @samp{concat} above.
 Boolean commands are used to test whether a condition holds true for elements
 of a sequence.  Under certain conditions, they cause the loop to exit and
 return a value.  Like accumulation commands, they have an implicit return
-value (@code{t} for @samp{always} and @samp{never}, @code{nil} for @samp{thereis}).
+value which is used if these commands do not cause the loop to exit.
 
 It is incorrect to use both @samp{thereis} and one of @samp{always} or @samp{never} in the
 same loop, as this leads to conflicting implicit return values.
 
-For convenience, these commands can be passed multiple conditions, in which
-case the conditions are @code{and}-ed.
+For convenience, these commands can be passed multiple conditions.
 
 @findex always
 @table @asis
-@item @samp{(always COND)}
-Immediately return @code{nil} if @samp{COND} is ever @code{nil}.
-Otherwise, the loop returns @code{t}.
+@item @samp{(always COND [CONDS])}
+Immediately return @code{nil} if any @samp{COND} is ever
+@code{nil}.  Otherwise, the loop returns the final value of the last @samp{COND} or
+@code{t} if no @samp{COND} is ever evaluated.
 
 @lisp
 ;; => t
@@ -1221,14 +1588,35 @@ Otherwise, the loop returns @code{t}.
 ;; => nil
 (loopy (list i '(1 0 1 0 1))
        (always (< i 1)))
+
+;; => t
+(loopy (list i '(1 0 1 0 1))
+       ;; Note: can accept multiple conditions.
+       ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
+       (always (< i 2) (>= i 0)))
+
+;; => "hello"
+(loopy (list i '(1 1 1 1))
+       ;; The return value of `(and (< i 2) "hello")' is "hello".
+       (always (< i 2) "hello"))
+
+;; NOTE: Here, the implicit return value is `t' because an
+;;       `always' command was used, and that return value
+;;       is never updated to "hello" because the `always'
+;;       command is never actually used.
+;;
+;; => t
+(loopy (list i '(1 1 1 1))
+       (when nil
+         (always (> i 5) "hello")))
 @end lisp
 @end table
 
 @findex never
 @table @asis
-@item @samp{(never COND)}
-Immediately return @code{nil} if @samp{COND} is ever non-nil.
-Otherwise, the loop returns @code{t}.
+@item @samp{(never COND [CONDS])}
+Immediately return @code{nil} if any @samp{COND} is ever
+non-nil.  Otherwise, the loop returns @code{t}.
 
 @lisp
 ;; => t
@@ -1238,14 +1626,36 @@ Otherwise, the loop returns @code{t}.
 ;; => nil
 (loopy (list i '(1 0 1 0 1))
        (never (= i 0)))
+
+;; Like `always', `never' can also accept multiple arguments. They are
+;; treated as `(never (or COND1 COND2 ... CONDN))'.
+
+;; => t
+(loopy (list i '(1 0 1 0 1))
+       ;; equivalent to `(never (or (= i 3) (= i 4)))'.
+       (never (= i 3) (= i 4)))
+@end lisp
+
+@samp{never} does not affect the loop's implicit return value when using the
+@samp{always} command.
+
+@lisp
+;; This example taken from the documentation of CL's Iterate package.
+;;
+;; => 2, not t
+(loopy (repeat 2)
+       (always 2)
+       (never nil))
 @end lisp
 @end table
 
 @findex thereis
 @table @asis
-@item @samp{(thereis COND)}
-Immediately return the value of @samp{COND} if said value is
-ever non-nil.  Otherwise, the loop returns @code{nil}.
+@item @samp{(thereis COND [CONDS])}
+Immediately return the value of @samp{COND} if said
+value is ever non-nil.  Otherwise, the loop returns @code{nil}.  If more than
+one condition is specified, then they are treated as one condition joined
+by @code{and}.
 
 @lisp
 ;; => 3
@@ -1256,6 +1666,11 @@ ever non-nil.  Otherwise, the loop returns @code{nil}.
 ;; => nil
 (loopy (list i '(1 0 1 0 1))
        (thereis (and (> i 2) i)))
+
+;; => nil
+(loopy (list i '(1 0 1 0 1))
+       ;; Same as above. Like `always' uses an explicit `and'.
+       (thereis (> i 2) i))
 
 ;; => 3
 (loopy (list i '(nil nil 3 nil))
