@@ -247,6 +247,28 @@ CORRECT is a list of valid keywords.  The first item in LIST is
 assumed to be a keyword."
   (null (cl-set-difference (loopy--every-other list) correct)))
 
+(defun loopy--mimic-init-structure (var val)
+  "Create a sequence of VAL that mimics the structure of VAR.
+
+For some destructuring loop commands, and initialization value is
+the same for all destructured variables.  For that to work, one
+must sometimes create a sequence to be destructured."
+  (cl-typecase var
+    (symbol val)
+    (list
+     (let ((val-list))
+       (while (car-safe var)
+         (push (loopy--mimic-init-structure (pop var) val)
+               val-list))
+       (setq val-list (nreverse val-list))
+       (if var
+           `(,@val-list . ,(loopy--mimic-init-structure var val))
+         val-list)))
+    (array
+     (cl-coerce (cl-loop for i across var
+                         collect (loopy--mimic-init-structure i val))
+                'array))))
+
 ;;;; Included parsing functions.
 ;;;;; Misc.
 (cl-defun loopy--parse-sub-loop-command ((_ &rest body))
@@ -426,7 +448,57 @@ BODY is one or more loop commands."
              needed-instructions)
           needed-instructions)))))
 
+(cl-defun loopy--parse-prev-expr-command ((_ var val &key init back))
+  "Parse the `prev-expr' command as (prev-expr VAR VAL &key init back).
 
+VAR is set to a version of VAL in a past loop cycle.  With INIT,
+initialize VAR to INIT.  With BACK, wait that many cycle before
+beginning to update VAR.
+
+This command does not wait for VAL to change before updating VAR."
+  (let ((holding-vars (cl-loop for i from 1 to (or back 1)
+                               collect (gensym "prev-expr-hold")))
+        (init-value-holder (gensym "prev-expr-init"))
+        (init-destr-value-holder (gensym "prev-expr-destr-init"))
+        (using-destructuring (sequencep var)))
+    ;; TODO: This feels more complicated than it needs to be, but the resulting
+    ;;       code is pretty simple.
+    `(,@(if init
+            `((loopy--iteration-vars . (,init-value-holder ,init))
+              ;; When using destructuring, each variable in `holding-vars'
+              ;; needs to be initialized to a value that can be destructured
+              ;; according to VAR.
+              ;;
+              ;; We only want to calculate the initial value once, even for the
+              ;; destructuring, so we require two holding variables.
+              ,@(if using-destructuring
+                    `((loopy--iteration-vars
+                       . (,init-destr-value-holder
+                          (loopy--mimic-init-structure
+                           (quote ,var) ,init-value-holder)))
+                      ,@(mapcar (lambda (x)
+                                  `(loopy--iteration-vars
+                                    . (,x ,init-destr-value-holder)))
+                                holding-vars))
+                  (mapcar (lambda (x)
+                            `(loopy--iteration-vars . (,x ,init-value-holder)))
+                          holding-vars)))
+          (mapcar (lambda (x)
+                    `(loopy--iteration-vars . (,x nil)))
+                  holding-vars))
+      ,@(loopy--substitute-using
+         (pcase-lambda ((and instr `(,place . (,var ,_))))
+           (if (eq place 'loopy--iteration-vars)
+               `(,place . (,var ,(when init
+                                   init-value-holder)))
+             instr))
+         (loopy--destructure-for-iteration-command
+          var (car (last holding-vars))))
+      (loopy--latter-body
+       . (setq ,@(apply #'append
+                        (nreverse (cl-loop for pvar = val then hv
+                                           for hv in holding-vars
+                                           collect (list hv pvar)))))))))
 
 (cl-defun loopy--parse-group-command ((_ &rest body))
   "Parse the `group' loop command.
@@ -1747,6 +1819,8 @@ COMMAND-LIST."
     (on           . loopy--parse-cons-command)
     (prepend      . loopy--parse-prepend-command)
     (prepending   . loopy--parse-prepend-command)
+    (prev         . loopy--parse-prev-expr-command)
+    (prev-expr    . loopy--parse-prev-expr-command)
     (push         . loopy--parse-push-into-command)
     (pushing      . loopy--parse-push-into-command)
     (push-into    . loopy--parse-push-into-command)

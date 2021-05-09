@@ -586,6 +586,42 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      expressions.  Currently, this command is only useful when used with the
      =if= command.
 
+   #+findex: prev-expr, prev
+   - =(prev-expr|prev VAR VAL &key init back)= :: Bind =VAR= to a value =VAL=
+     from a previous cycle in the loop.  =VAR= is initialized to =INIT= or nil.
+     With =BACK=, use the value from that many cycles previous.
+
+     As in =expr=, when using destructuring, each variable is initialized to
+     =INIT=, not a destructured part of =INIT=.
+
+     #+begin_src emacs-lisp
+       ;; => (nil 1 2 3 4)
+       (loopy (list i '(1 2 3 4 5))
+              (prev-expr j i)
+              (collect j))
+
+       ;; (nil nil nil 1 2)
+       (loopy (list i '(1 2 3 4 5))
+              (prev-expr j i :back 3)
+              (collect j))
+
+       ;; => ((7 7 1 3) (7 7 2 4))
+       (loopy (list i '((1 2) (3 4) (5 6) (7 8)))
+              (prev-expr (a b) i :back 2 :init 7)
+              (collect c1 a)
+              (collect c2 b)
+              (finally-return c1 c2))
+
+       ;; NOTE: `prev-expr' keeps track of the previous value of `i',
+       ;;       even when `j' isn't updated.
+       ;;
+       ;; => (first-val first-val 2 2 4 4 6 6 8 8)
+       (loopy (numbers i 1 10)
+              (when (cl-oddp i)
+                (prev-expr j i :init 'first-val))
+              (collect j))
+     #+end_src
+
 ** Iteration
    :PROPERTIES:
    :CUSTOM_ID: iteration-and-looping-commands
@@ -1779,6 +1815,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+vindex: loopy-first-iteration
   - =loopy-first-iteration= :: Whether the current loop is in its first
     iteration.
+
+    #+attr_texinfo: :tag Warning
+    #+begin_quote
+    You should not attempt to set this variable, as it is used by some loop
+    commands.
+    #+end_quote
 
 * The ~loopy-iter~ Macro
   :PROPERTIES:

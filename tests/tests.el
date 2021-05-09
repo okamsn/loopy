@@ -347,6 +347,32 @@ implicit variable without knowing it's name, even for named loops."
                                          (collect c2 i)))
                               (finally-return c1 c2)))))))
 
+;;;;; Prev-Expr
+(ert-deftest prev-expr ()
+  (should (equal '(nil 1 2 3 4)
+                 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (prev-expr j i)
+                                     (collect j))))))
+
+  (should (equal '(nil nil nil 1 2)
+                 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (prev-expr j i :back 3)
+                                     (collect j))))))
+
+  (should (equal '(first-val first-val 2 2 4 4 6 6 8 8)
+                 (eval (quote (loopy (numbers i 1 10)
+                                     (when (cl-oddp i)
+                                       (prev-expr j i :init 'first-val))
+                                     (collect j)))))))
+
+(ert-deftest prev-expr-destructuring ()
+  (should (equal '((7 7 1 3) (7 7 2 4))
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6) (7 8)))
+                                     (prev-expr (a b) i :back 2 :init 7)
+                                     (collect c1 a)
+                                     (collect c2 b)
+                                     (finally-return c1 c2)))))))
+
 ;;;; Iteration
 ;; Making sure iteration fails in sub-level
 (ert-deftest iteration-sub-level ()
