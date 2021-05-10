@@ -823,6 +823,25 @@ holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
        . (and ,value-holder (or (consp ,value-holder)
                                 (< ,index-holder ,length-holder)))))))
 
+(cl-defun loopy--parse-seq-index-command ((_ var val))
+  "Parse the `seq-index' command.
+
+VAR is a variable name.  VAL is an array value.
+
+This command does not support destructuring."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'seq-index))
+  (let ((value-holder (gensym "seq-index-val"))
+        (index-holder (gensym "seq-index-index-"))
+        (length-holder (gensym "seq-index-val-length-")))
+    `((loopy--iteration-vars . (,value-holder ,val))
+      (loopy--iteration-vars . (,index-holder 0))
+      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
+      (loopy--iteration-vars . (,var nil))
+      (loopy--main-body . (setq ,var ,index-holder))
+      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
+      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
+
 (cl-defun loopy--parse-seq-ref-command ((_ var val))
   "Parse the `seq-ref' loop command.
 
@@ -1752,6 +1771,8 @@ COMMAND-LIST."
     (adjoin       . loopy--parse-adjoin-command)
     (adjoining    . loopy--parse-adjoin-command)
     (array        . loopy--parse-array-command)
+    (array-index  . loopy--parse-seq-index-command)
+    (arrayi       . loopy--parse-seq-index-command)
     (array-ref    . loopy--parse-array-ref-command)
     (arrayf       . loopy--parse-array-ref-command)
     (collect      . loopy--parse-collect-command)
@@ -1778,6 +1799,8 @@ COMMAND-LIST."
     (in-ref       . loopy--parse-list-ref-command)
     (leave        . loopy--parse-leave-command)
     (list         . loopy--parse-list-command)
+    (list-index  . loopy--parse-seq-index-command)
+    (listi       . loopy--parse-seq-index-command)
     (list-ref     . loopy--parse-list-ref-command)
     (listf        . loopy--parse-list-ref-command)
     (loop         . loopy--parse-sub-loop-command)
@@ -1831,6 +1854,8 @@ COMMAND-LIST."
     (return       . loopy--parse-early-exit-commands)
     (return-from  . loopy--parse-early-exit-commands)
     (seq          . loopy--parse-seq-command)
+    (seq-index    . loopy--parse-seq-index-command)
+    (seqi         . loopy--parse-seq-index-command)
     (seq-ref      . loopy--parse-seq-ref-command)
     (seqf         . loopy--parse-seq-ref-command)
     (sequence     . loopy--parse-seq-command)

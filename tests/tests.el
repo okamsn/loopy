@@ -830,6 +830,20 @@ implicit variable without knowing it's name, even for named loops."
                                               (setf k 9))
                                           (finally-return my-seq))))))))
 
+;;;;; Seq Index
+(ert-deftest seq-index ()
+  (should (equal '(0 1 2 3)
+                 (eval (quote (loopy (seq-index i [1 2 3 4])
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6)
+                 (eval (quote (loopy (array-index i "abcdefg")
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4)
+                 (eval (quote (loopy (list-index i '(1 2 3 4 5))
+                                     (collect i)))))))
+
 ;;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should

@@ -850,6 +850,27 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return coll)) ; => (1 2 3)
      #+END_SRC
 
+   #+findex: seq-index, seqi, array-index, arrayi, list-index, listi
+   - =(seq-index|seqi|array-index|arrayi|list-index|listi VAR VAL)= :: Iterate
+     through the indices of =VAL=.  The loop ends when =VAR= is equal to the
+     length of =VAL=.
+
+     This command does not support destructuring.
+
+     #+begin_src emacs-lisp
+       ;; => (0 1 2)
+       (loopy (seq-index i [1 2 3])
+              (collect i))
+
+       ;; => (0 1 2)
+       (loopy (array-index i "abc")
+              (collect i))
+
+       ;; => (0 1 2)
+       (loopy (list-index i '(1 2 3))
+              (collect i))
+     #+end_src
+
    #+findex: seq-ref, seqf, sequence-ref, sequencef, elements-ref
    - =(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)= :: Loop
      through the elements of the sequence =EXPR=, binding =VAR= as a ~setf~-able
