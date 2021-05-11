@@ -665,17 +665,23 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    The available iteration commands are:
 
-   #+findex: array, across
-   - =(array|across VAR EXPR)= :: Loop through the elements of the array =EXPR=.
+   #+findex: array, string, across
+   - =(array|string|across VAR EXPR)= :: Loop through the elements of the array
+     =EXPR=.  In Emacs Lisp, strings are arrays whose elements are characters.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (array i [1 2 3])
               (do (message "%d" i)))
+
+       ;; Collects the integer values representing each character.
+       ;; => (97 98 99)
+       (loopy (string c "abc")
+              (collect c))
      #+END_SRC
 
-   #+findex: array-ref, arrayf, across-ref
-   - =(array-ref|arrayf|across-ref VAR EXPR)= :: Loop through the elements of the array
-     =EXPR=, binding =VAR= as a ~setf~-able place.
+   #+findex: array-ref, arrayf, string-ref, stringf, across-ref
+   - =(array-ref|arrayf|string-ref|stringf|across-ref VAR EXPR)= :: Loop through
+     the elements of the array =EXPR=, binding =VAR= as a ~setf~-able place.
 
      #+BEGIN_SRC emacs-lisp
        (loopy (with (my-str "cat"))
@@ -850,10 +856,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return coll)) ; => (1 2 3)
      #+END_SRC
 
-   #+findex: seq-index, seqi, array-index, arrayi, list-index, listi
-   - =(seq-index|seqi|array-index|arrayi|list-index|listi VAR VAL)= :: Iterate
+   #+findex: seq-index, seqi, array-index, arrayi, list-index, listi, string-index, stringi
+   - =(seq-index|array-index|list-index|string-index VAR VAL)= :: Iterate
      through the indices of =VAL=.  The loop ends when =VAR= is equal to the
      length of =VAL=.
+
+     For convenience, this command also has the aliases =seqi=, =arrayi=,
+     =listi=, and =stringi=, analogous to the command aliases =seqf=, =arrayf=,
+     =listf=, and =stringf=.
 
      This command does not support destructuring.
 

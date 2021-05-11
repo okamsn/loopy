@@ -420,6 +420,11 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3)
                  (eval (quote (loopy  (array i [1 2 3])
                                       (collect coll i)
+                                      (finally-return coll))))))
+
+  (should (equal '(97 98 99)
+                 (eval (quote (loopy  (string i "abc")
+                                      (collect coll i)
                                       (finally-return coll)))))))
 
 (ert-deftest array-destructuring ()
@@ -467,6 +472,11 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal "aaa"
                  (eval (quote (loopy (with (my-str "cat"))
                                      (array-ref i my-str)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+  (should (equal "aaa"
+                 (eval (quote (loopy (with (my-str "cat"))
+                                     (stringf i my-str)
                                      (do (setf i ?a))
                                      (finally-return my-str)))))))
 
@@ -838,6 +848,10 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '(0 1 2 3 4 5 6)
                  (eval (quote (loopy (array-index i "abcdefg")
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6)
+                 (eval (quote (loopy (string-index i "abcdefg")
                                      (collect i))))))
 
   (should (equal '(0 1 2 3 4)
