@@ -306,10 +306,10 @@ While `loopy-result' is an implied return value, it need not be
 the only implied value, and can still be returned in a list with
 other implied return values, if any.")
 
+(defvaralias 'loopy-first-iteration-p 'loopy-first-iteration)
+
 (defvar loopy-first-iteration nil
   "Whether this is the first cycle of the current loop.")
-
-(defvaralias 'loopy-first-iteration-p 'loopy-first-iteration)
 
 ;;;;; Variables for constructing the code
 (defvar loopy--in-sub-level nil
