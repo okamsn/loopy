@@ -474,7 +474,9 @@ in `loopy'.
 
 One useful difference is that `let*' is not an alias of the
 `with' special macro argument.  See the Info node `(loopy)' for
-information on how to use `loopy' and `loopy-iter'."
+information on how to use `loopy' and `loopy-iter'.
+
+\(fn CODE-or-COMMAND...)"
 
   (loopy--wrap-variables-around-body
 

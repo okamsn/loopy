@@ -834,7 +834,9 @@ Finally, `(finally-return 1 2 3)' is the same as
 
 Any another argument is assumed to be a loop command.  For more
 information, including a list of available loop commands, see the
-Info node `(loopy)' distributed with this package."
+Info node `(loopy)' distributed with this package.
+
+\(fn COMMAND...)"
 
   (declare (debug (&rest ;; TODO: Is this correct?
                    [&or
