@@ -46,7 +46,6 @@
 (defvar loopy--destructuring-for-with-vars-function)
 (defvar loopy--flag-settings nil)
 
-;;;###autoload
 (defun loopy-dash--enable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."
   (setq
