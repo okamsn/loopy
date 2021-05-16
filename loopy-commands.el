@@ -178,7 +178,7 @@ For functions, use `loopy--get-function-symbol'."
     (error "This function form is unrecognized: %s" quoted-form))))
 
 (defun loopy--quoted-form-p (form-or-symbol)
-  "Whether form is quoted via `quote' or `function'.
+  "Whether FORM-OR-SYMBOL is quoted via `quote' or `function'.
 
 If not, then it is possible that FORM is a variable."
   (and (listp form-or-symbol)
@@ -1522,7 +1522,7 @@ Otherwise, `loopy' should return t."
                             (cl-return-from ,loopy--loop-name nil))))))
 
 (cl-defun loopy--parse-thereis-command ((_ condition &rest other-conditions))
-  "Parse a command of the form `(thereis CONDITION [CONDITIONS]).'
+  "Parse the `thereis' command as (thereis CONDITION [CONDITIONS]).'
 
 If any condition is non-nil, its value is immediately returned and the loop is exited.
 Otherwise the loop continues and nil is returned."
