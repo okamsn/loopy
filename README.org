@@ -20,7 +20,7 @@ overview.
 
 -----
 #+begin_center
-*NOTE*: Loopy is still in its early stages.\\
+*NOTE*: Loopy is still in its middle stages.\\
 Constructive criticism is welcome.  If you see a place for improvement,
 please let me know.
 #+end_center
