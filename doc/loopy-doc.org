@@ -2893,9 +2893,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :END:
 
   This section contains examples of loops that exist in real-world commands.  To
-  see these loops in context, full examples of those commands can be found in
-  the file [[file:loopy-examples.el]] (containing the library =loopy-examples=) that
-  comes with this package.
+  see these loops in context, full examples of those commands can be found
+  online in the file {{{file(examples/loopy-examples.el)}}} in this package's
+  repository [fn:repo].
 
   One command that could see a benefit from using =loopy= is =selectrum-swiper=
   from the Selectrum wiki [fn:sel-wiki].  This command allows a user to jump to
@@ -3188,6 +3188,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 [[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
 
 [fn:iter] https://common-lisp.net/project/iterate/
+
+[fn:repo] [[https://github.com/okamsn/loopy]]
 
 # Local Variables:
 # toc-org-max-depth: 20
