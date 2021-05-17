@@ -2652,20 +2652,20 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :DESCRIPTION: Why `loopy' instead of `cl-loop'.
   :END:
 
-  =loopy= should be comparable with =cl-loop= for most things, keeping in
+  ~loopy~ should be comparable with ~cl-loop~ for most things, keeping in
   mind the following:
-  - It is probably less efficient than =cl-loop=, though I am so far trying to
-    keep the same logic that =cl-loop= uses.
+  - It is probably less efficient than ~cl-loop~, though I am so far trying to
+    keep the same logic that ~cl-loop~ uses.
   - It has more flexible control-flow commands, under which you can easily group
     sub-commands, including assignments.
   - It has a =skip= command to skip the rest of the loop body and immediately
     start the next iteration.  Of course, a similar effect could be achieved
     using the =when= or =unless= commands.
 
-  =loopy= is not always one-to-one replacement for =cl-loop=, but it is easy to
+  ~loopy~ is not always one-to-one replacement for ~cl-loop~, but it is easy to
   use and extend, and performs well in the cases that it already handles.
 
-  Below is a simple example of =loopy= vs =cl-loop=.
+  Below is a simple example of ~loopy~ vs ~cl-loop~.
 
   #+BEGIN_SRC emacs-lisp
     (require 'cl-lib)
@@ -2696,9 +2696,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
            (finally-return together))
   #+END_SRC
 
-  In my experience, =cl-loop= does not allow the easy grouping of assignment
+  In my experience, ~cl-loop~ does not allow the easy grouping of assignment
   statements under a =when= condition.  For example, below is something I would
-  like to try to do with =cl-loop=.
+  like to try to do with ~cl-loop~.
 
   I am aware that in this example the =for= statements aren't necessary and that
   the =collect= statements would be sufficient, but (when I come across things
@@ -2737,7 +2737,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
         (list (nreverse line-nums) (nreverse data-nums))))
   #+END_SRC
 
-  Here is how one could currently do it with =loopy=:
+  Here is how one could currently do it with ~loopy~:
 
   #+BEGIN_SRC emacs-lisp
     (require 'loopy)
@@ -2758,7 +2758,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   I believe that the value of the macro increases for longer loop bodies with
   several conditional commands.
 
-  Another nice ability, one that I'm not sure =cl-loop= has, is a specific
+  Another nice ability, one that I'm not sure ~cl-loop~ has, is a specific
   command for skipping/continuing a loop iteration.  Of course, one could also
   re-organize code under a conditional command like =when= to achieve the same
   effect.
@@ -2793,7 +2793,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :END:
 
    As Emacs has many functions that return lists, there is no need to implement
-   an exact equivalent for every =for=-clause that =cl-loop= has.  Instead, one
+   an exact equivalent for every =for=-clause that ~cl-loop~ has.  Instead, one
    can just iterate through the return value of the appropriate function using
    the =list= command.
 
