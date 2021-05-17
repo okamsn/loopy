@@ -2799,7 +2799,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    | ~cl-loop~                                     | ~loopy~                                          |
    |-----------------------------------------------+--------------------------------------------------|
-   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(list VAR (number-sequence EXPR1 EXPR2 EXPR3))= |
+   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(numbers VAR EXPR1 EXPR2 :by EXPR3)=          |
    | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
    | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
    | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
