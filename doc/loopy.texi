@@ -434,7 +434,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org2b24ef2
+@float Listing,orgfc62d1c
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -504,7 +504,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org355505f
+@float Listing,org6a61888
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2916,12 +2916,12 @@ built-in loop commands.  You can easily find this file using
 @node Comparing to @code{cl-loop}
 @chapter Comparing to @code{cl-loop}
 
-@samp{loopy} should be comparable with @samp{cl-loop} for most things, keeping in
+@code{loopy} should be comparable with @code{cl-loop} for most things, keeping in
 mind the following:
 @itemize
 @item
-It is probably less efficient than @samp{cl-loop}, though I am so far trying to
-keep the same logic that @samp{cl-loop} uses.
+It is probably less efficient than @code{cl-loop}, though I am so far trying to
+keep the same logic that @code{cl-loop} uses.
 @item
 It has more flexible control-flow commands, under which you can easily group
 sub-commands, including assignments.
@@ -2931,10 +2931,10 @@ start the next iteration.  Of course, a similar effect could be achieved
 using the @samp{when} or @samp{unless} commands.
 @end itemize
 
-@samp{loopy} is not always one-to-one replacement for @samp{cl-loop}, but it is easy to
+@code{loopy} is not always one-to-one replacement for @code{cl-loop}, but it is easy to
 use and extend, and performs well in the cases that it already handles.
 
-Below is a simple example of @samp{loopy} vs @samp{cl-loop}.
+Below is a simple example of @code{loopy} vs @code{cl-loop}.
 
 @lisp
 (require 'cl-lib)
@@ -2965,9 +2965,9 @@ conditionals while still using a clean syntax, such as in the below example.
        (finally-return together))
 @end lisp
 
-In my experience, @samp{cl-loop} does not allow the easy grouping of assignment
+In my experience, @code{cl-loop} does not allow the easy grouping of assignment
 statements under a @samp{when} condition.  For example, below is something I would
-like to try to do with @samp{cl-loop}.
+like to try to do with @code{cl-loop}.
 
 I am aware that in this example the @samp{for} statements aren't necessary and that
 the @samp{collect} statements would be sufficient, but (when I come across things
@@ -3006,7 +3006,7 @@ readability purposes.
     (list (nreverse line-nums) (nreverse data-nums))))
 @end lisp
 
-Here is how one could currently do it with @samp{loopy}:
+Here is how one could currently do it with @code{loopy}:
 
 @lisp
 (require 'loopy)
@@ -3027,7 +3027,7 @@ Here is how one could currently do it with @samp{loopy}:
 I believe that the value of the macro increases for longer loop bodies with
 several conditional commands.
 
-Another nice ability, one that I'm not sure @samp{cl-loop} has, is a specific
+Another nice ability, one that I'm not sure @code{cl-loop} has, is a specific
 command for skipping/continuing a loop iteration.  Of course, one could also
 re-organize code under a conditional command like @samp{when} to achieve the same
 effect.
@@ -3064,15 +3064,15 @@ clauses'' can be separated into ``iteration commands'' (@samp{repeat} and @samp{
 @section For Clauses
 
 As Emacs has many functions that return lists, there is no need to implement
-an exact equivalent for every @samp{for}-clause that @samp{cl-loop} has.  Instead, one
+an exact equivalent for every @samp{for}-clause that @code{cl-loop} has.  Instead, one
 can just iterate through the return value of the appropriate function using
 the @samp{list} command.
 
-@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem @code{cl-loop}
 @tab @code{loopy}
 @item @samp{for VAR from EXPR1 to EXPR2 by EXPR3}
-@tab @samp{(list VAR (number-sequence EXPR1 EXPR2 EXPR3))}
+@tab @samp{(numbers VAR EXPR1 EXPR2 :by EXPR3)}
 @item @samp{for VAR in LIST [by FUNCTION]}
 @tab @samp{(list VAR LIST [FUNC])}
 @item @samp{for VAR on LIST [by FUNCTION]}
@@ -3209,9 +3209,9 @@ special form @code{cond}.
 @chapter Real-World Examples
 
 This section contains examples of loops that exist in real-world commands.  To
-see these loops in context, full examples of those commands can be found in
-the file @uref{loopy-examples.el} (containing the library @samp{loopy-examples}) that
-comes with this package.
+see these loops in context, full examples of those commands can be found
+online in the file @file{examples/loopy-examples.el} in this package's
+repository @footnote{@uref{https://github.com/okamsn/loopy}}.
 
 One command that could see a benefit from using @samp{loopy} is @samp{selectrum-swiper}
 from the Selectrum wiki @footnote{@uref{https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines}}.  This command allows a user to jump to
