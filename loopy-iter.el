@@ -317,7 +317,7 @@ These expressions can have loop commands in the body."
      ,@(loopy-iter--replace-in-tree (cddr tree))))
 
 (cl-defun loopy-iter--replace-in-sub-loop-command (tree)
-  "Replace loop commands in the `sub-loop' command.
+  "Replace loop commands in the `sub-loop' command TREE.
 
 Unlike in `loopy', this allows arbitrary expressions."
   (let ((loopy--in-sub-level nil)

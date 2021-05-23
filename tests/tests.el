@@ -8,6 +8,11 @@
 (require 'ert)
 (require 'loopy "./loopy.el")
 
+;;; Check for ELC files, which can mess up testing.
+(ert-deftest no-elc-in-cwd ()
+  (should (cl-loop for f in (directory-files ".")
+                   never (string-match-p "\\.elc\\'" f))))
+
 ;;; Variables
 (ert-deftest first-iteration ()
   (should (equal '(1 2 3)
@@ -467,6 +472,61 @@ implicit variable without knowing it's name, even for named loops."
              (loopy (array [a (b c)] [[1 (2 3)] [4 (5 6)]])
                     (finally-return a b c))))))))
 
+(ert-deftest array-multi-array ()
+  (should (equal '((1 3) (1 4) (2 3) (2 4))
+                 (loopy (array i [1 2] [3 4])
+                        (collect i))))
+
+  (should (equal '((1 3) (2 3))
+                 (loopy (array i [1 2] [3 4] :by 2)
+                        (collect i))))
+
+  ;; Just to check how quoting is handled.
+  (should (equal '((1 3) (1 4) (2 3) (2 4))
+                 (loopy (array i `[1 ,(1+ 1)] [3 4])
+                        (collect i)))))
+
+(ert-deftest array-multi-array-destructuring ()
+  (should (equal '((1 1 2 2) (3 4 3 4))
+                 (eval (quote (loopy (array (i j) [1 2] [3 4])
+                                     (collect c1 i)
+                                     (collect c2 j)
+                                     (finally-return c1 c2)))))))
+
+(ert-deftest array-keywords ()
+  (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+                 (eval (quote (loopy (array i [4 3 2 1 0] :index cat)
+                                     (collect (cons cat i)))))))
+
+  (should (equal '(0 2 4 6 8 10)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+                                     (collect i))))))
+
+  (should (equal '(8 6 4 2)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10]
+                                            :from 8 :downto 1 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+                                     (collect i))))))
+
+  (should (equal '(10 9 8 7 6 5 4 3)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+                                     (collect i))))))
+
+  (should (equal '(10 9 8)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2)
+                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+                                     (collect i)))))))
+
 ;;;;; Array Ref
 (ert-deftest array-ref ()
   (should (equal "aaa"
@@ -520,34 +580,93 @@ implicit variable without knowing it's name, even for named loops."
                                               (setf k 9))
                                           (finally-return my-array))))))))
 
+(ert-deftest array-ref-keywords ()
+  (should (equal "a1a3a5a7a9"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :by 2)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "a1a3a5a7a9"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :by 2 :index cat)
+                                     (do (setf (aref my-str cat) ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "0a2a4a6a8a"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :from 1 :by 2 )
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "0123456a8a"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :downto 6 :by 2 )
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "aaaaa56789"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :below 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "012345aaaa"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :above 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "aaaaaa6789"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :upto 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "0a2a4a6a8a"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (array-ref i my-str :upfrom 1 :by 2 )
+                                     (do (setf i ?a))
+                                     (finally-return my-str)))))))
+
 ;;;;; Cons
 (ert-deftest cons ()
-  (should
-   (and (cl-every (lambda (list)
-                    (equal list '((1 2 3 4) (2 3 4) (3 4) (4))))
-                  (list (eval (quote (loopy (cons x '(1 2 3 4))
-                                            (collect coll x)
-                                            (finally-return coll))))
-                        (eval (quote (loopy (cons x '(1 2 3 4) cdr)
-                                            (collect coll x)
-                                            (finally-return coll))))))
-        (cl-every (lambda (list)
-                    (equal list '((1 2 3 4) (3 4))))
-                  (list (eval (quote (loopy (cons x '(1 2 3 4) #'cddr)
-                                            (collect coll x)
-                                            (finally-return coll))))
-                        (eval (quote (loopy (cons x '(1 2 3 4)
-                                                  (lambda (x) (cddr x)))
-                                            (collect coll x)
-                                            (finally-return coll))))))
-        (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
-               (eval (quote (loopy (cons (i . j) '(1 2 3 4))
-                                   (collect coll (list i j))
-                                   (finally-return coll)))))
-        (equal '((1 (2 3 4)) (3 (4)))
-               (eval (quote (loopy (cons (i . j) '(1 2 3 4) #'cddr)
-                                   (collect coll (list i j))
-                                   (finally-return coll))))))))
+  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
+                 (eval (quote (loopy (cons x '(1 2 3 4))
+                                     (collect coll x)
+                                     (finally-return coll))))))
+
+  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
+                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cdr)
+                                     (collect coll x)
+                                     (finally-return coll))))))
+
+  (should (equal '((1 2 3 4) (3 4))
+                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cddr)
+                                     (collect coll x)
+                                     (finally-return coll))))))
+
+  (should (equal '((1 2 3 4) (3 4))
+                 (eval (quote (loopy (cons x '(1 2 3 4)
+                                           :by (lambda (x) (cddr x)))
+                                     (collect coll x)
+                                     (finally-return coll))))))
+
+  (should (equal '((1 2 3 4) (3 4))
+                 (eval (quote (let ((f (lambda (x) (cddr x))))
+                                (loopy (cons x '(1 2 3 4) :by f)
+                                       (collect coll x)
+                                       (finally-return coll)))))))
+
+  (should (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
+                 (eval (quote (loopy (cons (i . j) '(1 2 3 4))
+                                     (collect coll (list i j))
+                                     (finally-return coll))))))
+
+  (should (equal '((1 (2 3 4)) (3 (4)))
+                 (eval (quote (loopy (cons (i . j) '(1 2 3 4) :by #'cddr)
+                                     (collect coll (list i j))
+                                     (finally-return coll)))))))
 
 
 ;;;;; List
@@ -555,7 +674,19 @@ implicit variable without knowing it's name, even for named loops."
   (should (= 3 (eval (quote (loopy  (list i '(1 2 3))
                                     ;; Same thing:
                                     ;; (after-do (cl-return i))
-                                    (finally-return i)))))))
+                                    (finally-return i))))))
+  (should (equal '(1 3)
+                 (let ((my-cddr (lambda (x)  (cddr x))))
+                   (loopy (list i '(1 2 3 4) :by my-cddr)
+                          (collect i)))))
+
+  (should (equal '(1 3)
+                 (loopy (list i '(1 2 3 4) :by (lambda (x) (cddr x)))
+                        (collect i))))
+
+  (should (equal '(1 3)
+                 (loopy (list i '(1 2 3 4) :by #'cddr)
+                        (collect i)))))
 
 (ert-deftest list-destructuring ()
   (should (and (equal '(5 6)
@@ -591,13 +722,54 @@ implicit variable without knowing it's name, even for named loops."
            (eval (quote (loopy (list (a (b (c))) '((1 (1 (2))) (5 (5 (6)))))
                                (finally-return (list a b c)))))))))
 
+(ert-deftest list-multi-list ()
+  (should (equal '((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+                 (eval (quote (loopy (list i '(1 2 3) '(4 5 6))
+                                     (collect i))))))
+
+  (should (equal '((1 7) (1 8) (1 9) (2 7) (2 8) (2 9))
+                 (eval (quote (cl-labels ((fx () '(7 8 9)))
+                                (loopy (list i '(1 2) (fx))
+                                       (collect i)))))))
+
+  (should (equal '((10 13) (10 15) (11 14) (12 13) (12 15))
+                 (eval (quote (loopy (list i '(10 11 12) '(13 14 15) :by #'cddr)
+                                     (collect i)))))))
+
+(ert-deftest list-multi-list-destructuring ()
+  (should (equal '((1 1 2 2) (4 5 4 5))
+                 (eval (quote (loopy (list (i j) '(1 2) '(4 5))
+                                     (collect c1 i)
+                                     (collect c2 j)
+                                     (finally-return c1 c2)))))))
+
 ;;;;; List Ref
 (ert-deftest list-ref ()
   (should (equal  '(7 7 7)
                   (eval (quote (loopy (with (my-list '(1 2 3)))
                                       (list-ref i my-list)
                                       (do (setf i 7))
-                                      (finally-return my-list)))))))
+                                      (finally-return my-list))))))
+
+  (should (equal  '(7 2 7)
+                  (eval (quote (loopy (with (my-list '(1 2 3)))
+                                      (list-ref i my-list :by #'cddr)
+                                      (do (setf i 7))
+                                      (finally-return my-list))))))
+
+  (should (equal  '(7 2 7)
+                  (eval (quote (loopy (with (my-list '(1 2 3)))
+                                      (list-ref i my-list
+                                                :by (lambda (x) (cddr x)))
+                                      (do (setf i 7))
+                                      (finally-return my-list))))))
+
+  (should (equal  '(7 2 7)
+                  (eval (quote (let ((f (lambda (x) (cddr x))))
+                                 (loopy (with (my-list '(1 2 3)))
+                                        (list-ref i my-list :by f)
+                                        (do (setf i 7))
+                                        (finally-return my-list))))))))
 
 (ert-deftest list-ref-destructuring ()
   (should (and (equal '((7 8 9) (7 8 9))
@@ -694,14 +866,15 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '(1 2 3 4 5)
                  (eval (quote (loopy (number i 1 5)
-                                     (collect i))))))
+                                     (collect i)))))))
 
+(ert-deftest nums-keywords ()
   (should (equal '(1 3 5)
                  (eval (quote (loopy (nums i 1 5 :by 2)
                                      (collect i))))))
 
   (should (equal '(5 3 1)
-                 (eval (quote (loopy (nums i 5 1 :by 2 :down t)
+                 (eval (quote (loopy (nums i 5 :downto 1 :by 2)
                                      (collect i))))))
 
   (should (equal '(0 7 14)
@@ -711,8 +884,59 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '(0 -7 -14 -21 -28 -35 -42)
                  (eval (quote (loopy (repeat 7)
-                                     (nums i 0 :by 7 :down t)
-                                     (collect i)))))))
+                                     (nums i :downfrom 0 :by 7)
+                                     (collect i))))))
+  (should (equal '(7 8 9)
+                 (eval (quote (loopy (repeat 3)
+                                     (nums i :upfrom 7)
+                                     (collect i))))))
+
+  (should (equal '(7 8 9)
+                 (eval (quote (loopy (repeat 3)
+                                     (nums i :from 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (nums i :upto 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (nums i :to 7)
+                                     (collect i))))))
+
+  (should (equal '(0 -1 -2 -3 -4 -5 -6 -7)
+                 (eval (quote (loopy (nums i :downto -7)
+                                     (collect i))))))
+
+  (should (equal '(0 -1 -2 -3 -4 -5 -6)
+                 (eval (quote (loopy (nums i :above -7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2)
+                 (eval (quote (loopy (nums i :below 3)
+                                     (collect i))))))
+
+  (should (equal nil
+                 (eval (quote (loopy (nums i :above 3)
+                                     (collect i))))))
+  (should (equal '(0 1.5 3.0)
+                 (loopy (nums i 0 3 :by 1.5)
+                        (collect i))))
+
+  (should (equal '(0 1.5 3.0 4.5)
+                 (eval (quote (loopy (nums i 0 5 :by 1.5)
+                                     (collect i))))))
+
+  ;; NOTE: It remains to be seen how well this test works.
+  (progn
+    (cl-float-limits)
+    (should (cl-every (lambda (x y) (> cl-float-epsilon (- x y)))
+                      '(0.5 0.3 0.1 -0.1 -0.3 -0.5)
+                      (eval (quote (loopy (nums i
+                                                :downfrom 0.5
+                                                :above -0.7
+                                                :by 0.2)
+                                          (collect i))))))))
 
 ;;;;; Nums-Down
 (ert-deftest nums-down ()
@@ -840,6 +1064,49 @@ implicit variable without knowing it's name, even for named loops."
                                               (setf k 9))
                                           (finally-return my-seq))))))))
 
+(ert-deftest seq-keywords ()
+  (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+                 (eval (quote (loopy (seq i [4 3 2 1 0] :index cat)
+                                     (collect (cons cat i)))))))
+
+  (should (equal '(0 2 4 6 8 10)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+                                     (collect i))))))
+
+  (should (equal '(8 6 4 2)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10]
+                                          :from 8 :downto 1 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+                                     (collect i))))))
+
+  (should (equal '(10 9 8 7 6 5 4 3)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+                                     (collect i))))))
+
+  (should (equal '(10 9 8)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+                                     (collect i))))))
+
+  (should (equal '(0 1 2)
+                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+                                     (collect i)))))))
+
+(ert-deftest seq-multi-seq ()
+  (should (equal '((1 3) (1 4) (2 3) (2 4))
+                 (eval (quote (loopy (seq i [1 2] '(3 4))
+                                     (collect i))))))
+
+  (should (equal '((1 3) (2 3))
+                 (eval (quote (loopy (seq i [1 2] '(3 4) :by 2)
+                                     (collect i)))))))
+
 ;;;;; Seq Index
 (ert-deftest seq-index ()
   (should (equal '(0 1 2 3)
@@ -858,6 +1125,43 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list-index i '(1 2 3 4 5))
                                      (collect i)))))))
 
+(ert-deftest seq-index-keywords ()
+  (should (equal '(0 2 4 6 8 10)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :by 2)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(8 6 4 2)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq
+                                                  :from 8 :downto 1 :by 2)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :upto 7)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(0 1 2 3 4 5 6 7)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :to 7)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(10 9 8 7 6 5 4 3)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :downto 3)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(10 9 8)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :above 7)
+                                       (collect (elt my-seq i))))))))
+
+  (should (equal '(0 1 2)
+                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+                                (loopy (seq-index i my-seq :below 3)
+                                       (collect (elt my-seq i)))))))))
+
 ;;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should
@@ -866,6 +1170,67 @@ implicit variable without knowing it's name, even for named loops."
                               (seq-ref i my-seq)
                               (do (setf i 7))
                               (finally-return my-seq)))))))
+
+(ert-deftest seq-ref-keywords ()
+  (should (equal "a1a3a5a7a9"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :by 2)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "a1a3a5a7a9"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :by 2 :index cat)
+                                     (do (setf (aref my-str cat) ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal '(0 cat 2 cat 4 cat 6 cat 8 cat)
+                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+                                     (seq-ref i my-list :from 1 :by 2 )
+                                     (do (setf i 'cat))
+                                     (finally-return my-list))))))
+
+  (should (equal "0123456a8a"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :downto 6 :by 2 )
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "aaaaa56789"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :below 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "012345aaaa"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :above 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal '(0 1 2 3 4 5 cat cat cat cat)
+                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+                                     (seq-ref i my-list :above 5)
+                                     (do (setf i 'cat))
+                                     (finally-return my-list))))))
+
+  (should (equal "aaaaaa6789"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :upto 5)
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal "0a2a4a6a8a"
+                 (eval (quote (loopy (with (my-str "0123456789"))
+                                     (seq-ref i my-str :upfrom 1 :by 2 )
+                                     (do (setf i ?a))
+                                     (finally-return my-str))))))
+
+  (should (equal '(0 cat 2 cat 4 cat 6 cat 8 cat)
+                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+                                     (seq-ref i my-list :upfrom 1 :by 2)
+                                     (do (setf i 'cat))
+                                     (finally-return my-list)))))))
 
 ;;;; Accumulation Commands
 ;;;;; Final updates

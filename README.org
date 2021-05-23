@@ -1,12 +1,15 @@
 #+title: Loopy: A Looping and Iteration Macro
-#+author: Earl Hyatt
-#+export_file_name: loopy
-
 # Make sure to export all headings as such.  Otherwise, some links to
 # sub-headings won’t work.
 #+options: H:6
 # Some parsers require this option to export footnotes.
 #+options: f:t
+
+# MELPA Badges
+=loopy=: [[https://melpa.org/#/loopy][file:https://melpa.org/packages/loopy-badge.svg]] \\
+=loopy-dash=: [[https://melpa.org/#/loopy-dash][file:https://melpa.org/packages/loopy-dash-badge.svg]]
+
+-----
 
 ~loopy~ is a macro meant for iterating and looping.  It is similar in usage to
 [[https://www.gnu.org/software/emacs/manual/html_node/cl/Loop-Facility.html#Loop-Facility][~cl-loop~]] but uses symbolic expressions rather than keywords.
@@ -145,20 +148,33 @@ please let me know.
 
 * How to Install
 
-  Currently, Loopy must be installed manually.  Here is how one could use
-  ~straight.el~ with ~use-package~
+  Loopy can be installed from [[https://melpa.org/#/][MELPA]] as the package =loopy=.  The optional
+  package =loopy-dash= can be installed to enable using the Dash
+  library for destructuring (instead of other methods).
 
   #+begin_src emacs-lisp
-    (use-package loopy
-      :straight (loopy :type git :host github :repo "okamsn/loopy"
-                       :files (:defaults (:exclude "loopy-dash.el"))))
+    (use-package loopy)
 
     ;; Optional support for destructuring with Dash.
     (use-package loopy-dash
       :after (loopy)
-      :demand t
-      :straight (loopy-dash :type git :host github :repo "okamsn/loopy"
-                            :files ("loopy-dash.el")))
+      :demand t)
+  #+end_src
+
+  To load all of the alternative destructuring libraries (see section [[*Multiple Kinds of Destructuring][Multiple
+  Kinds of Destructuring]]) and the alternative macro form (see section [[*Loop Commands in Arbitrary Code][Loop
+  Commands in Arbitrary Code]]), use
+
+  #+begin_src emacs-lisp
+    (use-package loopy
+      :config
+      (require 'loopy-iter)
+      (require 'loopy-pcase)
+      (require 'loopy-seq))
+
+    (use-package loopy-dash
+      :after (loopy)
+      :demand t)
   #+end_src
 
 * Multiple Kinds of Destructuring

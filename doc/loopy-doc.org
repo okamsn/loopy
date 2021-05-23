@@ -42,6 +42,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 - [[#loop-commands][Loop Commands]]
   - [[#generic-evaluation][Generic Evaluation]]
   - [[#iteration][Iteration]]
+    - [[#generic-iteration][Generic Iteration]]
+    - [[#numeric-iteration][Numeric Iteration]]
+    - [[#sequence-iteration][Sequence Iteration]]
+    - [[#sequence-index-iteration][Sequence Index Iteration]]
+    - [[#sequence-reference-iteration][Sequence Reference Iteration]]
   - [[#accumulation][Accumulation]]
   - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
@@ -628,8 +633,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :DESCRIPTION: Iterating through sequences, etc.
    :END:
 
-   Iteration commands bind local variables and determine when the loop ends.
-   If no command sets that condition, then the loop runs forever.
+   Iteration commands bind local variables and determine when the loop ends.  If
+   no command sets an ending condition, then the loop runs forever.  Infinite
+   loops can be exited by using early-exit commands ([[#exiting-the-loop-early]]) or
+   boolean commands ([[#boolean-commands]]).
 
    Iteration commands must occur in the top level of the ~loopy~ form or in a
    =sub-loop= command.  Trying to do something like the below will signal an
@@ -644,254 +651,584 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (collect j)))
    #+end_src
 
-   The =-ref= (as in “reference”) commands create ~setf~-able places instead of
-   true variables.  Like other commands, they too can use destructuring, in
-   which case the variables in the sequence =VAR= are also ~setf~-able places
-   instead of true variables.
 
-   #+ATTR_TEXINFO: :tag Note
-   #+begin_quote
    In ~loopy~, iteration commands are named after what they iterate through.
-   For example, =array= and =list= iterate through the elements of arrays and
-   lists, respectively.  For the convenience of familiarity, these commands also
-   have aliases based on their equivalent =for=-clause from ~cl-loop~.
+   For example, the =array= and =list= commands iterate through the elements of
+   arrays and lists, respectively.  For the sake of familiarity, these commands
+   also have aliases based on their equivalent =for=-clause from ~cl-loop~.  To
+   translate =for VAR in LIST= from ~cl-loop~, one can use either
+   =(list VAR LIST)= or =(in VAR LIST)=.
 
-   To translate =for VAR in LIST= from ~cl-loop~ to ~loopy~, one can use either
-   =(list VAR LIST)= or =(in VAR LIST)=.  This can be helpful when using
-   ~loopy-iter~ ([[#loopy-iter][The ~loopy-iter~ Macro]]), in which case you could write any of
-   =(for list VAR LIST)=, =(for in VAR LIST)=, or =(in VAR LIST)=, depending on
-   whether you have enabled the =lax-naming= flag.
-   #+end_quote
 
-   The available iteration commands are:
+*** Generic Iteration
+   :PROPERTIES:
+   :CUSTOM_ID: generic-iteration
+   :DESCRIPTION: Looping a certain number of times.
+   :END:
 
-   #+findex: array, string, across
-   - =(array|string|across VAR EXPR)= :: Loop through the elements of the array
-     =EXPR=.  In Emacs Lisp, strings are arrays whose elements are characters.
+    #+findex: repeat
+    - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
+      =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
+      1 at the end of the loop.
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (array i [1 2 3])
-              (do (message "%d" i)))
+      #+BEGIN_SRC emacs-lisp
+        (loopy (repeat 3)
+               (do (message "Messaged three times.")))
 
-       ;; Collects the integer values representing each character.
-       ;; => (97 98 99)
-       (loopy (string c "abc")
-              (collect c))
-     #+END_SRC
+        (loopy (repeat i 3)
+               (do (message "%d" i)))
+      #+END_SRC
 
-   #+findex: array-ref, arrayf, string-ref, stringf, across-ref
-   - =(array-ref|arrayf|string-ref|stringf|across-ref VAR EXPR)= :: Loop through
-     the elements of the array =EXPR=, binding =VAR= as a ~setf~-able place.
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (with (my-str "cat"))
-              (array-ref i my-str)
-              (do (setf i ?a))
-              (finally-return my-str)) ; => "aaa"
-     #+END_SRC
 
-   #+findex: cons, conses, on
-   - =(cons|conses|on VAR EXPR [FUNC])= :: Loop through the cons cells of =EXPR=.
-     Optionally, find the cons cells via =FUNC= instead of =cdr=.
+*** Numeric Iteration
+    :PROPERTIES:
+    :CUSTOM_ID: numeric-iteration
+    :DESCRIPTION: Iterating through numbers.
+    :END:
 
-     To avoid unneeded variables, when not destructuring, =VAR= is initialized
-     to =EXPR= instead of ~nil~.
+    For iterating through numbers, there is the general =nums= command, and its
+    variants =nums-up= and =nums-down=.
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (cons i '(1 2 3))
-              (collect coll i)
-              (finally-return coll)) ; => ((1 2 3) (2 3) (3))
-     #+END_SRC
+    #+findex: num, nums, number, numbers
+    - =(nums|num|number|numbers VAR [START [END]] &key KEYS)= :: Iterate through
+      numbers.  =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=,
+      =upto=, =downto=, =above=, =below=, and =by=.
 
-   #+findex: list, in, each
-   - =(list|in|each VAR EXPR [FUNC])= :: Loop through each element of the list
-     =EXPR=.  Optionally, update the list by =FUNC= instead of =cdr=.
+      The command =nums= is used to iterate through numbers.  For example, =(nums
+      i 1 10)= is similar to =(list i (number-sequence 1 10))=, and =(nums i 3)=
+      is similar to =(expr i 3 (1+ i))=.
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
-              (do (message "%d" i)))
-     #+END_SRC
+      To balance convenience and similarity to other commands, =nums= has a
+      flexible argument list.  In its most basic form, it uses no keywords and
+      takes a starting value and an ending value.  The ending value is inclusive.
 
-   #+findex: list-ref, listf, in-ref
-   - =(list-ref|listf|in-ref VAR EXPR [FUNC])= :: Loop through the elements of
-     the list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update
-     the list by =FUNC= instead of =cdr=.
+      #+begin_src emacs-lisp
+        ;; => (1 2 3 4 5)
+        (loopy (nums i 1 5)
+               (collect i))
+      #+end_src
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (with (my-list '(1 2 3)))
-              (list-ref i my-list)
-              (do (setf i 7))
-              (finally-return my-list)) ; Returns '(7 7 7).
-     #+END_SRC
+      If the ending value is not given, then the value is incremented by 1
+      without end.
 
-   #+findex: map
-   - =(map VAR EXPR)= :: Iterate through the key-value pairs of =EXPR=, using
-     the =map.el= library.  This library generalizes working with association
-     lists ("alists"), property lists ("plists"), hash-tables, and vectors.
+      #+begin_src emacs-lisp
+        ;; => (7 8 9 10 11 12 13 14 15 16)
+        (loopy (repeat 10)
+               (nums i 7)
+               (collect i))
+      #+end_src
 
-     In each undotted pair assigned to =VAR=, the first element is the key and
-     the second element is the value.  For vectors, the key is the index.  You
-     should not rely on the order in which the key-value pairs are found.
+      To specify the step size, one can use the keyword =:by=.  The step size
+      argument should always be positive.
 
-     These pairs are created before the loop begins.  In other words, the map
-     =EXPR= is not processed progressively, but all at once.  Therefore, this
-     command can have a noticeable start-up cost when working with very large
-     maps.
+      #+begin_src emacs-lisp
+        ;; => (1 3 5)
+        (loopy (nums i 1 5 :by 2)
+               (collect i))
 
-     #+begin_src emacs-lisp
-       ;; NOTE: `pair' is not dotted.
-       ;; => ((a 1) (b 2))
-       (loopy (map pair '((a . 1) (b . 2)))
-              (collect pair))
+        ;; => (7 9 11 13 15 17 19 21 23 25)
+        (loopy (repeat 10)
+               (nums i 7 :by 2)
+               (collect i))
 
-       ;; => ((a b) (1 2))
-       (loopy (map (key value) '((a . 1) (b . 2)))
-              (collect keys key)
-              (collect values value))
+        ;; => (1 2.5 4.0)
+        (loopy (nums i 1 5 :by 1.5)
+               (collect i))
+      #+end_src
 
-       ;; => ((:a :b) (1 2))
-       (loopy (map (key value) '(:a  1 :b 2))
-              (collect keys key)
-              (collect values value))
+      By default, the variable's value starts at 0 and increases by 1.  To
+      specify that the value should be increasing or decreasing, one can use the
+      keywords =:downfrom=, =:downto=, =:upfrom=, and =:upto=.  The keywords
+      =:from= and =:to= don't by themselves specify a direction.
 
-       ;; NOTE: For vectors, the keys are indices.
-       ;; => ((0 1) (1 2))
-       (loopy (map (key value) [1 2])
-              (collect keys key)
-              (collect values value))
+      #+begin_src emacs-lisp
+        ;; => (3 2 1)
+        (loopy (repeat 3)
+               (nums i :downfrom 3)
+               (collect i))
 
-       ;; => ((a b) (1 2))
-       (let ((my-table (make-hash-table)))
-         (puthash 'a 1 my-table)
-         (puthash 'b 2 my-table)
+        ;; => (0 -1 -2 -3)
+        (loopy (nums i :downto -3)
+               (collect i))
 
-         (loopy (map (key value) my-table)
-                (collect keys key)
-                (collect values value)))
-     #+end_src
+        ;; => (10 9 8 7 6 5 4 3 2)
+        (loopy (nums i :downfrom 10 :to 2)
+               (collect i))
 
-   #+findex: num, nums, number, numbers
-   - =(nums|num|number|numbers VAR START [END] &key by down)= :: Increment =VAR=
-     from =START= through =END=.  =by= is a _positive_ value used to adjust
-     =VAR=.  =down= determines whether =VAR= is incremented or decremented.
+        ;; => (10 8 6 4 2)
+        (loopy (nums i :from 10 :downto 2 :by 2)
+               (collect i))
 
-     The values of =START=, =END=, and =by= are all computed during
-     initialization.  They do not change during the loop.
+        ;; => (1 2 3 4 5 6 7)
+        (loopy (nums i :from 1 :upto 7)
+               (collect i))
+      #+end_src
 
-     =VAR= is initialized to =START=.  The loop ends when =VAR= is either
-     greater or less than =END= (if given), depending on the value of =down=.
+      To specify an /exclusive/ ending value, use the keywords =:below= for
+      increasing values and =:above= for decreasing values.
 
-     Without =by=, the default step is 1.  Without =down=, =VAR= increases.
+      #+begin_src emacs-lisp
+        ;; => (1 2 3 4 5 6 7 8 9)
+        (loopy (nums i :from 1 :below 10)
+               (collect i))
 
-     This command does not support destructuring.
+        ;; Same as
+        (loopy (expr i 1 (1+ i))
+               (while (< i 10))
+               (collect i))
 
-     #+begin_src emacs-lisp
-       ;; => (1 2 3 4 5)
-       (loopy (nums i 1 5)
-              (collect i))
+        ;; => (10 9 8 7 6 5 4 3 2)
+        (loopy (nums i :from 10 :above 1)
+               (collect i))
 
-       ;; => (1 3 5)
-       (loopy (nums i 1 5 :by 2)
-              (collect i))
+        ;; => (0 -1 -2)
+        (loopy (nums i :above -3)
+               (collect i))
+      #+end_src
 
-       ;; => (5 3 1)
-       (loopy (nums i 5 1 :by 2 :down t)
-              (collect i))
 
-       ;; => (0 7 14)
-       (loopy (repeat 3)
-              ;; We can use `repeat' to avoid an infinite loop.
-              (nums i 0 :by 7)
-              (collect i))
+    If you prefer using positional arguments to keyword arguments, you can use
+    the commands =nums-up= and =nums-down= to specify directions.  These
+    commands are simple wrappers of the above =nums= command.
 
-       ;; => (0 -7 -14 -21 -28 -35 -42)
-       (loopy (repeat 7)
-              ;; We can use `repeat' to avoid an infinite loop.
-              (nums i 0 :by 7 :down t)
-              (collect i))
-     #+end_src
+    #+findix: nums-down, numbers-down
+    - =(nums-down|numsdown|numbers-down VAR START [END] &key by)= :: Equivalent
+      to =(nums VAR START [:downto END] &key by)=.  This command exists only for
+      convenience.
 
-   #+findix: nums-down, numbers-down
-   - =(nums-down|numsdown|numbers-down VAR START [END] &key by)= :: Equivalent
-     to =(nums VAR START [END] :down t &key by)=.  This command exists only for
-     convenience.
+      #+begin_src emacs-lisp
+        ;; => (10 8 6 4 2)
+        (loopy (nums-down i 10 1 :by 2)
+               (collect i))
+      #+end_src
 
-     #+begin_src emacs-lisp
-       ;; => (10 8 6 4 2)
-       (loopy (nums-down i 10 1 :by 2)
-              (collect i))
-     #+end_src
+    #+findix: nums-up, numbers-up
+    - =(nums-up|numsup|numbers-up VAR START [END] &key by)= :: Equivalent to
+      =(nums VAR START [END] &key by)=.  This command exists only for
+      convenience.
 
-   #+findix: nums-up, numbers-up
-   - =(nums-up|numsup|numbers-up VAR START [END] &key by)= :: Equivalent to
-     =(nums VAR START [END] &key by)=.  This command exists only for
-     convenience.
+      #+begin_src emacs-lisp
+        ;; => (1 3 5 7 9)
+        (loopy (nums-up i 1 10 :by 2)
+               (collect i))
+      #+end_src
 
-     #+begin_src emacs-lisp
-       ;; => (1 3 5 7 9)
-       (loopy (nums-up i 1 10 :by 2)
-              (collect i))
-     #+end_src
 
-   #+findex: repeat
-   - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
-     =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
-     1 at the end of the loop.
+*** Sequence Iteration
+    :PROPERTIES:
+    :CUSTOM_ID: sequence-iteration
+    :DESCRIPTION: Iterating through sequences.
+    :END:
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (repeat 3)
-              (do (message "Messaged three times.")))
+    These commands provide various ways to iterate through sequences
+    ([[info:elisp#Sequences Arrays Vectors]]).
 
-       (loopy (repeat i 3)
-              (do (message "%d" i)))
-     #+END_SRC
+    #+cindex: sequence element distribution
+    Instead of just one sequence, the =array=, =list=, and =seq= commands can be
+    given multiple sequences of various sizes.  In such cases, the elements of
+    the sequences are {{{dfn(distributed)}}}, like in the distributive property
+    from mathematics.  A new sequence of distributed elements is created before
+    the loop runs, and that sequence is used for iteration instead of the source
+    sequences.  As seen in the below example, the resulting behavior is similar
+    to that of nested loops.
 
-   #+findex: seq, sequence, elements
-   - =(seq|sequence|elements VAR EXPR)= :: Loop through the sequence =EXPR=,
-     binding =VAR= to the elements of the sequence.
+    #+begin_src emacs-lisp
+      ;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
+      (loopy (list i '(1 2) '(3 4 5) '(6))
+             (collect i))
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (seq i [1 2 3])
-              (collect coll i)
-              (finally-return coll)) ; => (1 2 3)
-     #+END_SRC
+      ;; Gives the same result as this
+      (let ((result nil))
+        (dolist (i '(1 2))
+          (dolist (j '(3 4 5))
+            (dolist (k '(6))
+              (push (list i j k) result))))
+        (nreverse result))
 
-   #+findex: seq-index, seqi, array-index, arrayi, list-index, listi, string-index, stringi
-   - =(seq-index|array-index|list-index|string-index VAR VAL)= :: Iterate
-     through the indices of =VAL=.  The loop ends when =VAR= is equal to the
-     length of =VAL=.
+      ;; and this
+      (cl-loop for i in '(1 2)
+               append (cl-loop for j in '(3 4 5)
+                               append (cl-loop for k in '(6)
+                                               collect (list i j k))))
+    #+end_src
 
-     For convenience, this command also has the aliases =seqi=, =arrayi=,
-     =listi=, and =stringi=, analogous to the command aliases =seqf=, =arrayf=,
-     =listf=, and =stringf=.
 
-     This command does not support destructuring.
+    The =array= and =sequence= commands can use the same keywords as the =nums=
+    command ([[#numeric-iteration]]) for working with the index and choosing a range
+    of the sequence elements through which to iterate.  In addition to those
+    keywords, they also have an =index= keyword, which names the variable used
+    to store the accessed index during the loop.
 
-     #+begin_src emacs-lisp
-       ;; => (0 1 2)
-       (loopy (seq-index i [1 2 3])
-              (collect i))
+    Keep in mind that if used with sequence distribution, these keywords affect
+    iterating through the sequence of distributed elements.  That is, they do
+    not affect how said sequence is produced.  In the example below, see that
+    ~cddr~ is applied to the sequence of distributed elements. It is /not/
+    applied to the source sequences.
 
-       ;; => (0 1 2)
-       (loopy (array-index i "abc")
-              (collect i))
+    #+begin_src emacs-lisp
+      ;; This code creates the sequence of distributed elements
+      ;; ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+      ;; and then moves through this sequence using `cddr'.
+      ;;
+      ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+      (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+             (collect i))
 
-       ;; => (0 1 2)
-       (loopy (list-index i '(1 2 3))
-              (collect i))
-     #+end_src
+      ;; Not the same as:
+      ;; => ((1 4) (1 6) (3 4) (3 6))
+      (loopy (list i '(1 3) '(4 6))
+             (collect i))
+    #+end_src
 
-   #+findex: seq-ref, seqf, sequence-ref, sequencef, elements-ref
-   - =(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)= :: Loop
-     through the elements of the sequence =EXPR=, binding =VAR= as a ~setf~-able
-     place.
 
-     #+BEGIN_SRC emacs-lisp
-       (loopy (with (my-seq '(1 2 3 4)))
-              (seq-ref i my-seq)
-              (do (setf i 7))
-              (finally-return my-seq)) ; => '(7 7 7 7)
-     #+END_SRC
+    #+findex: array, string, across
+    - =(array|string|across VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
+      elements of the array =EXPR=.  In Emacs Lisp, strings are arrays whose
+      elements are characters.
+
+      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+      used to store the index being accessed.  For others, see the =nums=
+      command.
+
+      If multiple arrays are given, then the elements of these arrays are
+      distributed into an array of lists and the above keywords apply to this
+      new resulting array.
+
+      #+BEGIN_SRC emacs-lisp
+        (loopy (array i [1 2 3])
+               (do (message "%d" i)))
+
+        ;; => (1 3)
+        (loopy (array i [1 2 3 4] :by 2)
+               (collect i))
+
+        ;; Collects the integer values representing each character.
+        ;; => (97 98 99)
+        (loopy (string c "abc")
+               (collect c))
+
+        ;; This is the same as using [(1 3) (1 4) (2 3) (2 4)].
+        ;; => ((1 3) (1 4) (2 3) (2 4))
+        (loopy (array i [1 2] [3 4])
+               (collect i))
+
+        ;; => ((1 3) (2 3))
+        (loopy (array i [1 2] [3 4] :by 2)
+               (collect i))
+      #+END_SRC
+
+    #+findex: cons, conses, on
+    - =(cons|conses|on VAR EXPR &key by)= :: Loop through the cons cells of
+      =EXPR=.  Optionally, find the cons cells via function =by= instead of
+      =cdr=.
+
+      #+BEGIN_SRC emacs-lisp
+        (loopy (cons i '(1 2 3))
+               (collect coll i)
+               (finally-return coll)) ; => ((1 2 3) (2 3) (3))
+      #+END_SRC
+
+    #+findex: list, in, each
+    - =(list|in|each VAR EXPR [EXPRS] &key by)= :: Loop through each element of
+      the list =EXPR=.  Optionally, update the list by =by= instead of =cdr=.
+
+      If multiple lists are given, distribute the elements of the lists into one
+      new list.  In such cases, =by= applies to the new list, not the arguments
+      of the command.
+
+      #+BEGIN_SRC emacs-lisp
+        (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
+               (do (message "%d" i)))
+
+        ;; => ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+        (loopy (list i '(1 2 3) '(4 5 6))
+               (collect i))
+
+        ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+        (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+               (collect i))
+      #+END_SRC
+
+    #+findex: map
+    - =(map VAR EXPR)= :: Iterate through the key-value pairs of =EXPR=, using
+      the =map.el= library.  This library generalizes working with association
+      lists ("alists"), property lists ("plists"), hash-tables, and vectors.
+
+      In each undotted pair assigned to =VAR=, the first element is the key and
+      the second element is the value.  For vectors, the key is the index.  You
+      should not rely on the order in which the key-value pairs are found.
+
+      These pairs are created before the loop begins.  In other words, the map
+      =EXPR= is not processed progressively, but all at once.  Therefore, this
+      command can have a noticeable start-up cost when working with very large
+      maps.
+
+      #+begin_src emacs-lisp
+        ;; NOTE: `pair' is not dotted.
+        ;; => ((a 1) (b 2))
+        (loopy (map pair '((a . 1) (b . 2)))
+               (collect pair))
+
+        ;; => ((a b) (1 2))
+        (loopy (map (key value) '((a . 1) (b . 2)))
+               (collect keys key)
+               (collect values value))
+
+        ;; => ((:a :b) (1 2))
+        (loopy (map (key value) '(:a  1 :b 2))
+               (collect keys key)
+               (collect values value))
+
+        ;; NOTE: For vectors, the keys are indices.
+        ;; => ((0 1) (1 2))
+        (loopy (map (key value) [1 2])
+               (collect keys key)
+               (collect values value))
+
+        ;; => ((a b) (1 2))
+        (let ((my-table (make-hash-table)))
+          (puthash 'a 1 my-table)
+          (puthash 'b 2 my-table)
+
+          (loopy (map (key value) my-table)
+                 (collect keys key)
+                 (collect values value)))
+      #+end_src
+
+
+    #+findex: seq, sequence, elements
+    - =(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)= :: Loop
+      through the sequence =EXPR=, binding =VAR= to the elements of the sequence.
+
+      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+      used to store the index being accessed.  For others, see the =nums=
+      command.
+
+      If multiple sequences are given, then these keyword arguments apply to the
+      resulting sequence of distributed elements.
+
+      #+BEGIN_SRC emacs-lisp
+        ;; => (1 2 3)
+        (loopy (seq i [1 2 3])
+               (collect coll i)
+               (finally-return coll))
+
+        ;; => (0 2 4)
+        (loopy (seq i [0 1 2 3 4 5] :by 2)
+               (collect i))
+
+        ;; => (1 3 5)
+        (loopy (seq i [0 1 2 3 4 5 6]
+                    :by 2 :from 1 :to 5)
+               (collect i))
+
+        ;; => (5 3 1)
+        (loopy (seq i '(0 1 2 3 4 5 6)
+                    :downfrom 5 :by 2 :to 1)
+               (collect i))
+
+        ;; => ((1 3) (1 4) (2 3) (2 4))
+        (loopy (seq i [1 2] '(3 4))
+               (collect i))
+
+        ;; => ((1 3) (2 3))
+        (loopy (seq i [1 2] '(3 4) :by 2)
+               (collect i))
+      #+END_SRC
+
+*** Sequence Index Iteration
+    :PROPERTIES:
+    :CUSTOM_ID: sequence-index-iteration
+    :DESCRIPTION: Iterating through indices without accessing values.
+    :END:
+
+    This command is for iterating the a sequence's indices without accessing the
+    actual values of that sequence.  This is helpful if you know ahead of time
+    that you are only interested in a small subset of the sequence's elements.
+
+    As with the =array= and =seq= commands, the =seq-index= command can use the
+    same keywords as the =nums= command ([[#numeric-iteration]]) for working with
+    the index and choosing a range of the sequence elements through which to
+    iterate.  In addition to those keywords, it also has an =index= keyword,
+    which names the variable used to store the accessed index during the loop.
+
+    #+findex: seq-index, seqi, array-index, arrayi, list-index, listi, string-index, stringi
+    - =(seq-index|array-index|list-index|string-index VAR VAL &key KEYS)= :: Iterate
+      through the indices of =VAL=.
+
+      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+      =downto=, =above=, =below=, and =by=.  For their meaning, see the =nums=
+      command.  This command is very similar to =nums=, except that it can
+      automatically end the loop when the final element is reached.  With
+      =nums=, one would first need to explicitly calculate the length of the
+      sequence.
+
+      #+begin_src emacs-lisp
+        ;; => (97 98 99 100 101 102)
+        (loopy (with (my-string "abcdef"))
+               (string-index idx my-string)
+               (collect (aref my-string idx)))
+
+        ;; Works the same as
+        (loopy (with (my-string "abcdef"))
+               (nums idx :from 0 :below (length my-string))
+               (collect (aref my-string idx)))
+      #+end_src
+
+      For convenience, this command also has the aliases =seqi=, =arrayi=,
+      =listi=, and =stringi=, analogous to the command aliases =seqf=, =arrayf=,
+      =listf=, and =stringf=.
+
+      This command does not support destructuring.
+
+      #+begin_src emacs-lisp
+        ;; => (0 1 2)
+        (loopy (seq-index i [1 2 3])
+               (collect i))
+
+        ;; => (0 1 2)
+        (loopy (array-index i "abc")
+               (collect i))
+
+        ;; => (0 1 2)
+        (loopy (list-index i '(1 2 3))
+               (collect i))
+
+        ;; => (8 6 4 2)
+        (loopy (with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+               (seq-index idx my-seq :from 8 :downto 1 :by 2)
+               (collect (elt my-seq idx)))
+      #+end_src
+
+*** Sequence Reference Iteration
+    :PROPERTIES:
+    :CUSTOM_ID: sequence-reference-iteration
+    :DESCRIPTION: Iterating through places/fields in sequences.
+    :END:
+
+    These commands all iterate through ~setf~-able places as generalized
+    variables ([[info:elisp#Generalized Variables]]).  These generalized variables
+    are commonly called "references", "fields", or "places".  The below example
+    demonstrates using ~(nth 1 my-list)~ and ~(aref my-array 1)~ as ~setf~-able
+    places.
+
+    #+begin_src emacs-lisp
+      ;; => (1 99 3 4 5)
+      (let ((my-list '(1 2 3 4 5)))
+        (setf (nth 1 my-list) 99)
+        my-list)
+
+      ;; => [(1 2 3) (4 . 99)]
+      (let ((my-array [(1 2 3) (4 5 6)]))
+        (setf (cdr (aref my-array 1)) 99)
+        my-array)
+    #+end_src
+
+    Like other commands, field/reference commands can also use destructuring, in
+    which case the fields/places of the sequence are destructured into
+    "sub-fields", like the ~cdr~ of the second array element in the example
+    above.
+
+    As with the =array= and =seq= commands, the =array-ref= and =seq-ref=
+    commands can use the same keywords as the =nums= command
+    ([[#numeric-iteration]]) for working with the index and choosing a range of the
+    sequence elements through which to iterate.  In addition to those keywords,
+    they also have an =index= keyword, which names the variable used to store
+    the accessed index during the loop.
+
+    #+findex: array-ref, arrayf, string-ref, stringf, across-ref
+    - =(array-ref|arrayf|string-ref|stringf|across-ref VAR EXPR &key KEYS)= :: Loop
+      through the elements of the array =EXPR=, binding =VAR= as a ~setf~-able
+      place.
+
+      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+      used to store the index being accessed.  For others, see the =nums=
+      command.
+
+      #+BEGIN_SRC emacs-lisp
+        ;; => "aaa"
+        (loopy (with (my-str "cat"))
+               (array-ref i my-str)
+               (do (setf i ?a))
+               (finally-return my-str))
+
+        ;; => "0a2a4a6a89"
+        (loopy (with (my-str "0123456789"))
+               (array-ref i my-str :from 1 :by 2 :to 7)
+               (do (setf i ?a))
+               (finally-return my-str))
+
+        ;; Works the same as
+        (loopy (with (my-str "0123456789"))
+               (nums idx 1 7 :by 2)
+               (do (setf (aref my-str idx) ?a))
+               (finally-return my-str))
+      #+END_SRC
+
+    #+findex: list-ref, listf, in-ref
+    - =(list-ref|listf|in-ref VAR EXPR &key by)= :: Loop through the elements of
+      the list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update
+      the list via function =by= instead of =cdr=.
+
+      #+BEGIN_SRC emacs-lisp
+        ;; => (7 7 7)
+        (loopy (with (my-list '(1 2 3)))
+               (list-ref i my-list)
+               (do (setf i 7))
+               (finally-return my-list))
+
+        ;; Works similar to
+        (loopy (with (my-list '(1 2 3)))
+               (nums idx :below (length my-list))
+               (do (setf (nth idx my-list) 7))
+               (finally-return my-list))
+
+        ;; => (7 2 7)
+        (loopy (with (my-list '(1 2 3)))
+               (list-ref i my-list :by #'cddr)
+               (do (setf i 7))
+               (finally-return my-list))
+
+        ;; => ([1 7] [2 7])
+        (loopy (with (my-list '([1 2] [2 3])))
+               (list-ref [_ i] my-list)
+               (do (setf i 7))
+               (finally-return my-list))
+      #+END_SRC
+
+    #+findex: seq-ref, seqf, sequence-ref, sequencef, elements-ref
+    - =(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR &key KEYS)= :: Loop
+      through the elements of the sequence =EXPR=, binding =VAR= as a
+      ~setf~-able place.
+
+      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+      used to store the index being accessed.  For others, see the =nums=
+      command.
+
+      #+BEGIN_SRC emacs-lisp
+        ;; => (7 7 7 7)
+        (loopy (with (my-seq '(1 2 3 4)))
+               (seq-ref i my-seq)
+               (do (setf i 7))
+               (finally-return my-seq))
+
+        ;; => (0 cat 2 cat 4 cat 6 cat 8 cat)
+        (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+               (seq-ref i my-list :from 1 :by 2 )
+               (do (setf i 'cat))
+               (finally-return my-list))
+
+        ;; => "0123456a8a"
+        (loopy (with (my-str "0123456789"))
+               (seq-ref i my-str :downto 6 :by 2 )
+               (do (setf i ?a))
+               (finally-return my-str))
+      #+END_SRC
 
 ** Accumulation
    :PROPERTIES:
@@ -1890,7 +2227,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   loop command =list= and the function ~list~), a loop command must be preceded
   by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
   a name with any built-in Emacs feature and are similar to the keywords used by
-  other packages.
+  other packages.  For example, =(list VAR LIST)= would be =(for list VAR LIST)=
+  or =(for in VAR LIST)=.
 
   Any keyword in the user option ~loopy-iter-command-keywords~ can be used to
   identify any loop command.  For example, =(accum collect a)= and
@@ -1899,8 +2237,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   To disable this requirement, use the flag =lax-naming= ([[#flags][Using Flags]]).  When
   using =lax-naming=, ~loopy-iter~ will always prefer built-in features to loop
-  commands.  E.g., "list" will always be understood as referring to the function
-  ~list~ and not the loop command =list=.
+  commands.  For example, "list" will always be understood as referring to the
+  function ~list~ and not the loop command =list=.
 
   #+vindex: loopy-iter-ignored-commands
   If for some reason you wish for ~loopy-iter~ to ignore a loop command while

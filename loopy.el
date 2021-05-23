@@ -5,7 +5,7 @@
 ;; Author: Earl Hyatt
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.5
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
@@ -796,7 +796,7 @@ The function creates quoted code that should be used by a macro."
 (cl-defmacro loopy (&rest body)
   "A looping macro.
 
-The macro takes several top-level arguments, all, except a loop
+The macro takes several top level arguments, all, except a loop
 name, being a list beginning with one of the keywords below.  To
 name a loop, pass in an unquoted symbol as an argument.
 
@@ -832,11 +832,9 @@ Finally, `(finally-return 1 2 3)' is the same as
 `(finally-return (list 1 2 3))'.  This is convenient when using
 `seq-let', `pcase-let', `cl-destructuring-bind', and the like.
 
-Any another argument is assumed to be a loop command.  For more
-information, including a list of available loop commands, see the
-Info node `(loopy)' distributed with this package.
-
-\(fn COMMAND...)"
+Any other argument in BODY is assumed to be a loop command.  For
+more information, including a list of available loop commands,
+see the Info node `(loopy)' distributed with this package."
 
   (declare (debug (&rest ;; TODO: Is this correct?
                    [&or

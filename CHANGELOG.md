@@ -1,0 +1,29 @@
+# CHANGELOG
+
+This document describes the user-facing changes to Loopy.
+
+## Unreleased
+
+### Breaking Changes
+
+- Commands were updated to include keyword options more like those of `cl-loop`
+  and `iterate`, such as the keywords `from`, `upfrom`, `downfrom`, `to`,
+  `upto`, `downto`, `above`, `below`, `by`. ([#73], [#65])
+
+  - List commands like `list` and `list-ref` only received `by`, which replaces
+    the optional third argument `FUNC`.
+  - `seq` and `array` (and their variants) received the above list and the
+    keyword `index`, which names a variable to hold the index.
+
+- The commands `list`, `array`, and `seq` can now take multiple sequences before
+  keyword arguments, in which case the elements of those sequences are
+  distributed.  See the documentation for more info. ([#73], [#65])
+
+### Non-Breaking Changes
+
+- The positional arguments of the `nums` command are now optional, and can be
+  supplemented with keyword from the list above. ([#73])
+- Re-arrange documentation.
+
+[#65]: https://github.com/okamsn/loopy/issues/65
+[#73]: https://github.com/okamsn/loopy/pull/73

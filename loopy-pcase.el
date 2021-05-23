@@ -5,7 +5,7 @@
 ;; Author: Earl Hyatt
 ;; Created: February 2021
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.5
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "25.1") (loopy "0.5"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
@@ -98,7 +98,7 @@ Returns a list.  The elements are:
                 (cons var
                       (lambda (varvals &rest _)
                         (cons 'setq (mapcan (cl-function
-                                             (lambda ((var val &rest _))
+                                             (lambda ((var val &rest rest))
                                                (push var var-list)
                                                (list var val)))
                                             varvals))))))
@@ -131,7 +131,8 @@ Returns a list of two elements:
 2. A new list of bindings."
   (list 'pcase-let* bindings))
 
-(cl-defun loopy-pcase--parse-destructuring-accumulation-command ((name var val))
+(cl-defun loopy-pcase--parse-destructuring-accumulation-command
+    ((name var val &rest args))
   "Parse the accumulation loop command using `pcase' for destructuring.
 
 NAME is the name of the command.  VAR-OR-VAL is a variable name
@@ -153,7 +154,7 @@ should only be used if VAR-OR-VAL is a variable."
                               (seq-let (main-body other-instructions)
                                   (loopy--extract-main-body
                                    (loopy--parse-loop-command
-                                    (list name destr-var destr-val)))
+                                    `(,name ,destr-var ,destr-val ,@args)))
                                 ;; Just push the other instructions, but
                                 ;; gather the main body expressions.
                                 (dolist (instr other-instructions)
@@ -182,7 +183,7 @@ should only be used if VAR-OR-VAL is a variable."
                                   (seq-let (main-body other-instructions)
                                       (loopy--extract-main-body
                                        (loopy--parse-loop-command
-                                        (list name destr-var destr-val)))
+                                        `(,name ,destr-var ,destr-val ,@args)))
                                     ;; Just push the other instructions, but
                                     ;; gather the main body expressions.
                                     (dolist (instr other-instructions)
