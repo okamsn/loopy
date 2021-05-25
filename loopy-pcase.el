@@ -98,7 +98,7 @@ Returns a list.  The elements are:
                 (cons var
                       (lambda (varvals &rest _)
                         (cons 'setq (mapcan (cl-function
-                                             (lambda ((var val &rest _))
+                                             (lambda ((var val &rest rest))
                                                (push var var-list)
                                                (list var val)))
                                             varvals))))))

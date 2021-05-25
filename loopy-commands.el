@@ -1522,10 +1522,11 @@ Otherwise, `loopy' should return t."
                             (cl-return-from ,loopy--loop-name nil))))))
 
 (cl-defun loopy--parse-thereis-command ((_ condition &rest other-conditions))
-  "Parse the `thereis' command as (thereis CONDITION [CONDITIONS]).'
+  "Parse the `thereis' command as (thereis CONDITION [CONDITIONS]).
 
-If any condition is non-nil, its value is immediately returned and the loop is exited.
-Otherwise the loop continues and nil is returned."
+If any condition is non-nil, its value is immediately returned
+and the loop is exited.  Otherwise the loop continues and nil is
+returned."
   (let ((value-holder (gensym "thereis-var-")))
     `((loopy--implicit-return  . nil)
       (loopy--main-body
