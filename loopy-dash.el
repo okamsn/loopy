@@ -5,7 +5,7 @@
 ;; Author: Earl Hyatt
 ;; Created: February 2021
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.5
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "25.1") (loopy "0.5") (dash "2"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
@@ -140,7 +140,8 @@ For accumulation, we don't want Dash to assign to the named
     (array
      (cl-map 'vector #'loopy-dash--transform-var-list var-list))))
 
-(cl-defun loopy-dash--parse-destructuring-accumulation-command ((name var val))
+(cl-defun loopy-dash--parse-destructuring-accumulation-command
+    ((name var val &rest args))
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
 NAME is the name of the command.  VAR-OR-VAL is a variable name
@@ -172,7 +173,7 @@ should only be used if VAR-OR-VAL is a variable."
       ;; and the explicitly named accumulation vars.
       ,@(mapcan (-lambda ((given-var . dash-copy))
                   (loopy--parse-loop-command
-                   (list name given-var dash-copy)))
+                   `(,name ,given-var ,dash-copy ,@args)))
                 loopy-dash--accumulation-destructured-symbols))))
 
 (provide 'loopy-dash)

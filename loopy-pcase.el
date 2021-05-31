@@ -131,7 +131,8 @@ Returns a list of two elements:
 2. A new list of bindings."
   (list 'pcase-let* bindings))
 
-(cl-defun loopy-pcase--parse-destructuring-accumulation-command ((name var val))
+(cl-defun loopy-pcase--parse-destructuring-accumulation-command
+    ((name var val &rest args))
   "Parse the accumulation loop command using `pcase' for destructuring.
 
 NAME is the name of the command.  VAR-OR-VAL is a variable name
@@ -153,7 +154,7 @@ should only be used if VAR-OR-VAL is a variable."
                               (seq-let (main-body other-instructions)
                                   (loopy--extract-main-body
                                    (loopy--parse-loop-command
-                                    (list name destr-var destr-val)))
+                                    `(,name ,destr-var ,destr-val ,@args)))
                                 ;; Just push the other instructions, but
                                 ;; gather the main body expressions.
                                 (dolist (instr other-instructions)
@@ -182,7 +183,7 @@ should only be used if VAR-OR-VAL is a variable."
                                   (seq-let (main-body other-instructions)
                                       (loopy--extract-main-body
                                        (loopy--parse-loop-command
-                                        (list name destr-var destr-val)))
+                                        `(,name ,destr-var ,destr-val ,@args)))
                                     ;; Just push the other instructions, but
                                     ;; gather the main body expressions.
                                     (dolist (instr other-instructions)

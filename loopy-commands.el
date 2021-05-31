@@ -984,7 +984,13 @@ you can use in the instructions:
 
                (ignore var val)
                (if (sequencep var)
-                   (loopy--parse-destructuring-accumulation-command cmd)
+                   ;; If we need to destructure the sequence `var', we use the
+                   ;; function named by
+                   ;; `loopy--destructuring-accumulation-parser' or the function
+                   ;; `loopy--parse-destructuring-accumulation-command'.
+                   (funcall (or loopy--destructuring-accumulation-parser
+                                #'loopy--parse-destructuring-accumulation-command)
+                            cmd)
                  ;; Substitute in the instructions.
                  ,explicit)))
             (t

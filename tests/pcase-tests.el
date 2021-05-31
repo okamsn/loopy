@@ -100,3 +100,17 @@
                                      (list (a . b)
                                            '((1 . 2) (3 . 4) (5 . 6)))
                                      (finally-return a b)))))))
+
+(ert-deftest pcase-accum-keywords ()
+  (should (equal '(((1 . 2)) ((1 . 1) (2 . 3)))
+                 (loopy (flag pcase)
+                        (list i '([(1 . 2) (1 . 1)]
+                                  [(1 . 2) (2 . 3)]))
+                        (adjoin `[,a1 ,a2] i :test #'equal)
+                        (finally-return a1 a2))))
+
+  (should (equal '((3 1) (4 2))
+                 (loopy (flag pcase)
+                        (list j '([1 2] [3 4]))
+                        (collect `[,c1 ,c2] j :at start)
+                        (finally-return c1 c2)))))

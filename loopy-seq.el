@@ -142,7 +142,8 @@ Returns a list.  The elements are:
    need to be `let'-bound."
   (loopy-pcase--destructure-for-iteration (seq--make-pcase-patterns var) val))
 
-(cl-defun loopy-seq--parse-destructuring-accumulation-command ((name var val))
+(cl-defun loopy-seq--parse-destructuring-accumulation-command
+    ((name var val &rest args))
   "Destructure an accumulation loop command as if by `seq-let'.
 
 NAME is the command name.  VAR is the variable sequence.  VAL is
@@ -158,7 +159,7 @@ the value to accumulate."
   ;; produce some instructions ourselves.
   `(,@(cl-remove-if (lambda (x) (eq (car-safe x) 'loopy--implicit-return))
                     (loopy-pcase--parse-destructuring-accumulation-command
-                     (list name (seq--make-pcase-patterns var) val)))
+                     `(,name ,(seq--make-pcase-patterns var) ,val ,@args)))
     ,@(mapcar (lambda (var) `(loopy--implicit-return . ,var))
               (loopy-seq--get-variables var))))
 
