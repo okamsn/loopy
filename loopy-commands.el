@@ -43,6 +43,41 @@
 ;; `(loopy)'.
 
 ;;; Code:
+
+;; NOTE:
+;;
+;; For more easily finding loop commands using Imenu, you might wish to do
+;; something like the below, which should work for most definitions.
+;;
+;; (progn
+;;   (push (list "Loop Commands"
+;;               (rx (seq bol
+;;                        (zero-or-more (syntax whitespace))
+;;                        "(loopy--def"
+;;                        (or "iteration" "accumulation")
+;;                        (one-or-more (syntax whitespace))
+;;                        (group (one-or-more (or (syntax word)
+;;                                                (syntax symbol)
+;;                                                (seq "\\" nonl))))))
+;;               1)
+;;         imenu-generic-expression)
+;;   (push (list "Loop Commands"
+;;               (rx (seq bol
+;;                        (zero-or-more (syntax whitespace))
+;;                        "(defun loopy--parse-"
+;;                        (group (one-or-more (or (syntax word)
+;;                                                (syntax symbol)
+;;                                                (seq "\\" nonl))))
+;;                        "-command"))
+;;               1)
+;;         imenu-generic-expression))
+
+;; TODO:
+;; - Clean up old code to use newer features:
+;;   - Use `loopy--extract-main-body' in more places.
+;;   - Use `loopy--apply-function' in more places.
+
+
 ;; Cant require `loopy', as that would be recursive.
 (require 'cl-lib)
 (require 'seq)
@@ -157,8 +192,8 @@ as `(quote my-var)' or `(function my-func)' inside the body.  For
 expansion, we generally only want the actual symbol."
   (if (symbolp function-form)
       function-form
-    (cl-case (car function-form)
-      ((function quote) (cadr function-form))
+    (cl-case (cl-first function-form)
+      ((function quote cl-function) (cl-second function-form))
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
 
@@ -181,10 +216,32 @@ For functions, use `loopy--get-function-symbol'."
   "Whether FORM-OR-SYMBOL is quoted via `quote' or `function'.
 
 If not, then it is possible that FORM is a variable."
+
   (and (listp form-or-symbol)
        (= 2 (length form-or-symbol))
        (or (eq (car form-or-symbol) 'quote)
-           (eq (car form-or-symbol) 'function))))
+           (eq (car form-or-symbol) 'function)
+           (eq (car form-or-symbol) 'cl-function))))
+
+(defun loopy--quoted-symbol-p (form)
+  "Whether FORM is a quoted symbol."
+  (and (memq (car-safe form) '(quote function cl-function))
+       (symbolp (cl-second form))))
+
+(defun loopy--apply-function (func &rest args)
+  "Return an expansion that appropriately applies FUNC to ARGS.
+
+This expansion can apply FUNC directly or via `funcall'."
+  (if (loopy--quoted-form-p func)
+      `(,(loopy--get-function-symbol func) ,@args)
+    `(funcall ,func ,@args)))
+
+(defun loopy--quote-if-car-not-symbol-or-lambda (list)
+  "Apply a heuristic to decide if LIST should be quoted."
+  (if (or (symbolp (car-safe list))
+          (eq (car-safe list) 'lambda))
+      list
+    `(quote ,list)))
 
 (defun loopy--extract-main-body (instructions)
   "Extract main-body expressions from INSTRUCTIONS.
@@ -269,8 +326,29 @@ must sometimes create a sequence to be destructured."
                          collect (loopy--mimic-init-structure i val))
                 'array))))
 
+;; TODO: Would this be more useful as a `pcase' macro?
+(defmacro loopy--plist-bind (bindings plist &rest body)
+  "Destructure PLIST into BINDINGS, surrounding BODY.
+
+BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR can be a list
+of two elements: a variable name and a default value, similar to
+what one would use for `cl-defun'.
+
+This function is similar in use to `cl-destructuring-bind'."
+  (declare (indent 2))
+  (let ((value-holder (gensym "plist-let-")))
+    `(let* ((,value-holder ,plist)
+            ,@(cl-loop for (key var . _) on bindings by #'cddr
+                       if (consp var)
+                       collect `(,(cl-first var)
+                                 (or (plist-get ,value-holder ,key)
+                                     ,(cl-second var)))
+                       else collect `(,var (plist-get ,value-holder ,key))))
+       ,@body)))
+
 ;;;; Included parsing functions.
 ;;;;; Misc.
+;;;;;; Sub Loop
 (cl-defun loopy--parse-sub-loop-command ((_ &rest body))
   "Parse the `loop' or `sub-loop' command.
 
@@ -387,6 +465,7 @@ BODY is one or more loop commands."
             non-wrapped-instructions))))
 
 ;;;;; Genereric Evaluation
+;;;;;; Expr
 (cl-defun loopy--parse-expr-command ((_ var &rest vals))
   "Parse the `expr' command.
 
@@ -448,6 +527,7 @@ BODY is one or more loop commands."
              needed-instructions)
           needed-instructions)))))
 
+;;;;;; Prev Expr
 (cl-defun loopy--parse-prev-expr-command ((_ var val &key init back))
   "Parse the `prev-expr' command as (prev-expr VAR VAL &key init back).
 
@@ -500,6 +580,7 @@ This command does not wait for VAL to change before updating VAR."
                                            for hv in holding-vars
                                            collect (list hv pvar)))))))))
 
+;;;;;; Group
 (cl-defun loopy--parse-group-command ((_ &rest body))
   "Parse the `group' loop command.
 
@@ -514,6 +595,7 @@ BODY is one or more commands to be grouped by a `progn' form."
     (cons `(loopy--main-body . (progn ,@(nreverse progn-body)))
           (nreverse full-instructions))))
 
+;;;;;; Do
 (cl-defun loopy--parse-do-command ((_ &rest expressions))
   "Parse the `do' loop command.
 
@@ -523,6 +605,7 @@ the loop literally (not even in a `progn')."
           expressions))
 
 ;;;;; Conditionals
+;;;;;; If
 (cl-defun loopy--parse-if-command
     ((_ condition &optional if-true &rest if-false))
   "Parse the `if' loop command.  This takes the entire command.
@@ -555,6 +638,7 @@ the loop literally (not even in a `progn')."
                 ,@(nreverse if-false-main-body)))
           (nreverse full-instructions))))
 
+;;;;;; Cond
 (cl-defun loopy--parse-cond-command ((_ &rest clauses))
   "Parse the `cond' command.  This works like the `cond' special form.
 
@@ -581,6 +665,7 @@ command are inserted into a `cond' special form."
     (cons `(loopy--main-body . ,(cons 'cond (nreverse actual-cond-clauses)))
           (nreverse full-instructions))))
 
+;;;;;; When Unless
 (cl-defun loopy--parse-when-unless-command ((name condition &rest body))
   "Parse `when' and `unless' commands.
 
@@ -599,96 +684,433 @@ command are inserted into a `cond' special form."
           (nreverse full-instructions))))
 
 ;;;;; Iteration
-(cl-defun loopy--parse-array-command ((_ var val))
-  "Parse the `array' command.
+(cl-defmacro loopy--defiteration
+    (name doc-string &key keywords (required-vals 1) other-vals instructions)
+  "Define an interation command parser for NAME.
 
-- VAR is a variable name.
-- VAL is an array value.
-- Optional VALUE-HOLDER holds the array value.
-- Optional INDEX-HOLDER holds the index value."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'array))
+An iteration command made with this macro has the layout of
+\(command-name variable-name value [values] [keys]).  That is,
+each command will always require a variable name and a value.
+Some commands will have additional non-keyword arguments, which
+will be either required or optional.  Some commands will have
+keyword arguments, which, as in functions, are always optional.
+
+Not all iteration loop commands are written using this macro.
+This macro is for iteration commands that have the above
+structure.
+
+- NAME is the primary name of the loop command.  This creates a
+  parsing function \"loopy--parse-NAME-command\".
+
+- DOC-STRING is the documentation string for the produced parsing
+  function.  It should describe the arguments of the loop command.
+
+- KEYWORDS is an unquoted list of colon-prefixed keywords used by
+  the command.
+
+- REQUIRED-VALS is the number of required values.  For most
+  iteration commands, this is one.  This can be one nil (or
+  zero), a non-zero number, or an unquoted list of variable
+  names.
+
+  If a list of variable names, those names are used in the
+  function definition.  Otherwise, the variables are named
+  following the naming scheme \"valNUM\".
+
+- OTHER-VALS is whether the command can take other arguments that
+  are not keyword arguments.  This is one of nil, t, or an
+  unquoted list of numbers.
+
+  If a list of numbers, then those numbers describe the valid
+  amounts of additional (non-keyword) arguments of the command.
+  For example, (0 1) means that command has 1 optional
+  non-keyword argument.  (1 3) means the command requires either
+  1 or 3 additional non-keyword arguments.
+
+  This means that if a command has no required arguments, but
+  several optional non-keyword arguments, you can set
+  REQUIRED-VALS to 0 and OTHER-VALS to a list of 0 and some
+  integer.
+
+  If t, no check if performed and the command takes any number of
+  optional additional arguments.
+
+- INSTRUCTIONS are the command's instructions.  This should be a
+  single expression, such as a list of instructions or an
+  expression capable of producing said instructions.
+
+In the expanded parsing function, there are several values
+automatically bound to variables, which can be used in
+instructions:
+
+- `name' is the name of the command.
+
+- `cmd' is the entire command expression.
+
+- `var' is the variable to be used by the command.
+
+- `val' is the required value (generally, the sequence over which
+  to iterate). If there are multiple required values, they are
+  instead named according to the value of REQUIRED-VALS.
+
+- `args' is a list of the remaining arguments of the command
+   after `var' and `val'.  If either OTHER-VALS or KEYWORDS are
+   nil, then this variable is not bound.  In that case, use the
+   below two variables.
+
+- `other-vals' is a list of additional values found in `args',
+   if OTHER-VALS is non-nil.
+
+- `opts' is a list of keyword arguments and their values,
+  found in `args' after the elements of `other-vals'.
+  It is assumed that this list can be treated as a property list.
+  The first keyword in `args' determines the start of
+  the optional keyword arguments.
+
+  If OTHER-VALS is non-nil (i.e., no other values are allowed),
+  then these keyword variables should be referenced directly
+  instead of through the property list `opts'."
+
+  (declare (indent defun) (doc-string 2))
+
+  ;; Make sure `keywords' is a list.
+  (when (nlistp keywords)
+    (setq keywords (list keywords)))
+
+  ;; Make sure `keywords' are all prefixed with a colon.
+  (setq keywords (mapcar (lambda (x)
+                           (if (eq ?: (aref (symbol-name x) 0))
+                               x
+                             (intern (format ":%s" x))))
+                         keywords))
+
+  ;; Check that `instructions' given.
+  (unless instructions
+    (error "Instructions required"))
+
+  ;; Store the variable names of the keyword arguments so we only have to
+  ;; compute them one.  E.g., "by" from ":by".
+  ;; Currently, keywords are required to be prefixed by the colon.
+  (let ((var-keys (when keywords
+                    (cl-loop for sym in keywords
+                             collect (intern (substring (symbol-name sym) 1))))))
+
+    `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
+         (( &whole cmd name var
+            ,@(cond
+               ((eq 1 required-vals)
+                '(val))
+               ((or (eq required-vals nil)
+                    (eq required-vals 0))
+                nil)
+               ((consp required-vals)
+                required-vals)
+               ((integerp required-vals)
+                (cl-loop for i from 1 to required-vals
+                         collect (intern (format "val%d" i))))
+               (t
+                (error "Bad value for `required-vals': %s" required-vals)))
+            ,@(if keywords
+                  (if other-vals
+                      '(&rest args)
+                    `(&key ,@var-keys))
+                (when other-vals
+                  '(&rest other-vals)))))
+       ,doc-string
+
+       (when loopy--in-sub-level
+         (loopy--signal-bad-iter (quote ,name)))
+
+       (let* ,(if keywords
+                  (if other-vals
+                      '((other-vals nil)
+                        (opts nil))
+                    ;; These can be referred to directly, but we'll keep
+                    ;; the option open for using `opts'.
+                    `((opts (list ,@(cl-loop for sym in keywords
+                                             for var in var-keys
+                                             append (list sym var))))))
+                nil)
+
+         ;; We only want to run this code if the values of `opts' and
+         ;; `other-vals' are contained in `args'.  For other cases, the
+         ;; function arguments perform this step for us.
+         ,@(when (and other-vals keywords)
+             `(;; Set `opts' as starting from the first keyword and `other-vals'
+               ;; as everything before that.
+               (cl-loop with other-val-holding = nil
+                        for cons-cell on args
+                        for arg = (car cons-cell)
+                        until (keywordp arg)
+                        do (push arg other-val-holding)
+                        finally do (setq opts cons-cell
+                                         other-vals (nreverse other-val-holding)))
+
+               ;; Validate any keyword arguments:
+               (when (cl-set-difference (loopy--every-other opts)
+                                        (quote ,keywords))
+                 (error "Wrong number of arguments or wrong keywords: %s" cmd))))
+
+         ,(when (consp other-vals)
+            `(unless (cl-member (length other-vals)
+                                (quote ,other-vals)
+                                :test #'=)
+               (error "Wrong number of arguments or wrong keywords: %s" cmd)))
+
+         (ignore cmd name
+                 ;; We can only ignore variables if they're defined.
+                 ,(if other-vals 'other-vals)
+                 ,(if keywords 'opts))
+
+         ,instructions))))
+
+(defun loopy--find-start-by-end-dir-vals (plist)
+  "Find the numeric start, end, and step, direction, and inclusivity.
+
+The values are returned in a list in that order as a plist.
+
+PLIST contains the keyword arguments passed to a sequence
+iteration command.  The supported keywords are:
+
+- from, upfrom (inclusive)
+- downfrom (inclusive)
+- to, upto (inclusive)
+- downto (inclusive)
+- above (exclusive)
+- below (exclusive)"
+
+  (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
+                       :to to :upto upto :downto downto
+                       :above above :below below
+                       :by by)
+      plist
+    ;; Check the inputs:
+    (when (or (< 1 (cl-count-if #'identity (list from upfrom downfrom)))
+              (< 1 (cl-count-if #'identity (list to upto downto above below)))
+              (and downfrom below)
+              (and upfrom above))
+      (error "Conflicting arguments: %s" plist))
+
+    (let ((decreasing (or downfrom downto above)))
+
+      ;; Check directions  for above and below.
+      ;; :above is only for when the value is decreasing.
+      ;; :below is only for when the value in increasing.
+      (when (or (and below decreasing)
+                (and above (not decreasing)))
+        (error "Conflicting arguments: %s" plist))
+
+      (list :start (or from upfrom downfrom)
+            :by by
+            :end (or to downto above below upto)
+            :decreasing decreasing
+            :inclusive (not (or above below))))))
+
+;;;;;; Array
+(defmacro loopy--distribute-array-elements (&rest arrays)
+  "Distribute the elements of the ARRAYS into an array of lists.
+
+For example, [1 2] and [3 4] gives [(1 3) (1 4) (2 3) (2 4)]."
+  (let ((vars (cl-loop for _ in arrays
+                       collect (gensym "array-var-")))
+        (reverse-order (reverse arrays)))
+    (cl-loop with expansion = `(cl-loop for ,(cl-first vars)
+                                        across ,(cl-first reverse-order)
+                                        do (setq result
+                                                 (cons (list ,@(reverse vars))
+                                                       result)))
+             for var in (cl-rest vars)
+             for array in (cl-rest reverse-order)
+             do (setq expansion `(cl-loop for ,var across ,array
+                                          do ,expansion))
+             finally return `(let ((result nil))
+                               ,expansion
+                               (vconcat (nreverse result))))))
+
+(loopy--defiteration array
+  "Parse the `array' command as (array VAR VAL [VALS] &key KEYS).
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+
+- `:index' names a variable used to store the accessed index of
+  the array.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase.
+
+If multiple values are given, their elements are distributed
+using the function `loopy--distribute-array-elements'."
+  :other-vals t
+  :keywords (:index
+             :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :instructions
   (let ((value-holder (gensym "array-"))
-        (index-holder (gensym "array-index-"))
-        (length-holder (gensym "array-length-")))
-    `((loopy--iteration-vars . (,value-holder ,val))
-      (loopy--iteration-vars . (,index-holder 0))
-      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-      ,@(loopy--destructure-for-iteration-command var
-                                                  `(aref ,value-holder ,index-holder))
-      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
-      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
+        (index-holder (or (plist-get opts :index)
+                          (gensym "array-index-")))
+        (end-holder (gensym "array-end-"))
+        (increment-holder (gensym "array-increment")))
 
-(cl-defun loopy--parse-array-ref-command ((_ var val))
-  "Parse the `array-ref' command by editing the `array' command's instructions.
+    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                         :decreasing decreasing :inclusive inclusive)
 
-VAR is a variable name.  VAL is an array value.  VALUE-HOLDER
-holds the array value.  INDEX-HOLDER holds the index value."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'array-ref))
-  (let ((value-holder (gensym "array-"))
-        (index-holder (gensym "array-ref-index-"))
-        (length-holder (gensym "array-ref-length-")))
-    `(,@(loopy--destructure-for-generalized-command
-         var `(aref ,value-holder ,index-holder))
-      (loopy--iteration-vars  . (,value-holder ,val))
-      (loopy--iteration-vars  . (,index-holder 0))
-      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
-      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
+        (loopy--find-start-by-end-dir-vals opts)
 
-(cl-defun loopy--parse-cons-command ((_ var val &optional (func #'cdr)))
-  "Parse the `cons' loop command.
+      `((loopy--iteration-vars . (,increment-holder ,by))
+        (loopy--iteration-vars
+         . (,value-holder ,(if (null other-vals)
+                               val
+                             `(loopy--distribute-array-elements
+                               ,val ,@other-vals))))
+        (loopy--iteration-vars . (,end-holder ,(or key-end
+                                                   (if decreasing
+                                                       -1
+                                                     `(length ,value-holder)))))
+        (loopy--iteration-vars . (,index-holder ,(or key-start
+                                                     (if decreasing
+                                                         `(1- (length ,value-holder))
+                                                       0))))
+        ,@(loopy--destructure-for-iteration-command
+           var `(aref ,value-holder ,index-holder))
+        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+                                                      ,index-holder
+                                                      ,increment-holder)))
+        (loopy--pre-conditions . (,(if (or (null key-end)
+                                           (not inclusive))
+                                       (if decreasing #'> #'<)
+                                     (if decreasing #'>= #'<=))
+                                  ,index-holder ,end-holder))))))
 
-VAR is a variable name.  VAL is a cons cell value.  Optional FUNC
+;;;;;; Array Ref
+(loopy--defiteration array-ref
+  "Parse the `array-ref' command as (array-ref VAR VAL &key KEYS).
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+
+- `:index' names a variable used to store the accessed index of
+  the array.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase."
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :instructions
+  (let ((value-holder (gensym "array-ref-"))
+        (index-holder (or (plist-get opts :index)
+                          (gensym "array-ref-index-")))
+        (end-holder (gensym "array-ref-end-"))
+        (increment-holder (gensym "array-ref-increment-")))
+
+    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                         :decreasing decreasing :inclusive inclusive)
+
+        (loopy--find-start-by-end-dir-vals opts)
+
+      `((loopy--iteration-vars . (,increment-holder ,by))
+        (loopy--iteration-vars . (,value-holder ,val))
+        (loopy--iteration-vars . (,end-holder ,(or key-end
+                                                   (if decreasing
+                                                       -1
+                                                     `(length ,value-holder)))))
+        (loopy--iteration-vars . (,index-holder ,(or key-start
+                                                     (if decreasing
+                                                         `(1- (length ,value-holder))
+                                                       0))))
+        ,@(loopy--destructure-for-generalized-command
+           var `(aref ,value-holder ,index-holder))
+        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+                                                      ,index-holder
+                                                      ,increment-holder)))
+        (loopy--pre-conditions . (,(if (or (null key-end)
+                                           (not inclusive))
+                                       (if decreasing #'> #'<)
+                                     (if decreasing #'>= #'<=))
+                                  ,index-holder ,end-holder))))))
+
+;;;;;; Cons
+(loopy--defiteration cons
+  "Parse the `cons' loop command as (cons VAR VAL &key by).
+
+VAR is a variable name.  VAL is a cons cell value.  Keyword BY
 is a function by which to update VAR (default `cdr')."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'cons))
-  (if (symbolp var)
-      `((loopy--iteration-vars . (,var ,val))
+  :keywords (:by)
+  :instructions
+  (let ((value-holder (gensym "cons-")))
+    `((loopy--iteration-vars . (,value-holder ,val))
+      ,@(loopy--destructure-for-iteration-command var value-holder)
+      (loopy--latter-body
+       . (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
+                                                     value-holder)))
+      (loopy--pre-conditions . (consp ,value-holder)))))
+
+;;;;;; List
+(defmacro loopy--distribute-list-elements (&rest lists)
+  "Distribute the elements of LISTS into a list of lists.
+
+For example, (1 2) and (3 4) would give ((1 3) (1 4) (2 3) (2 4))."
+  (let ((vars (cl-loop for _ in lists
+                       collect (gensym "list-var-")))
+        (reverse-order (reverse lists)))
+    (cl-loop with expansion = `(dolist (,(cl-first vars)
+                                        ,(cl-first reverse-order))
+                                 (setq result (cons (list ,@(reverse vars))
+                                                    result)))
+             for var in (cl-rest vars)
+             for list in (cl-rest reverse-order)
+             do (setq expansion `(dolist (,var ,list)
+                                   ,expansion))
+             finally return `(let ((result nil))
+                               ,expansion
+                               (nreverse result)))))
+
+(loopy--defiteration list
+  "Parse the list command as (list VAR VAL [VALS] &key by).
+
+BY is function to use to update the list.  It defaults to `cdr'.
+
+If multiple values are given, their elements are distributed
+using the function `loopy--distribute-list-elements'."
+  :other-vals t
+  :keywords (:by)
+  :instructions
+  (let* ((by-func (or (plist-get opts :by)
+                      ;; Need to quote as if passed in to macro
+                      (quote #'cdr))))
+    (let ((value-holder (gensym "list-")))
+      `((loopy--iteration-vars
+         . (,value-holder ,(if (null other-vals)
+                               val
+                             `(loopy--distribute-list-elements
+                               ,val ,@other-vals))))
         (loopy--latter-body
-         . (setq ,var (,(loopy--get-function-symbol func) ,var)))
-        (loopy--pre-conditions . (consp ,var)))
-    ;; TODO: For destructuring, do we actually need the extra variable?
-    (let ((value-holder (gensym "cons-")))
-      `((loopy--iteration-vars . (,value-holder ,val))
-        ,@(loopy--destructure-for-iteration-command var value-holder)
-        (loopy--latter-body
-         . (setq ,value-holder (,(loopy--get-function-symbol func)
-                                ,value-holder)))
-        (loopy--pre-conditions . (consp ,value-holder))))))
+         . (setq ,value-holder ,(loopy--apply-function by-func value-holder)))
+        (loopy--pre-conditions . (consp ,value-holder))
+        ,@(loopy--destructure-for-iteration-command
+           var `(car ,value-holder))))))
 
-(cl-defun loopy--parse-list-command
-    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-")))
-  "Parse the `list' loop command.
+;;;;;; List Ref
+(loopy--defiteration list-ref
+  "Parse the `list-ref' loop command as (list-ref VAR VAL &key by).
 
-VAR is a variable name or a list of such names (dotted pair or
-normal).  VAL is a list value.  FUNC is a function used to update
-VAL (default `cdr').  VAL-HOLDER is a variable name that holds
-the list."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'list))
-  `((loopy--iteration-vars . (,val-holder ,val))
-    (loopy--latter-body
-     . (setq ,val-holder (,(loopy--get-function-symbol func) ,val-holder)))
-    (loopy--pre-conditions . (consp ,val-holder))
-    ,@(loopy--destructure-for-iteration-command var `(car ,val-holder))))
+BY is the function to use to move through the list (default `cdr')."
+  :keywords (:by)
+  :instructions
+  (let ((val-holder (gensym "list-ref"))
+        ;; Need to quote as if passed in to macro
+        (by-func (or by (quote #'cdr))))
+    `((loopy--iteration-vars . (,val-holder ,val))
+      ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
+      (loopy--latter-body
+       . (setq ,val-holder ,(loopy--apply-function by-func val-holder)))
+      (loopy--pre-conditions . (consp ,val-holder)))))
 
-(cl-defun loopy--parse-list-ref-command
-    ((_ var val &optional (func #'cdr)) &optional (val-holder (gensym "list-ref-")))
-  "Parse the `list-ref' loop command, editing the `list' commands instructions.
-
-VAR is the name of a setf-able place.  VAL is a list value.  FUNC
-is a function used to update VAL (default `cdr').  VAL-HOLDER is
-a variable name that holds the list."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'list-ref))
-  `((loopy--iteration-vars . (,val-holder ,val))
-    ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
-    (loopy--latter-body . (setq ,val-holder (,(loopy--get-function-symbol func)
-                                             ,val-holder)))
-    (loopy--pre-conditions . (consp ,val-holder))))
-
+;;;;;; Map
 (cl-defun loopy--parse-map-command ((_ var val))
   "Parse the `map' loop command.
 
@@ -703,88 +1125,96 @@ vector using the library `map.el'."
       (loopy--pre-conditions . (consp ,value-holder))
       (loopy--latter-body . (setq ,value-holder (cdr ,value-holder))))))
 
-(cl-defun loopy--parse-nums-command ((&whole cmd _ var start &rest args))
-  "Parse the `nums' command as (nums VAR START [END] &key BY DOWN).
+;;;;;; Nums
+(loopy--defiteration nums
+  "Parse the `nums' command as (nums VAR [START [END]] &key KEYS).
 
-If END is given, end the loop when the value of VAR is greater
-than END.  BY is the positive value used to increment VAR from
-START to END.  IF DOWN is given, end the loop when the value of
-VAR is less than END."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'nums))
+- START is the starting index, if given.
+- END is the ending index (inclusive), if given.
 
-  ;; Verify args
-  (when args
-    (unless (and (if (keywordp (cl-first args))
-                     (cl-member (length args) '(2 4) :test #'=)
-                   (cl-member (length args) '(1 3 5) :test #'=))
-                 (loopy--valid-keywords-p '(:by :down)
-                                           (if (keywordp (cl-first args))
-                                               args
-                                             (cl-rest args))))
-      (error "Bad arguments to `nums': %s" cmd)))
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
 
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
 
-  (let ((end (unless (keywordp (cl-first args))
-               (cl-first args))))
-    (let ((down (plist-get (if end (cdr args) args) :down))
-          (by   (plist-get (if end (cdr args) args) :by))
-          (increment-val-holder (gensym "nums-increment")))
+`:downto' and `:downfrom' make the index decrease instead of increase."
+  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :required-vals 0
+  :other-vals (0 1 2)
+  :instructions
+  ;; TODO: `cl-destructuring-bind' signals error here.  Why?
+  (seq-let (explicit-start explicit-end) other-vals
 
-      `((loopy--iteration-vars . (,var ,start))
-        ,(when by
-           `(loopy--iteration-vars . (,increment-val-holder ,by)))
-        ,(when end
-           `(loopy--pre-conditions . (,(if down #'>= #'<=)
-                                      ,var ,end)))
-        (loopy--latter-body . (setq ,var ,(cond
-                                           (by   `(,(if down #'- #'+)
-                                                   ,var ,increment-val-holder))
-                                           (down `(1- ,var))
-                                           (t    `(1+ ,var)))))))))
+    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                         :decreasing decreasing :inclusive inclusive)
 
-(cl-defun loopy--parse-nums-up-command ((&whole cmd _ var start &rest args))
-  "Parse the `nums-up' command as (nums-up START [END] &key by)."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'nums-up))
+        (loopy--find-start-by-end-dir-vals opts)
 
-  (when args
-    (let ((end-given (not (keywordp (cl-first args)))))
-      (unless (and (if end-given
-                       (cl-member (length args) '(1 3) :test #'=)
-                     (= 2 (length args)))
-                   (loopy--valid-keywords-p '(:by)
-                                             (if end-given
-                                                 (cl-rest args)
-                                               args)))
-        (error "Bad arguments to `nums-up': %s" cmd))))
+      ;; Check that nothing conflicts.
+      (when (or (and explicit-start key-start)
+                (and explicit-end key-end))
+        (error "Conflicting commands given: %s" cmd))
 
-  (loopy--parse-loop-command `(nums ,var ,start ,@args)))
+      (let ((increment-val-holder (gensym "nums-increment"))
+            (end (or explicit-end key-end))
+            (end-val-holder (gensym "nums-end"))
+            (start (or explicit-start key-start 0)))
 
+        `((loopy--iteration-vars . (,var ,start))
+          (loopy--iteration-vars . (,increment-val-holder ,by))
+          ,@(when end
+              `((loopy--iteration-vars . (,end-val-holder ,end))
+                (loopy--pre-conditions . (,(if inclusive
+                                               (if decreasing #'>= #'<=)
+                                             (if decreasing #'> #'<))
+                                          ,var ,end-val-holder))))
+          (loopy--latter-body . (setq ,var ,(cond
+                                             (by   `(,(if decreasing #'- #'+)
+                                                     ,var ,increment-val-holder))
+                                             (decreasing `(1- ,var))
+                                             (t    `(1+ ,var))))))))))
 
-(cl-defun loopy--parse-nums-down-command ((&whole cmd _ var start &rest args))
-  "Parse the `nums-down' command as (nums-up START [END] &key by)."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'nums-up))
+;;;;;; Nums Up
+(loopy--defiteration nums-up
+  "Parse the `nums-up' command as (nums-up START [END] &key by).
 
-  (when args
-    (let ((end-given (not (keywordp (cl-first args)))))
-      (unless (and (if end-given
-                       (cl-member (length args) '(1 3) :test #'=)
-                     (= 2 (length args)))
-                   (loopy--valid-keywords-p '(:by)
-                                             (if end-given
-                                                 (cl-rest args)
-                                               args)))
-        (error "Bad arguments to `nums-down': %s" cmd))))
+This is for increasing indices.
 
-  (loopy--parse-loop-command `(nums ,var ,start ,@args :down t)))
+- START is the starting index.
+- END is the ending index (inclusive), if given.
+- BY is the step size."
+  :other-vals (0 1)
+  :keywords (:by)
+  :instructions
+  (loopy--plist-bind (:by by) opts
+    (loopy--parse-loop-command `(nums ,var ,val
+                                      :upto ,(car other-vals)
+                                      :by ,by))))
 
+;;;;;; Nums Down
+(loopy--defiteration nums-down
+  "Parse the `nums-down' command as (nums-up START [END] &key by).
 
+This is for decreasing indices.
+
+- START is the starting index.
+- END is the ending index (inclusive), if given.
+- BY is the step size.  Even though the index value is decreasing,
+  this should still be a positive value."
+  :other-vals (0 1)
+  :keywords (:by)
+  :instructions
+  (loopy--plist-bind (:by by) opts
+    (loopy--parse-loop-command `(nums ,var ,val
+                                      :downto ,(car other-vals)
+                                      :by ,by))))
+
+;;;;;; Repeat
 (cl-defun loopy--parse-repeat-command ((_ var-or-count &optional count))
-  "Parse the `repeat' loop command.
-
-The command can be of the form (repeat VAR  COUNT) or (repeat COUNT).
+  "Parse the `repeat' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
@@ -799,68 +1229,203 @@ an integer, to be used if a variable name is provided."
         (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
         (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
 
-(cl-defun loopy--parse-seq-command ((_ var val))
-  "Parse the `seq' loop command.
+;;;;;; Seq
+(defmacro loopy--distribute-sequence-elements (&rest sequences)
+  "Distribute the elements of SEQUENCES into a vector of lists.
 
-VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
-holds VAL.  INDEX-HOLDER holds an index that point into VALUE-HOLDER."
-  ;; NOTE: `cl-loop' just combines the logic for lists and arrays, and
-  ;;       just checks the type for each iteration, so we do that too.
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'seq))
+For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (let ((vars (cl-loop for _ in sequences
+                       collect (gensym "seq-var-")))
+        (reverse-order (reverse sequences)))
+    (cl-loop with expansion = `(cl-loop for ,(cl-first vars)
+                                        being the elements of ,(cl-first reverse-order)
+                                        do (setq result
+                                                 (cons (list ,@(reverse vars))
+                                                       result)))
+             for var in (cl-rest vars)
+             for sequence in (cl-rest reverse-order)
+             do (setq expansion `(cl-loop for ,var being the elements of ,sequence
+                                          do ,expansion))
+             finally return `(let ((result nil))
+                               ,expansion
+                               (vconcat (nreverse result))))))
+
+(loopy--defiteration seq
+  "Parse the `seq' command as (seq VAR EXPR [EXPRS] &key KEYS).
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+
+- `:index' names a variable used to store the accessed index of
+  the sequence.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase.
+
+If multiple sequence values are given, their elements are
+distributed using the function `loopy--distribute-sequence-elements'."
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :other-vals t
+  :instructions
   (let ((value-holder (gensym "seq-"))
-        (index-holder (gensym "seq-index-"))
-        (length-holder (gensym "seq-length-")))
-    `((loopy--iteration-vars . (,value-holder ,val))
-      (loopy--iteration-vars . (,index-holder 0))
-      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-      ,@(loopy--destructure-for-iteration-command
-         var `(if (consp ,value-holder)
-                  (pop ,value-holder)
-                (aref ,value-holder ,index-holder)))
-      (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
-      (loopy--pre-conditions
-       . (and ,value-holder (or (consp ,value-holder)
-                                (< ,index-holder ,length-holder)))))))
+        (index-holder (or (plist-get opts :index)
+                          (gensym "seq-index-")))
+        (end-index-holder (gensym "seq-end-index-"))
+        (increment-holder (gensym "seq-increment-")))
 
-(cl-defun loopy--parse-seq-index-command ((_ var val))
-  "Parse the `seq-index' command.
+    (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                         :decreasing going-down :inclusive inclusive)
 
-VAR is a variable name.  VAL is an array value.
+        (loopy--find-start-by-end-dir-vals opts)
 
-This command does not support destructuring."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'seq-index))
-  (let ((value-holder (gensym "seq-index-val"))
+
+      `((loopy--iteration-vars . (,increment-holder ,by))
+        (loopy--iteration-vars
+         . (,value-holder ,(if other-vals
+                               `(loopy--distribute-sequence-elements
+                                 ,val ,@other-vals)
+                             val)))
+        (loopy--iteration-vars
+         . (,index-holder ,(or starting-index (if going-down
+                                                  `(1- (length ,value-holder))
+                                                0))))
+        (loopy--iteration-vars
+         . (,end-index-holder ,(or ending-index (if going-down
+                                                    -1
+                                                  `(length ,value-holder)))))
+        (loopy--latter-body . (setq ,index-holder (,(if going-down '- '+)
+                                                   ,index-holder
+                                                   ,increment-holder)))
+
+        ;; Optimize for the case of traversing from start to end, as done in
+        ;; `cl-loop'.  Currently, all other case use `elt'.
+        ,@(cond
+           ((and (not going-down)
+                 (= 1 by)
+                 (or (eql 0 starting-index)
+                     (null starting-index)))
+
+            `(,@(loopy--destructure-for-iteration-command
+                 var `(if (consp ,value-holder)
+                          (pop ,value-holder)
+                        (aref ,value-holder ,index-holder)))
+              (loopy--pre-conditions
+               . (and ,value-holder
+                      ,(if ending-index
+                           `(,(if inclusive #'<= #'<)
+                             ,index-holder ,end-index-holder)
+                         `(or (consp ,value-holder)
+                              (< ,index-holder ,end-index-holder)))))))
+
+           (t
+            `(,@(loopy--destructure-for-iteration-command
+                 var `(elt ,value-holder ,index-holder))
+              (loopy--pre-conditions . (,(if (or (null ending-index)
+                                                 (not inclusive))
+                                             (if going-down '> '<)
+                                           (if going-down '>= '<=))
+                                        ,index-holder
+                                        ,end-index-holder)))))))))
+
+;;;;;; Seq Index
+(loopy--defiteration seq-index
+  "Parse the `seq-index' command as (seq-index VAR VAL &key KEYS).
+
+KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
+`:to', `:downto', `:upto', `:above', or `:below'.
+
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase."
+
+  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :instructions
+  (let ((value-holder (gensym "array-"))
+        (end-holder (gensym "array-end-"))
         (index-holder (gensym "seq-index-index-"))
-        (length-holder (gensym "seq-index-val-length-")))
-    `((loopy--iteration-vars . (,value-holder ,val))
-      (loopy--iteration-vars . (,index-holder 0))
-      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-      (loopy--iteration-vars . (,var nil))
-      (loopy--main-body . (setq ,var ,index-holder))
-      (loopy--latter-body    . (setq ,index-holder (1+ ,index-holder)))
-      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
+        (increment-holder (gensym "array-increment")))
 
-(cl-defun loopy--parse-seq-ref-command ((_ var val))
-  "Parse the `seq-ref' loop command.
+    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                         :decreasing decreasing :inclusive inclusive)
 
-VAR is a variable name.  VAL is a sequence value.  VALUE-HOLDER
-holds VAL.  INDEX-HOLDER holds an index that point into
-VALUE-HOLDER.  LENGTH-HOLDER holds than length of the value of
-VALUE-HOLDER, once VALUE-HOLDER is initialized."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'seq-ref))
+        (loopy--find-start-by-end-dir-vals opts)
+
+      `((loopy--iteration-vars . (,var nil))
+        (loopy--iteration-vars . (,increment-holder ,by))
+        (loopy--iteration-vars . (,value-holder ,val))
+        (loopy--iteration-vars . (,end-holder ,(or key-end
+                                                   (if decreasing
+                                                       -1
+                                                     `(length ,value-holder)))))
+        (loopy--iteration-vars . (,index-holder ,(or key-start
+                                                     (if decreasing
+                                                         `(1- (length ,value-holder))
+                                                       0))))
+        (loopy--main-body      . (setq ,var ,index-holder))
+        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+                                                      ,index-holder
+                                                      ,increment-holder)))
+        (loopy--pre-conditions . (,(if (or (null key-end)
+                                           (not inclusive))
+                                       (if decreasing #'> #'<)
+                                     (if decreasing #'>= #'<=))
+                                  ,index-holder ,end-holder))))))
+
+;;;;;; Seq Ref
+(loopy--defiteration seq-ref
+  "Parse the `seq' command as (seq VAR EXPR &key KEYS).
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+
+- `:index' names a variable used to store the accessed index of
+  the sequence.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase."
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :instructions
   (let ((value-holder (gensym "seq-ref-"))
-        (index-holder (gensym "seq-ref-index-"))
-        (length-holder (gensym "seq-ref-length-")))
-    `((loopy--iteration-vars . (,value-holder ,val))
-      (loopy--iteration-vars . (,length-holder (length ,value-holder)))
-      (loopy--iteration-vars . (,index-holder 0))
-      ,@(loopy--destructure-for-generalized-command
-         var `(elt ,value-holder ,index-holder))
-      (loopy--latter-body   . (setq ,index-holder (1+ ,index-holder)))
-      (loopy--pre-conditions . (< ,index-holder ,length-holder)))))
+        (index-holder (or (plist-get opts :index)
+                          (gensym "seq-ref-index-")))
+        (end-index-holder (gensym "seq-ref-end-index-"))
+        (increment-holder (gensym "seq-ref-increment-")))
+
+    (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                         :decreasing going-down :inclusive inclusive)
+
+        (loopy--find-start-by-end-dir-vals opts)
+
+      `((loopy--iteration-vars . (,increment-holder ,by))
+        (loopy--iteration-vars . (,value-holder ,val))
+        (loopy--iteration-vars
+         . (,index-holder ,(or starting-index (if going-down
+                                                  `(1- (length ,value-holder))
+                                                0))))
+        (loopy--iteration-vars
+         . (,end-index-holder ,(or ending-index (if going-down
+                                                    -1
+                                                  `(length ,value-holder)))))
+        (loopy--latter-body . (setq ,index-holder (,(if going-down '- '+)
+                                                   ,index-holder
+                                                   ,increment-holder)))
+        ,@(loopy--destructure-for-generalized-command
+           var `(elt ,value-holder ,index-holder))
+        (loopy--pre-conditions . (,(if (or (null ending-index)
+                                           (not inclusive))
+                                       (if going-down '> '<)
+                                     (if going-down '>= '<=))
+                                  ,index-holder
+                                  ,end-index-holder))))))
 
 (defun loopy--accumulation-starting-value (command-name)
   "Get the appropriate starting value for COMMAND-NAME."
@@ -1031,6 +1596,7 @@ the inputs to test."
                      (cl-return y)))))
         `(cl-member x ,var :test ,test))))
 
+;;;;;; Accumulate
 (loopy--defaccumulation accumulate
   "Parse the `accumulate command' as (accumulate VAR VAL FUNC &key init)."
   :keywords (init)
@@ -1050,6 +1616,7 @@ the inputs to test."
                                                       ,val ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Adjoin
 (loopy--defaccumulation adjoin
   "Parse the `adjoin' command as (adjoin VAR VAL &key test key result-type at)
 
@@ -1122,6 +1689,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                                         result-type))))))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Append
 (loopy--defaccumulation append
   "Parse the `append' command as (append VAR VAL &key at)."
   :keywords (at)
@@ -1158,6 +1726,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     (error "Bad `:at' position: %s" cmd))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Collect
 (loopy--defaccumulation collect
   "Parse the `collect' command as (collect VAR VAL &key result-type at)."
   :keywords (result-type at)
@@ -1215,6 +1784,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                    (error "Bad `:at' position: %s" cmd))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Concat
 (loopy--defaccumulation concat
   "Parse the `concat' command as (concat VAR VAL &key at)."
   :keywords (at)
@@ -1247,6 +1817,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                     (error "Bad `:at' position: %s" cmd)))))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Count
 (loopy--defaccumulation count
   "Parse the `count' command as (count VAR VAL)."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
@@ -1255,6 +1826,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (if ,val (setq ,var (1+ ,var))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding EXPR TEST &key ON-FAILURE)'."
   :num-args 3
@@ -1290,6 +1862,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                      . (,var . (if ,var nil (setq ,var ,on-failure)))))
                 (loopy--implicit-return   . ,var))))
 
+;;;;;; Max
 (loopy--defaccumulation max
   "Parse the `max' command as (max VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1297,6 +1870,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (setq ,var (max ,val ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Min
 (loopy--defaccumulation min
   "Parse the `min' command as (min VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1304,6 +1878,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (setq ,var (min ,val ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Multiply
 (loopy--defaccumulation multiply
   "Parse the `multiply' command as (multiply VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1311,6 +1886,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (setq ,var (* ,val ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Nconc
 (loopy--defaccumulation nconc
   "Parse the `nconc' command as (nconc VAR VAL &key at)."
   :keywords (at)
@@ -1341,6 +1917,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     (error "Bad `:at' position: %s" cmd))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Nunion
 (loopy--defaccumulation nunion
   "Parse the `nunion' command as (nunion VAR VAL &key test key at)."
   :keywords (test key at)
@@ -1372,6 +1949,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                       (error "Bad `:at' position: %s" cmd)))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Prepend
 (loopy--defaccumulation prepend
   "Parse the `prepend' command as (prepend VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1386,6 +1964,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                                     ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Push Into
 (loopy--defaccumulation push-into
   "Parse the `push' command as (push VAR VAL)."
   :explicit `((loopy--accumulation-vars
@@ -1393,6 +1972,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--main-body . (setq ,var (cons ,val  ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Reduce
 (loopy--defaccumulation reduce
   "Parse the `reduce' command as (reduce VAR VAL FUNC &key init).
 
@@ -1414,6 +1994,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                                         (funcall ,(cl-third args) ,var ,val)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Sum
 (loopy--defaccumulation sum
   "Parse the `sum' command as (sum VAR VAL)."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
@@ -1422,6 +2003,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
               (loopy--main-body . (setq ,var (+ ,val ,var)))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Union
 (loopy--defaccumulation union
   "Parse the `union' command as (union VAR VAL &key test key at)."
   :keywords (test key at)
@@ -1453,6 +2035,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                       (error "Bad `:at' position: %s" cmd)))))
               (loopy--implicit-return . ,var)))
 
+;;;;;; Vconcat
 (loopy--defaccumulation vconcat
   "Parse the `vconcat' command as (vconcat VAR VAL &key at)."
   :keywords (at)
@@ -1486,7 +2069,8 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
               (loopy--implicit-return . ,var)))
 
 
-;;;; Boolean Commands
+;;;;; Boolean Commands
+;;;;;; Always
 (cl-defun loopy--parse-always-command ((_ condition &rest other-conditions))
   "Parse a command of the form `(always CONDITION [CONDITIONS])'.
 
@@ -1509,6 +2093,7 @@ or t if the command is never evaluated."
 			    (unless ,return-val
 			      (cl-return-from ,loopy--loop-name nil)))))))
 
+;;;;;; Never
 (cl-defun loopy--parse-never-command ((_ condition &rest other-conditions))
   "Parse a command of the form `(never CONDITION [CONDITIONS])'.
 
@@ -1527,6 +2112,7 @@ Otherwise, `loopy' should return t."
                                    condition)
                             (cl-return-from ,loopy--loop-name nil))))))
 
+;;;;;; Thereis
 (cl-defun loopy--parse-thereis-command ((_ condition &rest other-conditions))
   "Parse the `thereis' command as (thereis CONDITION [CONDITIONS]).
 
@@ -1543,6 +2129,7 @@ returned."
 
 
 ;;;;; Exiting and Skipping
+;;;;;; Early Exit
 (cl-defun loopy--parse-early-exit-commands ((&whole command name &rest args))
   "Parse the  `return' and `return-from' loop commands.
 
@@ -1571,16 +2158,19 @@ a loop name, return values, or a list of both."
                   ((= 2 arg-length) (cl-second args))
                   (t                `(list ,@(cl-rest args))))))))))))
 
+;;;;;; Leave
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
   '((loopy--tagbody-exit-used . t)
     (loopy--main-body . (go loopy--non-returning-exit-tag))))
 
+;;;;;; Skip
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
   '((loopy--skip-used . t)
     (loopy--main-body . (go loopy--continue-tag))))
 
+;;;;;; While Until
 (cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
   "Parse the `while' and `until' commands.
 
