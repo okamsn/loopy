@@ -2,7 +2,12 @@
 
 This document describes the user-facing changes to Loopy.
 
+
 ## Unreleased
+
+No changes so far.
+
+## 0.6.1
 
 ### Breaking Changes
 
@@ -24,6 +29,13 @@ This document describes the user-facing changes to Loopy.
 - The positional arguments of the `nums` command are now optional, and can be
   supplemented with keyword from the list above. ([#73])
 - Re-arrange documentation.
+
+### Bug Fixes
+
+- Fix using variables for the new `by` argument of the commands `list-ref`,
+  `list`, and `cons`.  This argument can now be a variable, which means that
+  references to function symbols must now be quoted ([#73]).
+
 
 [#65]: https://github.com/okamsn/loopy/issues/65
 [#73]: https://github.com/okamsn/loopy/pull/73

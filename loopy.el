@@ -193,7 +193,7 @@ NOTE: This functionality might change in the future.")
 
 (defvar loopy--valid-macro-arguments
   '( flag flags with let* init without no-with no-init before-do before initially-do
-     initially after-do after else-do else finally-do finally finally-return)
+     initially after-do after else-do else finally-do finally finally-return wrap)
   "List of valid keywords for `loopy' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -249,6 +249,20 @@ required for destructuring in accumulation commands.
 Unlike in `loopy--iteration-vars', these variables should be
 accessible from anywhere in the macro, and should not be reset
 for sub-loops.")
+
+(defvar loopy--wrapping-forms nil
+  "Forms that should wrap the loop body, applied in order.
+
+A form can be either a list or a symbol.  If a list, the loop
+body is inserted into the end of the list.  If a symbol, the
+symbol is applied as a function to the loop body.  This is
+similar in use to the macros `thread-first' and `thread-last'.
+
+These forms fall under the variable definitions used by the
+loop (that is, they occur in the `let'-body instead of
+surrounding it).  Only the loop body is wrapped.  If you wish to
+wrap the return values and other parts of the macro expansion,
+just wrap the macro expression as you normally would.")
 
 (defvar loopy--before-do nil
   "A list of expressions to evaluate before the loop starts.
@@ -684,6 +698,16 @@ The function creates quoted code that should be used by a macro."
                   ,@(mapcar #'cdr loopy--accumulation-final-updates)))
               result-is-one-expression nil))
 
+      ;; Try to apply wrapping forms so that they're not disturbed by variable
+      ;; updates or leaving the loop early.
+      (when loopy--wrapping-forms
+        (dolist (form (reverse loopy--wrapping-forms))
+          (setq result (if (and (consp form)
+                                (not (eq (cl-first form) 'lambda)))
+                           `(,@form ,@(get-result))
+                         `(,form ,@(get-result)))
+                result-is-one-expression t)))
+
       ;; Now ensure return value is nil and add the code to run before and
       ;; after the `while' loop.
       (cond
@@ -902,6 +926,10 @@ see the Info node `(loopy)' distributed with this package."
    ;; Without
    (setq loopy--without-vars
          (loopy--find-special-macro-arguments '(without no-with no-init) body))
+
+   ;; Wrap
+   (setq loopy--wrapping-forms
+         (loopy--find-special-macro-arguments '(wrap) body))
 
    ;; Before do
    (setq loopy--before-do

@@ -113,8 +113,7 @@ list.  For example, by default, \"(for collect i)\" and
 
 ;;;;
 (defvar loopy-iter--valid-macro-arguments
-  '( flag flags with init without no-init no-with before-do before initially-do
-     initially after-do after else-do else finally-do finally finally-return)
+  (remq 'let* loopy--valid-macro-arguments)
   "List of valid keywords for `loopy-iter' macro arguments.
 
 This variable is used to signal an error instead of silently failing.")
@@ -523,6 +522,10 @@ information on how to use `loopy' and `loopy-iter'.
    ;; Without
    (setq loopy--without-vars
          (loopy--find-special-macro-arguments '(without no-init) body))
+
+   ;; Wrap
+   (setq loopy--wrapping-forms
+         (loopy--find-special-macro-arguments '(wrap) body))
 
    ;; Before do
    (setq loopy--before-do

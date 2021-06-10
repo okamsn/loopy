@@ -196,11 +196,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :END:
 
   #+cindex: special macro argument
-  There are 7 special macro arguments. One, an unquoted symbol, is taken as the
-  loop's name. The others, listed below, are symbolic expressions that begin
-  with a keyword or one of their aliases. You do not need to use all of them.
+  There are only a few special macro arguments. One, an unquoted symbol, is
+  taken as the loop's name. The others, listed below, are symbolic expressions
+  that begin with a keyword or one of their aliases. You do not need to use all
+  of them.
 
-  If a macro argument does not match one of these special 7, ~loopy~ will
+  If a macro argument does not match one of these special few, ~loopy~ will
   attempt to interpret it as a loop command, and throw an error if that fails.
 
   These special macro arguments are always processed before loop commands,
@@ -341,6 +342,36 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
              ...)
     #+end_src
 
+  #+findex: wrap
+  - =wrap= :: A list of forms in which to wrap the loop itself (i.e., not
+    =before-do=, =after-do=, or anything else).  Each form can be either a list
+    or a symbol.  If a list, the loop is inserted into the end of the list.  If
+    a symbol, it is first converted to a list of 1 element before inserting the
+    loop at the end of the list.  This special macro argument is similar in use
+    to the Emacs Lisp macro ~thread-last~, except that forms listed first are
+    applied last, as in normal Lisp code.
+
+    The main difference between using this macro argument instead of just
+    writing the function calls normally is that these forms can access variables
+    initialized by the macro and that they occur after the code in =before-do=
+    is run.
+
+    #+begin_src emacs-lisp
+      (loopy (wrap (let ((a 1)))
+                   save-match-data)
+             ...)
+
+      ;; Similar to
+      (let ((a 1))
+        (save-match-data
+          (loopy ...)))
+
+      ;; => 6
+      (loopy (with (a 1))
+             (before-do (cl-incf a 2))
+             (wrap (progn (setq a (* 2 a))))
+             (return a))
+    #+end_src
 
   As stated above, all other expressions will be considered loop commands
   ([[#loop-commands][Loop Commands]]).
