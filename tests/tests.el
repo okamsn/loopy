@@ -1362,7 +1362,13 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '((3 1) (4 2))
                  (eval (quote (loopy (list i '((1 2) (3 4)))
                                      (accumulate (accum1 accum2) i #'cons
-                                                 :init nil)))))))
+                                                 :init nil))))))
+
+  (should (equal '((3 1) (4 2))
+                 (eval (quote (let ((f #'cons))
+                                (loopy (list i '((1 2) (3 4)))
+                                       (accumulate (accum1 accum2) i f
+                                                   :init nil))))))))
 
 ;;;;; Adjoin
 (ert-deftest adjoin ()
