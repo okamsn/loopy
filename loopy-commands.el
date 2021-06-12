@@ -75,9 +75,10 @@
 
 ;; Can't require `loopy', as that would be recursive.
 (require 'cl-lib)
+(require 'map)
+(require 'pcase)
 (require 'seq)
 (require 'subr-x)
-(require 'map)
 
 (declare-function loopy--bound-p "loopy")
 (declare-function loopy--basic-builtin-destructuring "loopy")
