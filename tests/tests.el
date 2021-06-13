@@ -128,6 +128,28 @@
                                    (after-do (cl-incf i))
                                    (finally-return i)))))))
 
+;;;; Wrap
+
+(ert-deftest wrap ()
+  ;; Test saving match data
+  (should
+   (save-match-data
+     (let ((original-data (set-match-data nil)))
+       (equal original-data
+              (eval (quote (loopy (wrap save-match-data)
+                                  (repeat 1)
+                                  (do (string-match (make-string 100 ?a)
+                                                    (make-string 100 ?a)))
+                                  (finally-return (match-data)))))))))
+
+  ;; Test order things wrapped in.
+  (should (= 3 (eval (quote (loopy (wrap (let ((a 1)))
+                                         (let ((b (1+ a)))))
+                                   (return (+ a b)))))))
+
+  ;; TODO: Test `lambda' forms.
+  )
+
 ;;;; Final Instructions
 (ert-deftest finally-do ()
   (should (and (= 10
