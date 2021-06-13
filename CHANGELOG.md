@@ -4,6 +4,8 @@ This document describes the user-facing changes to Loopy.
 
 ## Unreleased
 
+## 0.6.1
+
 ### Breaking Changes
 
 - Commands were updated to include keyword options more like those of `cl-loop`
