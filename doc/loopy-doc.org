@@ -434,8 +434,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     bar, such as in =expr|set=.
   - =VAR= is an unquoted symbol that will be used as a variable name, such as
     =i= in =(list i my-list)=.
-  - =FUNC= is a Lisp function name, such as =my-func=, =#'my-func= or
-    ='my-func=.
+  - =FUNC= is a quoted Lisp function name, such as ~#'my-func~ or ~'my-func~, a
+    variable whose value is a function, or a ~lambda~ expression.
   - =NAME= is an unquoted name of a loop (or, more accurately, of a
     =cl-block=).
   - =EXPR= is a single Lisp expression, such as =(+ 1 2)=, ='(1 2 3)=,

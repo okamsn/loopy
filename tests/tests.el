@@ -1420,10 +1420,24 @@ implicit variable without knowing it's name, even for named loops."
                                      (adjoin (a1 a2) i :test #'equal)
                                      (finally-return a1 a2))))))
 
+  (should (equal '(((1 . 2)) ((1 . 1) (2 . 3)))
+                 (eval (quote (loopy (with (test #'equal))
+                                     (list i '(((1 . 2) (1 . 1))
+                                               ((1 . 2) (2 . 3))))
+                                     (adjoin (a1 a2) i :test test)
+                                     (finally-return a1 a2))))))
+
   (should (equal '(((1 . 1)) ((1 . 2) (2 . 3)))
                  (eval (quote (loopy (list i '(((1 . 1) (1 . 2))
                                                ((1 . 2) (2 . 3))))
                                      (adjoin (a1 a2) i :key #'car)
+                                     (finally-return a1 a2))))))
+
+  (should (equal '(((1 . 1)) ((1 . 2) (2 . 3)))
+                 (eval (quote (loopy (with (key #'car))
+                                     (list i '(((1 . 1) (1 . 2))
+                                               ((1 . 2) (2 . 3))))
+                                     (adjoin (a1 a2) i :key key)
                                      (finally-return a1 a2)))))))
 
 (ert-deftest adjoin-implicit ()
@@ -2017,10 +2031,22 @@ implicit variable without knowing it's name, even for named loops."
                                      (nunioning var i :test #'equal)
                                      (finally-return var))))))
 
+  (should (equal '((1 1) 2 3 4)
+                 (eval (quote (let ((test #'equal))
+                                (loopy
+                                 (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+                                 (nunioning var i :test test)
+                                 (finally-return var)))))))
+
   ;; The resulting list should only have one element whose `car' is `a'.
   (should (equal '((a . 1)) (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
                                                 (nunioning var i :key #'car)
-                                                (finally-return var)))))))
+                                                (finally-return var))))))
+
+  (should (equal '((a . 1)) (eval (quote (let ((key #'car))
+                                           (loopy (array i [((a . 1)) ((a . 2))])
+                                                  (nunioning var i :key key)
+                                                  (finally-return var))))))))
 
 (ert-deftest nunion-destructuring ()
   (should (equal '((1 2 3) (2 3 4))
@@ -2159,6 +2185,11 @@ implicit variable without knowing it's name, even for named loops."
                                      (reduce r i #'append))))))
 
   (should (equal '(1 2 3)
+                 (eval (quote (let ((func #'append))
+                                (loopy (list i '((1) (2) (3)))
+                                       (reduce r i func)))))))
+
+  (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '((1) (2) (3)))
                                      (reducing r i #'append)))))))
 
@@ -2258,10 +2289,22 @@ implicit variable without knowing it's name, even for named loops."
                                      (unioning var i :test #'equal)
                                      (finally-return var))))))
 
+  (should (equal '((1 1) 2 3 4)
+                 (eval (quote (let ((func #'equal ))
+                                (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+                                       (unioning var i :test func)
+                                       (finally-return var)))))))
+
   (should (equal '((a . 1))
                  (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
                                      (unioning var i :key #'car)
-                                     (finally-return var)))))))
+                                     (finally-return var))))))
+
+  (should (equal '((a . 1))
+                 (eval (quote (let ((func #'car))
+                                (loopy (array i [((a . 1)) ((a . 2))])
+                                       (unioning var i :key func)
+                                       (finally-return var))))))))
 
 (ert-deftest union-destructuring ()
   ;; TODO: `union' currently has predictable behavior due to the `:at' position,
