@@ -213,14 +213,19 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     be used to initialize variables referenced by loop commands.
 
     #+begin_src emacs-lisp
-      (loopy (with (a 1) (b 2)) ...)
-      (loopy (let* (a 1) (b 2)) ...)
+      ;; => (4 5 6)
+      (loopy
+       (with (a 1)          ; Set `a' to 1.
+             (b (1+ a)))    ; Set `b' to 1+1=2.
+       (list i '(1 2 3))    ; Bind `i' to elements of the list.
+       (collect (+ i a b))) ; Collect sum of `a', `b', and each `i' into a list.
 
       ;; => 16
-      (loopy (with (my-sum 10))
-             (list i '(1 2 3))
-             (sum my-sum i)
-             (finally-return my-sum))
+      (loopy
+       (let* (my-sum 10))       ; Bind `my-sum' to 10.
+       (list i '(1 2 3))        ; Bind `i' to elements of the list.
+       (sum my-sum i)           ; Set `my-sum' to `i' + `my-sum'.
+       (finally-return my-sum)) ; Return the value of `my-sum'.
     #+end_src
 
   #+findex: without, no-init
@@ -229,16 +234,20 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     ~let~-like form, but that isn’t always desired.
 
     #+begin_src emacs-lisp
-      (let ((a 5))
-        ;; Without `without', `loopy' would try to initialize `a' to nil, which would
-        ;; overwrite the value of 5 above.
-        (loopy (without a)
-               (while (not (zerop a)))
-               (expr a (1- a)))
+      ;; Without `without', `loopy' would try to initialize `a' to nil, which would
+      ;; overwrite the value of 5 above.
 
+      (let ((a 5))
+        (loopy (without a)        ; Don't initialize `a'.
+               (until (zerop a))  ; Leave loop when `a' equals 0.
+               (collect a)        ; Collect the value of `a' into a list.
+               (expr a (1- a))))  ; Set `a' to the value of `(1- a)'.
+
+      (let ((a 5))
         (loopy (no-init a)
                (while (not (zerop a)))
-               (expr a (1- a))))
+               (collect a)
+               (set a (1- a))))
     #+end_src
 
   #+findex: before-do, before
@@ -246,21 +255,19 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     before the loop starts.
 
     #+begin_src emacs-lisp
-      (loopy (before-do (message "1: before loop")
-                        (message "2: before loop"))
-             ...)
+      ;; = > (6 7 8)
+      (loopy (with (a 1) (b 2))          ; Set `a' to 1 and `b' to 2.
+             (before-do (setq a (1+ a))  ; Add 1 to `a'.
+                        (setq b (1+ b))) ; Add 1 to `b'.
+             (list i '(1 2 3))           ; Set `i' to each element in the list.
+             (collect (+ i a b)))        ; Collect each sum into a list.
 
-      (loopy (before (message "1: before loop")
-                     (message "2: before loop"))
-             ...)
-
-      (loopy (initially-do (message "1: initially loop")
-                           (message "2: initially loop"))
-             ...)
-
-      (loopy (initially (message "1: initially loop")
-                        (message "2: initially loop"))
-             ...)
+      ;; => (1 2 3)
+      (loopy (with (a 1))
+             ;; Message before the loop starts:
+             (initially (message "Starting loop..."))
+             (list i '(1 2 3))
+             (collect i))
     #+end_src
 
   #+findex: after-do, after, else-do, else
@@ -269,28 +276,24 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     after a ~for~ or ~while~ loop.
 
     #+begin_src emacs-lisp
+      ;; Messages that no odd number was found:
+      ;; => nil
       (loopy (list i '(2 4 6 8))
              (when (cl-oddp i)
                (do (message "Odd number found."))
-               (leave))
-             (after-do (message "No odd number found.")))
+               (return t))                  ; Make the loop return `t'.
+             (after-do
+              (message "No odd number found.")
+              ;; The macro already return `nil' by default,
+              ;; but one can still use `cl-return' to be more explicit.
+              (cl-return nil)))
 
-      (loopy (list i '(2 4 6 8))
+      ;; Messages that an odd number was found:
+      ;; => t
+      (loopy (list i '(2 4 5 8))
              (when (cl-oddp i)
                (do (message "Odd number found."))
-               (leave))
-             (after (message "No odd number found.")))
-
-      (loopy (list i '(2 4 6 8))
-             (when (cl-oddp i)
-               (do (message "Odd number found."))
-               (leave))
-             (else-do (message "No odd number found.")))
-
-      (loopy (list i '(2 4 6 8))
-             (when (cl-oddp i)
-               (do (message "Odd number found."))
-               (leave))
+               (return t))
              (else (message "No odd number found.")))
     #+end_src
 
@@ -318,13 +321,19 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     ~pcase-let~, ~cl-destructuring-bind~, and the like.
 
     #+begin_src emacs-lisp
+      ;; => "This string always returned."
       (loopy (list i '(1 2 3))
              (when (cl-oddp i)
                (return "This return value is over-ridden."))
              (finally-return "This string always returned."))
 
+
+      ;; To be clear, the below code would be better expressed as
+      ;; `(loopy (return 1 2 3))'.  In the below example,
+      ;; `repeat' is used to avoid an infinite loop.
+      ;;
       ;; => (1 2 3)
-      (loopy (repeat 0)
+      (loopy (repeat 0)  ; Run the loop itself 0 times.
              (finally-return 1 2 3))
     #+end_src
 
@@ -333,13 +342,30 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     ([[*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]]).
 
     #+begin_src emacs-lisp
+      ;; Use Dash for destructuring:
+      ;;
+      ;; (((1 2) (3 4)) (1 3) (2 4))
       (loopy (flag dash)
              (list (whole &as a b) '((1 2) (3 4)))
-             ...)
+             (collect wholes whole)
+             (collect as a)
+             (collect bs b)
+             (finally-return wholes as bs))
 
-      (loopy (flags dash)
-             (list (whole &as a b) '((1 2) (3 4)))
-             ...)
+      ;; Use Seq for destructuring:
+      ;;
+      ;; => (1 [2 3])
+      (loopy (flag seq)
+             (with ([a &rest b] [1 2 3]))
+             (return a b))
+
+      ;; Automatically split accumulations into separate variables:
+      ;;
+      ;; => ((1 3) (2 4))
+      (loopy (flag split)
+             (list (i . j) '((1 2) (3 4)))
+             (collect i)
+             (collect j))
     #+end_src
 
   #+findex: wrap
