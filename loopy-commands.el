@@ -2301,6 +2301,7 @@ COMMAND-LIST."
     (arrayf       . loopy--parse-array-ref-command)
     (collect      . loopy--parse-collect-command)
     (collecting   . loopy--parse-collect-command)
+    (command-do   . loopy--parse-group-command)
     (concat       . loopy--parse-concat-command)
     (concating    . loopy--parse-concat-command)
     (cond         . loopy--parse-cond-command)
