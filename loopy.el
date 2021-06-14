@@ -395,6 +395,7 @@ t.")
       ;; -- Flag Variables --
       loopy-iter--lax-naming
       loopy--destructuring-for-with-vars-function
+      loopy--destructuring-for-iteration-function
       loopy--destructuring-accumulation-parser
       loopy--split-implied-accumulation-results)
     "These variables must be `let'-bound around the loop.

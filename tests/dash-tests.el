@@ -45,3 +45,10 @@
                                    (with ((&plist :a a  :b b) '(:a 3 :b 4)))
                                    (repeat 1)
                                    (return (+ a b))))))))
+
+;; Make sure all variables for the needed settings are properly bound.
+(ert-deftest destructuring-settings-not-escape ()
+  (eval (quote (loopy (flag dash) (repeat 0))))
+  (should-not loopy--destructuring-for-with-vars-function)
+  (should-not loopy--destructuring-for-iteration-function)
+  (should-not loopy--destructuring-accumulation-parser))

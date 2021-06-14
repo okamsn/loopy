@@ -18,6 +18,9 @@ This document describes the user-facing changes to Loopy.
   This change only applies to function parameters.  Arguments like `end` for
   `collect`'s position parameter can still be unquoted.
 
+- Correctly `let`-bind `loopy--destructuring-for-iteration-function`.
+  Previously, some destructuring settings would affect the next macro run.
+
 ## 0.6.1
 
 ### Breaking Changes

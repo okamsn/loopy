@@ -114,3 +114,10 @@
                         (list j '([1 2] [3 4]))
                         (collect `[,c1 ,c2] j :at start)
                         (finally-return c1 c2)))))
+
+;; Make sure all variables for the needed settings are properly bound.
+(ert-deftest destructuring-settings-not-escape ()
+  (eval (quote (loopy (flag pcase) (repeat 0))))
+  (should-not loopy--destructuring-for-with-vars-function)
+  (should-not loopy--destructuring-for-iteration-function)
+  (should-not loopy--destructuring-accumulation-parser))
