@@ -150,7 +150,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   That being said, Loopy is not yet feature complete.  Please request features
   or report problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While most cases are
-  covered, full feature parity with some of the more niche uses of =cl-loop= is
+  covered, full feature parity with some of the more niche uses of ~cl-loop~ is
   still being worked on.
 
 * Basic Concepts
@@ -182,7 +182,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   Except when using accumulating loop commands ([[#accumulation-commands][Accumulation Commands]]), return
   values must be stated explicitly, either as an early return in the loop body
   via the =return= or =return-from= commands, or as part of the =finally-return=
-  macro argument.  =nil= is returned by default.
+  macro argument.  ~nil~ is returned by default.
 
   The macro is configurable.  One can add custom commands ([[#adding-custom-commands][Custom Commands]]), add
   custom command aliases ([[#custom-aliases][Custom Aliases]]), and specify macro options for a
@@ -363,7 +363,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       ;;
       ;; => ((1 3) (2 4))
       (loopy (flag split)
-             (list (i . j) '((1 2) (3 4)))
+             (list (i j) '((1 2) (3 4)))
              (collect i)
              (collect j))
     #+end_src
@@ -562,8 +562,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
            (finally-return my-array))
   #+end_src
 
-  Most commands that assign variables (even the =-ref= commands, which use
-  ~setf~-able places instead of actual variables) can use destructuring, but
+  Most commands that assign variables can use destructuring, but
   not all kinds of destructuring make sense in all situations.
 
 
