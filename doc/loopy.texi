@@ -62,6 +62,14 @@ Loop Commands
 * Control Flow::                 When to run loop commands.
 * Sub-loops::                    Running a loop within a loop.
 
+Iteration
+
+* Generic Iteration::            Looping a certain number of times.
+* Numeric Iteration::            Iterating through numbers.
+* Sequence Iteration::           Iterating through sequences.
+* Sequence Index Iteration::     Iterating through indices without accessing values.
+* Sequence Reference Iteration:: Iterating through places/fields in sequences.
+
 Control Flow
 
 * Conditionals::                 Choosing if commands should run.
@@ -158,7 +166,7 @@ iteration.
 
 That being said, Loopy is not yet feature complete.  Please request features
 or report problems in this project’s @uref{https://github.com/okamsn/loopy/issues, issues tracker}.  While most cases are
-covered, full feature parity with some of the more niche uses of @samp{cl-loop} is
+covered, full feature parity with some of the more niche uses of @code{cl-loop} is
 still being worked on.
 
 @node Basic Concepts
@@ -187,7 +195,7 @@ or @samp{return-from} command is reached (@ref{Early Exit, , Exiting the Loop Ea
 Except when using accumulating loop commands (@ref{Accumulation, , Accumulation Commands}), return
 values must be stated explicitly, either as an early return in the loop body
 via the @samp{return} or @samp{return-from} commands, or as part of the @samp{finally-return}
-macro argument.  @samp{nil} is returned by default.
+macro argument.  @code{nil} is returned by default.
 
 The macro is configurable.  One can add custom commands (@ref{Custom Commands}), add
 custom command aliases (@ref{Custom Aliases}), and specify macro options for a
@@ -198,11 +206,12 @@ later in this document.
 @chapter Special Macro Arguments
 
 @cindex special macro argument
-There are 7 special macro arguments. One, an unquoted symbol, is taken as the
-loop's name. The others, listed below, are symbolic expressions that begin
-with a keyword or one of their aliases. You do not need to use all of them.
+There are only a few special macro arguments. One, an unquoted symbol, is
+taken as the loop's name. The others, listed below, are symbolic expressions
+that begin with a keyword or one of their aliases. You do not need to use all
+of them.
 
-If a macro argument does not match one of these special 7, @code{loopy} will
+If a macro argument does not match one of these special few, @code{loopy} will
 attempt to interpret it as a loop command, and throw an error if that fails.
 
 These special macro arguments are always processed before loop commands,
@@ -216,14 +225,19 @@ Declare variables before the loop.  This can also
 be used to initialize variables referenced by loop commands.
 
 @lisp
-(loopy (with (a 1) (b 2)) ...)
-(loopy (let* (a 1) (b 2)) ...)
+;; => (4 5 6)
+(loopy
+ (with (a 1)          ; Set `a' to 1.
+       (b (1+ a)))    ; Set `b' to 1+1=2.
+ (list i '(1 2 3))    ; Bind `i' to elements of the list.
+ (collect (+ i a b))) ; Collect sum of `a', `b', and each `i' into a list.
 
 ;; => 16
-(loopy (with (my-sum 10))
-       (list i '(1 2 3))
-       (sum my-sum i)
-       (finally-return my-sum))
+(loopy
+ (let* (my-sum 10))       ; Bind `my-sum' to 10.
+ (list i '(1 2 3))        ; Bind `i' to elements of the list.
+ (sum my-sum i)           ; Set `my-sum' to `i' + `my-sum'.
+ (finally-return my-sum)) ; Return the value of `my-sum'.
 @end lisp
 @end table
 
@@ -235,16 +249,20 @@ initialize.  @code{loopy} tries to initialize all the variables it uses in a
 @code{let}-like form, but that isn’t always desired.
 
 @lisp
-(let ((a 5))
-  ;; Without `without', `loopy' would try to initialize `a' to nil, which would
-  ;; overwrite the value of 5 above.
-  (loopy (without a)
-         (while (not (zerop a)))
-         (expr a (1- a)))
+;; Without `without', `loopy' would try to initialize `a' to nil, which would
+;; overwrite the value of 5 above.
 
+(let ((a 5))
+  (loopy (without a)        ; Don't initialize `a'.
+         (until (zerop a))  ; Leave loop when `a' equals 0.
+         (collect a)        ; Collect the value of `a' into a list.
+         (expr a (1- a))))  ; Set `a' to the value of `(1- a)'.
+
+(let ((a 5))
   (loopy (no-init a)
          (while (not (zerop a)))
-         (expr a (1- a))))
+         (collect a)
+         (set a (1- a))))
 @end lisp
 @end table
 
@@ -255,21 +273,19 @@ Run Lisp expressions
 before the loop starts.
 
 @lisp
-(loopy (before-do (message "1: before loop")
-                  (message "2: before loop"))
-       ...)
+;; = > (6 7 8)
+(loopy (with (a 1) (b 2))          ; Set `a' to 1 and `b' to 2.
+       (before-do (setq a (1+ a))  ; Add 1 to `a'.
+                  (setq b (1+ b))) ; Add 1 to `b'.
+       (list i '(1 2 3))           ; Set `i' to each element in the list.
+       (collect (+ i a b)))        ; Collect each sum into a list.
 
-(loopy (before (message "1: before loop")
-               (message "2: before loop"))
-       ...)
-
-(loopy (initially-do (message "1: initially loop")
-                     (message "2: initially loop"))
-       ...)
-
-(loopy (initially (message "1: initially loop")
-                  (message "2: initially loop"))
-       ...)
+;; => (1 2 3)
+(loopy (with (a 1))
+       ;; Message before the loop starts:
+       (initially (message "Starting loop..."))
+       (list i '(1 2 3))
+       (collect i))
 @end lisp
 @end table
 
@@ -281,28 +297,24 @@ loop successfully completes.  This is similar to Python’s @code{else} statemen
 after a @code{for} or @code{while} loop.
 
 @lisp
+;; Messages that no odd number was found:
+;; => nil
 (loopy (list i '(2 4 6 8))
        (when (cl-oddp i)
          (do (message "Odd number found."))
-         (leave))
-       (after-do (message "No odd number found.")))
+         (return t))                  ; Make the loop return `t'.
+       (after-do
+        (message "No odd number found.")
+        ;; The macro already return `nil' by default,
+        ;; but one can still use `cl-return' to be more explicit.
+        (cl-return nil)))
 
-(loopy (list i '(2 4 6 8))
+;; Messages that an odd number was found:
+;; => t
+(loopy (list i '(2 4 5 8))
        (when (cl-oddp i)
          (do (message "Odd number found."))
-         (leave))
-       (after (message "No odd number found.")))
-
-(loopy (list i '(2 4 6 8))
-       (when (cl-oddp i)
-         (do (message "Odd number found."))
-         (leave))
-       (else-do (message "No odd number found.")))
-
-(loopy (list i '(2 4 6 8))
-       (when (cl-oddp i)
-         (do (message "Odd number found."))
-         (leave))
+         (return t))
        (else (message "No odd number found.")))
 @end lisp
 @end table
@@ -336,13 +348,19 @@ a list of those values.  This is convenient when used with @code{seq-let},
 @code{pcase-let}, @code{cl-destructuring-bind}, and the like.
 
 @lisp
+;; => "This string always returned."
 (loopy (list i '(1 2 3))
        (when (cl-oddp i)
          (return "This return value is over-ridden."))
        (finally-return "This string always returned."))
 
+
+;; To be clear, the below code would be better expressed as
+;; `(loopy (return 1 2 3))'.  In the below example,
+;; `repeat' is used to avoid an infinite loop.
+;;
 ;; => (1 2 3)
-(loopy (repeat 0)
+(loopy (repeat 0)  ; Run the loop itself 0 times.
        (finally-return 1 2 3))
 @end lisp
 @end table
@@ -354,16 +372,66 @@ Options that change the behavior of @code{loopy}
 ([BROKEN LINK: *Changing the Macro's Behavior with Flags]).
 
 @lisp
+;; Use Dash for destructuring:
+;;
+;; (((1 2) (3 4)) (1 3) (2 4))
 (loopy (flag dash)
        (list (whole &as a b) '((1 2) (3 4)))
-       ...)
+       (collect wholes whole)
+       (collect as a)
+       (collect bs b)
+       (finally-return wholes as bs))
 
-(loopy (flags dash)
-       (list (whole &as a b) '((1 2) (3 4)))
-       ...)
+;; Use Seq for destructuring:
+;;
+;; => (1 [2 3])
+(loopy (flag seq)
+       (with ([a &rest b] [1 2 3]))
+       (return a b))
+
+;; Automatically split accumulations into separate variables:
+;;
+;; => ((1 3) (2 4))
+(loopy (flag split)
+       (list (i j) '((1 2) (3 4)))
+       (collect i)
+       (collect j))
 @end lisp
 @end table
 
+@findex wrap
+@table @asis
+@item @samp{wrap}
+A list of forms in which to wrap the loop itself (i.e., not
+@samp{before-do}, @samp{after-do}, or anything else).  Each form can be either a list
+or a symbol.  If a list, the loop is inserted into the end of the list.  If
+a symbol, it is first converted to a list of 1 element before inserting the
+loop at the end of the list.  This special macro argument is similar in use
+to the Emacs Lisp macro @code{thread-last}, except that forms listed first are
+applied last, as in normal Lisp code.
+
+The main difference between using this macro argument instead of just
+writing the function calls normally is that these forms can access variables
+initialized by the macro and that they occur after the code in @samp{before-do}
+is run.
+
+@lisp
+(loopy (wrap (let ((a 1)))
+             save-match-data)
+       ...)
+
+;; Similar to
+(let ((a 1))
+  (save-match-data
+    (loopy ...)))
+
+;; => 6
+(loopy (with (a 1))
+       (before-do (cl-incf a 2))
+       (wrap (progn (setq a (* 2 a))))
+       (return a))
+@end lisp
+@end table
 
 As stated above, all other expressions will be considered loop commands
 (@ref{Loop Commands}).
@@ -434,7 +502,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgfc62d1c
+@float Listing,org403d4c1
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -464,8 +532,8 @@ bar, such as in @samp{expr|set}.
 @samp{VAR} is an unquoted symbol that will be used as a variable name, such as
 @samp{i} in @samp{(list i my-list)}.
 @item
-@samp{FUNC} is a Lisp function name, such as @samp{my-func}, @samp{#'my-func} or
-@samp{'my-func}.
+@samp{FUNC} is a quoted Lisp function name, such as @code{#'my-func} or @code{'my-func}, a
+variable whose value is a function, or a @code{lambda} expression.
 @item
 @samp{NAME} is an unquoted name of a loop (or, more accurately, of a
 @samp{cl-block}).
@@ -504,7 +572,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org6a61888
+@float Listing,org7849d86
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -543,8 +611,7 @@ the final @code{cdr} of a destructured list, use dotted notation.
 @caption{Several examples of destructuring.}
 @end float
 
-Most commands that assign variables (even the @samp{-ref} commands, which use
-@code{setf}-able places instead of actual variables) can use destructuring, but
+Most commands that assign variables can use destructuring, but
 not all kinds of destructuring make sense in all situations.
 
 @menu
@@ -636,11 +703,34 @@ variables outside of the loop in the same way that using @samp{(do (setq VAR
 
 @findex group
 @table @asis
-@item @samp{(group [CMDS])}
-Evaluate multiple loop commands, as if in a @samp{progn}.
-This is similar to @samp{do}, but runs commands instead of normal Lisp
+@item @samp{(group|command-do [CMDS])}
+Evaluate multiple loop commands, as if in a
+@samp{progn}.  This is similar to @samp{do}, but runs commands instead of normal Lisp
 expressions.  Currently, this command is only useful when used with the
 @samp{if} command.
+
+@lisp
+;; Report whether an even number is found, or return the sum of
+;; the list's elements.  To be clear, this is not an idiomatic example.
+
+;; Returns sum:
+;; => 9
+(loopy (list i '(1 3 5))
+       (if (cl-evenp i)
+           (group
+            (do (message "Even found."))
+            (return i))
+         (sum i)))
+
+;; Returns the detected even number:
+;; => 2
+(loopy (list i '(1 3 2 5))
+       (if (cl-evenp i)
+           (command-do
+            (do (message "Even found."))
+            (return i))
+         (sum i)))
+@end lisp
 @end table
 
 @findex prev-expr, prev
@@ -685,8 +775,10 @@ As in @samp{expr}, when using destructuring, each variable is initialized to
 @node Iteration
 @section Iteration
 
-Iteration commands bind local variables and determine when the loop ends.
-If no command sets that condition, then the loop runs forever.
+Iteration commands bind local variables and determine when the loop ends.  If
+no command sets an ending condition, then the loop runs forever.  Infinite
+loops can be exited by using early-exit commands (@ref{Early Exit}) or
+boolean commands (@ref{Boolean}).
 
 Iteration commands must occur in the top level of the @code{loopy} form or in a
 @samp{sub-loop} command.  Trying to do something like the below will signal an
@@ -701,66 +793,288 @@ error.
          (collect j)))
 @end lisp
 
-The @samp{-ref} (as in “reference”) commands create @code{setf}-able places instead of
-true variables.  Like other commands, they too can use destructuring, in
-which case the variables in the sequence @samp{VAR} are also @code{setf}-able places
-instead of true variables.
 
-@quotation Note
 In @code{loopy}, iteration commands are named after what they iterate through.
-For example, @samp{array} and @samp{list} iterate through the elements of arrays and
-lists, respectively.  For the convenience of familiarity, these commands also
-have aliases based on their equivalent @samp{for}-clause from @code{cl-loop}.
+For example, the @samp{array} and @samp{list} commands iterate through the elements of
+arrays and lists, respectively.  For the sake of familiarity, these commands
+also have aliases based on their equivalent @samp{for}-clause from @code{cl-loop}.  To
+translate @samp{for VAR in LIST} from @code{cl-loop}, one can use either
+@samp{(list VAR LIST)} or @samp{(in VAR LIST)}.
 
-To translate @samp{for VAR in LIST} from @code{cl-loop} to @code{loopy}, one can use either
-@samp{(list VAR LIST)} or @samp{(in VAR LIST)}.  This can be helpful when using
-@code{loopy-iter} (@ref{The @code{loopy-iter} Macro}), in which case you could write any of
-@samp{(for list VAR LIST)}, @samp{(for in VAR LIST)}, or @samp{(in VAR LIST)}, depending on
-whether you have enabled the @samp{lax-naming} flag.
+@menu
+* Generic Iteration::            Looping a certain number of times.
+* Numeric Iteration::            Iterating through numbers.
+* Sequence Iteration::           Iterating through sequences.
+* Sequence Index Iteration::     Iterating through indices without accessing values.
+* Sequence Reference Iteration:: Iterating through places/fields in sequences.
+@end menu
 
-@end quotation
+@node Generic Iteration
+@subsection Generic Iteration
 
-The available iteration commands are:
+@findex repeat
+@table @asis
+@item @samp{(repeat [VAR] EXPR)}
+Add a condition that the loop should stop after
+@samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is incremented by
+1 at the end of the loop.
+
+@lisp
+(loopy (repeat 3)
+       (do (message "Messaged three times.")))
+
+(loopy (repeat i 3)
+       (do (message "%d" i)))
+@end lisp
+@end table
+
+@node Numeric Iteration
+@subsection Numeric Iteration
+
+For iterating through numbers, there is the general @samp{nums} command, and its
+variants @samp{nums-up} and @samp{nums-down}.
+
+@findex num, nums, number, numbers
+@table @asis
+@item @samp{(nums|num|number|numbers VAR [START [END]] &key KEYS)}
+Iterate through
+numbers.  @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to},
+@samp{upto}, @samp{downto}, @samp{above}, @samp{below}, and @samp{by}.
+
+The command @samp{nums} is used to iterate through numbers.  For example, @samp{(nums
+      i 1 10)} is similar to @samp{(list i (number-sequence 1 10))}, and @samp{(nums i 3)}
+is similar to @samp{(expr i 3 (1+ i))}.
+
+To balance convenience and similarity to other commands, @samp{nums} has a
+flexible argument list.  In its most basic form, it uses no keywords and
+takes a starting value and an ending value.  The ending value is inclusive.
+
+@lisp
+;; => (1 2 3 4 5)
+(loopy (nums i 1 5)
+       (collect i))
+@end lisp
+
+If the ending value is not given, then the value is incremented by 1
+without end.
+
+@lisp
+;; => (7 8 9 10 11 12 13 14 15 16)
+(loopy (repeat 10)
+       (nums i 7)
+       (collect i))
+@end lisp
+
+To specify the step size, one can use the keyword @samp{:by}.  The step size
+argument should always be positive.
+
+@lisp
+;; => (1 3 5)
+(loopy (nums i 1 5 :by 2)
+       (collect i))
+
+;; => (7 9 11 13 15 17 19 21 23 25)
+(loopy (repeat 10)
+       (nums i 7 :by 2)
+       (collect i))
+
+;; => (1 2.5 4.0)
+(loopy (nums i 1 5 :by 1.5)
+       (collect i))
+@end lisp
+
+By default, the variable's value starts at 0 and increases by 1.  To
+specify that the value should be increasing or decreasing, one can use the
+keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, and @samp{:upto}.  The keywords
+@samp{:from} and @samp{:to} don't by themselves specify a direction.
+
+@lisp
+;; => (3 2 1)
+(loopy (repeat 3)
+       (nums i :downfrom 3)
+       (collect i))
+
+;; => (0 -1 -2 -3)
+(loopy (nums i :downto -3)
+       (collect i))
+
+;; => (10 9 8 7 6 5 4 3 2)
+(loopy (nums i :downfrom 10 :to 2)
+       (collect i))
+
+;; => (10 8 6 4 2)
+(loopy (nums i :from 10 :downto 2 :by 2)
+       (collect i))
+
+;; => (1 2 3 4 5 6 7)
+(loopy (nums i :from 1 :upto 7)
+       (collect i))
+@end lisp
+
+To specify an @emph{exclusive} ending value, use the keywords @samp{:below} for
+increasing values and @samp{:above} for decreasing values.
+
+@lisp
+;; => (1 2 3 4 5 6 7 8 9)
+(loopy (nums i :from 1 :below 10)
+       (collect i))
+
+;; Same as
+(loopy (expr i 1 (1+ i))
+       (while (< i 10))
+       (collect i))
+
+;; => (10 9 8 7 6 5 4 3 2)
+(loopy (nums i :from 10 :above 1)
+       (collect i))
+
+;; => (0 -1 -2)
+(loopy (nums i :above -3)
+       (collect i))
+@end lisp
+@end table
+
+
+If you prefer using positional arguments to keyword arguments, you can use
+the commands @samp{nums-up} and @samp{nums-down} to specify directions.  These
+commands are simple wrappers of the above @samp{nums} command.
+
+@table @asis
+@item @samp{(nums-down|numsdown|numbers-down VAR START [END] &key by)}
+Equivalent
+to @samp{(nums VAR START [:downto END] &key by)}.  This command exists only for
+convenience.
+
+@lisp
+;; => (10 8 6 4 2)
+(loopy (nums-down i 10 1 :by 2)
+       (collect i))
+@end lisp
+@end table
+
+@table @asis
+@item @samp{(nums-up|numsup|numbers-up VAR START [END] &key by)}
+Equivalent to
+@samp{(nums VAR START [END] &key by)}.  This command exists only for
+convenience.
+
+@lisp
+;; => (1 3 5 7 9)
+(loopy (nums-up i 1 10 :by 2)
+       (collect i))
+@end lisp
+@end table
+
+@node Sequence Iteration
+@subsection Sequence Iteration
+
+These commands provide various ways to iterate through sequences
+(@ref{Sequences Arrays Vectors,,,elisp,}).
+
+@cindex sequence element distribution
+Instead of just one sequence, the @samp{array}, @samp{list}, and @samp{seq} commands can be
+given multiple sequences of various sizes.  In such cases, the elements of
+the sequences are @dfn{distributed}, like in the distributive property
+from mathematics.  A new sequence of distributed elements is created before
+the loop runs, and that sequence is used for iteration instead of the source
+sequences.  As seen in the below example, the resulting behavior is similar
+to that of nested loops.
+
+@lisp
+;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
+(loopy (list i '(1 2) '(3 4 5) '(6))
+       (collect i))
+
+;; Gives the same result as this
+(let ((result nil))
+  (dolist (i '(1 2))
+    (dolist (j '(3 4 5))
+      (dolist (k '(6))
+        (push (list i j k) result))))
+  (nreverse result))
+
+;; and this
+(cl-loop for i in '(1 2)
+         append (cl-loop for j in '(3 4 5)
+                         append (cl-loop for k in '(6)
+                                         collect (list i j k))))
+@end lisp
+
+
+The @samp{array} and @samp{sequence} commands can use the same keywords as the @samp{nums}
+command (@ref{Numeric Iteration}) for working with the index and choosing a range
+of the sequence elements through which to iterate.  In addition to those
+keywords, they also have an @samp{index} keyword, which names the variable used
+to store the accessed index during the loop.
+
+Keep in mind that if used with sequence distribution, these keywords affect
+iterating through the sequence of distributed elements.  That is, they do
+not affect how said sequence is produced.  In the example below, see that
+@code{cddr} is applied to the sequence of distributed elements. It is @emph{not}
+applied to the source sequences.
+
+@lisp
+;; This code creates the sequence of distributed elements
+;; ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+;; and then moves through this sequence using `cddr'.
+;;
+;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+(loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+       (collect i))
+
+;; Not the same as:
+;; => ((1 4) (1 6) (3 4) (3 6))
+(loopy (list i '(1 3) '(4 6))
+       (collect i))
+@end lisp
+
 
 @findex array, string, across
 @table @asis
-@item @samp{(array|string|across VAR EXPR)}
-Loop through the elements of the array
-@samp{EXPR}.  In Emacs Lisp, strings are arrays whose elements are characters.
+@item @samp{(array|string|across VAR EXPR [EXPRS] &key KEYS)}
+Loop through the
+elements of the array @samp{EXPR}.  In Emacs Lisp, strings are arrays whose
+elements are characters.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
+used to store the index being accessed.  For others, see the @samp{nums}
+command.
+
+If multiple arrays are given, then the elements of these arrays are
+distributed into an array of lists and the above keywords apply to this
+new resulting array.
 
 @lisp
 (loopy (array i [1 2 3])
        (do (message "%d" i)))
 
+;; => (1 3)
+(loopy (array i [1 2 3 4] :by 2)
+       (collect i))
+
 ;; Collects the integer values representing each character.
 ;; => (97 98 99)
 (loopy (string c "abc")
        (collect c))
-@end lisp
-@end table
 
-@findex array-ref, arrayf, string-ref, stringf, across-ref
-@table @asis
-@item @samp{(array-ref|arrayf|string-ref|stringf|across-ref VAR EXPR)}
-Loop through
-the elements of the array @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.
+;; This is the same as using [(1 3) (1 4) (2 3) (2 4)].
+;; => ((1 3) (1 4) (2 3) (2 4))
+(loopy (array i [1 2] [3 4])
+       (collect i))
 
-@lisp
-(loopy (with (my-str "cat"))
-       (array-ref i my-str)
-       (do (setf i ?a))
-       (finally-return my-str)) ; => "aaa"
+;; => ((1 3) (2 3))
+(loopy (array i [1 2] [3 4] :by 2)
+       (collect i))
 @end lisp
 @end table
 
 @findex cons, conses, on
 @table @asis
-@item @samp{(cons|conses|on VAR EXPR [FUNC])}
-Loop through the cons cells of @samp{EXPR}.
-Optionally, find the cons cells via @samp{FUNC} instead of @samp{cdr}.
-
-To avoid unneeded variables, when not destructuring, @samp{VAR} is initialized
-to @samp{EXPR} instead of @code{nil}.
+@item @samp{(cons|conses|on VAR EXPR &key by)}
+Loop through the cons cells of
+@samp{EXPR}.  Optionally, find the cons cells via function @samp{by} instead of
+@samp{cdr}.
 
 @lisp
 (loopy (cons i '(1 2 3))
@@ -771,28 +1085,25 @@ to @samp{EXPR} instead of @code{nil}.
 
 @findex list, in, each
 @table @asis
-@item @samp{(list|in|each VAR EXPR [FUNC])}
-Loop through each element of the list
-@samp{EXPR}.  Optionally, update the list by @samp{FUNC} instead of @samp{cdr}.
+@item @samp{(list|in|each VAR EXPR [EXPRS] &key by)}
+Loop through each element of
+the list @samp{EXPR}.  Optionally, update the list by @samp{by} instead of @samp{cdr}.
+
+If multiple lists are given, distribute the elements of the lists into one
+new list.  In such cases, @samp{by} applies to the new list, not the arguments
+of the command.
 
 @lisp
 (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
        (do (message "%d" i)))
-@end lisp
-@end table
 
-@findex list-ref, listf, in-ref
-@table @asis
-@item @samp{(list-ref|listf|in-ref VAR EXPR [FUNC])}
-Loop through the elements of
-the list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update
-the list by @samp{FUNC} instead of @samp{cdr}.
+;; => ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+(loopy (list i '(1 2 3) '(4 5 6))
+       (collect i))
 
-@lisp
-(loopy (with (my-list '(1 2 3)))
-       (list-ref i my-list)
-       (do (setf i 7))
-       (finally-return my-list)) ; Returns '(7 7 7).
+;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+(loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+       (collect i))
 @end lisp
 @end table
 
@@ -845,111 +1156,88 @@ maps.
 @end lisp
 @end table
 
-@findex num, nums, number, numbers
-@table @asis
-@item @samp{(nums|num|number|numbers VAR START [END] &key by down)}
-Increment @samp{VAR}
-from @samp{START} through @samp{END}.  @samp{by} is a positive value used to adjust
-@samp{VAR}.  @samp{down} determines whether @samp{VAR} is incremented or decremented.
-
-The values of @samp{START}, @samp{END}, and @samp{by} are all computed during
-initialization.  They do not change during the loop.
-
-@samp{VAR} is initialized to @samp{START}.  The loop ends when @samp{VAR} is either
-greater or less than @samp{END} (if given), depending on the value of @samp{down}.
-
-Without @samp{by}, the default step is 1.  Without @samp{down}, @samp{VAR} increases.
-
-This command does not support destructuring.
-
-@lisp
-;; => (1 2 3 4 5)
-(loopy (nums i 1 5)
-       (collect i))
-
-;; => (1 3 5)
-(loopy (nums i 1 5 :by 2)
-       (collect i))
-
-;; => (5 3 1)
-(loopy (nums i 5 1 :by 2 :down t)
-       (collect i))
-
-;; => (0 7 14)
-(loopy (repeat 3)
-       ;; We can use `repeat' to avoid an infinite loop.
-       (nums i 0 :by 7)
-       (collect i))
-
-;; => (0 -7 -14 -21 -28 -35 -42)
-(loopy (repeat 7)
-       ;; We can use `repeat' to avoid an infinite loop.
-       (nums i 0 :by 7 :down t)
-       (collect i))
-@end lisp
-@end table
-
-@table @asis
-@item @samp{(nums-down|numsdown|numbers-down VAR START [END] &key by)}
-Equivalent
-to @samp{(nums VAR START [END] :down t &key by)}.  This command exists only for
-convenience.
-
-@lisp
-;; => (10 8 6 4 2)
-(loopy (nums-down i 10 1 :by 2)
-       (collect i))
-@end lisp
-@end table
-
-@table @asis
-@item @samp{(nums-up|numsup|numbers-up VAR START [END] &key by)}
-Equivalent to
-@samp{(nums VAR START [END] &key by)}.  This command exists only for
-convenience.
-
-@lisp
-;; => (1 3 5 7 9)
-(loopy (nums-up i 1 10 :by 2)
-       (collect i))
-@end lisp
-@end table
-
-@findex repeat
-@table @asis
-@item @samp{(repeat [VAR] EXPR)}
-Add a condition that the loop should stop after
-@samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is incremented by
-1 at the end of the loop.
-
-@lisp
-(loopy (repeat 3)
-       (do (message "Messaged three times.")))
-
-(loopy (repeat i 3)
-       (do (message "%d" i)))
-@end lisp
-@end table
 
 @findex seq, sequence, elements
 @table @asis
-@item @samp{(seq|sequence|elements VAR EXPR)}
-Loop through the sequence @samp{EXPR},
-binding @samp{VAR} to the elements of the sequence.
+@item @samp{(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)}
+Loop
+through the sequence @samp{EXPR}, binding @samp{VAR} to the elements of the sequence.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
+used to store the index being accessed.  For others, see the @samp{nums}
+command.
+
+If multiple sequences are given, then these keyword arguments apply to the
+resulting sequence of distributed elements.
 
 @lisp
+;; => (1 2 3)
 (loopy (seq i [1 2 3])
        (collect coll i)
-       (finally-return coll)) ; => (1 2 3)
+       (finally-return coll))
+
+;; => (0 2 4)
+(loopy (seq i [0 1 2 3 4 5] :by 2)
+       (collect i))
+
+;; => (1 3 5)
+(loopy (seq i [0 1 2 3 4 5 6]
+            :by 2 :from 1 :to 5)
+       (collect i))
+
+;; => (5 3 1)
+(loopy (seq i '(0 1 2 3 4 5 6)
+            :downfrom 5 :by 2 :to 1)
+       (collect i))
+
+;; => ((1 3) (1 4) (2 3) (2 4))
+(loopy (seq i [1 2] '(3 4))
+       (collect i))
+
+;; => ((1 3) (2 3))
+(loopy (seq i [1 2] '(3 4) :by 2)
+       (collect i))
 @end lisp
 @end table
 
+@node Sequence Index Iteration
+@subsection Sequence Index Iteration
+
+This command is for iterating the a sequence's indices without accessing the
+actual values of that sequence.  This is helpful if you know ahead of time
+that you are only interested in a small subset of the sequence's elements.
+
+As with the @samp{array} and @samp{seq} commands, the @samp{seq-index} command can use the
+same keywords as the @samp{nums} command (@ref{Numeric Iteration}) for working with
+the index and choosing a range of the sequence elements through which to
+iterate.  In addition to those keywords, it also has an @samp{index} keyword,
+which names the variable used to store the accessed index during the loop.
+
 @findex seq-index, seqi, array-index, arrayi, list-index, listi, string-index, stringi
 @table @asis
-@item @samp{(seq-index|array-index|list-index|string-index VAR VAL)}
+@item @samp{(seq-index|array-index|list-index|string-index VAR VAL &key KEYS)}
 Iterate
-through the indices of @samp{VAL}.  The loop ends when @samp{VAR} is equal to the
-length of @samp{VAL}.
+through the indices of @samp{VAL}.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, and @samp{by}.  For their meaning, see the @samp{nums}
+command.  This command is very similar to @samp{nums}, except that it can
+automatically end the loop when the final element is reached.  With
+@samp{nums}, one would first need to explicitly calculate the length of the
+sequence.
+
+@lisp
+;; => (97 98 99 100 101 102)
+(loopy (with (my-string "abcdef"))
+       (string-index idx my-string)
+       (collect (aref my-string idx)))
+
+;; Works the same as
+(loopy (with (my-string "abcdef"))
+       (nums idx :from 0 :below (length my-string))
+       (collect (aref my-string idx)))
+@end lisp
 
 For convenience, this command also has the aliases @samp{seqi}, @samp{arrayi},
 @samp{listi}, and @samp{stringi}, analogous to the command aliases @samp{seqf}, @samp{arrayf},
@@ -969,21 +1257,144 @@ This command does not support destructuring.
 ;; => (0 1 2)
 (loopy (list-index i '(1 2 3))
        (collect i))
+
+;; => (8 6 4 2)
+(loopy (with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+       (seq-index idx my-seq :from 8 :downto 1 :by 2)
+       (collect (elt my-seq idx)))
+@end lisp
+@end table
+
+@node Sequence Reference Iteration
+@subsection Sequence Reference Iteration
+
+These commands all iterate through @code{setf}-able places as generalized
+variables (@ref{Generalized Variables,,,elisp,}).  These generalized variables
+are commonly called ``references'', ``fields'', or ``places''.  The below example
+demonstrates using @code{(nth 1 my-list)} and @code{(aref my-array 1)} as @code{setf}-able
+places.
+
+@lisp
+;; => (1 99 3 4 5)
+(let ((my-list '(1 2 3 4 5)))
+  (setf (nth 1 my-list) 99)
+  my-list)
+
+;; => [(1 2 3) (4 . 99)]
+(let ((my-array [(1 2 3) (4 5 6)]))
+  (setf (cdr (aref my-array 1)) 99)
+  my-array)
+@end lisp
+
+Like other commands, field/reference commands can also use destructuring, in
+which case the fields/places of the sequence are destructured into
+``sub-fields'', like the @code{cdr} of the second array element in the example
+above.
+
+As with the @samp{array} and @samp{seq} commands, the @samp{array-ref} and @samp{seq-ref}
+commands can use the same keywords as the @samp{nums} command
+(@ref{Numeric Iteration}) for working with the index and choosing a range of the
+sequence elements through which to iterate.  In addition to those keywords,
+they also have an @samp{index} keyword, which names the variable used to store
+the accessed index during the loop.
+
+@findex array-ref, arrayf, string-ref, stringf, across-ref
+@table @asis
+@item @samp{(array-ref|arrayf|string-ref|stringf|across-ref VAR EXPR &key KEYS)}
+Loop
+through the elements of the array @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able
+place.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
+used to store the index being accessed.  For others, see the @samp{nums}
+command.
+
+@lisp
+;; => "aaa"
+(loopy (with (my-str "cat"))
+       (array-ref i my-str)
+       (do (setf i ?a))
+       (finally-return my-str))
+
+;; => "0a2a4a6a89"
+(loopy (with (my-str "0123456789"))
+       (array-ref i my-str :from 1 :by 2 :to 7)
+       (do (setf i ?a))
+       (finally-return my-str))
+
+;; Works the same as
+(loopy (with (my-str "0123456789"))
+       (nums idx 1 7 :by 2)
+       (do (setf (aref my-str idx) ?a))
+       (finally-return my-str))
+@end lisp
+@end table
+
+@findex list-ref, listf, in-ref
+@table @asis
+@item @samp{(list-ref|listf|in-ref VAR EXPR &key by)}
+Loop through the elements of
+the list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update
+the list via function @samp{by} instead of @samp{cdr}.
+
+@lisp
+;; => (7 7 7)
+(loopy (with (my-list '(1 2 3)))
+       (list-ref i my-list)
+       (do (setf i 7))
+       (finally-return my-list))
+
+;; Works similar to
+(loopy (with (my-list '(1 2 3)))
+       (nums idx :below (length my-list))
+       (do (setf (nth idx my-list) 7))
+       (finally-return my-list))
+
+;; => (7 2 7)
+(loopy (with (my-list '(1 2 3)))
+       (list-ref i my-list :by #'cddr)
+       (do (setf i 7))
+       (finally-return my-list))
+
+;; => ([1 7] [2 7])
+(loopy (with (my-list '([1 2] [2 3])))
+       (list-ref [_ i] my-list)
+       (do (setf i 7))
+       (finally-return my-list))
 @end lisp
 @end table
 
 @findex seq-ref, seqf, sequence-ref, sequencef, elements-ref
 @table @asis
-@item @samp{(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR)}
+@item @samp{(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR &key KEYS)}
 Loop
-through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able
-place.
+through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a
+@code{setf}-able place.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
+used to store the index being accessed.  For others, see the @samp{nums}
+command.
 
 @lisp
+;; => (7 7 7 7)
 (loopy (with (my-seq '(1 2 3 4)))
        (seq-ref i my-seq)
        (do (setf i 7))
-       (finally-return my-seq)) ; => '(7 7 7 7)
+       (finally-return my-seq))
+
+;; => (0 cat 2 cat 4 cat 6 cat 8 cat)
+(loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+       (seq-ref i my-list :from 1 :by 2 )
+       (do (setf i 'cat))
+       (finally-return my-list))
+
+;; => "0123456a8a"
+(loopy (with (my-str "0123456789"))
+       (seq-ref i my-str :downto 6 :by 2 )
+       (do (setf i ?a))
+       (finally-return my-str))
 @end lisp
 @end table
 
@@ -2090,7 +2501,8 @@ To clearly distinguish between loop commands and Emacs features (such as the
 loop command @samp{list} and the function @code{list}), a loop command must be preceded
 by one of the keywords @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not share
 a name with any built-in Emacs feature and are similar to the keywords used by
-other packages.
+other packages.  For example, @samp{(list VAR LIST)} would be @samp{(for list VAR LIST)}
+or @samp{(for in VAR LIST)}.
 
 Any keyword in the user option @code{loopy-iter-command-keywords} can be used to
 identify any loop command.  For example, @samp{(accum collect a)} and
@@ -2099,8 +2511,8 @@ command in @code{loopy-iter}.
 
 To disable this requirement, use the flag @samp{lax-naming} (@ref{Using Flags}).  When
 using @samp{lax-naming}, @code{loopy-iter} will always prefer built-in features to loop
-commands.  E.g., ``list'' will always be understood as referring to the function
-@code{list} and not the loop command @samp{list}.
+commands.  For example, ``list'' will always be understood as referring to the
+function @code{list} and not the loop command @samp{list}.
 
 @vindex loopy-iter-ignored-commands
 If for some reason you wish for @code{loopy-iter} to ignore a loop command while
