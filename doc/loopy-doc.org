@@ -2665,6 +2665,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    of each instruction to whether the code should be inserted into the loop's
    main body (and so whether it should be wrapped in the ~if~-form).
 
+   For the purpose of this example, below is a version of the parsing function
+   made of the basic Lisp features with which you are familiar.
+
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-if-command
          ((_ condition &optional if-true &rest if-false))
@@ -2673,24 +2676,41 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      - CONDITION is a Lisp expression.
      - IF-TRUE is the first sub-command of the `if' command.
      - IF-FALSE are all the other sub-commands."
-       (let (full-instructions
-             if-true-main-body
-             if-false-main-body)
+
+       ;; The main processing of this function is to separate instructions for
+       ;; the loop's main body from other instructions, and to then wrap those
+       ;; main-body instructions with an `if' special form.
+       (let ((full-instructions)
+             (if-true-main-body)
+             (if-false-main-body)
+             ;; This variable is just so iteration commands know when they are being
+             ;; used away from the top level of the loop's structure (which is an
+             ;; error).
+             (loopy--in-sub-level t))
+
+         ;; Process the instructions for the command that should run if the condition
+         ;; is true.
          (dolist (instruction (loopy--parse-loop-command if-true))
            (if (eq 'loopy--main-body (car instruction))
                (push (cdr instruction) if-true-main-body)
              (push instruction full-instructions)))
+
+         ;; Process the instructions for the command that should run if the condition
+         ;; is true.
          (dolist (instruction (loopy--parse-loop-commands if-false))
            (if (eq 'loopy--main-body (car instruction))
                (push (cdr instruction) if-false-main-body)
              (push instruction full-instructions)))
-         ;; Push the actual main-body instruction.
+
+         ;; `loopy--parse-loop-command' always returns a list instructions.
+         ;; For some commands, that means wrapping multiple instructions in
+         ;; a `progn' form.  For others, we need to extract the only element.
          (setq if-true-main-body
                (if (= 1 (length if-true-main-body))
                    (car if-true-main-body)
                  (cons 'progn (nreverse if-true-main-body))))
 
-         ;; Return the list of instructions.
+         ;; Return the new, full list of instructions.
          (cons `(loopy--main-body
                  . (if ,condition
                        ,if-true-main-body
@@ -2698,8 +2718,43 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (nreverse full-instructions))))
    #+END_SRC
 
+   For completeness, below is the current actual definition of the parsing
+   function.  The logic is the same, but it uses more convenient Emacs Lisp
+   features, along with some custom functions for processing instructions.
+
+   #+begin_src emacs-lisp
+     (require 'cl-lib)
+     (require 'pcase)
+
+     (cl-defun loopy--parse-if-command
+         ((_ condition &optional if-true &rest if-false))
+       "Parse the `if' loop command.  This takes the entire command.
+
+     - CONDITION is a Lisp expression.
+     - IF-TRUE is the first sub-command of the `if' command.
+     - IF-FALSE are all the other sub-commands."
+       (let ((loopy--in-sub-level t))
+         (pcase-let ((`(,if-true-main-body ,true-rest)
+                      (loopy--extract-main-body (loopy--parse-loop-command if-true)))
+                     (`(,if-false-main-body ,false-rest)
+                      (loopy--extract-main-body (loopy--parse-loop-commands if-false))))
+
+           ;; Return the full instruction list.
+           `((loopy--main-body . (if ,condition
+                                     ;; Handle if we need to wrap multiple main-body
+                                     ;; expressions.
+                                     ,(if (cl-rest if-true-main-body)
+                                          (cons 'progn if-true-main-body)
+                                        (cl-first if-true-main-body))
+                                   ,@if-false-main-body))
+             ,@true-rest
+             ,@false-rest))))
+   #+end_src
+
+
    The hardest part of this exchange is making sure the inserted code ends up in
-   the correct order.
+   the correct order.  Custom functions like ~loopy--extract-main-body~ make
+   this easier, as seen when comparing with the first example.
 
    A loop body command has 7 main places to put code:
 

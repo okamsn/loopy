@@ -502,7 +502,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org403d4c1
+@float Listing,org92f9d26
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -572,7 +572,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org7849d86
+@float Listing,org9d2bce5
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -646,7 +646,7 @@ command.
 @item @samp{(expr|exprs|set VAR [EXPRS] [:init INIT])}
 Bind @samp{VAR} to each @samp{EXPR} in
 order.  Once the last @samp{EXPR} is reached, it is used repeatedly for the rest
-of the loop.  With no @samp{EXPR}, @samp{VAR} is repeatedly bound to @samp{nil}.
+of the loop.  With no @samp{EXPR}, @samp{VAR} is repeatedly bound to @code{nil}.
 
 If @samp{INIT} is provided, use that as the initial value of @samp{VAR}.  This could
 also be achieved by specifying a value using the @samp{with} special macro
@@ -2175,9 +2175,9 @@ by @code{and}.
 @node Conditionals
 @subsection Conditionals
 
-Conditional commands in @samp{loopy} can take multiple sub-commands, and work
+Conditional commands in @code{loopy} can take multiple sub-commands, and work
 like their Lisp counterparts.  There is therefore no need for an @samp{and}
-command as used in @samp{cl-loop}.
+command as used in @code{cl-loop}.
 
 @findex when
 @table @asis
@@ -2260,7 +2260,7 @@ of @samp{cl-return-from} underneath.  Indeed, you could use @samp{(do (cl-return
     NAME [EXPR]))} to achieve the same effect.
 
 If multiple @samp{EXPR} are passes to the @samp{return} or @samp{return-from}, these
-commands will return a list of those @samp{EXPR}.  If not @samp{EXPR} is given, @samp{nil}
+commands will return a list of those @samp{EXPR}.  If not @samp{EXPR} is given, @code{nil}
 is returned.
 
 The commands @samp{leave}, @samp{while}, and @samp{until} leave the current loop without
@@ -2823,7 +2823,7 @@ add custom commands to @code{loopy}.  Two examples are provided.
 @section Background Info
 
 @cindex instruction, instructions
-The core working of @samp{loopy} is taking a command and generating code that is
+The core working of @code{loopy} is taking a command and generating code that is
 substituted into or around a loop body.  This code is transmitted between
 functions as @dfn{instructions}, which describe how the code is to be
 used.
@@ -2889,6 +2889,9 @@ turn its sub-commands into a list of instructions, and then checks the @samp{car
 of each instruction to whether the code should be inserted into the loop's
 main body (and so whether it should be wrapped in the @code{if}-form).
 
+For the purpose of this example, below is a version of the parsing function
+made of the basic Lisp features with which you are familiar.
+
 @lisp
 (cl-defun loopy--parse-if-command
     ((_ condition &optional if-true &rest if-false))
@@ -2897,24 +2900,41 @@ main body (and so whether it should be wrapped in the @code{if}-form).
 - CONDITION is a Lisp expression.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
-  (let (full-instructions
-        if-true-main-body
-        if-false-main-body)
+
+  ;; The main processing of this function is to separate instructions for
+  ;; the loop's main body from other instructions, and to then wrap those
+  ;; main-body instructions with an `if' special form.
+  (let ((full-instructions)
+        (if-true-main-body)
+        (if-false-main-body)
+        ;; This variable is just so iteration commands know when they are being
+        ;; used away from the top level of the loop's structure (which is an
+        ;; error).
+        (loopy--in-sub-level t))
+
+    ;; Process the instructions for the command that should run if the condition
+    ;; is true.
     (dolist (instruction (loopy--parse-loop-command if-true))
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) if-true-main-body)
         (push instruction full-instructions)))
+
+    ;; Process the instructions for the command that should run if the condition
+    ;; is true.
     (dolist (instruction (loopy--parse-loop-commands if-false))
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) if-false-main-body)
         (push instruction full-instructions)))
-    ;; Push the actual main-body instruction.
+
+    ;; `loopy--parse-loop-command' always returns a list instructions.
+    ;; For some commands, that means wrapping multiple instructions in
+    ;; a `progn' form.  For others, we need to extract the only element.
     (setq if-true-main-body
           (if (= 1 (length if-true-main-body))
               (car if-true-main-body)
             (cons 'progn (nreverse if-true-main-body))))
 
-    ;; Return the list of instructions.
+    ;; Return the new, full list of instructions.
     (cons `(loopy--main-body
             . (if ,condition
                   ,if-true-main-body
@@ -2922,8 +2942,43 @@ main body (and so whether it should be wrapped in the @code{if}-form).
           (nreverse full-instructions))))
 @end lisp
 
+For completeness, below is the current actual definition of the parsing
+function.  The logic is the same, but it uses more convenient Emacs Lisp
+features, along with some custom functions for processing instructions.
+
+@lisp
+(require 'cl-lib)
+(require 'pcase)
+
+(cl-defun loopy--parse-if-command
+    ((_ condition &optional if-true &rest if-false))
+  "Parse the `if' loop command.  This takes the entire command.
+
+- CONDITION is a Lisp expression.
+- IF-TRUE is the first sub-command of the `if' command.
+- IF-FALSE are all the other sub-commands."
+  (let ((loopy--in-sub-level t))
+    (pcase-let ((`(,if-true-main-body ,true-rest)
+                 (loopy--extract-main-body (loopy--parse-loop-command if-true)))
+                (`(,if-false-main-body ,false-rest)
+                 (loopy--extract-main-body (loopy--parse-loop-commands if-false))))
+
+      ;; Return the full instruction list.
+      `((loopy--main-body . (if ,condition
+                                ;; Handle if we need to wrap multiple main-body
+                                ;; expressions.
+                                ,(if (cl-rest if-true-main-body)
+                                     (cons 'progn if-true-main-body)
+                                   (cl-first if-true-main-body))
+                              ,@@if-false-main-body))
+        ,@@true-rest
+        ,@@false-rest))))
+@end lisp
+
+
 The hardest part of this exchange is making sure the inserted code ends up in
-the correct order.
+the correct order.  Custom functions like @code{loopy--extract-main-body} make
+this easier, as seen when comparing with the first example.
 
 A loop body command has 7 main places to put code:
 
@@ -3061,7 +3116,7 @@ the loop is stored in the variable @code{loopy--loop-name}.  The default value i
 @samp{sub-loop} command.
 
 The structure of the macro’s expanded code depends on the features used
-(e.g., @samp{loopy} won’t try to declare variables if none exist), but the result
+(e.g., @code{loopy} won’t try to declare variables if none exist), but the result
 will work similar to the below example.
 
 @lisp
@@ -3159,7 +3214,7 @@ see that it expands to do what we want, as expected.
 @section An @code{always} Command
 
 Lets say we want to emulate @code{cl-loop}'s @samp{always} clause, which causes the
-loop to return @samp{nil} if an expression evaluates to @samp{nil} and @samp{t} otherwise.
+loop to return @code{nil} if an expression evaluates to @code{nil} and @code{t} otherwise.
 This is similar to the functions @code{cl-every} and @code{seq-every-p}.
 
 Here is an example:
@@ -3169,7 +3224,7 @@ Here is an example:
 (cl-loop for i in (number-sequence 1 9) always (< i 10))
 @end lisp
 
-Actually, @samp{loopy} already has an @samp{always} command, but for the sake of this
+Actually, @code{loopy} already has an @samp{always} command, but for the sake of this
 example let's assume that it doesn't.  Without a custom command, you could
 translate this using the following code:
 
@@ -3593,8 +3648,8 @@ evaluates to @code{nil}.
 special form @code{cond}.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
-@headitem @samp{cl-loop}
-@tab @samp{loopy}
+@headitem @code{cl-loop}
+@tab @code{loopy}
 @item @samp{with var = value}
 @tab @samp{(with (VAR VALUE))} as a macro argument
 @item @samp{if COND clause}
@@ -3632,7 +3687,7 @@ lines, formatting non-empty lines and collecting the formatted lines into a
 list of candidates.  At the same time, it selects a default candidate by
 finding the non-empty line closest to the current line.
 
-Here is the main portion of the command, which uses @samp{cl-loop}.
+Here is the main portion of the command, which uses @code{cl-loop}.
 
 @lisp
 ;; ...
@@ -3674,7 +3729,7 @@ Here is the main portion of the command, which uses @samp{cl-loop}.
 ;; ...
 @end lisp
 
-The limitations of @samp{cl-loop}'s @samp{when} clause encourages relying on Lisp
+The limitations of @code{cl-loop}'s @samp{when} clause encourages relying on Lisp
 expressions rather than clauses for processing.  To use those Lisp
 expressions, one must declare more variables with the @samp{with} clause to ensure
 that those variables are locally scoped.
@@ -3727,7 +3782,7 @@ The loop produces formatted candidates by prepending this heading text with
 the text of parent headings, as determined by the heading level.  At the same
 time, the loop selects the current heading as the default candidate.
 
-Instead of using @samp{cl-loop}, this command is written in conventional Emacs
+Instead of using @code{cl-loop}, this command is written in conventional Emacs
 Lisp.
 
 @lisp
