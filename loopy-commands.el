@@ -1693,7 +1693,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   "Parse the `collect' command as (collect VAR VAL &key result-type at)."
   :keywords (result-type at)
   :explicit (loopy--plist-bind ( :at (pos (quote 'end))
-                                 :result-type (result-type (quote 'list)))
+                                 :result-type (result-type 'list))
                 opts
               `((loopy--accumulation-vars . (,var nil))
                 (loopy--main-body
@@ -1704,7 +1704,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                  `(append ,var (list ,val)))
                                 (t
                                  (error "Bad `:at' position: %s" cmd)))))
-                ,(unless (eq result-type 'list)
+                ,(unless (member result-type '(list 'list))
                    `(loopy--accumulation-final-updates
                      . (,var . (setq ,var
                                      (cl-coerce ,var (quote
@@ -1713,7 +1713,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 (loopy--implicit-return . ,var)))
 
   :implicit (loopy--plist-bind ( :at (pos (quote 'end))
-                                 :result-type (result-type (quote 'list)))
+                                 :result-type (result-type 'list))
                 opts
               `((loopy--accumulation-vars . (,var nil))
                 (loopy--main-body
@@ -1724,7 +1724,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 ;; `:result-type'.
                 ,(cond
                   ((member pos '(start beginning 'start 'beginning))
-                   (unless (eq result-type 'list)
+                   (unless (member result-type '(list 'list))
                      `(loopy--accumulation-final-updates
                        . (,var . (setq ,var
                                        (cl-coerce ,var
@@ -1732,7 +1732,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                                    ,(loopy--get-quoted-symbol
                                                      result-type))))))))
                   ((member pos '(end 'end))
-                   (if (eq result-type 'list)
+                   (if (member result-type '(list 'list))
                        `(loopy--accumulation-final-updates
                          . (,var . (setq ,var (nreverse ,var))))
                      `(loopy--accumulation-final-updates
