@@ -6,7 +6,7 @@
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
 ;; Version: 0.6.1
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "27.1") (map "3.0"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
 
@@ -250,6 +250,26 @@ Unlike in `loopy--iteration-vars', these variables should be
 accessible from anywhere in the macro, and should not be reset
 for sub-loops.")
 
+(defvar loopy--accumulation-list-end-vars nil
+  "Associations of accumulation variables and variables pointing to their ends.
+
+Keys are symbols naming variables.  Values are symbols naming variables.
+
+When working with lists, it is useful to be able to reference the
+last link in the list.  This makes appending to the end of the
+list much easier.  When using multiple accumulation commands, it
+is important that such commands use the same variable to keep
+track of the end of the list.")
+
+(defvar loopy--accumulation-variable-info nil
+  "Information about accumulation variables to ensure command compatibility.
+
+Information is of the form (VARIABLE-NAME CATEGORY COMMAND).
+Current categories are `list', `string', `vector', `value', and
+`reverse-list'.
+
+See `loopy--check-accumulation-compatibility' for more.")
+
 (defvar loopy--wrapping-forms nil
   "Forms that should wrap the loop body, applied in order.
 
@@ -390,6 +410,8 @@ t.")
       loopy--skip-used
       loopy--tagbody-exit-used
       loopy--accumulation-final-updates
+      loopy--accumulation-list-end-vars
+      loopy--accumulation-variable-info
       loopy--in-sub-level
 
       ;; -- Flag Variables --

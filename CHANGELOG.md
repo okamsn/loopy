@@ -4,8 +4,6 @@ This document describes the user-facing changes to Loopy.
 
 ## Unreleased
 
-## 0.6.1
-
 ### Breaking Changes
 
 - Previously, some commands (`accumulate`, `cons`) required using a function
@@ -20,6 +18,23 @@ This document describes the user-facing changes to Loopy.
 
 - Correctly `let`-bind `loopy--destructuring-for-iteration-function`.
   Previously, some destructuring settings would affect the next macro run.
+
+- `append` now appends to the ends of explicit accumulation variables
+  without copying first.  It is now much faster. [#78]
+
+- The accumulation commands which build lists (`adjoin`, `append`, `collect`,
+  `union`, `nonc`, `nunion`) are now more correct, at the cost of some speed
+  ([#78]).
+  - When adding the end of the list, variables explicitly named can now be
+    better modified during the loop.
+  - Accumulation commands can now better modify the end of the list
+    `loopy-result`.  Using implicit variables is still faster than using
+    explicit variables.
+  - Accumulation loop commands are now even more efficient when using the
+    `split` flag.  This is the fastest method to use build a result.
+
+- A more informative error is signaled when incompatible accumulation commands
+  are used ([#78]), showing the commands themselves.
 
 ## 0.6.1
 
@@ -53,3 +68,4 @@ This document describes the user-facing changes to Loopy.
 
 [#65]: https://github.com/okamsn/loopy/issues/65
 [#73]: https://github.com/okamsn/loopy/pull/73
+[#78]: https://github.com/okamsn/loopy/pull/78

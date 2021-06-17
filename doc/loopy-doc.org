@@ -1412,11 +1412,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+end_src
 
    Like in ~cl-loop~, all accumulation commands using implied variables will
-   accumulate into the same implied variable (that is, into ~loopy-result~).
-   You should make sure that such commands are compatible.  For example, you
-   should not try to accumulate =collect= results and =sum= results into
-   ~loopy-result~, as trying to use a list as a number will cause an error.  If
-   you want to collect into separate variables, just specify a variable name
+   accumulate into the same implied variable (that is, into ~loopy-result~).  An
+   error will be signaled if the accumulation commands are not compatible.  For
+   example, you should not try to accumulate =collect= results and =sum= results
+   into ~loopy-result~, as trying to use a list as a number will cause an error.
+   If you want to collect into separate variables, just specify a variable name
    like you normally would.
 
    #+attr_texinfo: :tag Warning
@@ -1460,6 +1460,40 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (collect i)        ; Without the `split' flag,
             (collect j)        ; this would just produce
             (collect k))       ; (1 2 3 4 5 6).
+   #+end_src
+
+   To be clear, the more guarantees that can be made about the accumulation
+   variables, the more ~loopy~ can optimize the accumulations.  The fastest
+   accumulations (from greatest speed to least), are produced by:
+   1. Using implied result variables with the =split= flag enabled.
+   2. Using the implied variable ~loopy-result~, which, similar to the variables
+      in (1), cannot be modified during the loop except by other accumulation
+      commands.  This is the default behavior for accumulation commands that do
+      not name a variable, and occurs when the =split= flag is disabled.
+   3. Using explicitly named result variables, which can be modified during the
+      loop by arbitrary code, not just accumulation commands.  This includes the
+      explicitly named variables required for destructuring.
+
+   Effort has gone into making each case efficient while keeping flexibility and
+   correctness.  The difference in speed can be significant when working with
+   large sequences or performing many accumulations.
+
+   #+begin_src emacs-lisp
+     ;; This is the slowest form.
+     ;; => (1 2 3)
+     (loopy (list i '(1 2 3))
+            (collect my-collection i)
+            (finally-return my-collection))
+
+     ;; Accumulations with implicit variables are faster.
+     ;; => (1 2 3)
+     (loopy (list i '(1 2 3))
+            (collect i))
+
+     ;; Accumulations with split implicit variables are fastest.
+     (loopy (flag split)
+            (list i '(1 2 3))
+            (collect i))
    #+end_src
 
    #+attr_texinfo: :tag Note
