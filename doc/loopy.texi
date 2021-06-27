@@ -502,7 +502,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgce871cd
+@float Listing,orgcfc8153
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -516,7 +516,7 @@ For convenience and understanding, the same command might have multiple names,
 called @dfn{aliases}.  For example, the command @samp{expr} has an alias
 @samp{set}, because @samp{expr} is used to set a variable to the value of an expression.
 You can add custom aliases using the function @code{loopy-defalias}, which modifies
-the user option @code{loopy-custom-command-aliases} (@ref{Custom Aliases}).
+the user option @code{loopy-command-aliases} (@ref{Custom Aliases}).
 
 Some commands take optional arguments.  For example, the command @samp{list} can
 take a function as an optional argument, which affects how that iterates
@@ -572,7 +572,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,orgd745dc0
+@float Listing,org0f4531b
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2792,9 +2792,9 @@ Below is an example of the @samp{split} flag.
 An @dfn{alias} is another name for a command.  @code{loopy} comes with several
 built-in aliases, such as @samp{set} for the command @samp{expr}.
 
-@vindex loopy-custom-command-aliases
+@vindex loopy-command-aliases
 @findex loopy-defalias
-Custom aliases can be added to the user option @code{loopy-custom-command-aliases}.
+Custom aliases can be added to the user option @code{loopy-command-aliases}.
 Each element in this list is a pair of the alias and the definition.  For
 convenience, the function @code{loopy-defalias} is provided, which will correctly
 add the pairs to this variable.
@@ -2811,26 +2811,13 @@ add the pairs to this variable.
        (collect (cons i j)))
 
 ;; => ((a . array) (l . list))
-loopy-custom-command-aliases
+loopy-command-aliases
 @end lisp
 
-@quotation Note
-The macro checks for command definitions in the following order:
-
-@enumerate
-@item
-Custom aliases
-@item
-Custom commands
-@item
-Built-in commands
-@end enumerate
-
-
-If an alias is found, the macro will check first whether it is an alias of a
-custom command, then whether it is an alias of a built-in command.
-
-@end quotation
+When looking for a command parser, @samp{loopy} will always check whether a given
+name is an alias before checking whether it is a command.  Additionally,
+aliases can be recursive. That is, you can create a new alias for an existing
+alias.
 
 The special macro arguments (@ref{Special Macro Arguments}) can also be aliased.
 Using an alias does not change that the special arguments are parsed before
@@ -3212,15 +3199,15 @@ loopy body, so the definition of the parsing function is quite simple.
 @samp{loopy} will pass the entire command expression to the parsing function, and
 expects back a list of instructions.
 
-@vindex loopy-custom-command-parsers
+@vindex loopy-command-parsers
 To tell @samp{loopy} about this function, add it and the command name @samp{greet} to
-the variable @samp{loopy-custom-command-parsers}.  When @code{loopy} doesn’t recognize
+the variable @samp{loopy-command-parsers}.  When @code{loopy} doesn’t recognize
 a command, it will search in this alist for a matching symbol.  The function
 that is paired with the symbol receives the entire command expressions, and
 should produce a list of valid instructions.
 
 @lisp
-(add-to-list 'loopy-custom-command-parsers
+(add-to-list 'loopy-command-parsers
              '(greet . my-loopy-greet-command-parser))
 @end lisp
 
@@ -3347,7 +3334,7 @@ just @code{'(t)}, then the macro knows to just return @code{t}.
 
 Once we've chosen our instructions, we need to tell @samp{loopy} what function to
 use to produce these instructions.  Like in the previous example, we define
-are parsing function and add it to the alist @code{loopy-custom-command-parsers}.
+are parsing function and add it to the alist @code{loopy-command-parsers}.
 
 @lisp
 ;; As noted in the previous section, the parsing function is always
@@ -3363,11 +3350,11 @@ Otherwise, `loopy' should return t."
     (loopy--main-body . (unless condition
                           (cl-return-from ,loopy--loop-name nil)))))
 
-(add-to-list 'loopy-custom-command-parsers
+(add-to-list 'loopy-command-parsers
              (cons 'always #'my--loopy-always-command-parser))
 @end lisp
 
-Once we've added our parsing function to @code{loopy-custom-command-parsers},
+Once we've added our parsing function to @code{loopy-command-parsers},
 @samp{loopy} will use that function whenever it tries to understand the @samp{always}
 command.  In this case, this custom parser would supercede the built-in
 parser.
