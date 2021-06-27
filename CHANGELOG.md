@@ -10,14 +10,12 @@ This document describes the user-facing changes to Loopy.
   symbol (quoted or not) for their function parameter.  This prevented passing
   variables containing function symbols as the argument.
 
-  This behavior has been changed so that function symbols must now be quoted.
-  Unquoted symbol arguments will now be understood to be variables.
+  This behavior has been changed so that function symbols must now be quoted (no
+  Issue or PR).  Unquoted symbol arguments will now be understood to be
+  variables.
 
   This change only applies to function parameters.  Arguments like `end` for
   `collect`'s position parameter can still be unquoted.
-
-- Correctly `let`-bind `loopy--destructuring-for-iteration-function`.
-  Previously, some destructuring settings would affect the next macro run.
 
 - `append` now appends to the ends of explicit accumulation variables
   without copying first.  It is now much faster. [#78]
@@ -33,8 +31,16 @@ This document describes the user-facing changes to Loopy.
   - Accumulation loop commands are now even more efficient when using the
     `split` flag.  This is the fastest method to use build a result.
 
+### Bugs Fixed
+
+- Correctly `let`-bind `loopy--destructuring-for-iteration-function` (no PR or
+  Issue).  Previously, some destructuring settings would affect the next macro
+  run.
+
+### Other Changes
+
 - A more informative error is signaled when incompatible accumulation commands
-  are used ([#78]), showing the commands themselves.
+  are used ([#78]), showing the commands themselves.  This addresses [#45].
 
 ## 0.6.1
 
@@ -66,6 +72,7 @@ This document describes the user-facing changes to Loopy.
   references to function symbols must now be quoted ([#73]).
 
 
+[#45]: https://github.com/okamsn/loopy/issues/45
 [#65]: https://github.com/okamsn/loopy/issues/65
 [#73]: https://github.com/okamsn/loopy/pull/73
 [#78]: https://github.com/okamsn/loopy/pull/78
