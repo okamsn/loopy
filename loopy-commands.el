@@ -1618,8 +1618,7 @@ the inputs to test."
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-third args) val var)))
-                (loopy--implicit-return . ,var)))
+                 . (setq ,var ,(loopy--apply-function (cl-third args) val var)))))
   :implicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var ,init))
@@ -1677,8 +1676,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
          `(loopy--accumulation-final-updates
            . (,var . (setq ,var (cl-coerce ,var
                                            (quote ,(loopy--get-quoted-symbol
-                                                    result-type)))))))
-      (loopy--implicit-return . ,var)))
+                                                    result-type)))))))))
   :implicit
   (loopy--plist-bind ( :test test :key key :at (pos 'end)
                        :result-type (result-type 'list))
@@ -1760,8 +1758,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                       ((member pos '(end 'end))
                        `(nconc ,var (copy-sequence ,val)))
                       (t
-                       (error "Bad `:at' position: %s" cmd)))))
-      (loopy--implicit-return . ,var)))
+                       (error "Bad `:at' position: %s" cmd)))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     `((loopy--accumulation-vars . (,var nil))
@@ -1814,8 +1811,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                      . (,var . (setq ,var
                                      (cl-coerce ,var (quote
                                                       ,(loopy--get-quoted-symbol
-                                                        result-type)))))))
-                (loopy--implicit-return . ,var)))
+                                                        result-type)))))))))
 
   :implicit (loopy--plist-bind ( :at (pos (quote 'end))
                                  :result-type (result-type 'list))
@@ -1880,8 +1876,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                            ((member pos '(end 'end))
                             `(concat ,var ,val))
                            (t
-                            (error "Bad `:at' position: %s" cmd)))))
-                (loopy--implicit-return . ,var)))
+                            (error "Bad `:at' position: %s" cmd)))))))
   :implicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'string cmd)
               `((loopy--accumulation-vars . (,var nil))
@@ -1905,6 +1900,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var 0))
+                (loopy--main-body . (if ,val (setq ,var (1+ ,var))))))
+  :implicit (progn
+              (loopy--check-accumulation-compatibility var 'value cmd)
+              `((loopy--accumulation-vars . (,var 0))
                 (loopy--main-body . (if ,val (setq ,var (1+ ,var))))
                 (loopy--implicit-return . ,var))))
 
@@ -1926,8 +1925,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
                    `(loopy--accumulation-final-updates
-                     . (,var . (if ,var nil (setq ,var ,on-failure)))))
-                (loopy--implicit-return   . ,var)))
+                     . (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
                    (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
@@ -1950,6 +1948,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var -1.0e+INF))
+                (loopy--main-body . (setq ,var (max ,val ,var)))))
+  :implicit (progn
+              (loopy--check-accumulation-compatibility var 'value cmd)
+              `((loopy--accumulation-vars . (,var -1.0e+INF))
                 (loopy--main-body . (setq ,var (max ,val ,var)))
                 (loopy--implicit-return . ,var))))
 
@@ -1959,6 +1961,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var +1.0e+INF))
+                (loopy--main-body . (setq ,var (min ,val ,var)))))
+  :implicit (progn
+              (loopy--check-accumulation-compatibility var 'value cmd)
+              `((loopy--accumulation-vars . (,var +1.0e+INF))
                 (loopy--main-body . (setq ,var (min ,val ,var)))
                 (loopy--implicit-return . ,var))))
 
@@ -1966,6 +1972,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 (loopy--defaccumulation multiply
   "Parse the `multiply' command as (multiply VAR VAL)."
   :explicit (progn
+              (loopy--check-accumulation-compatibility var 'value cmd)
+              `((loopy--accumulation-vars . (,var 1))
+                (loopy--main-body . (setq ,var (* ,val ,var)))))
+  :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var 1))
                 (loopy--main-body . (setq ,var (* ,val ,var)))
@@ -1986,8 +1996,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                            ((member pos '(end 'end))
                             `(nconc ,var ,val))
                            (t
-                            (error "Bad `:at' position: %s" cmd)))))
-                (loopy--implicit-return . ,var)))
+                            (error "Bad `:at' position: %s" cmd)))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     `((loopy--accumulation-vars . (,var nil))
@@ -2027,7 +2036,6 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
     `((loopy--accumulation-vars . (,var nil))
-      (loopy--implicit-return . ,var)
       ,@(let ((test-method (loopy--get-union-test-method var key test)))
           (cond
            ((member pos '(start beginning 'start 'beginning))
@@ -2078,8 +2086,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (append ,val ,var)))
-                (loopy--implicit-return . ,var)))
+                (loopy--main-body . (setq ,var (append ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars . (,var nil))
@@ -2093,6 +2100,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 (loopy--defaccumulation push-into
   "Parse the `push' command as (push VAR VAL)."
   :explicit (progn
+              (loopy--check-accumulation-compatibility var 'list cmd)
+              `((loopy--accumulation-vars . (,var nil))
+                (loopy--main-body . (setq ,var (cons ,val  ,var)))))
+  :implicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars . (,var nil))
                 (loopy--main-body . (setq ,var (cons ,val  ,var)))
@@ -2115,14 +2126,17 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-third args) var val)))
-                (loopy--implicit-return . ,var))))
+                 . (setq ,var ,(loopy--apply-function (cl-third args) var val))))))
 
 ;;;;;; Sum
 (loopy--defaccumulation sum
   "Parse the `sum' command as (sum VAR VAL)."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit (progn
+              (loopy--check-accumulation-compatibility var 'value cmd)
+              `((loopy--accumulation-vars . (,var 0))
+                (loopy--main-body . (setq ,var (+ ,val ,var)))))
+  :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
               `((loopy--accumulation-vars . (,var 0))
                 (loopy--main-body . (setq ,var (+ ,val ,var)))
@@ -2136,7 +2150,6 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
     `((loopy--accumulation-vars . (,var nil))
-      (loopy--implicit-return . ,var)
       ,(let ((test-method (loopy--get-union-test-method var key test)))
          (cond
           ((member pos '(start beginning 'start 'beginning))
@@ -2199,8 +2212,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                            ((member pos '(end 'end))
                             `(vconcat ,var ,val))
                            (t
-                            (error "Bad `:at' position: %s" cmd)))))
-                (loopy--implicit-return . ,var)))
+                            (error "Bad `:at' position: %s" cmd)))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     (loopy--check-accumulation-compatibility var 'vector cmd)

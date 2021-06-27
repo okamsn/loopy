@@ -67,6 +67,9 @@ This document describes the user-facing changes to Loopy.
   keyword arguments, in which case the elements of those sequences are
   distributed.  See the documentation for more info. ([#73], [#65])
 
+- Explicit accumulation variables are no longer used as implicit return values
+  for the macro.
+
 ### Non-Breaking Changes
 
 - The positional arguments of the `nums` command are now optional, and can be

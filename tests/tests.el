@@ -1348,7 +1348,8 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list i '(1 2 3))
                                      (if (cl-evenp i)
                                          (collect evens i)
-                                       (collect odds i))))))))
+                                       (collect odds i))
+                                     (finally-return evens odds)))))))
 
 ;;;;; Name of implicit accumulations
 (ert-deftest implicit-accumulation-name ()
@@ -1437,18 +1438,21 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(2 1)
                  (eval (quote (loopy (list i '(1 2))
                                      (accumulate my-accum i #'cons
-                                                 :init nil))))))
+                                                 :init nil)
+                                     (finally-return my-accum))))))
 
   (should (equal '((3 1) (4 2))
                  (eval (quote (loopy (list i '((1 2) (3 4)))
                                      (accumulate (accum1 accum2) i #'cons
-                                                 :init nil))))))
+                                                 :init nil)
+                                     (finally-return accum1 accum2))))))
 
   (should (equal '((3 1) (4 2))
                  (eval (quote (let ((f #'cons))
                                 (loopy (list i '((1 2) (3 4)))
                                        (accumulate (accum1 accum2) i f
-                                                   :init nil))))))))
+                                                   :init nil)
+                                       (finally-return accum1 accum2))))))))
 
 ;;;;; Adjoin
 (ert-deftest adjoin ()
@@ -1549,7 +1553,8 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal [1 2 3]
                  (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin my-var i :result-type 'vector))))))
+                                     (adjoin my-var i :result-type 'vector)
+                                     (finally-return my-var))))))
 
   (should (equal [1 2 3 4 5]
                  (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
@@ -1565,7 +1570,8 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal [1 2 3]
                  (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin my-var i :result-type vector)))))))
+                                     (adjoin my-var i :result-type vector)
+                                     (finally-return my-var)))))))
 
 (ert-deftest adjoin-at ()
   (should (equal '(1 2 3 4 5)
@@ -1618,7 +1624,8 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list i '(1 2 2 3 3 4))
                                      (adjoin coll i :at end :test #'=)
                                      (do (setq coll (nconc coll (list 27))))
-                                     (adjoin coll (1+ i) :at end :test #'=)))))))
+                                     (adjoin coll (1+ i) :at end :test #'=)
+                                     (finally-return coll)))))))
 
 (ert-deftest adjoin-not-destructive ()
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
@@ -1655,10 +1662,13 @@ implicit variable without knowing it's name, even for named loops."
 (ert-deftest append-destructuring ()
   (should (equal '((1 2 5 6) (3 4 7 8))
                  (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
-                                     (append (j k) i))))))
+                                     (append (j k) i)
+                                     (finally-return j k))))))
+
   (should (equal '((1 2 5 6) (3 4 7 8))
                  (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
-                                     (appending (j k) i)))))))
+                                     (appending (j k) i)
+                                     (finally-return j k)))))))
 
 (ert-deftest append-implicit ()
   (should (equal '(1 2 3 4 5 6)
@@ -1700,7 +1710,8 @@ implicit variable without knowing it's name, even for named loops."
                         (do (setq coll `(,@coll 23)))
                         (append coll (mapcar (lambda (x) (+ x 7))
                                              i)
-                                :at end)))))
+                                :at end)
+                        (finally-return coll)))))
 
 (ert-deftest append-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
@@ -1739,7 +1750,8 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 8 2 9 3 10 4 11)
                  (loopy (list i '(1 2 3 4))
                         (collect coll i :at end)
-                        (collect coll (+ i 7) :at end))))
+                        (collect coll (+ i 7) :at end)
+                        (finally-return coll))))
 
   (should (equal '(1 23 8 2 23 8 2 9 3 23 8 2 9 3 10)
                  (loopy (list i '(1 2 3))
@@ -1798,7 +1810,8 @@ implicit variable without knowing it's name, even for named loops."
 (ert-deftest collect-coercion ()
   (should (equal [1 2 3]
                  (eval (quote (loopy (list j '(1 2 3))
-                                     (collect v j :result-type 'vector))))))
+                                     (collect v j :result-type 'vector)
+                                     (finally-return v))))))
 
   (should (equal "abc"
                  (eval (quote (loopy (list j '(?a ?b ?c))
@@ -1806,7 +1819,8 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal [1 2 3]
                  (eval (quote (loopy (list j '(1 2 3))
-                                     (collect v j :result-type vector))))))
+                                     (collect v j :result-type vector)
+                                     (finally-return v))))))
 
   (should (equal "abc"
                  (eval (quote (loopy (list j '(?a ?b ?c))
@@ -2211,14 +2225,16 @@ implicit variable without knowing it's name, even for named loops."
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (list j '((11 12) (13 14) (15 16)))
                                      (nconc coll i :at end)
-                                     (nconc coll j :at end))))))
+                                     (nconc coll j :at end)
+                                     (finally-return coll))))))
 
   (should (equal '(1 2 27 11 12 3 4 27 13 14 5 6 27 15 16)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (list j '((11 12) (13 14) (15 16)))
                                      (nconc coll i :at end)
                                      (do (setq coll (nconc coll (list 27))))
-                                     (nconc coll j :at end))))))
+                                     (nconc coll j :at end)
+                                     (finally-return coll))))))
 
   (should (equal '(1 2 11 12 3 4 13 14 5 6 15 16)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
@@ -2259,7 +2275,8 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal
            '(1 2 3 4)
            (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                               (nunion var i))))))
+                               (nunion var i)
+                               (finally-return var))))))
   (should (equal
            '(1 2 3 4)
            (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
@@ -2292,7 +2309,8 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '((1 2 3) (2 3 4))
                  (eval (quote (loopy (array i [((1 2) (2 3))
                                                ((1 2 3) (3 4))])
-                                     (nunion (var1 var2) i :test #'equal)))))))
+                                     (nunion (var1 var2) i :test #'equal)
+                                     (finally-return var1 var2)))))))
 
 (ert-deftest nunion-at ()
   (should (equal '((1 2) (3 2) (1 1))
@@ -2353,21 +2371,17 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(5 6 3 4 1 2)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (prepending my-list i)
-                                     (finally-return my-list))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend my-list i))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepending my-list i)))))))
+                                     (finally-return my-list)))))))
 
 (ert-deftest prepend-destructuring ()
   (should (equal '((5 6 1 2) (7 8 3 4))
                  (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
-                                     (prepend [my-list1 my-list2] i))))))
+                                     (prepend [my-list1 my-list2] i)
+                                     (finally-return my-list1 my-list2))))))
   (should (equal '((5 6 1 2) (7 8 3 4))
                  (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
-                                     (prepending [my-list1 my-list2] i)))))))
+                                     (prepending [my-list1 my-list2] i)
+                                     (finally-return my-list1 my-list2)))))))
 
 (ert-deftest prepend-implicit ()
   (should (equal '(5 6 3 4 1 2)
@@ -2423,20 +2437,6 @@ implicit variable without knowing it's name, even for named loops."
                                      (pushing (p1 p2) elem)
                                      (finally-return p1 p2)))))))
 
-(ert-deftest push-into-implict ()
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (push-into coll j))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (pushing-into coll j))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (push coll j))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (pushing coll j)))))))
-
 ;;;;; Reduce
 (ert-deftest reduce ()
   (should (= 6
@@ -2446,16 +2446,19 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reduce r i #'append))))))
+                                     (reduce r i #'append)
+                                     (finally-return r))))))
 
   (should (equal '(1 2 3)
                  (eval (quote (let ((func #'append))
                                 (loopy (list i '((1) (2) (3)))
-                                       (reduce r i func)))))))
+                                       (reduce r i func)
+                                       (finally-return r)))))))
 
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reducing r i #'append)))))))
+                                     (reducing r i #'append)
+                                     (finally-return r)))))))
 
 (ert-deftest reduce-destructuring ()
   (should (equal '(4 6)
@@ -2465,11 +2468,14 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '((1 3) (2 4))
                  (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
-                                     (reduce [r1 r2] i #'append))))))
+                                     (reduce [r1 r2] i #'append)
+                                     (finally-return r1 r2))))))
 
   (should (equal '((1 3) (2 4))
                  (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
-                                     (reducing [r1 r2] i #'append)))))))
+                                     (reducing [r1 r2] i #'append)
+                                     (finally-return r1 r2)))))))
+
 (ert-deftest reduce-implicit ()
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
@@ -2542,7 +2548,9 @@ implicit variable without knowing it's name, even for named loops."
 
   (should (equal '(1 2 3 4)
                  (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                                     (union var i))))))
+                                     (union var i)
+                                     (finally-return var))))))
+
   (should (equal '(1 2 3 4)
                  (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
                                      (unioning var i)
@@ -2584,7 +2592,8 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '((1 2 3) (2 3 4))
                  (eval (quote (loopy (array i [((1 2) (2 3))
                                                ((1 2 3) (3 4))])
-                                     (union (var1 var2) i :test #'=)))))))
+                                     (union (var1 var2) i :test #'=)
+                                     (finally-return var1 var2)))))))
 
 (ert-deftest union-at ()
   (should (equal '((1 2) (3 2) (1 1))
