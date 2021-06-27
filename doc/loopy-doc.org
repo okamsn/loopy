@@ -479,7 +479,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   called {{{dfn(aliases)}}}.  For example, the command =expr= has an alias
   =set=, because =expr= is used to set a variable to the value of an expression.
   You can add custom aliases using the function ~loopy-defalias~, which modifies
-  the user option ~loopy-custom-command-aliases~ ([[#custom-aliases][Custom Aliases]]).
+  the user option ~loopy-command-aliases~ ([[#custom-aliases][Custom Aliases]]).
 
   Some commands take optional arguments.  For example, the command =list= can
   take a function as an optional argument, which affects how that iterates
@@ -2582,9 +2582,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   An {{{dfn(alias)}}} is another name for a command.  ~loopy~ comes with several
   built-in aliases, such as =set= for the command =expr=.
 
-  #+vindex: loopy-custom-command-aliases
+  #+vindex: loopy-command-aliases
   #+findex: loopy-defalias
-  Custom aliases can be added to the user option ~loopy-custom-command-aliases~.
+  Custom aliases can be added to the user option ~loopy-command-aliases~.
   Each element in this list is a pair of the alias and the definition.  For
   convenience, the function ~loopy-defalias~ is provided, which will correctly
   add the pairs to this variable.
@@ -2601,21 +2601,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
            (collect (cons i j)))
 
     ;; => ((a . array) (l . list))
-    loopy-custom-command-aliases
+    loopy-command-aliases
   #+end_src
 
-  #+attr_texinfo: :tag Note
-  #+begin_quote
-  The macro checks for command definitions in the following order:
-
-  1. Custom aliases
-  2. Custom commands
-  3. Built-in commands
-
-
-  If an alias is found, the macro will check first whether it is an alias of a
-  custom command, then whether it is an alias of a built-in command.
-  #+end_quote
+  When looking for a command parser, =loopy= will always check whether a given
+  name is an alias before checking whether it is a command.  Additionally,
+  aliases can be recursive. That is, you can create a new alias for an existing
+  alias.
 
   The special macro arguments ([[#macro-arguments][Special Macro Arguments]]) can also be aliased.
   Using an alias does not change that the special arguments are parsed before
@@ -2943,15 +2935,15 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    =loopy= will pass the entire command expression to the parsing function, and
    expects back a list of instructions.
 
-   #+vindex: loopy-custom-command-parsers
+   #+vindex: loopy-command-parsers
    To tell =loopy= about this function, add it and the command name =greet= to
-   the variable =loopy-custom-command-parsers=.  When ~loopy~ doesn’t recognize
+   the variable =loopy-command-parsers=.  When ~loopy~ doesn’t recognize
    a command, it will search in this alist for a matching symbol.  The function
    that is paired with the symbol receives the entire command expressions, and
    should produce a list of valid instructions.
 
    #+BEGIN_SRC emacs-lisp
-     (add-to-list 'loopy-custom-command-parsers
+     (add-to-list 'loopy-command-parsers
                   '(greet . my-loopy-greet-command-parser))
    #+END_SRC
 
@@ -3077,7 +3069,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    Once we've chosen our instructions, we need to tell =loopy= what function to
    use to produce these instructions.  Like in the previous example, we define
-   are parsing function and add it to the alist ~loopy-custom-command-parsers~.
+   are parsing function and add it to the alist ~loopy-command-parsers~.
 
    #+begin_src emacs-lisp
      ;; As noted in the previous section, the parsing function is always
@@ -3093,11 +3085,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
          (loopy--main-body . (unless condition
                                (cl-return-from ,loopy--loop-name nil)))))
 
-     (add-to-list 'loopy-custom-command-parsers
+     (add-to-list 'loopy-command-parsers
                   (cons 'always #'my--loopy-always-command-parser))
    #+end_src
 
-   Once we've added our parsing function to ~loopy-custom-command-parsers~,
+   Once we've added our parsing function to ~loopy-command-parsers~,
    =loopy= will use that function whenever it tries to understand the =always=
    command.  In this case, this custom parser would supercede the built-in
    parser.

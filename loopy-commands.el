@@ -104,46 +104,21 @@
   :prefix "loopy-"
   :link '(url-link "https://github.com/okamsn/loopy"))
 
-;;;###autoload
-(defcustom loopy-custom-command-parsers nil
-  "An alist of pairs of a quoted command name and a parsing function.
-
-The parsing function is chosen based on the command name (such as
-`list' in `(list i my-list)'), not the usage of the command.  That is,
-
-  (my-command var1)
-
-and
-
-  (my-command var1 var2)
-
-are both parsed by the same function, but that parsing function
-is not limited in how it responds to different usages.  If you
-really want, it can return different instructions each time.
-Learn more with `(info \"(emacs)loopy\")'.
-
-For example, to add a `when' command (if one didn't already
-exist), one could do
-
-  (add-to-list \'loopy-custom-command-parsers
-                (cons 'when #'my-loopy-parse-when-command))"
-  :group 'loopy
-  :type '(alist :key-type symbol :value-type function))
-
-(defun loopy--get-custom-command-parser (command)
-  "Get the parsing function for COMMAND from `loopy-custom-command-parsers'.
-This uses the command name (such as `list' in `(list i my-list)')."
-  (alist-get (car command) loopy-custom-command-parsers))
 
 ;;;###autoload
-(defcustom loopy-custom-command-aliases nil
+(defalias 'loopy-custom-command-aliases 'loopy-command-aliases)
+(defcustom loopy-command-aliases nil
   "An alist of pairs of a quoted alias and a quoted true name.
 
 For example, to create the alias `add' for the command `sum', one would add
 
   '(add . sum)
 
-to this list."
+to this list.  Aliases can also be defined for the special macro
+arguments, such as `with' or `before-do'.
+
+ This user option is an alternative to modifying
+`loopy-command-parsers' when the command parser is unknown."
   :group 'loopy
   :type '(alist :key-type symbol :value-type symbol))
 
@@ -151,13 +126,12 @@ to this list."
   "Add alias ALIAS for loop command DEFINITION.
 
 Neither argument need be quoted."
-  `(push (cons ,(if (eq (car-safe alias) 'quote)
-                    alias
-                  `(quote ,alias))
-               ,(if (eq (car-safe definition) 'quote)
-                    definition
-                  `(quote ,definition)))
-         loopy-custom-command-aliases))
+  `(setf (map-elt loopy-command-aliases ,(if (eq (car-safe alias) 'quote)
+                                             alias
+                                           `(quote ,alias)))
+         ,(if (eq (car-safe definition) 'quote)
+              definition
+            `(quote ,definition))))
 
 ;;;; Errors
 (define-error 'loopy-error
@@ -2505,7 +2479,7 @@ To allow for some flexibility in the command parsers, any nil
 instructions are removed.
 
 This function gets the parser, and passes the command to that parser."
-  (let ((parser (loopy--get-command-parser command)))
+  (let ((parser (loopy--get-command-parser (cl-first command))))
     (if-let ((instructions (funcall parser command)))
         (remq nil instructions)
       (error "Loopy: No instructions returned by command parser: %s"
@@ -2519,9 +2493,12 @@ Return a single list of instructions in the same order as
 COMMAND-LIST."
   (mapcan #'loopy--parse-loop-command command-list))
 
-;; TODO: Is there a cleaner way than this?  Symbol properties?
-(defconst loopy--builtin-command-parsers
-  ;; A few of these are just aliases.
+;;;###autoload
+(defalias 'loopy-custom-command-parsers 'loopy-command-parsers)
+
+;;;###autoload
+(defcustom loopy-command-parsers
+  ;; Plenty of these are just aliases.
   '((accumulate   . loopy--parse-accumulate-command)
     (accumulating . loopy--parse-accumulate-command)
     (always       . loopy--parse-always-command)
@@ -2642,26 +2619,44 @@ COMMAND-LIST."
     (vconcating   . loopy--parse-vconcat-command)
     (when         . loopy--parse-when-unless-command)
     (while        . loopy--parse-while-until-commands))
-  "An alist of pairs of command names and built-in parser functions.")
+  "An alist of pairs of a quoted command name and a parsing function.
 
-(defun loopy--get-command-parser (command)
-  "Get the parsing function for COMMAND, based on the command name.
+The parsing function is chosen based on the command name (such as
+`list' in `(list i my-list)'), not the usage of the command.  That is,
+
+  (my-command var1)
+
+and
+
+  (my-command var1 var2)
+
+are both parsed by the same function, but that parsing function
+is not limited in how it responds to different usages.  If you
+really want, it can return different instructions each time.
+Learn more with `(info \"(emacs)loopy\")'.
+
+For example, to add a `when' command (if one didn't already
+exist), one could do
+
+  (add-to-list \'loopy-command-parsers
+                (cons 'when #'my-loopy-parse-when-command))"
+  :group 'loopy
+  :type '(alist :key-type symbol :value-type function))
+
+(defun loopy--get-command-parser (command-name)
+  "Get the parsing function for COMMAND-NAME.
 
 The following variables are checked:
 
-1. `loopy-custom-command-aliases'
-2. `loopy-custom-command-parsers'
-3. `loopy--builtin-command-parsers'
+1. `loopy-command-aliases'
+2. `loopy-command-parsers'
 
 Failing that, an error is signaled."
-
-  (let ((key (car command)))
-    (or (when-let ((alias-def (cdr (assq key loopy-custom-command-aliases))))
-          (or (cdr (assq alias-def loopy-custom-command-parsers))
-              (cdr (assq alias-def loopy--builtin-command-parsers))))
-        (cdr (assq key loopy-custom-command-parsers))
-        (cdr (assq key loopy--builtin-command-parsers))
-        (signal 'loopy-unknown-command command))))
+  (if-let ((alias-def (map-elt loopy-command-aliases command-name)))
+      ;; Allow for recursive aliases.
+      (loopy--get-command-parser alias-def)
+    (or (map-elt loopy-command-parsers command-name)
+        (signal 'loopy-unknown-command command-name))))
 
 (provide 'loopy-commands)
 

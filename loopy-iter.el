@@ -139,12 +139,10 @@ still evaluated.")
 (defun loopy-iter--valid-loop-command (name)
   "Check if NAME is a known command.
 
-This checks for NAME as a key in
-`loopy-custom-command-aliases', `loopy-custom-command-parsers',
-and `loopy--builtin-command-parsers', in that order."
-  (or (assq name loopy-custom-command-aliases)
-      (assq name loopy-custom-command-parsers)
-      (assq name loopy--builtin-command-parsers)))
+This checks for NAME as a key in `loopy-command-aliases'
+and `loopy-command-parsers', in that order."
+  (or (map-elt loopy-command-aliases name)
+      (map-elt loopy-command-parsers name)))
 
 (defun loopy-iter--literal-form-p (form)
   "Whether FORM is a literal form that should not be interpreted."
@@ -156,7 +154,7 @@ and `loopy--builtin-command-parsers', in that order."
   "Whether command named NAME is a sub-loop."
   (let ((built-in-aliases '(loop sub-loop subloop)))
     (or (memq name built-in-aliases)
-        (memq (cdr (assq name loopy-custom-command-aliases))
+        (memq (map-elt loopy-command-aliases name)
               built-in-aliases))))
 
 ;;;; Replacement functions
@@ -434,8 +432,8 @@ Unlike in `loopy', this allows arbitrary expressions."
        (let* ((update-pair (cdr instruction))
               (var-to-update (car update-pair))
               (update-code (cdr update-pair)))
-         (if-let ((existing-update (cdr (assq var-to-update
-                                              loopy--accumulation-final-updates))))
+         (if-let ((existing-update (map-elt loopy--accumulation-final-updates
+                                            var-to-update)))
              (unless (equal existing-update update-code)
                (error "Incompatible final update for %s:\n%s\n%s"
                       var-to-update
@@ -498,7 +496,7 @@ information on how to use `loopy' and `loopy-iter'.
                        (loopy--find-special-macro-arguments '(flag flags)
                                                             body))))
      (dolist (flag loopy--all-flags)
-       (if-let ((func (cdr (assq flag loopy--flag-settings))))
+       (if-let ((func (map-elt loopy--flag-settings flag)))
            (funcall func)
          (error "Loopy: Flag not defined: %s" flag))))
 

@@ -41,6 +41,14 @@ This document describes the user-facing changes to Loopy.
 
 - A more informative error is signaled when incompatible accumulation commands
   are used ([#78]), showing the commands themselves.  This addresses [#45].
+- Update some of the user options ([#49]):
+  - `loopy-custom-command-aliases` is now an alias of `loopy-command-aliases`.
+  - `loopy-custom-command-parsers` is now an alias of `loopy-command-parsers`.
+  - User aliases can now be recursive (i.e., an alias of an alias).
+
+[#45]: https://github.com/okamsn/loopy/issues/45
+[#49]: https://github.com/okamsn/loopy/issues/49
+[#78]: https://github.com/okamsn/loopy/pull/78
 
 ## 0.6.1
 
@@ -72,7 +80,5 @@ This document describes the user-facing changes to Loopy.
   references to function symbols must now be quoted ([#73]).
 
 
-[#45]: https://github.com/okamsn/loopy/issues/45
 [#65]: https://github.com/okamsn/loopy/issues/65
 [#73]: https://github.com/okamsn/loopy/pull/73
-[#78]: https://github.com/okamsn/loopy/pull/78

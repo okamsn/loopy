@@ -451,10 +451,10 @@ Accumulation commands can operate on the same variable, and we
   "Whether SYMBOL is a special macro argument (including aliases).
 
 Special macro arguments are listed in ARGUMENTS-LIST
-or `loopy-custom-command-aliases'."
+or `loopy-command-aliases'."
   (memq symbol (append arguments-list
                        (let ((results))
-                         (dolist (alias loopy-custom-command-aliases)
+                         (dolist (alias loopy-command-aliases)
                            (when (memq (cdr alias) arguments-list)
                              (push (car alias) results)))
                          results))))
@@ -608,14 +608,14 @@ Returns a list of two elements:
 
 NAMES can be either a single quoted name or a list of quoted names.
 
-Aliases can be found in `loopy-custom-command-aliases'."
+Aliases can be found in `loopy-command-aliases'."
   (dolist (keyword
            (if (listp names)
                (append names
-                       (cl-loop for alias in loopy-custom-command-aliases
+                       (cl-loop for alias in loopy-command-aliases
                                 if (memq (cdr alias) names)
                                 collect (car alias)))
-             (cons names (cl-loop for alias in loopy-custom-command-aliases
+             (cons names (cl-loop for alias in loopy-command-aliases
                                   if (eq (cdr alias) names)
                                   collect (car alias)))))
     (when-let ((target (cdr (assq keyword body))))
@@ -925,7 +925,7 @@ see the Info node `(loopy)' distributed with this package."
                        (loopy--find-special-macro-arguments '(flag flags)
                                                             body))))
      (dolist (flag loopy--all-flags)
-       (if-let ((func (cdr (assq flag loopy--flag-settings))))
+       (if-let ((func (map-elt loopy--flag-settings flag)))
            (funcall func)
          (error "Loopy: Flag not defined: %s" flag))))
 
@@ -1026,8 +1026,8 @@ see the Info node `(loopy)' distributed with this package."
             (let* ((update-pair (cdr instruction))
                    (var-to-update (car update-pair))
                    (update-code (cdr update-pair)))
-              (if-let ((existing-update (cdr (assq var-to-update
-                                                   loopy--accumulation-final-updates))))
+              (if-let ((existing-update (map-elt loopy--accumulation-final-updates
+                                                 var-to-update)))
                   (unless (equal existing-update update-code)
                     (error "Incompatible final update for %s:\n%s\n%s"
                            var-to-update

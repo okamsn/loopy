@@ -5,6 +5,7 @@
       load-path)
 
 (require 'cl-lib)
+(require 'map)
 (require 'ert)
 (require 'loopy "./loopy.el")
 
@@ -2999,49 +3000,52 @@ Not multiple of 3: 7")))
 
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()
-  (cl-defun my-loopy-sum-command ((_ target &rest items))
-    "Set TARGET to the sum of ITEMS."
-    `((loopy--iteration-vars . (,target nil))
-      (loopy--main-body . (setq ,target (apply #'+ (list ,@items))))))
-  (setq-local loopy-custom-command-parsers
-              (list (cons 'target-sum #'my-loopy-sum-command)))
-  (should (= 6
-             (eval (quote (loopy  (target-sum my-target 1 2 3)
-                           (return nil)
-                           (finally-return my-target)))))))
+  (let ((loopy-command-parsers
+         (map-insert loopy-command-parsers 'target-sum #'my-loopy-sum-command)))
+
+    (cl-defun my-loopy-sum-command ((_ target &rest items))
+      "Set TARGET to the sum of ITEMS."
+      `((loopy--iteration-vars . (,target nil))
+        (loopy--main-body . (setq ,target (apply #'+ (list ,@items))))))
+
+    (should (= 6
+               (eval (quote (loopy  (target-sum my-target 1 2 3)
+                                    (return nil)
+                                    (finally-return my-target))))))))
 
 ;; NOTE: Also tests that post-conditions work as expected.
 (ert-deftest custom-command-always ()
-  (cl-defun my--loopy-always-command-parser ((_ &rest conditions))
-    "Parse a command of the form `(always [CONDITIONS])'.
+  (let ((loopy-command-parsers
+         (map-insert loopy-command-parsers
+                     'always #'my--loopy-always-command-parser)))
+
+    (cl-defun my--loopy-always-command-parser ((_ &rest conditions))
+      "Parse a command of the form `(always [CONDITIONS])'.
      If any condition is `nil', `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-    (let (instructions)
-      ;; Return t if loop completes successfully.
-      (push `(loopy--after-do . (cl-return t)) instructions)
-      ;; Check all conditions at the end of the loop body, forcing an exit if any
-      ;; evaluate to nil.  Since the default return value of the macro is nil, we
-      ;; don’t need to do anything else.
-      ;;
-      ;; NOTE: We must not add anything to `loopy--final-return', since that
-      ;;       would override the value of any early returns.
-      (dolist (condition conditions)
-        (push `(loopy--post-conditions . ,condition) instructions))
-      instructions))
+      (let (instructions)
+        ;; Return t if loop completes successfully.
+        (push `(loopy--after-do . (cl-return t)) instructions)
+        ;; Check all conditions at the end of the loop body, forcing an exit if any
+        ;; evaluate to nil.  Since the default return value of the macro is nil, we
+        ;; don’t need to do anything else.
+        ;;
+        ;; NOTE: We must not add anything to `loopy--final-return', since that
+        ;;       would override the value of any early returns.
+        (dolist (condition conditions)
+          (push `(loopy--post-conditions . ,condition) instructions))
+        instructions))
 
-  (add-to-list 'loopy-custom-command-parsers
-               (cons 'always #'my--loopy-always-command-parser))
+    ;; One condition: => t
+    (should (and
+             (eval (quote
+                    (loopy (list i (number-sequence 1 9)) (always (< i 10)))))
 
-  ;; One condition: => t
-  (should (and
-           (eval (quote
-                  (loopy (list i (number-sequence 1 9)) (always (< i 10)))))
-
-           ;; Two conditions: => nil
-           (not (eval (quote
-                       (loopy (list i (number-sequence 1 9))
-                              (list j '(2 4 6 8 9))
-                              (always (< i 10) (cl-evenp j)))))))))
+             ;; Two conditions: => nil
+             (not (eval (quote
+                         (loopy (list i (number-sequence 1 9))
+                                (list j '(2 4 6 8 9))
+                                (always (< i 10) (cl-evenp j))))))))))
 
 ;;; Repeated evaluation of macro
 
@@ -3063,67 +3067,73 @@ This assumes that you're on guix."
      (eq nil (mu4e:other-path)))))
 
 ;;; Custom Aliases
-(setq loopy-custom-command-aliases
-      '((f . flags)
-        (as . with)
-        (ignore . without)
-        (precode . before-do)
-        (postcode . after-do)
-        (fd . finally-do)
-        (fr . finally-return)))
-
 (ert-deftest custom-alias-flag ()
-  (should (equal '((1) (2))
-                 (eval (quote (loopy (f split)
-                                     (list i '(1))
-                                     (collect i)
-                                     (collect (1+ i))))))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'f 'flag)))
+    (should (equal '((1) (2))
+                   (eval (quote (loopy (f split)
+                                       (list i '(1))
+                                       (collect i)
+                                       (collect (1+ i)))))))))
 
 (ert-deftest custom-aliases-with ()
-  (should (= 1
-             (eval (quote (loopy (as (a 1))
-                                 (return a)))))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'as 'with)))
+    (should (= 1
+               (eval (quote (loopy (as (a 1))
+                                   (return a))))))))
 
 (ert-deftest custom-aliases-without ()
-  (should (= 5 (let ((a 1)
-                     (b 2))
-                 (eval (quote (loopy (ignore a b)
-                                     (repeat 1)
-                                     (expr a 2)
-                                     (expr b 3))))
-                 (+ a b)))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'ignore 'without)))
+    (should (= 5 (let ((a 1)
+                       (b 2))
+                   (eval (quote (loopy (ignore a b)
+                                       (repeat 1)
+                                       (expr a 2)
+                                       (expr b 3))))
+                   (+ a b))))))
 
 (ert-deftest custom-aliases-before-do ()
-  (should (= 7 (eval (quote (loopy (with (i 2))
-                                   (precode (setq i 7))
-                                   (return i)))))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'precode 'before-do)))
+    (should (= 7 (eval (quote (loopy (with (i 2))
+                                     (precode (setq i 7))
+                                     (return i))))))))
 
 (ert-deftest custom-aliases-after-do ()
-  (should (eval (quote (loopy (with (my-ret nil))
-                              (list i '(1 2 3 4))
-                              (postcode (setq my-ret t))
-                              (finally-return my-ret))))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'postcode 'after-do)))
+    (should (eval (quote (loopy (with (my-ret nil))
+                                (list i '(1 2 3 4))
+                                (postcode (setq my-ret t))
+                                (finally-return my-ret)))))))
 
 (ert-deftest custom-aliases-finally-do ()
-  (should
-   (= 10
-      (let (my-var)
-        (eval (quote (loopy (list i (number-sequence 1 10))
-                            (fd (setq my-var i)))))
-        my-var))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'fd 'finally-do)))
+    (should
+     (= 10
+        (let (my-var)
+          (eval (quote (loopy (list i (number-sequence 1 10))
+                              (fd (setq my-var i)))))
+          my-var)))))
 
 (ert-deftest custom-aliases-finally-return ()
-  (should (= 10
-             (eval (quote (loopy (list i (number-sequence 1 10))
-                                 (fr i)))))))
+  (let ((loopy-command-aliases (map-insert loopy-command-aliases
+                                           'fr 'finally-return)))
+    (should (= 10
+               (eval (quote (loopy (list i (number-sequence 1 10))
+                                   (fr i))))))))
 
 (ert-deftest custom-aliases-list ()
-  (should (loopy-defalias l list))
-  (should (loopy-defalias a 'array))
-  (should (equal '((1 . 4) (2 . 5) (3 . 6))
-                 (eval (quote (loopy (l i '(1 2 3))
-                                     (a j [4 5 6])
-                                     (collect (cons i j))))))))
+  (let ((loopy-command-aliases nil))
+    (should (loopy-defalias l list))
+    (should (loopy-defalias a 'array))
+    (should (equal '((1 . 4) (2 . 5) (3 . 6))
+                   (eval (quote (loopy (l i '(1 2 3))
+                                       (a j [4 5 6])
+                                       (collect (cons i j)))))))))
 
 ;; Local Variables:
 ;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
