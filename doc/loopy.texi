@@ -502,7 +502,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org92f9d26
+@float Listing,orgce871cd
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -572,7 +572,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org9d2bce5
+@float Listing,orgd745dc0
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -1498,11 +1498,11 @@ return value of the loop.
 @end lisp
 
 Like in @code{cl-loop}, all accumulation commands using implied variables will
-accumulate into the same implied variable (that is, into @code{loopy-result}).
-You should make sure that such commands are compatible.  For example, you
-should not try to accumulate @samp{collect} results and @samp{sum} results into
-@code{loopy-result}, as trying to use a list as a number will cause an error.  If
-you want to collect into separate variables, just specify a variable name
+accumulate into the same implied variable (that is, into @code{loopy-result}).  An
+error will be signaled if the accumulation commands are not compatible.  For
+example, you should not try to accumulate @samp{collect} results and @samp{sum} results
+into @code{loopy-result}, as trying to use a list as a number will cause an error.
+If you want to collect into separate variables, just specify a variable name
 like you normally would.
 
 @quotation Warning
@@ -1546,6 +1546,45 @@ accumulation commands.
        (collect i)        ; Without the `split' flag,
        (collect j)        ; this would just produce
        (collect k))       ; (1 2 3 4 5 6).
+@end lisp
+
+To be clear, the more guarantees that can be made about the accumulation
+variables, the more @code{loopy} can optimize the accumulations.  The fastest
+accumulations (from greatest speed to least), are produced by:
+@enumerate
+@item
+Using implied result variables with the @samp{split} flag enabled.
+@item
+Using the implied variable @code{loopy-result}, which, similar to the variables
+in (1), cannot be modified during the loop except by other accumulation
+commands.  This is the default behavior for accumulation commands that do
+not name a variable, and occurs when the @samp{split} flag is disabled.
+@item
+Using explicitly named result variables, which can be modified during the
+loop by arbitrary code, not just accumulation commands.  This includes the
+explicitly named variables required for destructuring.
+@end enumerate
+
+Effort has gone into making each case efficient while keeping flexibility and
+correctness.  The difference in speed can be significant when working with
+large sequences or performing many accumulations.
+
+@lisp
+;; This is the slowest form.
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect my-collection i)
+       (finally-return my-collection))
+
+;; Accumulations with implicit variables are faster.
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i))
+
+;; Accumulations with split implicit variables are fastest.
+(loopy (flag split)
+       (list i '(1 2 3))
+       (collect i))
 @end lisp
 
 @quotation Note
