@@ -92,7 +92,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
              finally return (list odds evens))
 
     ;; How it could be done using `loopy':
-    (loopy (list i (number-sequence 1 10))
+    (loopy (numbers i 1 10)
            (if (cl-evenp i)
                (collect evens i)
              (collect odds i))
@@ -109,19 +109,22 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                  '(([1 2 3] [4 5 6])
                    ([7 8 9] [10 11 12])))
            (sum [sum1 sum2 sum3] list-elem1)
-           (sum [sum4 sum5 sum6] list-elem2))
+           (sum [sum4 sum5 sum6] list-elem2)
+           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
     ;; Or, more simply:
     ;; => (8 10 12 14 16 18)
     (loopy (list list-elem '(([1 2 3] [4 5 6])
                              ([7 8 9] [10 11 12])))
            (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
-                list-elem))
+                list-elem)
+           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
     ;; Separate the elements of sub-list:
     ;; => ((1 3) (2 4))
     (loopy (list i '((1 2) (3 4)))
-           (collect (elem1 elem2) i))
+           (collect (elem1 elem2) i)
+           (finally-return elem1 elem2))
   #+end_src
 
   The ~loopy~ macro is configurable and extensible.  In addition to writing one's
@@ -134,7 +137,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     ;; => ((1 4) ([2 3] [5 6]))
     (loopy (flag seq)
            (list elem '([1 2 3] [4 5 6]))
-           (collect [i &rest j] elem))
+           (collect [i &rest j] elem)
+           (finally-return i j))
   #+end_src
 
   Variables like =elem=, =i=, and =j= in the example above are automatically
@@ -1053,18 +1057,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
         ;; => ((a b) (1 2))
         (loopy (map (key value) '((a . 1) (b . 2)))
                (collect keys key)
-               (collect values value))
+               (collect values value)
+               (finally-return keys values))
 
         ;; => ((:a :b) (1 2))
         (loopy (map (key value) '(:a  1 :b 2))
                (collect keys key)
-               (collect values value))
+               (collect values value)
+               (finally-return keys values))
 
         ;; NOTE: For vectors, the keys are indices.
         ;; => ((0 1) (1 2))
         (loopy (map (key value) [1 2])
                (collect keys key)
-               (collect values value))
+               (collect values value)
+               (finally-return keys values))
 
         ;; => ((a b) (1 2))
         (let ((my-table (make-hash-table)))
@@ -1073,7 +1080,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
           (loopy (map (key value) my-table)
                  (collect keys key)
-                 (collect values value)))
+                 (collect values value)
+                 (finally-return keys values)))
       #+end_src
 
 
@@ -1422,7 +1430,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (collect i)
             (collect my-other-collection (* 2 i))
             (collect (a b) (list i (* 2 i)))
-            (finally-return loopy-result my-other-collection
+            (finally-return loopy-result
+                            my-other-collection
                             a b))
    #+end_src
 
@@ -1600,11 +1609,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;;
        ;; => (2 1)
        (loopy (list i '(1 2))
-              (accumulate my-accum i #'cons :init nil))
+              (accumulate my-accum i #'cons :init nil)
+              (finally-return my-accum))
 
        ;; => ((3 1) (4 2))
        (loopy (list i '((1 2) (3 4)))
-              (accumulate (accum1 accum2) i #'cons :init nil))
+              (accumulate (accum1 accum2) i #'cons :init nil)
+              (finally-return accum1 accum2))
      #+end_src
 
    #+findex: adjoin
@@ -1635,11 +1646,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (loopy (list i '(1 2 3 3 4))
               (adjoin my-var i :result-type 'vector)
               (when (vectorp my-var)
-                (return 'is-vector)))
+                (return 'is-vector))
+              (finally-return my-var))
 
        ;; => [4 3 2 1]
        (loopy (list i '(1 2 3 3 4))
-              (adjoin my-var i :result-type 'vector :at 'start))
+              (adjoin my-var i :result-type 'vector :at 'start)
+              (finally-return my-var))
      #+end_src
 
    #+findex: append
@@ -1673,7 +1686,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               ;; Collect `i' into `coll1'.
               (collect coll1 i)
               ;; Collect `coll1' into a generated variable.
-              (collect coll1))
+              (collect coll1)
+              (finally-return coll1 loopy-result))
 
        ;; => [1 2 3]
        (loopy (list j '(1 2 3))
@@ -1824,7 +1838,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+begin_src emacs-lisp
        ;; => (4 1 2 3)
        (loopy (list i '((1 2) (2 3) (3 4)))
-              (nunion var i))
+              (nunion var i)
+              (finally-return var))
 
        ;; => ((a . 2))
        (loopy (array i [((a . 1)) ((a . 2))])
@@ -1839,7 +1854,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => ((1 2 3) (2 3 4))
        (loopy (array i [((1 2) (2 3))
                         ((1 2 3) (3 4))])
-              (nunion (var1 var2) i :test #'equal))
+              (nunion (var1 var2) i :test #'equal)
+              (finally-return var1 var2))
 
        ;; => ((4 2) (1 2) (3 2))
        (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
@@ -1862,7 +1878,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (let ((my-list '(1)))
          (loopy (without my-list)
                 (array elem [(2) (3) (4)])
-                (prepend my-list elem)))
+                (prepend my-list elem)
+                (finally-return my-list)))
      #+end_src
 
    #+findex: push, push-into
@@ -1876,7 +1893,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+BEGIN_SRC emacs-lisp
        ;; => (3 2 1)
        (loopy (array i [1 2 3])
-              (push my-list i))
+              (push my-list i)
+              (finally-return my-list))
      #+END_SRC
 
    #+findex: reduce
@@ -1916,7 +1934,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+begin_src emacs-lisp
        ;; => (4 1 2 3)
        (loopy (list i '((1 2) (2 3) (3 4)))
-              (union var i))
+              (union var i)
+              (finally-return var))
 
        ;; => ((a . 2))
        (loopy (array i [((a . 1)) ((a . 2))])
@@ -2116,9 +2135,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                    (push-into reversed-odds i)
                  (push-into reversed-evens i)
                  (push-into some-threes 3))
-               (finally-return (list reversed-odds
-                                     reversed-evens
-                                     some-threes)))
+               (finally-return reversed-odds
+                               reversed-evens
+                               some-threes))
       #+END_SRC
 
     #+findex: cond
@@ -2546,19 +2565,22 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     (require 'loopy-dash)
     (loopy (flag dash)
            (list elem '((1 (2 3)) (4 (5 6))))
-           (collect (whole &as i (j k)) elem))
+           (collect (whole &as i (j k)) elem)
+           (finally-return whole i j k))
 
     ;; => ((1 4) (3 6))
     (require 'loopy-pcase)
     (loopy (flag pcase)
            (list elem '((1 (2 3)) (4 (5 6))))
-           (collect `(,a (,_ ,b)) elem))
+           (collect `(,a (,_ ,b)) elem)
+           (finally-return a b))
 
     ;; => ((1 6) (3 8) ([4 5] [9 10]))
     (require 'loopy-seq)
     (loopy (flag seq)
            (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-           (collect [a _ b &rest c] elem))
+           (collect [a _ b &rest c] elem)
+           (finally-return a b c))
   #+end_src
 
   The =split= flag can be more efficient than using destructuring with
@@ -2581,7 +2603,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      ;; => ((1 4) (2 5) (3 6))
      (loopy (list elem '((1 2 3) (4 5 6)))
-            (collect (i j k) elem))
+            (collect (i j k) elem)
+            (finally-return i j k))
 
      ;; => ((1 4) (2 5) (3 6))
      (loopy (flag split) ; Don't accumulate into same implicit variable.
@@ -2732,7 +2755,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    main body (and so whether it should be wrapped in the ~if~-form).
 
    For the purpose of this example, below is a version of the parsing function
-   made of the basic Lisp features with which you are familiar.
+   made of the basic Lisp features with which you are familiar.  The actual
+   definition is simpler.
 
    #+BEGIN_SRC emacs-lisp
      (cl-defun loopy--parse-if-command
@@ -2783,40 +2807,6 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                      ,@(nreverse if-false-main-body)))
                (nreverse full-instructions))))
    #+END_SRC
-
-   For completeness, below is the current actual definition of the parsing
-   function.  The logic is the same, but it uses more convenient Emacs Lisp
-   features, along with some custom functions for processing instructions.
-
-   #+begin_src emacs-lisp
-     (require 'cl-lib)
-     (require 'pcase)
-
-     (cl-defun loopy--parse-if-command
-         ((_ condition &optional if-true &rest if-false))
-       "Parse the `if' loop command.  This takes the entire command.
-
-     - CONDITION is a Lisp expression.
-     - IF-TRUE is the first sub-command of the `if' command.
-     - IF-FALSE are all the other sub-commands."
-       (let ((loopy--in-sub-level t))
-         (pcase-let ((`(,if-true-main-body ,true-rest)
-                      (loopy--extract-main-body (loopy--parse-loop-command if-true)))
-                     (`(,if-false-main-body ,false-rest)
-                      (loopy--extract-main-body (loopy--parse-loop-commands if-false))))
-
-           ;; Return the full instruction list.
-           `((loopy--main-body . (if ,condition
-                                     ;; Handle if we need to wrap multiple main-body
-                                     ;; expressions.
-                                     ,(if (cl-rest if-true-main-body)
-                                          (cons 'progn if-true-main-body)
-                                        (cl-first if-true-main-body))
-                                   ,@if-false-main-body))
-             ,@true-rest
-             ,@false-rest))))
-   #+end_src
-
 
    The hardest part of this exchange is making sure the inserted code ends up in
    the correct order.  Custom functions like ~loopy--extract-main-body~ make
@@ -2977,14 +2967,15 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+vindex: loopy-command-parsers
    To tell =loopy= about this function, add it and the command name =greet= to
-   the variable =loopy-command-parsers=.  When ~loopy~ doesn’t recognize
-   a command, it will search in this alist for a matching symbol.  The function
-   that is paired with the symbol receives the entire command expressions, and
-   should produce a list of valid instructions.
+   the variable =loopy-command-parsers=, which associates commands with parsing
+   functions.  The function that is paired with the symbol receives the entire
+   command expressions, and should produce a list of valid instructions.
 
    #+BEGIN_SRC emacs-lisp
-     (add-to-list 'loopy-command-parsers
-                  '(greet . my-loopy-greet-command-parser))
+     ;; Using the Map library, for convenience.
+     (require 'map)
+     (setf (map-elt loopy-command-parsers 'greet)
+           #'my-loopy-greet-command-parser)
    #+END_SRC
 
    After that, you can use your custom command in the loop body.
@@ -2992,24 +2983,33 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+BEGIN_SRC emacs-lisp
      (loopy (list name '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
             (greet (car name) (cadr name)))
+
+     ;; With destructuring:
+     (loopy (list (first-name last-name)
+                  '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
+            (greet first-name last-name))
    #+END_SRC
 
    By running =M-x pp-macroexpand-last-sexp= on the above expression, you can
    see that it expands to do what we want, as expected.
 
    #+BEGIN_SRC emacs-lisp
-     (let ((g815 '(("John" "Deer")
-                   ("Jane" "Doe")
-                   ("Jimmy")))
-           (name nil))
-       (while (consp g815)
-         (setq name (car g815))
-         (if (cadr name)
-             (message "Hello, %s %s"
-                      (car name) (cadr name))
-           (message "Hello, %s" (car name)))
-         (setq g815 (cdr g815)))
-       nil)
+     ;; An example expansion.
+     (let* ((list-166 '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
+            (name nil))
+       (let ((loopy-first-iteration t))
+         (cl-block nil
+           (while (consp list-166)
+             (setq name (car list-166))
+             (if (cadr name)
+                 (message "Hello, %s %s"
+                          (car name)
+                          (cadr name))
+               (message "Hello, %s"
+                        (car name)))
+             (setq list-166 (cdr list-166))
+             (setq loopy-first-iteration nil))
+           nil)))
    #+END_SRC
 
 ** An ~always~ Command
@@ -3029,9 +3029,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      (cl-loop for i in (number-sequence 1 9) always (< i 10))
    #+END_SRC
 
-   Actually, ~loopy~ already has an =always= command, but for the sake of this
-   example let's assume that it doesn't.  Without a custom command, you could
-   translate this using the following code:
+   While ~loopy~ already has an =always= command, we'll ignore it for the sake
+   of this example.  Without a custom command, you could translate this using
+   the following code:
 
    #+BEGIN_SRC emacs-lisp
      ;; => t
@@ -3109,7 +3109,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    Once we've chosen our instructions, we need to tell =loopy= what function to
    use to produce these instructions.  Like in the previous example, we define
-   are parsing function and add it to the alist ~loopy-command-parsers~.
+   are parsing function and add it to ~loopy-command-parsers~.
 
    #+begin_src emacs-lisp
      ;; As noted in the previous section, the parsing function is always
@@ -3125,8 +3125,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
          (loopy--main-body . (unless condition
                                (cl-return-from ,loopy--loop-name nil)))))
 
-     (add-to-list 'loopy-command-parsers
-                  (cons 'always #'my--loopy-always-command-parser))
+     (setf (map-elt loopy-command-parsers 'always)
+           #'my--loopy-always-command-parser)
    #+end_src
 
    Once we've added our parsing function to ~loopy-command-parsers~,
