@@ -1722,14 +1722,23 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                   (let ((last-link (loopy--get-accumulation-list-end-var var)))
                     (loopy--check-accumulation-compatibility var 'list cmd)
                     `((loopy--accumulation-vars . (,last-link nil))
-                      (loopy--main-body . (if ,membership-test
-                                              nil
-                                            (if ,last-link
-                                                (progn
-                                                  (setcdr ,last-link (list ,value-holder))
-                                                  (setq ,last-link (cdr ,last-link)))
-                                              (setq ,var (list ,value-holder)
-                                                    ,last-link ,var)))))))))))
+                      (loopy--main-body
+                       . (cond
+                          (,membership-test nil)
+                          ;; If `last-link' is know, set it's cdr.
+                          (,last-link
+                           (setcdr ,last-link (list ,value-holder))
+                           (setq ,last-link (cdr ,last-link)))
+                          ;; If `var' was updated without `last-link',
+                          ;; reset `last-link'.
+                          (,var
+                           (setq ,last-link (last ,var))
+                           (setcdr ,last-link (list ,value-holder))
+                           (setq ,last-link (cdr ,last-link)))
+                          ;; Otherwise, set `var' and `last-link' directly.
+                          (t
+                           (setq ,var (list ,value-holder)
+                                 ,last-link ,var)))))))))))
       ,(let ((reversing (and loopy--split-implied-accumulation-results
                              (member pos '(end 'end)))))
          (if (not (member result-type '(list 'list)))
@@ -1780,12 +1789,17 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars . (,last-link nil))
                 (loopy--main-body
-                 . (if ,last-link
-                       (progn
-                         (setcdr ,last-link (copy-sequence ,val))
-                         (setq ,last-link (last ,last-link)))
+                 . (cond
+                    (,last-link
+                     (setcdr ,last-link (copy-sequence ,val))
+                     (setq ,last-link (last ,last-link)))
+                    (,var
+                     (setq ,last-link (last ,var))
+                     (setcdr ,last-link (copy-sequence ,val))
+                     (setq ,last-link (last ,last-link)))
+                    (t
                      (setq ,var (copy-sequence ,val)
-                           ,last-link (last ,var))))))))
+                           ,last-link (last ,var)))))))))
          (t
           (error "Bad `:at' position: %s" cmd)))
       (loopy--implicit-return . ,var))))
@@ -1833,12 +1847,20 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                       (let ((last-link (loopy--get-accumulation-list-end-var var)))
                         (loopy--check-accumulation-compatibility var 'list cmd)
                         `((loopy--accumulation-vars . (,last-link (last ,var)))
-                          (loopy--main-body . (if ,last-link
-                                                  (progn
-                                                    (setcdr ,last-link (list ,val))
-                                                    (setq ,last-link (cdr ,last-link)))
-                                                (setq ,var (list ,val)
-                                                      ,last-link ,var)))))))
+                          (loopy--main-body
+                           . (cond
+                              (,last-link
+                               (setcdr ,last-link (list ,val))
+                               (setq ,last-link (cdr ,last-link)))
+                              ;; Check if `var' was modified.  If so, reset
+                              ;; `last-link'.  If not, set `var' directly.
+                              (,var
+                               (setq ,last-link (last ,var))
+                               (setcdr ,last-link (list ,val))
+                               (setq ,last-link (cdr ,last-link)))
+                              (t
+                               (setq ,var (list ,val)
+                                     ,last-link ,var))))))))
                    (t
                     (error "Bad `:at' position: %s" cmd)))
                 ,(if (and (member pos '(end 'end))
@@ -2015,15 +2037,21 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
             (let ((last-link (loopy--get-accumulation-list-end-var var)))
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars . (,last-link nil))
-                (loopy--main-body . (if ,last-link
-                                        (progn
-                                          ;; Since this is `nconc', don't copy
-                                          ;; `val'.  `val' will be modified in
-                                          ;; the next iteration.
-                                          (setcdr ,last-link ,val)
-                                          (setq ,last-link (last ,last-link)))
-                                      (setq ,var ,val
-                                            ,last-link (last ,var))))))))
+                (loopy--main-body
+                 . (cond
+                    (,last-link
+                     ;; Since this is `nconc', don't copy
+                     ;; `val'.  `val' will be modified in
+                     ;; the next iteration.
+                     (setcdr ,last-link ,val)
+                     (setq ,last-link (last ,last-link)))
+                    (,var
+                     (setq ,last-link (last ,var))
+                     (setcdr ,last-link ,val)
+                     (setq ,last-link (last ,last-link)))
+                    (t
+                     (setq ,var ,val
+                           ,last-link (last ,var)))))))))
          (t
           (error "Bad `:at' position: %s" cmd)))
       (loopy--implicit-return . ,var))))
@@ -2071,12 +2099,17 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 `((loopy--accumulation-vars . (,last-link nil))
                   (loopy--main-body
                    . (if-let ((,new-items (cl-delete-if ,test-method ,val)))
-                         (if ,last-link
-                             (progn
-                               (setcdr ,last-link ,new-items)
-                               (setq ,last-link (last ,last-link)))
+                         (cond
+                          (,last-link
+                           (setcdr ,last-link ,new-items)
+                           (setq ,last-link (last ,last-link)))
+                          (,var
+                           (setq ,last-link (last ,var))
+                           (setcdr ,last-link ,new-items)
+                           (setq ,last-link (last ,last-link)))
+                          (t
                            (setq ,var ,new-items
-                                 ,last-link (last ,var)))))))))
+                                 ,last-link (last ,var))))))))))
            (t
             (error "Bad `:at' position: %s" cmd)))))))
 
@@ -2186,14 +2219,20 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                 (loopy--check-accumulation-compatibility var 'list cmd)
                 `((loopy--accumulation-vars . (,last-link (last ,var)))
                   (loopy--main-body
-                   . (if ,last-link
-                         (progn
-                           (setcdr ,last-link (cl-delete-if ,test-method
-                                                            (copy-sequence ,val)))
-                           (setq ,last-link (last ,last-link)))
+                   . (cond
+                      (,last-link
+                       (setcdr ,last-link (cl-delete-if ,test-method
+                                                        (copy-sequence ,val)))
+                       (setq ,last-link (last ,last-link)))
+                      (,var
+                       (setq ,last-link (last ,var))
+                       (setcdr ,last-link (cl-delete-if ,test-method
+                                                        (copy-sequence ,val)))
+                       (setq ,last-link (last ,last-link)))
+                      (t
                        (setq ,var (cl-delete-if ,test-method
                                                 (copy-sequence ,val))
-                             ,last-link (last ,var))))))))
+                             ,last-link (last ,var)))))))))
            (t
             (error "Bad `:at' position: %s" cmd)))))))
 

@@ -1625,7 +1625,17 @@ implicit variable without knowing it's name, even for named loops."
                                      (adjoin coll i :at end :test #'=)
                                      (do (setq coll (nconc coll (list 27))))
                                      (adjoin coll (1+ i) :at end :test #'=)
-                                     (finally-return coll)))))))
+                                     (finally-return coll))))))
+
+  (should (equal '(3 2 1 11 12 13)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (adjoin i :at start)
+                                     (adjoin (+ i 10) :at end))))))
+
+  (should (equal '(3 2 1 11 12 13)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (adjoin (+ i 10) :at end)
+                                     (adjoin i :at start)))))))
 
 (ert-deftest adjoin-not-destructive ()
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
@@ -1711,7 +1721,19 @@ implicit variable without knowing it's name, even for named loops."
                         (append coll (mapcar (lambda (x) (+ x 7))
                                              i)
                                 :at end)
-                        (finally-return coll)))))
+                        (finally-return coll))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (append i :at start)
+                                     (append (mapcar (lambda (x) (+ x 10)) i)
+                                             :at end))))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (append (mapcar (lambda (x) (+ x 10)) i)
+                                             :at end)
+                                     (append i :at start)))))))
 
 (ert-deftest append-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
@@ -1768,7 +1790,19 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3 4)
                  (loopy (flag split)
                         (list i '(1 2 3 4))
-                        (collect i :at end)))))
+                        (collect i :at end))))
+
+  (should (equal '(3 2 1 1 2 3)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect i :at end)
+                                     (collect i :at start))))))
+
+  (should (equal '(3 2 1 1 2 3)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (collect i :at start)
+                                     (collect i :at end)))))))
+
+
 
 (ert-deftest collect-destructuring ()
   (should (and (equal '((1 4) ((2 3) (5 6)))
@@ -2245,7 +2279,21 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3 4 5 6)
                  (eval (quote (loopy (flag split)
                                      (list i '((1 2) (3 4) (5 6)))
-                                     (nconc i :at end)))))))
+                                     (nconc i :at end))))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (nconc (copy-sequence i) :at start)
+                                     (nconc (mapcar (lambda (x) (+ x 10))
+                                                    (copy-sequence i))
+                                            :at end))))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
+                                     (nconc (mapcar (lambda (x) (+ x 10))
+                                                    (copy-sequence i))
+                                            :at end)
+                                     (nconc (copy-sequence i) :at start)))))))
 
 ;;;;; Nunion
 (ert-deftest nunion ()
@@ -2360,7 +2408,19 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3 4 5 6 7 8 9)
                  (eval (quote (loopy (flag split)
                                      (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
-                                     (nunion i :at end)))))))
+                                     (nunion i :at end))))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (loopy (list i '((1 2) (3 4) (5 6)))
+                        (nunion (copy-sequence i) :at start)
+                        (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                                :at end))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (loopy (list i '((1 2) (3 4) (5 6)))
+                        (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                                :at end)
+                        (nunion (copy-sequence i) :at start)))))
 
 ;;;;; Prepend
 (ert-deftest prepend ()
@@ -2655,7 +2715,19 @@ implicit variable without knowing it's name, even for named loops."
                                        (do (setq coll
                                                  (append coll (list 27))))
                                        (union coll (mapcar #'1+ i) :at end)
-                                       (finally-return coll))))))))
+                                       (finally-return coll)))))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (loopy (list i '((1 2) (3 4) (5 6)))
+                        (union i :at start)
+                        (union (mapcar (lambda (x) (+ x 10)) i)
+                               :at end))))
+
+  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
+                 (loopy (list i '((1 2) (3 4) (5 6)))
+                        (union (mapcar (lambda (x) (+ x 10)) i)
+                               :at end)
+                        (union i :at start)))))
 
 (ert-deftest union-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
