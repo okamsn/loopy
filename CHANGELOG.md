@@ -31,6 +31,11 @@ This document describes the user-facing changes to Loopy.
   - Accumulation loop commands are now even more efficient when using the
     `split` flag.  This is the fastest method to use build a result.
 
+- Explicit accumulation variables are no longer used as implicit return values
+  for the macro.  This is needed for more consistently handling the complexity
+  that comes from allowing the use of Pcase's arbitrary destructuring macros.
+  This is related to, but not a direct fix for, [#43].
+
 ### Bugs Fixed
 
 - Correctly `let`-bind `loopy--destructuring-for-iteration-function` (no PR or
@@ -46,6 +51,7 @@ This document describes the user-facing changes to Loopy.
   - `loopy-custom-command-parsers` is now an alias of `loopy-command-parsers`.
   - User aliases can now be recursive (i.e., an alias of an alias).
 
+[#43]: https://github.com/okamsn/loopy/issues/43
 [#45]: https://github.com/okamsn/loopy/issues/45
 [#49]: https://github.com/okamsn/loopy/issues/49
 [#78]: https://github.com/okamsn/loopy/pull/78
@@ -66,9 +72,6 @@ This document describes the user-facing changes to Loopy.
 - The commands `list`, `array`, and `seq` can now take multiple sequences before
   keyword arguments, in which case the elements of those sequences are
   distributed.  See the documentation for more info. ([#73], [#65])
-
-- Explicit accumulation variables are no longer used as implicit return values
-  for the macro.
 
 ### Non-Breaking Changes
 
