@@ -144,9 +144,8 @@ For accumulation, we don't want Dash to assign to the named
     ((name var val &rest args))
   "Parse the accumulation loop commands, like `collect', `append', etc.
 
-NAME is the name of the command.  VAR-OR-VAL is a variable name
-or, if using implicit variables, a value .  VAL is a value, and
-should only be used if VAR-OR-VAL is a variable."
+NAME is the name of the command.  VAR is a variable name.
+VAL is a value."
   (let* (;; An alist of (given-name . dash-copy).  We let Dash produce the
          ;; bindings it needs, then copy those values into the explicitly
          ;; given variables.
