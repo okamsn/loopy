@@ -609,17 +609,18 @@ Returns a list of two elements:
 NAMES can be either a single quoted name or a list of quoted names.
 
 Aliases can be found in `loopy-command-aliases'."
-  (dolist (keyword
-           (if (listp names)
-               (append names
-                       (cl-loop for alias in loopy-command-aliases
-                                if (memq (cdr alias) names)
-                                collect (car alias)))
-             (cons names (cl-loop for alias in loopy-command-aliases
-                                  if (eq (cdr alias) names)
-                                  collect (car alias)))))
-    (when-let ((target (cdr (assq keyword body))))
-      (cl-return-from loopy--find-special-macro-arguments target))))
+  (let ((aliases (map-pairs loopy-command-aliases)))
+    (dolist (keyword
+             (if (listp names)
+                 (append names
+                         (cl-loop for alias in aliases
+                                  if (memq (cdr alias) names)
+                                  collect (car alias)))
+               (cons names (cl-loop for alias in aliases
+                                    if (eq (cdr alias) names)
+                                    collect (car alias)))))
+      (when-let ((target (cdr (assq keyword body))))
+        (cl-return-from loopy--find-special-macro-arguments target)))))
 
 
 ;;;; The Macro Itself
