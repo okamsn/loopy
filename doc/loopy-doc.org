@@ -64,7 +64,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   - [[#an-always-command][An ~always~ Command]]
   - [[#finding-more-examples][Finding More Examples]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
-- [[#translating-cl-loop][Translating =cl-loop=]]
+- [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
   - [[#for-clauses][For Clauses]]
   - [[#iteration-clauses][Iteration Clauses]]
   - [[#accumulation-clauses][Accumulation Clauses]]
@@ -342,8 +342,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     #+end_src
 
   #+findex: flag, flags
-  - =flag=, =flags= :: Options that change the behavior of ~loopy~
-    ([[*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]]).
+  - =flag=, =flags= :: Options that change the behavior of ~loopy~ ([[#flags]]).
 
     #+begin_src emacs-lisp
       ;; Use Dash for destructuring:
@@ -589,7 +588,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      #+END_SRC
 
    #+findex: expr, exprs, set
-   - =(expr|exprs|set VAR [EXPRS] [:init INIT])= :: Bind =VAR= to each =EXPR= in
+   - =(expr|exprs|set VAR [EXPRS] &key init)= :: Bind =VAR= to each =EXPR= in
      order.  Once the last =EXPR= is reached, it is used repeatedly for the rest
      of the loop.  With no =EXPR=, =VAR= is repeatedly bound to ~nil~.
 
@@ -1324,30 +1323,28 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :END:
 
    Accumulation commands are used to accumulate or aggregate values into a
-   variable.  For example, creating a list of values or summing the elements in
-   a sequence can both be done using accumulation commands.
+   variable, such as creating a list of values or summing the elements in
+   a sequence.
 
    If needed, you can refer to the same accumulation variable in multiple
-   accumulation commands, such as in the following example.
+   accumulation commands.
 
    #+begin_src emacs-lisp
+     ;; => (1 6 2 7 3 8)
      (loopy (list i '(1 2 3))
             (collect coll i)
             (collect coll (+ i 5))
-            (finally-return coll)) ; => (1 6 2 7 3 8)
+            (finally-return coll))
    #+end_src
 
-   #+ATTR_TEXINFO: :tag Note
-   #+begin_quote
    Like with other loop commands, variables created by accumulation commands
    (such as =coll= in the above example) are initialized to ~nil~ unless
    stated otherwise.
-   #+end_quote
 
    #+cindex: accumulation destructuring
-   Like iteration loop commands, accumulation commands can also use
-   destructuring, in which case the destructured values are accumulated instead
-   of the "whole" value.
+   Similar to iteration commands, accumulation commands can also use
+   destructuring.  In accumulation commands, the values resulting from
+   destructuring are accumulated, instead of the destructured value.
 
    #+begin_src emacs-lisp
      ;; => ((1 4) (2 5) (3 6))
@@ -1374,10 +1371,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    Like in ~cl-loop~, you do not need to supply a variable name to accumulation
    commands.  If no accumulation variable is given, accumulation commands will
    use the variable ~loopy-result~.  This variable is accessible in the
-   =after-do=, =finally-do=, and =finally-return= special macro arguments.  As a
-   consequence of how the macro expands, changing the value of ~loopy-result~ in
-   the =after-do= (but not =finally-do=) macro argument changes the implied
-   return value of the loop.
+   =after-do=, =finally-do=, and =finally-return= special macro arguments.  You
+   should not attempt to modify this variable.  If you wish to override what
+   would be returned by the macro, simply use the =finally-return= macro
+   argument as you normally would.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3)
@@ -1403,11 +1400,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+cindex: implied/implicit return values
    Using an accumulation command without naming a variable implies a return
    value for the macro, which you can override using the =return= and
-   =return-from= loop commands or the =finally-return= macro argument.
-   Explicitly named accumulation variables are not part of this implied return
-   value.  This restriction is required for consistency and reducing complexity
-   when working with destructuring systems like Pcase, which can be extended
-   arbitrarily in ways that =loopy= can't predict.
+   =return-from= loop commands or the =finally-return= macro argument.  Be aware
+   that that explicitly named accumulation variables do not affect this implied
+   return value.  This limitation is needed for more consistently handling the
+   complexity that comes from allowing the use of Pcase's arbitrary
+   destructuring macros, and may change in the future.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3)
@@ -1421,8 +1418,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (collect (a b) (list i (* 2 i))))
    #+end_src
 
-   When mixing implicit and explicit accumulation variables, you must use the
-   =finally-return= special macro argument the return all accumulation results.
+   Therefore, when mixing implicit and explicit accumulation variables, you must
+   use the =finally-return= special macro argument to return all of the
+   accumulation results.
 
    #+begin_src emacs-lisp
      ;; => ((1 2 3) (2 4 6) (1 2 3) (2 4 6))
@@ -1464,23 +1462,24 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    results.
    #+end_quote
 
-   You should prefer using accumulation with implied results whenever you don't
-   need to access the accumulation results during the loop.  Because ~loopy~ has
-   more freedom when generating implied accumulation results, using implied
-   results can be much faster.
+   You should prefer using implied variables with accumulation commands whenever
+   you can.  If you do not need access to accumulation variables while the loop
+   is running, then there is no point in requesting that ~loopy~ generate code
+   to allow that possibility.  Because ~loopy~ has more freedom in working with
+   implied accumulation variables, their use can be much faster.
 
-   As noted above, ~loopy~ will by default accumulate into the same implied
-   variable, ~loopy-result~.  If you wish to have the speed of implied results
-   while accumulating into separate variables, you should enable the =split=
-   flag ([[#flags][Flags]]).  This flag will make the macro split the implied
-   results of each accumulation command into a separate variable, which then
-   become elements of ~loopy-result~ after the loop completes.
+   By default, one must specify accumulation variables in order to accumulate
+   into separate values.  As noted above, ~loopy~ will allow access to these
+   variables during the loop, which requires a reduction in speed.  To have
+   separate commands accumulate into separate variables while avoiding this
+   reduction, one can use the =split= flag ([[#flags][Flags]]).
 
-   After the loop completes, each of these split accumulation variables will be
-   part of the list ~loopy-result~, appearing in the same order as their
-   respective commands in the macro's arguments.  In the example below, note
-   that the result of ~(collect i)~ is the first element of ~loopy-result~, even
-   though the collection happens after the first summation when the loop is run.
+   When the flag is enabled and after the loop completes, each of these split
+   accumulation variables will be part of the list ~loopy-result~, appearing in
+   the same order as their respective commands in the macro's arguments.  In the
+   example below, note that the result of ~(collect i)~ is the first element of
+   ~loopy-result~, even though the collection happens /after/ the first
+   summation when the loop runs.
 
    #+begin_src emacs-lisp
      ;; => ((2 4) 15)
@@ -1488,7 +1487,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (nums i 1 5)
             (when (cl-evenp i)
               (collect i))
-            (sum i))
+            (sum i)
+            ;; This `finally-return' isn't needed, as `loopy-result'
+            ;; is already the implied return value.
+            (finally-return loopy-result))
    #+end_src
 
    Using this behavior can produce results much faster than destructuring
@@ -1504,11 +1506,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (finally-return i j k))
 
      ;; => ((1 4) (2 5) (3 6))
-     (loopy (flag split) ; Don't implicitly accumulate into `loopy-result'.
+     (loopy (flag split)
             (list (i j k) '((1 2 3) (4 5 6)))
-            (collect i)        ; Without the `split' flag,
-            (collect j)        ; this would just produce
-            (collect k))       ; (1 2 3 4 5 6).
+            (collect i)   ; Without the `split' flag,
+            (collect j)   ; this would just produce
+            (collect k))  ; (1 2 3 4 5 6).
    #+end_src
 
    To be clear, the more guarantees that can be made about the accumulation
@@ -1544,17 +1546,6 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (list i '(1 2 3))
             (collect i))
    #+end_src
-
-   #+attr_texinfo: :tag Note
-   #+begin_quote
-   You will notice that each accumulation command has an alias of the command
-   name in the present participle form (the "-ing" form).
-
-   For example, instead of "min" or "minimize", you can use "minning" or
-   "minimizing".  Instead of "sum" and "append", you can use "summing" and
-   "appending".  This helps to avoid name collisions when using the ~loopy-iter~
-   macro with the =lax-naming= flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
-   #+end_quote
 
    #+cindex: accumulation keyword arguments
    Some accumulation commands have optional keyword parameters, which are listed
@@ -1595,6 +1586,18 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    The arguments to the =test= and =key= parameters can be quoted functions or
    variables, just like when using ~cl-union~, ~cl-adjoin~, and so on.  ~loopy~
    knows how to expand efficiently for either case.
+
+   #+attr_texinfo: :tag Note
+   #+begin_quote
+   You will notice that each accumulation command has an alias of the command
+   name in the present participle form (the "-ing" form).
+
+   For example, instead of "min" or "minimize", you can use "minning" or
+   "minimizing".  Instead of "sum" and "append", you can use "summing" and
+   "appending".  This helps to avoid name collisions when using the ~loopy-iter~
+   macro with the =lax-naming= flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
+   #+end_quote
+
 
    The available accumulation commands are:
 
@@ -2179,13 +2182,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     :DESCRIPTION: Leaving the loop early, with or without returning values.
     :END:
 
-    The loop is contained in a =cl-block=, and these forms are all variations
-    of =cl-return-from= underneath.  Indeed, you could use =(do (cl-return-from
-    NAME [EXPR]))= to achieve the same effect.
+    The loop is contained in a ~cl-block~, which can be exited by the function
+    ~cl-return-from~.  Indeed, the =return= and =return-from= commands just are
+    wrappers around that function.
 
-    If multiple =EXPR= are passes to the =return= or =return-from=, these
-    commands will return a list of those =EXPR=.  If not =EXPR= is given, ~nil~
-    is returned.
+    If multiple values are passed to =return= or =return-from=, these commands
+    will return a list of those values.  If no value is given, ~nil~ is
+    returned.
 
     The commands =leave=, =while=, and =until= leave the current loop without
     forcing a returned value.  Unlike the =return= commands, they do not stop
@@ -2498,11 +2501,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   :END:
 
   #+cindex: flag
-  A "flag" is a symbol passed to the =flag= or =flags= macro argument, and
-  changes the macro's behavior.  Currently, flags affect what ~loopy~ uses to
-  perform destructuring (~pcase-let~, ~seq-let~, =dash=, or the default method)
-  and whether accumulation commands that don't specify a variable (such as
-  =(collect collect-value)=) accumulate into one or several variables.
+  A "flag" is a symbol passed to the =flag= or =flags= special macro argument,
+  and changes the macro's behavior.  Currently, flags affect what ~loopy~ uses
+  to perform destructuring (~pcase-let~, ~seq-let~, =dash=, or the default
+  method) and whether accumulation commands that don't specify a variable (such
+  as =(collect collect-value)=) accumulate into one or several variables.
 
   Flags are applied in order, so if you specify =(flags seq pcase)= ~loopy~ will
   use ~pcase-let~ for destructuring, not ~seq-let~.
@@ -2510,7 +2513,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+vindex: loopy-default-flags
   If you wish to always use a flag, you can add that flag to the list
   ~loopy-default-flags~.  These can be overridden by any flag given in the
-  =flag= macro argument.
+  =flag= special macro argument.
 
   The following flags are currently supported:
 
@@ -2524,7 +2527,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    ([[info:dash#-let]]).
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
-    separate variables instead of into ~loopy-result~.
+    separate variables which are then collected into ~loopy-result~.
   #+cindex: lax-naming flag
   - =lax-naming= :: In ~loopy-iter~, don't require keywords when using loop
     commands ([[#loopy-iter][The ~loopy-iter~ Macro]]).
@@ -2583,16 +2586,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
            (finally-return a b c))
   #+end_src
 
-  The =split= flag can be more efficient than using destructuring with
-  accumulation commands.  Some accumulation commands can have more efficient
-  behavior when using implicit accumulation variables, since the variables can't
-  be accessed until the loop ends.  Using the =split= flag allows you to do this
-  easily for multiple variables.
-
-  This can make a noticeable difference on large lists, but note that if you use
-  this feature, you will not be able to access the implicit return values with
-  loopy-result.  They will each have their own, uniquely generated name in
-  each loop.
+  As noted in previous sections, the =split= flag can be used to generate more
+  efficient code for accumulation commands ([[#accumulation-commands]]).  By making
+  stronger guarantees about how accumulation variables can be used, ~loopy~ can
+  produce results fasters.
 
    #+begin_src emacs-lisp
      ;; Both of these example give the same result, but the latter
@@ -2647,13 +2644,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   #+vindex: loopy-command-aliases
   #+findex: loopy-defalias
-  Custom aliases can be added to the user option ~loopy-command-aliases~.
-  Each element in this list is a pair of the alias and the definition.  For
-  convenience, the function ~loopy-defalias~ is provided, which will correctly
-  add the pairs to this variable.
+  Custom aliases can be added to the user option ~loopy-command-aliases~, which
+  associates aliases with their true names.  For convenience, the macro
+  ~loopy-defalias~ is provided, which will correctly add an association to
+  this variable.
 
   #+begin_src emacs-lisp
-    ;; You don't need to quote either of the arguments,
+    ;; You don't need to quote either argument,
     ;; but you can if you prefer.
     (loopy-defalias l list)
     (loopy-defalias a 'array)
@@ -2669,12 +2666,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   When looking for a command parser, =loopy= will always check whether a given
   name is an alias before checking whether it is a command.  Additionally,
-  aliases can be recursive. That is, you can create a new alias for an existing
+  aliases can be recursive.  That is, you can create a new alias for an existing
   alias.
 
-  The special macro arguments ([[#macro-arguments][Special Macro Arguments]]) can also be aliased.
-  Using an alias does not change that the special arguments are parsed before
-  ~loopy~ attempts to parse loop commands.
+  Special macro arguments ([[#macro-arguments][Special Macro Arguments]]) can also be aliased.  Using
+  an alias does not change that the special macro arguments are parsed before
+  loop commands.
 
   #+begin_src emacs-lisp
     (loopy-defalias as with)
@@ -2773,9 +2770,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (let ((full-instructions)
              (if-true-main-body)
              (if-false-main-body)
-             ;; This variable is just so iteration commands know when they are being
-             ;; used away from the top level of the loop's structure (which is an
-             ;; error).
+             ;; This variable is just so that iteration commands know when they are
+             ;; being used away from the top level of the loop's structure
+             ;; (which is an error).
              (loopy--in-sub-level t))
 
          ;; Process the instructions for the command that should run if the condition
@@ -2808,9 +2805,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (nreverse full-instructions))))
    #+END_SRC
 
-   The hardest part of this exchange is making sure the inserted code ends up in
-   the correct order.  Custom functions like ~loopy--extract-main-body~ make
-   this easier, as seen when comparing with the first example.
+   The hardest part of this exchange is making sure that the inserted code ends
+   up in the correct order.
 
    A loop body command has 7 main places to put code:
 
@@ -2863,12 +2859,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+vindex: loopy--implicit-return
    - =loopy--implicit-return= :: A list of values to be returned by the loop if
-     no other return value is specified/reached.  All accumulation commands can
-     add a value to this list, which can include the variable ~loopy-result~ if
-     an accumulation command is used without specifying a variable.
+     no other return value is specified/reached. A value is added to this list,
+     when an accumulation command does not specify an accumulation variable, and
+     in some special other cases. Generally, they add the variable
+     ~loopy-result~.
 
-     For example, =(collect my-collection my-value)= would add =my-collection=
-     to this list.
+     For example, =(collect my-value)= would add ~loopy-result~ to this list.
 
    #+vindex: loopy--implicit-accumulation-final-update
    - =loopy--implicit-accumulation-final-update= :: Actions to perform on
@@ -3109,7 +3105,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    Once we've chosen our instructions, we need to tell =loopy= what function to
    use to produce these instructions.  Like in the previous example, we define
-   are parsing function and add it to ~loopy-command-parsers~.
+   the parsing function and add it to ~loopy-command-parsers~.
 
    #+begin_src emacs-lisp
      ;; As noted in the previous section, the parsing function is always
@@ -3215,7 +3211,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
     (require 'loopy)
     (loopy (with (some-thing 5))
-           (list i (number-sequence 1 100))
+           (nums i 1 100)
            (do (message "I is %s" i))
            (when (> (+ i 5) 20)
              (return (format "Done: %d" i))))
@@ -3226,12 +3222,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   #+BEGIN_SRC emacs-lisp
     ;; => '((2 4) (4 8) (6 12) (8 16) (10 20))
-    (loopy (list i (number-sequence 1 10))
+    (loopy (nums i 1 10)
            (when (cl-evenp i)
              (expr once i)
              (expr twice (* 2 i))
-             (collect together (list once twice)))
-           (finally-return together))
+             (collect doubles (list once twice)))
+           (finally-return doubles))
   #+END_SRC
 
   In my experience, ~cl-loop~ does not allow the easy grouping of assignment
@@ -3303,15 +3299,16 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   #+BEGIN_SRC emacs-lisp
     ;; Returns even numbers that aren't multiples of 10.
-    (loopy (list i (number-sequence 1 20))
+    ;;
+    ;; => (2 4 6 8 12 14 16 18)
+    (loopy (nums i 1 20)
            (when (zerop (mod i 10))
              (skip))
            (when (cl-evenp i)
-             (push-into my-collection i))
-           (finally-return (nreverse my-collection))) ; => (2 4 6 8 12 14 16 18)
+             (collect i)))
   #+END_SRC
 
-* Translating =cl-loop=
+* Translating to and from =cl-loop=
   :PROPERTIES:
   :CUSTOM_ID: translating-from-cl-loop
   :DESCRIPTION: Converting `cl-loop' to `loopy', and vice versa.
@@ -3629,8 +3626,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       )
   #+end_src
 
-  Here is a version in =loopy= which is more of a straight translation than a
-  re-working:
+  Here is a version in =loopy= (which is more of a straight translation than a
+  re-working):
 
   #+begin_src emacs-lisp
     ;; ...
