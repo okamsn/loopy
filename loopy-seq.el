@@ -116,22 +116,6 @@ variables."
                 result-is-one-expression t))))
     result))
 
-(defun loopy-seq--get-variables (var)
-  "Get the variables in sequence VAR, as a list."
-  (let ((var-list))
-    (seq-doseq (sym-or-seq var)
-      (cond
-
-       ((sequencep sym-or-seq)
-        (dolist (symbol (loopy-seq--get-variables sym-or-seq))
-          (push symbol var-list)))
-
-       ((and (not (eq sym-or-seq '&rest))
-             (not (eq sym-or-seq '_)))
-        (push sym-or-seq var-list))))
-    ;; Return the list of symbols in order of appearance.
-    (nreverse var-list)))
-
 (cl-defun loopy-seq--destructure-for-iteration (var val)
   "Destructure VAL according to VAR, as if by `seq-let'.
 
@@ -152,16 +136,8 @@ the value to accumulate."
   ;; Pcase macro, so we can use functions from loopy-pcase.el.  The `setq'
   ;; bindings in the instruction should not be order-sensitive for accumulation
   ;; commands; the bindings should be independent.
-  ;;
-  ;; However, it might not parse the bindings in the right order, so while the
-  ;; main-body instruction is correct, instructions for things like
-  ;; implicit-return might be in the wrong order.  Therefore, we must still
-  ;; produce some instructions ourselves.
-  `(,@(cl-remove-if (lambda (x) (eq (car-safe x) 'loopy--implicit-return))
-                    (loopy-pcase--parse-destructuring-accumulation-command
-                     `(,name ,(seq--make-pcase-patterns var) ,val ,@args)))
-    ,@(mapcar (lambda (var) `(loopy--implicit-return . ,var))
-              (loopy-seq--get-variables var))))
+  (loopy-pcase--parse-destructuring-accumulation-command
+   `(,name ,(seq--make-pcase-patterns var) ,val ,@args)))
 
 (provide 'loopy-seq)
 ;;; loopy-seq.el ends here
