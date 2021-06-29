@@ -1415,6 +1415,12 @@ implicit variable without knowing it's name, even for named loops."
                                      (when (cl-evenp i)
                                        (collect i))
                                      (sum i)
+                                     (finally-return loopy-result))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy (flag split)
+                                     (nums i 1 5)
+                                     (collect i)
                                      (finally-return loopy-result)))))))
 
 (ert-deftest loopy-result-with-split-with-leave ()
