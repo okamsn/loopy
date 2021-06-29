@@ -36,6 +36,10 @@ This document describes the user-facing changes to Loopy.
   that comes from allowing the use of Pcase's arbitrary destructuring macros.
   This is related to, but not a direct fix for, [#43].
 
+- The command `map` now iterates through dotted pairs (via `map-pairs`) instead
+  of undotted pairs (via `map-apply`).  This brings `loopy` more in line with
+  other packages, better meeting user expectations.
+
 ### Bugs Fixed
 
 - Correctly `let`-bind `loopy--destructuring-for-iteration-function` (no PR or

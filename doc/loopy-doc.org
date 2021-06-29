@@ -1034,11 +1034,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       #+END_SRC
 
     #+findex: map
-    - =(map VAR EXPR)= :: Iterate through the key-value pairs of =EXPR=, using
-      the =map.el= library.  This library generalizes working with association
-      lists ("alists"), property lists ("plists"), hash-tables, and vectors.
+    - =(map VAR EXPR)= :: Iterate through the dotted key-value pairs of =EXPR=,
+      using the =map.el= library.  This library generalizes working with
+      association lists ("alists"), property lists ("plists"), hash-tables, and
+      vectors.
 
-      In each undotted pair assigned to =VAR=, the first element is the key and
+      In each dotted pair assigned to =VAR=, the first element is the key and
       the second element is the value.  For vectors, the key is the index.  You
       should not rely on the order in which the key-value pairs are found.
 
@@ -1048,26 +1049,25 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       maps.
 
       #+begin_src emacs-lisp
-        ;; NOTE: `pair' is not dotted.
-        ;; => ((a 1) (b 2))
+        ;; => ((a . 1) (b . 2))
         (loopy (map pair '((a . 1) (b . 2)))
                (collect pair))
 
         ;; => ((a b) (1 2))
-        (loopy (map (key value) '((a . 1) (b . 2)))
+        (loopy (map (key . value) '((a . 1) (b . 2)))
                (collect keys key)
                (collect values value)
                (finally-return keys values))
 
         ;; => ((:a :b) (1 2))
-        (loopy (map (key value) '(:a  1 :b 2))
+        (loopy (map (key . value) '(:a  1 :b 2))
                (collect keys key)
                (collect values value)
                (finally-return keys values))
 
         ;; NOTE: For vectors, the keys are indices.
         ;; => ((0 1) (1 2))
-        (loopy (map (key value) [1 2])
+        (loopy (map (key . value) [1 2])
                (collect keys key)
                (collect values value)
                (finally-return keys values))
@@ -1077,7 +1077,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
           (puthash 'a 1 my-table)
           (puthash 'b 2 my-table)
 
-          (loopy (map (key value) my-table)
+          (loopy (map (key . value) my-table)
                  (collect keys key)
                  (collect values value)
                  (finally-return keys values)))

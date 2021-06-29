@@ -1096,13 +1096,13 @@ BY is the function to use to move through the list (default `cdr')."
 (cl-defun loopy--parse-map-command ((_ var val))
   "Parse the `map' loop command.
 
-Iterates through an alist of (key value) un-dotted pairs,
+Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'map))
   (let ((value-holder (gensym "map-")))
-    `((loopy--iteration-vars . (,value-holder (map-apply #'list ,val)))
+    `((loopy--iteration-vars . (,value-holder (map-pairs ,val)))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
       (loopy--pre-conditions . (consp ,value-holder))
       (loopy--latter-body . (setq ,value-holder (cdr ,value-holder))))))
