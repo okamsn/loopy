@@ -42,6 +42,10 @@ This document describes the user-facing changes to Loopy.
   Issue).  Previously, some destructuring settings would affect the next macro
   run.
 
+- Split accumulation values are correctly gathered into `loopy-result` when the
+  special macro arguments `after-do`, `finally-do`, or `finally-return` are
+  used.
+
 ### Other Changes
 
 - A more informative error is signaled when incompatible accumulation commands

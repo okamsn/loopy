@@ -767,7 +767,13 @@ The function creates quoted code that should be used by a macro."
                       ;; Be sure that the `cl-block' defaults to returning the
                       ;; implicit return, which can be nil.  This can be
                       ;; overridden by any call to `cl-return-from'.
-                      ,loopy--implicit-return)
+                      ,(if (and loopy--split-implied-accumulation-results
+                                loopy--implicit-return
+                                (or loopy--after-do
+                                    loopy--final-do
+                                    loopy--final-return))
+                           `(setq loopy-result ,loopy--implicit-return)
+                         loopy--implicit-return))
             ;; Will always be a single expression after wrapping with
             ;; `cl-block'.
             result-is-one-expression t)
@@ -811,6 +817,16 @@ The function creates quoted code that should be used by a macro."
       ;; Declare accumulation variables.
       (when loopy--accumulation-vars
         (setq result `(let* ,loopy--accumulation-vars ,@(get-result))
+              result-is-one-expression t))
+
+      ;; Bind `loopy-result' if using split accumulation variables.
+      ;; In such case, no command requests this, so we do it here.
+      (when (and loopy--split-implied-accumulation-results
+                 loopy--implicit-return
+                 (or loopy--after-do
+                     loopy--final-do
+                     loopy--final-return))
+        (setq result `(let ((loopy-result nil)) ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare the With variables.

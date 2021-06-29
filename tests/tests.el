@@ -1408,6 +1408,26 @@ implicit variable without knowing it's name, even for named loops."
                                          (collect i)
                                        (collect i))))))))
 
+(ert-deftest loopy-result-with-split ()
+  (should (equal '((2 4) 15)
+                 (eval (quote (loopy (flag split)
+                                     (nums i 1 5)
+                                     (when (cl-evenp i)
+                                       (collect i))
+                                     (sum i)
+                                     (finally-return loopy-result)))))))
+
+(ert-deftest loopy-result-with-split-with-leave ()
+  (should (equal '((2 4 6) 21)
+                 (eval (quote (loopy (flag split)
+                                     (nums i 1 10)
+                                     (when (cl-evenp i)
+                                       (collect i :at end))
+                                     (when (> i 6)
+                                       (leave))
+                                     (sum i)
+                                     (finally-return loopy-result)))))))
+
 ;;;;; Default flag
 (ert-deftest default-flag-disable-split ()
   (should (equal '(1 2 3)
