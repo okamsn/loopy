@@ -2623,6 +2623,7 @@ COMMAND-LIST."
     (listf        . loopy--parse-list-ref-command)
     (loop         . loopy--parse-sub-loop-command)
     (map          . loopy--parse-map-command)
+    (map-pairs    . loopy--parse-map-command)
     (max          . loopy--parse-max-command)
     (maxing       . loopy--parse-max-command)
     (maximize     . loopy--parse-max-command)

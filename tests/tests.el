@@ -848,10 +848,21 @@ implicit variable without knowing it's name, even for named loops."
                                      (collect coll pair)
                                      (finally-return coll))))))
 
+  (should (equal '((a . 1) (b . 2))
+                 (eval (quote (loopy (map-pairs pair '((a . 1) (b . 2)))
+                                     (collect coll pair)
+                                     (finally-return coll))))))
+
   (should (equal '((0 . a) (1 . b) (2 . c) (3 . d))
                  (eval (quote (loopy (map pair [a b c d])
                                      (collect coll pair)
                                      (finally-return coll))))))
+
+  (should (equal '((0 . a) (1 . b) (2 . c) (3 . d))
+                 (eval (quote (loopy (map-pairs pair [a b c d])
+                                     (collect coll pair)
+                                     (finally-return coll))))))
+
   (let ((my-hash (make-hash-table)))
     (puthash 'a 1 my-hash)
     (puthash 'b 2 my-hash)

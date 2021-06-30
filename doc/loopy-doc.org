@@ -1034,10 +1034,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       #+END_SRC
 
     #+findex: map
-    - =(map VAR EXPR)= :: Iterate through the dotted key-value pairs of =EXPR=,
-      using the =map.el= library.  This library generalizes working with
-      association lists ("alists"), property lists ("plists"), hash-tables, and
-      vectors.
+    - =(map|map-pairs VAR EXPR)= :: Iterate through the dotted key-value pairs
+      of =EXPR=, using the =map.el= library.  This library generalizes working
+      with association lists ("alists"), property lists ("plists"), hash-tables,
+      and vectors.
 
       In each dotted pair assigned to =VAR=, the first element is the key and
       the second element is the value.  For vectors, the key is the index.  You

@@ -9,6 +9,10 @@ This document describes the user-facing changes to Loopy.
 - Fix understanding the arguments in `find` when using the `:into` keyword
   argument.  More tests were added.
 
+### Other Changes
+
+- Add alias `map-pairs` for `map`, since `map` uses `map-pairs` underneath.
+
 ## 0.7.1
 
 ### Breaking Changes
