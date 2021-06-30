@@ -54,7 +54,7 @@ please let me know.
              finally return (list odds evens))
 
     ;; How it could be done using `loopy':
-    (loopy (list i (number-sequence 1 10))
+    (loopy (numbers i 1 10)
            (if (cl-evenp i)
                (collect evens i)
              (collect odds i))
@@ -71,19 +71,22 @@ please let me know.
                  '(([1 2 3] [4 5 6])
                    ([7 8 9] [10 11 12])))
            (sum [sum1 sum2 sum3] list-elem1)
-           (sum [sum4 sum5 sum6] list-elem2))
+           (sum [sum4 sum5 sum6] list-elem2)
+           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
     ;; Or, more simply:
     ;; => (8 10 12 14 16 18)
     (loopy (list list-elem '(([1 2 3] [4 5 6])
                              ([7 8 9] [10 11 12])))
            (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
-                list-elem))
+                list-elem)
+           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
     ;; Separate the elements of sub-list:
     ;; => ((1 3) (2 4))
     (loopy (list i '((1 2) (3 4)))
-           (collect (elem1 elem2) i))
+           (collect (elem1 elem2) i)
+           (finally-return elem1 elem2))
   #+end_src
 
   The ~loopy~ macro is configurable and extensible.  In addition to writing one's
@@ -96,7 +99,8 @@ please let me know.
     ;; => ((1 4) ([2 3] [5 6]))
     (loopy (flag seq)
            (list elem '([1 2 3] [4 5 6]))
-           (collect [i &rest j] elem))
+           (collect [i &rest j] elem)
+           (finally-return i j))
   #+end_src
 
   Variables like =elem=, =i=, and =j= in the example above are automatically
@@ -184,8 +188,8 @@ please let me know.
   flexibility and allows you to use destructuring patterns that you're already
   familiar with.
 
-  These features can be enabled with "flags", described in the section
-  [[file:doc/loopy-doc.org::*Changing the Macro's Behavior with Flags][Changing the Macro's Behavior with Flags]] in the documentation.
+  These features can be enabled with "flags", described in the section [[file:doc/loopy-doc.org::#flags][Using
+  Flags]] in the documentation.
 
   Here are a few examples that demonstrate how ~loopy~ can use destructuring
   with accumulation commands.
@@ -197,26 +201,30 @@ please let me know.
     ;;     (3 6))                ; k
     (loopy (flag dash)
            (list elem '((1 (2 3)) (4 (5 6))))
-           (collect (whole &as i (_ k)) elem))
+           (collect (whole &as i (_ k)) elem)
+           (finally-return whole i k))
 
     ;; = > ((3 5) (4 6))
     (loopy (flag dash)
            (list (&plist :a a  :b b)
                  '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
            (collect a-vals a)
-           (collect b-vals b))
+           (collect b-vals b)
+           (finally-return a-vals b-vals))
 
     (require 'loopy-pcase)
     ;; => ((1 4) (3 6))
     (loopy (flag pcase)
            (list elem '((1 (2 3)) (4 (5 6))))
-           (collect `(,a (,_ ,b)) elem))
+           (collect `(,a (,_ ,b)) elem)
+           (finally-return a b))
 
     ;; => ((1 6) (3 8) ([4 5] [9 10]))
     (require 'loopy-seq)
     (loopy (flag seq)
            (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-           (collect [a _ b &rest c] elem))
+           (collect [a _ b &rest c] elem)
+           (finally-return a b c))
   #+end_src
 
   For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
@@ -261,15 +269,15 @@ please let me know.
   :END:
 
   It is easy to create custom commands for Loopy.  To see how, see the section
-  [[file:doc/loopy-doc.org::#adding-custom-commands][Adding Custom Commands]] in the documentation or a copy of this information on
-  the wiki page [[https://github.com/okamsn/loopy/wiki/Custom-Commands][Custom Commands]].
+  [[file:doc/loopy-doc.org::#adding-custom-commands][Adding Custom Commands]] in the documentation.
 
 * Comparing to =cl-loop=
   :PROPERTIES:
   :CUSTOM_ID: how-does-it-compare-to-other-approaches
   :END:
 
-  See the wiki page [[https://github.com/okamsn/loopy/wiki/Versus-%60cl-loop%60][Versus =cl-loop=]].
+  See the documentation page [[file:doc/loopy-doc.org::#comparing-to-cl-loop][Comparing to ~cl-loop~]].  See also the wiki page
+  [[https://github.com/okamsn/loopy/wiki/speed-comparisons][Speed Comparisons]].
 
 
 * Real-World Examples
