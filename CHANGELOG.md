@@ -2,6 +2,13 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Bugs Fixed
+
+- Fix understanding the arguments in `find` when using the `:into` keyword
+  argument.  More tests were added.
+
 ## 0.7.1
 
 ### Breaking Changes

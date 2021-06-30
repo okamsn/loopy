@@ -3103,7 +3103,17 @@ Not multiple of 3: 7")))
 			          (finding i (> i 4))))))
 
   (should (= 0 (eval (quote (loopy (list i '(1 2 3))
-			           (finding i (> i 4) :on-failure 0)))))))
+			           (finding i (> i 4) :on-failure 0))))))
+
+  (should (= 2 (eval (quote (loopy (list i '(1 2 3))
+                                   (finding found i (= i 2))
+                                   (finally-return found))))))
+
+  (should (equal "not found"
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (finding whether-found i (> i 4)
+                                              :on-failure "not found")
+                                     (finally-return whether-found)))))))
 
 ;;; Custom Commands
 (ert-deftest custom-command-sum ()

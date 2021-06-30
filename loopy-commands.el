@@ -1500,7 +1500,9 @@ you can use in the instructions:
 
 - `name' is the name of the command.
 - `cmd' is the entire command.
-- `args' is the arguments of the command.
+- `args' is the arguments of the command that are not optional
+  (except for the variable name).  These are the arguments before
+  any keyword arguments.
 - `var' is the variable to be used by the command.  This can be
   explicitly given, `loopy-result', or automatically generated.
 - `val' is the value to be accumulated.
@@ -1527,34 +1529,55 @@ you can use in the instructions:
   ;;       accumulations need use all variables.
 
   `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
-       ((&whole cmd name &rest args))
+       ((&whole cmd name &rest parser-args))
      ,doc-string
-     ,(let* ((max-plist-length (+ (* 2 (length keywords)) 2)) ; Add 2 for `:into'.
-             (implicit-num-args (1- num-args))
-             (implicit-args-nums (number-sequence implicit-num-args
-                                                  (+ implicit-num-args
-                                                     max-plist-length)
-                                                  2))
-             (explicit-args-nums (number-sequence num-args
-                                                  (+ num-args
-                                                     max-plist-length)
-                                                  2)))
-        `(let ((arg-length (length args)))
-           (cond
-            ;; Implicit
-            ((cl-member arg-length (quote ,implicit-args-nums) :test #'=)
-             (let ((opts (nthcdr ,(1- num-args) args))
-                   (val (cl-first args)))
-               ;; Validate any keyword arguments:
-               (when (cl-set-difference (loopy--every-other opts)
-                                        (quote ,(cons :into keywords)))
+     ,(let ((explicit-num-args num-args)
+            (implicit-num-args (1- num-args)))
+        `(let ((args)
+               (opts))
+           ;; Compare with `loopy' for the equivalent code:
+           ;; (loopy (flag split)
+           ;;        (cons i parser-args)
+           ;;        (expr arg (car i))
+           ;;        (until (keyword arg))
+           ;;        (collect arg)
+           ;;        (finally-do
+           ;;          (if i
+           ;;             (set opts i args loopy-result)
+           ;;           (setq args parser-args))))
+           ;; or
+           ;; (loopy (flag dash split)
+           ;;        (cons (&whole i arg . _) parser-args)
+           ;;        (if (keyword arg)
+           ;;            (leave)
+           ;;          (collect arg))
+           ;;        (finally-do
+           ;;          (if i
+           ;;             (set opts i args loopy-result)
+           ;;           (setq args parser-args))))
+           (cl-loop with args-holding = nil
+                    for cons-cell on parser-args
+                    for arg = (car cons-cell)
+                    until (keywordp arg)
+                    do (push arg args-holding)
+                    finally do
+                    ;; If a keyword is found
+                    (if cons-cell
+                        (setq opts cons-cell
+                              args (nreverse args-holding))
+                      (setq args parser-args)))
+           (let ((arg-length (length args)))
+             (cond
+              ((= arg-length ,implicit-num-args)
+               (unless (loopy--only-valid-keywords-p (quote ,(cons :into keywords))
+                                                     opts)
                  (error "Wrong number of arguments or wrong keywords: %s" cmd))
-
                (let* ((into-var (plist-get opts :into))
                       (var (or into-var
-                               (if loopy--split-implied-accumulation-results
-                                   (gensym (symbol-name name))
-                                 'loopy-result))))
+                               (and loopy--split-implied-accumulation-results
+                                    (gensym (symbol-name name)))
+                               'loopy-result))
+                      (val (cl-first args)))
                  (ignore var val)
                  ;; Substitute in the instructions.
                  ;;
@@ -1563,33 +1586,32 @@ you can use in the instructions:
                  ;; be accessed during the loop.
                  ,(if implicit
                       `(if into-var
-                           ,explicit
+                           ;; Make sure to adjust `args' for commands that
+                           ;; might depend on positions, such as `find'.
+                           (let ((args (cons into-var args)))
+                             ,explicit)
                          ,implicit)
-                    explicit))))
-            ;; Explicit
-            ((cl-member arg-length (quote ,explicit-args-nums) :test #'=)
-             (let ((var (cl-first args))
-                   (val (cl-second args))
-                   (opts (nthcdr ,num-args args)))
+                    explicit)))
 
-               ;; Validate any keyword arguments:
-               (when (cl-set-difference (loopy--every-other opts)
-                                        (quote ,(cons :into keywords)))
-                 (error "Wrong number of arguments or wrong keywords: %s" cmd))
-
-               (ignore var val)
-               (if (sequencep var)
-                   ;; If we need to destructure the sequence `var', we use the
-                   ;; function named by
-                   ;; `loopy--destructuring-accumulation-parser' or the function
-                   ;; `loopy--parse-destructuring-accumulation-command'.
-                   (funcall (or loopy--destructuring-accumulation-parser
-                                #'loopy--parse-destructuring-accumulation-command)
-                            cmd)
-                 ;; Substitute in the instructions.
-                 ,explicit)))
-            (t
-             (error "Wrong number of command arguments: %s" cmd)))))))
+              ((= arg-length ,explicit-num-args)
+               ,(when keywords
+                  `(unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
+                     (error "Wrong number of arguments or wrong keywords: %s" cmd)))
+               (let ((var (cl-first args))
+                     (val (cl-second args)))
+                 (ignore var val)
+                 (if (sequencep var)
+                     ;; If we need to destructure the sequence `var', we use the
+                     ;; function named by
+                     ;; `loopy--destructuring-accumulation-parser' or the function
+                     ;; `loopy--parse-destructuring-accumulation-command'.
+                     (funcall (or loopy--destructuring-accumulation-parser
+                                  #'loopy--parse-destructuring-accumulation-command)
+                              cmd)
+                   ;; Substitute in the instructions.
+                   ,explicit)))
+              (t
+               (error "Wrong number of arguments or wrong keywords: %s" cmd))))))))
 
 (defun loopy--get-union-test-method (var &optional key test)
   "Get a function testing for values in VAR in `union' and `nunion'.
@@ -1938,7 +1960,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 
 ;;;;;; Find
 (loopy--defaccumulation find
-  "Parse a command of the form `(finding EXPR TEST &key ON-FAILURE)'."
+  "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
   :num-args 3
   :keywords (on-failure)
   :explicit (let* ((test-arg (cl-third args))
@@ -1956,7 +1978,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                    `(loopy--accumulation-final-updates
                      . (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
-                   (test-form (if (loopy--quoted-form-p test-arg)
+                   (test-form (if (loopy--quoted-symbol-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
                    (on-failure (plist-get opts :on-failure)))

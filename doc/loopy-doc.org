@@ -1745,7 +1745,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      provided.
 
      =VAR= takes the value of =EXPR= if =TEST= is non-nil or =ON-FAILURE= if the
-     loop completes successfully.  It is bound to ~nil~ during  the loop.
+     loop completes successfully.  It is bound to ~nil~ during  the loop.  As
+     with other accumulation commands, if =VAR= is provided, then =EXPR= is not
+     used as a return value.  Instead, it is assigned to =VAR=, which must be
+     returned explicitly.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 3
@@ -1763,14 +1766,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => 2
        ;; Does not display message.
        (loopy (list i '(1 2 3))
-	      (finding i (= i 2) :into found)
-	      (after-do (message "found: %s" found)))
+              (finding i (= i 2) :into found)
+              (after-do (message "found: %s" found))
+              (finally-return found))
 
        ;; => 2
        ;; Messages "found: 2" in echo area.
        (loopy (list i '(1 2 3))
-	      (finding found i (= i 2))
-	      (finally-do (message "found: %s" found)))
+              (finding found i (= i 2))
+              (finally-do (message "found: %s" found))
+              (finally-return found))
+
+       ;; => "not found"
+       (loopy (list i '(1 2 3))
+              (finding whether-found i (> i 4) :on-failure "not found")
+              (finally-return whether-found))
      #+END_SRC
 
    #+findex: max, maximize
