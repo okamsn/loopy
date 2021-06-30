@@ -836,7 +836,7 @@ instructions:
                                          other-vals (nreverse other-val-holding)))
 
                ;; Validate any keyword arguments:
-               (unless (loopy--valid-keywords-p (quote ,keywords) opts)
+               (unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
                  (error "Wrong number of arguments or wrong keywords: %s" cmd))))
 
          ,(when (consp other-vals)
