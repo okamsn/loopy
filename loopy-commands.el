@@ -279,14 +279,21 @@ Unlike `loopy--substitute-using', the test is required."
 This is helpful when working with property lists."
   (cl-loop for i in list by #'cddr collect i))
 
-(defun loopy--valid-keywords-p (correct list)
+(defun loopy--extract-keywords (list)
+  "Extract the keywords from LIST according to `keywordp'."
+  (cl-loop for i in list
+           if (keywordp i)
+           collect i))
+
+(defun loopy--only-valid-keywords-p (correct list)
   "Check that LIST contains only valid keywords in every other position.
 
 Any keyword not in CORRECT is considered invalid.
 
 CORRECT is a list of valid keywords.  The first item in LIST is
 assumed to be a keyword."
-  (null (cl-set-difference (loopy--every-other list) correct)))
+  ;; (null (cl-set-difference (loopy--every-other list) correct))
+  (null (cl-set-difference (loopy--extract-keywords list) correct)))
 
 ;; TODO: Would this be more useful as a `pcase' macro?
 (defmacro loopy--plist-bind (bindings plist &rest body)
