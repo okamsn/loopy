@@ -152,7 +152,7 @@ please let me know.
 
 * How to Install
 
-  Loopy can be installed from [[https://melpa.org/#/][MELPA]] as the package =loopy=.  The optional
+  Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional
   package =loopy-dash= can be installed to enable using the Dash
   library for destructuring (instead of other methods).
 
@@ -188,8 +188,8 @@ please let me know.
   flexibility and allows you to use destructuring patterns that you're already
   familiar with.
 
-  These features can be enabled with "flags", described in the section [[file:doc/loopy-doc.org::#flags][Using
-  Flags]] in the documentation.
+  These features can be enabled with "flags", described in the section
+  [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#using-flags][Using Flags]] in the documentation.
 
   Here are a few examples that demonstrate how ~loopy~ can use destructuring
   with accumulation commands.
@@ -261,7 +261,7 @@ please let me know.
                   (accum collect a)))
   #+end_src
 
-  For more on this, [[file:doc/loopy-doc.org::#loopy-iter][see the documentation]].
+  For more on this, [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#the-loopy-iter-macro][see the documentation]].
 
 * Adding Custom Commands
   :PROPERTIES:
@@ -269,14 +269,14 @@ please let me know.
   :END:
 
   It is easy to create custom commands for Loopy.  To see how, see the section
-  [[file:doc/loopy-doc.org::#adding-custom-commands][Adding Custom Commands]] in the documentation.
+  [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#custom-commands][Custom Commands]] in the documentation.
 
 * Comparing to =cl-loop=
   :PROPERTIES:
   :CUSTOM_ID: how-does-it-compare-to-other-approaches
   :END:
 
-  See the documentation page [[file:doc/loopy-doc.org::#comparing-to-cl-loop][Comparing to ~cl-loop~]].  See also the wiki page
+  See the documentation page [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#comparing-to-cl-loop][Comparing to ~cl-loop~]].  See also the wiki page
   [[https://github.com/okamsn/loopy/wiki/speed-comparisons][Speed Comparisons]].
 
 
