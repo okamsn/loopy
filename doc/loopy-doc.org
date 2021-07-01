@@ -2630,7 +2630,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (if (cl-oddp i)
                 (collect i)
               (collect i))
-            ;; For un-named loops, the variable is `loopy-result'.
+            ;; This `finally-return' is unneeded.
             (finally-return loopy-result))
 
      ;; => ((1 3 5) (2 4))
@@ -2638,7 +2638,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
             (list i '(1 2 3 4 5))
             (if (cl-oddp i)
                 (collect i)
-              (collect i)))
+              (collect i))
+            ;; This `finally-return' is unneeded.
+            (finally-return loopy-result))
    #+end_src
 
 
@@ -2719,8 +2721,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      scoped.
    - Declaring a generated variable in a let form to contain a given value.
    - Adding a condition for continuing/exiting the loop.
-   - Adding code to be run during the main loop body.
-   - Adding code to be run after the main loop body.
+   - Adding code to be run during the main loop body (the main processing
+     section of the ~while~-loop).
+   - Adding code to be run in the latter loop body (the section for updating
+     variables after running the main loop body).
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
@@ -2748,18 +2752,20 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    | =loopy--main-body=      | =(setq i (car list-3717))=         |
    | =loopy--iteration-vars= | =(i nil)=                          |
 
-   Commands are parsed by =loopy--parse-loop-commands=, which receives a list of
-   commands and returns a list of instructions.  For commands that take
-   sub-commands as arguments (such as =cond=, =if=, and =when=), more specific
-   parsing functions are called in a mutually recursive fashion (e.g.,
-   Function-1 uses Function-2 which uses Function-1, and so on).
+   Commands are parsed by ~loopy--parse-loop-command~, which receives a command
+   call and returns a list of instructions.  It does this by searching for an
+   appropriate command-specific parsing function in ~loopy-command-aliases~ and
+   ultimately in ~loopy-command-parsers~.  For parsing multiple commands at
+   once, there is ~loopy--parse-loop-commands~, which wraps the single-command
+   version.
 
-   For example, consider the function =loopy--parse-if-command=, which parses
+   For example, consider the function ~loopy--parse-if-command~, which parses
    the =if= command.  It needs to be able to group any code going to the loop
-   body under an ~if~-form.  To do this, it uses =loopy--parse-loop-command= to
-   turn its sub-commands into a list of instructions, and then checks the =car=
-   of each instruction to whether the code should be inserted into the loop's
-   main body (and so whether it should be wrapped in the ~if~-form).
+   body under an ~if~-form.  To do this, it uses ~loopy--parse-loop-command~ to
+   turn its sub-commands into a list of instructions, and then checks the ~car~
+   of each instruction to see whether the instruction's code is meant to be
+   inserted into the loop's main body (and so whether it should be wrapped in
+   the ~if~-form).
 
    For the purpose of this example, below is a version of the parsing function
    made of the basic Lisp features with which you are familiar.  The actual
@@ -2774,26 +2780,27 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      - IF-TRUE is the first sub-command of the `if' command.
      - IF-FALSE are all the other sub-commands."
 
-       ;; The main processing of this function is to separate instructions for
-       ;; the loop's main body from other instructions, and to then wrap those
-       ;; main-body instructions with an `if' special form.
+       ;; The main processing of this function is to separate instructions
+       ;; for the loop's main body from other instructions,
+       ;; and to then wrap those main-body instructions with an
+       ;; `if' special form.
        (let ((full-instructions)
              (if-true-main-body)
              (if-false-main-body)
-             ;; This variable is just so that iteration commands know when they are
-             ;; being used away from the top level of the loop's structure
-             ;; (which is an error).
+             ;; This variable is just so that iteration commands know when
+             ;; they are being used away from the top level of the loop's
+             ;; structure (which is an error).
              (loopy--in-sub-level t))
 
-         ;; Process the instructions for the command that should run if the condition
-         ;; is true.
+         ;; Process the instructions for the command that should run if the
+         ;; condition is true.
          (dolist (instruction (loopy--parse-loop-command if-true))
            (if (eq 'loopy--main-body (car instruction))
                (push (cdr instruction) if-true-main-body)
              (push instruction full-instructions)))
 
-         ;; Process the instructions for the command that should run if the condition
-         ;; is true.
+         ;; Process the instructions for the command that should run
+         ;; if the condition is true.
          (dolist (instruction (loopy--parse-loop-commands if-false))
            (if (eq 'loopy--main-body (car instruction))
                (push (cdr instruction) if-false-main-body)
@@ -2869,20 +2876,30 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+vindex: loopy--implicit-return
    - =loopy--implicit-return= :: A list of values to be returned by the loop if
-     no other return value is specified/reached. A value is added to this list,
+     no other return value is specified/reached. A value is added to this list
      when an accumulation command does not specify an accumulation variable, and
-     in some special other cases. Generally, they add the variable
-     ~loopy-result~.
+     in some special other cases.
 
-     For example, =(collect my-value)= would add ~loopy-result~ to this list.
+     By default, the implicit return value is ~loopy-result~, and so this
+     variable is usually just a list of the symbol =loopy-result=.  When the
+     =split= flag is enabled, this is a list of values to which ~loopy-result~
+     is bound.
 
-   #+vindex: loopy--implicit-accumulation-final-update
-   - =loopy--implicit-accumulation-final-update= :: Actions to perform on
-     ~loopy-result~ after the loop ends.  Some implied accumulation commands
-     need to update the variable one final time after ending the loop, such as
-     making sure it is in the right order.  Although this variable is a list of
-     such updates, to avoid conflicts, only the update at the head of the list
-     is performed.
+   #+vindex: loopy--accumulation-final-updates
+   - =loopy--accumulation-final-updates= :: Actions to perform on the
+     accumulation variable after the loop ends.  Some implied accumulation
+     commands need to update the variable one final time after ending the loop.
+     Some examples are:
+     1. Correcting the order of elements in a list that was constructed in
+        reverse.
+     2. Coercing the variable into a new sequence type, for commands with the
+        ~:result-type~ argument.
+
+     Each accumulation variable can only be updated once, in a single way.  For
+     example, a variable cannot be reversed according to the needs of one
+     command and then coerced into a new type according to the needs of another.
+     Commands acting on the same accumulation variable must require the same
+     final update, for commands that require any update.
 
    There are 4 more variables a loop command can push to, but they are derived
    from the macro's arguments.  Adding to them after using a macro argument
@@ -3042,7 +3059,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+BEGIN_SRC emacs-lisp
      ;; => t
      (loopy (list i (number-sequence 1 9))
-            (when (< i 10) (return nil))
+            (when (not (< i 10)) (return nil))
             (else-do (cl-return t)))
    #+END_SRC
 
@@ -3051,7 +3068,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+begin_src python
      # In some testing Python function:
      for i in range(1, 10):
-         if i < 10:
+         if not (i < 10):
              return False
      else:
          return True
@@ -3077,11 +3094,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+begin_src emacs-lisp
      ;; We want to insert the below code into the loop
-     (when CONDITION
+     (unless CONDITION
        (cl-return nil))
 
      ;; so we use the instruction
-     `(loopy--main-body . (when ,CONDITION (cl-return nil)))
+     `(loopy--main-body . (unless ,CONDITION (cl-return nil)))
 
      ;; where CONDITION is supplied by the parsing function.
    #+end_src
@@ -3095,7 +3112,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+begin_src emacs-lisp
      `(loopy--main-body
-       . (when ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+       . (unless ,CONDITION (cl-return-from ,loopy--loop-name nil)))
    #+end_src
 
    The best way to satisfy the second requirement is to use an instruction for
@@ -3128,7 +3145,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
        `((loopy--implicit-return . t)
-         (loopy--main-body . (unless condition
+         (loopy--main-body . (unless ,condition
                                (cl-return-from ,loopy--loop-name nil)))))
 
      (setf (map-elt loopy-command-parsers 'always)

@@ -12,6 +12,7 @@ This document describes the user-facing changes to Loopy.
 ### Other Changes
 
 - Add alias `map-pairs` for `map`, since `map` uses `map-pairs` underneath.
+- Small corrections to Org/Info documentation.
 
 ## 0.7.1
 

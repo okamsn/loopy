@@ -505,7 +505,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org138d965
+@float Listing,org477bb3f
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -575,7 +575,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org75921fa
+@float Listing,orgb9f641b
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -1112,12 +1112,13 @@ of the command.
 
 @findex map
 @table @asis
-@item @samp{(map VAR EXPR)}
-Iterate through the key-value pairs of @samp{EXPR}, using
-the @samp{map.el} library.  This library generalizes working with association
-lists (``alists''), property lists (``plists''), hash-tables, and vectors.
+@item @samp{(map|map-pairs VAR EXPR)}
+Iterate through the dotted key-value pairs
+of @samp{EXPR}, using the @samp{map.el} library.  This library generalizes working
+with association lists (``alists''), property lists (``plists''), hash-tables,
+and vectors.
 
-In each undotted pair assigned to @samp{VAR}, the first element is the key and
+In each dotted pair assigned to @samp{VAR}, the first element is the key and
 the second element is the value.  For vectors, the key is the index.  You
 should not rely on the order in which the key-value pairs are found.
 
@@ -1127,26 +1128,25 @@ command can have a noticeable start-up cost when working with very large
 maps.
 
 @lisp
-;; NOTE: `pair' is not dotted.
-;; => ((a 1) (b 2))
+;; => ((a . 1) (b . 2))
 (loopy (map pair '((a . 1) (b . 2)))
        (collect pair))
 
 ;; => ((a b) (1 2))
-(loopy (map (key value) '((a . 1) (b . 2)))
+(loopy (map (key . value) '((a . 1) (b . 2)))
        (collect keys key)
        (collect values value)
        (finally-return keys values))
 
 ;; => ((:a :b) (1 2))
-(loopy (map (key value) '(:a  1 :b 2))
+(loopy (map (key . value) '(:a  1 :b 2))
        (collect keys key)
        (collect values value)
        (finally-return keys values))
 
 ;; NOTE: For vectors, the keys are indices.
 ;; => ((0 1) (1 2))
-(loopy (map (key value) [1 2])
+(loopy (map (key . value) [1 2])
        (collect keys key)
        (collect values value)
        (finally-return keys values))
@@ -1156,7 +1156,7 @@ maps.
   (puthash 'a 1 my-table)
   (puthash 'b 2 my-table)
 
-  (loopy (map (key value) my-table)
+  (loopy (map (key . value) my-table)
          (collect keys key)
          (collect values value)
          (finally-return keys values)))
@@ -1874,7 +1874,10 @@ is never non-nil, then @samp{ON-FAILURE} is used as a returned value, if
 provided.
 
 @samp{VAR} takes the value of @samp{EXPR} if @samp{TEST} is non-nil or @samp{ON-FAILURE} if the
-loop completes successfully.  It is bound to @code{nil} during  the loop.
+loop completes successfully.  It is bound to @code{nil} during  the loop.  As
+with other accumulation commands, if @samp{VAR} is provided, then @samp{EXPR} is not
+used as a return value.  Instead, it is assigned to @samp{VAR}, which must be
+returned explicitly.
 
 @lisp
 ;; => 3
@@ -1893,13 +1896,20 @@ loop completes successfully.  It is bound to @code{nil} during  the loop.
 ;; Does not display message.
 (loopy (list i '(1 2 3))
        (finding i (= i 2) :into found)
-       (after-do (message "found: %s" found)))
+       (after-do (message "found: %s" found))
+       (finally-return found))
 
 ;; => 2
 ;; Messages "found: 2" in echo area.
 (loopy (list i '(1 2 3))
        (finding found i (= i 2))
-       (finally-do (message "found: %s" found)))
+       (finally-do (message "found: %s" found))
+       (finally-return found))
+
+;; => "not found"
+(loopy (list i '(1 2 3))
+       (finding whether-found i (> i 4) :on-failure "not found")
+       (finally-return whether-found))
 @end lisp
 @end table
 
@@ -2834,7 +2844,7 @@ Below is an example of the @samp{split} flag.
        (if (cl-oddp i)
            (collect i)
          (collect i))
-       ;; For un-named loops, the variable is `loopy-result'.
+       ;; This `finally-return' is unneeded.
        (finally-return loopy-result))
 
 ;; => ((1 3 5) (2 4))
@@ -2842,7 +2852,9 @@ Below is an example of the @samp{split} flag.
        (list i '(1 2 3 4 5))
        (if (cl-oddp i)
            (collect i)
-         (collect i)))
+         (collect i))
+       ;; This `finally-return' is unneeded.
+       (finally-return loopy-result))
 @end lisp
 
 @node Custom Aliases
@@ -2924,9 +2936,11 @@ Declaring a generated variable in a let form to contain a given value.
 @item
 Adding a condition for continuing/exiting the loop.
 @item
-Adding code to be run during the main loop body.
+Adding code to be run during the main loop body (the main processing
+section of the @code{while}-loop).
 @item
-Adding code to be run after the main loop body.
+Adding code to be run in the latter loop body (the section for updating
+variables after running the main loop body).
 @end itemize
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
@@ -2962,18 +2976,20 @@ in @code{let} and @code{let*} .
 @tab @samp{(i nil)}
 @end multitable
 
-Commands are parsed by @samp{loopy--parse-loop-commands}, which receives a list of
-commands and returns a list of instructions.  For commands that take
-sub-commands as arguments (such as @samp{cond}, @samp{if}, and @samp{when}), more specific
-parsing functions are called in a mutually recursive fashion (e.g.,
-Function-1 uses Function-2 which uses Function-1, and so on).
+Commands are parsed by @code{loopy--parse-loop-command}, which receives a command
+call and returns a list of instructions.  It does this by searching for an
+appropriate command-specific parsing function in @code{loopy-command-aliases} and
+ultimately in @code{loopy-command-parsers}.  For parsing multiple commands at
+once, there is @code{loopy--parse-loop-commands}, which wraps the single-command
+version.
 
-For example, consider the function @samp{loopy--parse-if-command}, which parses
+For example, consider the function @code{loopy--parse-if-command}, which parses
 the @samp{if} command.  It needs to be able to group any code going to the loop
-body under an @code{if}-form.  To do this, it uses @samp{loopy--parse-loop-command} to
-turn its sub-commands into a list of instructions, and then checks the @samp{car}
-of each instruction to whether the code should be inserted into the loop's
-main body (and so whether it should be wrapped in the @code{if}-form).
+body under an @code{if}-form.  To do this, it uses @code{loopy--parse-loop-command} to
+turn its sub-commands into a list of instructions, and then checks the @code{car}
+of each instruction to see whether the instruction's code is meant to be
+inserted into the loop's main body (and so whether it should be wrapped in
+the @code{if}-form).
 
 For the purpose of this example, below is a version of the parsing function
 made of the basic Lisp features with which you are familiar.  The actual
@@ -2988,26 +3004,27 @@ definition is simpler.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
 
-  ;; The main processing of this function is to separate instructions for
-  ;; the loop's main body from other instructions, and to then wrap those
-  ;; main-body instructions with an `if' special form.
+  ;; The main processing of this function is to separate instructions
+  ;; for the loop's main body from other instructions,
+  ;; and to then wrap those main-body instructions with an
+  ;; `if' special form.
   (let ((full-instructions)
         (if-true-main-body)
         (if-false-main-body)
-        ;; This variable is just so that iteration commands know when they are
-        ;; being used away from the top level of the loop's structure
-        ;; (which is an error).
+        ;; This variable is just so that iteration commands know when
+        ;; they are being used away from the top level of the loop's
+        ;; structure (which is an error).
         (loopy--in-sub-level t))
 
-    ;; Process the instructions for the command that should run if the condition
-    ;; is true.
+    ;; Process the instructions for the command that should run if the
+    ;; condition is true.
     (dolist (instruction (loopy--parse-loop-command if-true))
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) if-true-main-body)
         (push instruction full-instructions)))
 
-    ;; Process the instructions for the command that should run if the condition
-    ;; is true.
+    ;; Process the instructions for the command that should run
+    ;; if the condition is true.
     (dolist (instruction (loopy--parse-loop-commands if-false))
       (if (eq 'loopy--main-body (car instruction))
           (push (cdr instruction) if-false-main-body)
@@ -3106,23 +3123,37 @@ following:
 @table @asis
 @item @samp{loopy--implicit-return}
 A list of values to be returned by the loop if
-no other return value is specified/reached. A value is added to this list,
+no other return value is specified/reached. A value is added to this list
 when an accumulation command does not specify an accumulation variable, and
-in some special other cases. Generally, they add the variable
-@code{loopy-result}.
+in some special other cases.
 
-For example, @samp{(collect my-value)} would add @code{loopy-result} to this list.
+By default, the implicit return value is @code{loopy-result}, and so this
+variable is usually just a list of the symbol @samp{loopy-result}.  When the
+@samp{split} flag is enabled, this is a list of values to which @code{loopy-result}
+is bound.
 @end table
 
-@vindex loopy--implicit-accumulation-final-update
+@vindex loopy--accumulation-final-updates
 @table @asis
-@item @samp{loopy--implicit-accumulation-final-update}
-Actions to perform on
-@code{loopy-result} after the loop ends.  Some implied accumulation commands
-need to update the variable one final time after ending the loop, such as
-making sure it is in the right order.  Although this variable is a list of
-such updates, to avoid conflicts, only the update at the head of the list
-is performed.
+@item @samp{loopy--accumulation-final-updates}
+Actions to perform on the
+accumulation variable after the loop ends.  Some implied accumulation
+commands need to update the variable one final time after ending the loop.
+Some examples are:
+@enumerate
+@item
+Correcting the order of elements in a list that was constructed in
+reverse.
+@item
+Coercing the variable into a new sequence type, for commands with the
+@code{:result-type} argument.
+@end enumerate
+
+Each accumulation variable can only be updated once, in a single way.  For
+example, a variable cannot be reversed according to the needs of one
+command and then coerced into a new type according to the needs of another.
+Commands acting on the same accumulation variable must require the same
+final update, for commands that require any update.
 @end table
 
 There are 4 more variables a loop command can push to, but they are derived
@@ -3293,7 +3324,7 @@ the following code:
 @lisp
 ;; => t
 (loopy (list i (number-sequence 1 9))
-       (when (< i 10) (return nil))
+       (when (not (< i 10)) (return nil))
        (else-do (cl-return t)))
 @end lisp
 
@@ -3302,7 +3333,7 @@ This is similar to what you might write in other languages, such as Python.
 @example
 # In some testing Python function:
 for i in range(1, 10):
-    if i < 10:
+    if not (i < 10):
         return False
 else:
     return True
@@ -3332,11 +3363,11 @@ while the loop is running, so we should use an instruction for
 
 @lisp
 ;; We want to insert the below code into the loop
-(when CONDITION
+(unless CONDITION
   (cl-return nil))
 
 ;; so we use the instruction
-`(loopy--main-body . (when ,CONDITION (cl-return nil)))
+`(loopy--main-body . (unless ,CONDITION (cl-return nil)))
 
 ;; where CONDITION is supplied by the parsing function.
 @end lisp
@@ -3350,7 +3381,7 @@ stores the symbol which names the loop.
 
 @lisp
 `(loopy--main-body
-  . (when ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+  . (unless ,CONDITION (cl-return-from ,loopy--loop-name nil)))
 @end lisp
 
 The best way to satisfy the second requirement is to use an instruction for
@@ -3383,7 +3414,7 @@ the parsing function and add it to @code{loopy-command-parsers}.
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
   `((loopy--implicit-return . t)
-    (loopy--main-body . (unless condition
+    (loopy--main-body . (unless ,condition
                           (cl-return-from ,loopy--loop-name nil)))))
 
 (setf (map-elt loopy-command-parsers 'always)
