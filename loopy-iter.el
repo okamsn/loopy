@@ -5,7 +5,7 @@
 ;; Author: Earl Hyatt
 ;; Created: March 2021
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.7.1
+;; Version: 0.7.2
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
