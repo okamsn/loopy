@@ -194,7 +194,7 @@ should only be used if VAR-OR-VAL is a variable."
                               ;; destructured bindings.
                               (macroexp-progn (apply #'append destr-main-body)))))))))
     ;; Finally, return the instructions.
-    `((loopy--main-body . ,full-main-body)
+    `((loopy--main-body ,full-main-body)
       ,@(nreverse instructions))))
 
 (provide 'loopy-pcase)

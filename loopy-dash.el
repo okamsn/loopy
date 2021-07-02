@@ -161,10 +161,10 @@ VAL is a value."
           (reverse loopy-dash--accumulation-destructured-symbols))
 
     `(;; Bind the variables that Dash uses for destructuring to nil.
-      ,@(--map `(loopy--accumulation-vars . (,(car it) nil))
+      ,@(--map `(loopy--accumulation-vars (,(car it) nil))
                destructurings)
       ;; Let Dash perform the destructuring on the copied variable names.
-      (loopy--main-body . (setq ,@(-flatten-n 1 destructurings)))
+      (loopy--main-body (setq ,@(-flatten-n 1 destructurings)))
       ;; Accumulate the values of those copied variable names into the
       ;; explicitly given variables.
       ;;

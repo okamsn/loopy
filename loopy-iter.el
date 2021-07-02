@@ -401,63 +401,63 @@ Unlike in `loopy', this allows arbitrary expressions."
   "Push the values of INSTRUCTIONS to the appropriate variable."
   ;; These variables are `let'-bound by the macro `loopy-iter'.
   (dolist (instruction instructions)
-    (cl-case (car instruction)
-      (loopy--generalized-vars
-       (loopy--validate-binding (cdr instruction))
-       (push (cdr instruction) loopy--generalized-vars))
-      (loopy--iteration-vars
-       (loopy--validate-binding (cdr instruction))
-       ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cadr instruction))
-         (push (cdr instruction) loopy--iteration-vars)))
-      (loopy--accumulation-vars
-       (loopy--validate-binding (cdr instruction))
-       ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cadr instruction))
-         (push (cdr instruction) loopy--accumulation-vars)))
-      (loopy--pre-conditions
-       (push (cdr instruction) loopy--pre-conditions))
-      ;; NOTE: We shouldn't get any of these.
-      ;; (loopy--main-body
-      ;;  (push (cdr instruction) loopy--main-body))
-      (loopy--latter-body
-       (push (cdr instruction) loopy--latter-body))
-      (loopy--post-conditions
-       (push (cdr instruction) loopy--post-conditions))
-      (loopy--implicit-return
-       (unless (loopy--already-implicit-return (cdr instruction))
-         (push (cdr instruction) loopy--implicit-return)))
-      (loopy--accumulation-final-updates
-       ;; These instructions are of the form `(instr . (var . update))'
-       (let* ((update-pair (cdr instruction))
-              (var-to-update (car update-pair))
-              (update-code (cdr update-pair)))
-         (if-let ((existing-update (map-elt loopy--accumulation-final-updates
-                                            var-to-update)))
-             (unless (equal existing-update update-code)
-               (error "Incompatible final update for %s:\n%s\n%s"
-                      var-to-update
-                      existing-update
-                      update-code))
-           (push update-pair loopy--accumulation-final-updates))))
+    (let ((instruction-value (cl-second instruction)))
+      (cl-case (car instruction)
+        (loopy--generalized-vars
+         (loopy--validate-binding instruction-value)
+         (push instruction-value loopy--generalized-vars))
+        (loopy--iteration-vars
+         (loopy--validate-binding instruction-value)
+         ;; Don't want to accidentally rebind variables to `nil'.
+         (unless (loopy--bound-p (cl-first instruction-value))
+           (push instruction-value loopy--iteration-vars)))
+        (loopy--accumulation-vars
+         (loopy--validate-binding instruction-value)
+         ;; Don't want to accidentally rebind variables to `nil'.
+         (unless (loopy--bound-p (cl-first instruction-value))
+           (push instruction-value loopy--accumulation-vars)))
+        (loopy--pre-conditions
+         (push instruction-value loopy--pre-conditions))
+        ;; NOTE: We shouldn't get any of these.
+        ;; (loopy--main-body
+        ;;  (push instruction-value loopy--main-body))
+        (loopy--latter-body
+         (push instruction-value loopy--latter-body))
+        (loopy--post-conditions
+         (push instruction-value loopy--post-conditions))
+        (loopy--implicit-return
+         (unless (loopy--already-implicit-return instruction-value)
+           (push instruction-value loopy--implicit-return)))
+        (loopy--accumulation-final-updates
+         ;; These instructions are of the form `(l--a-f-u (var . update))'
+         (let* ((var-to-update (car instruction-value))
+                (update-code (cdr instruction-value)))
+           (if-let ((existing-update (map-elt loopy--accumulation-final-updates
+                                              var-to-update)))
+               (unless (equal existing-update update-code)
+                 (error "Incompatible final update for %s:\n%s\n%s"
+                        var-to-update
+                        existing-update
+                        update-code))
+             (push instruction-value loopy--accumulation-final-updates))))
 
-      ;; Code for conditionally constructing the loop body.
-      (loopy--skip-used
-       (setq loopy--skip-used t))
-      (loopy--tagbody-exit-used
-       (setq loopy--tagbody-exit-used t))
+        ;; Code for conditionally constructing the loop body.
+        (loopy--skip-used
+         (setq loopy--skip-used t))
+        (loopy--tagbody-exit-used
+         (setq loopy--tagbody-exit-used t))
 
-      ;; Places users probably shouldn't push to, but can if they want:
-      (loopy--before-do
-       (push (cdr instruction) loopy--before-do))
-      (loopy--after-do
-       (push (cdr instruction) loopy--after-do))
-      (loopy--final-do
-       (push (cdr instruction) loopy--final-do))
-      (loopy--final-return
-       (push (cdr instruction) loopy--final-return))
-      (t
-       (error "Loopy: Unknown body instruction: %s" instruction)))))
+        ;; Places users probably shouldn't push to, but can if they want:
+        (loopy--before-do
+         (push instruction-value loopy--before-do))
+        (loopy--after-do
+         (push instruction-value loopy--after-do))
+        (loopy--final-do
+         (push instruction-value loopy--final-do))
+        (loopy--final-return
+         (push instruction-value loopy--final-return))
+        (t
+         (error "Loopy: Unknown body instruction: %s" instruction))))))
 
 ;;;; The macro itself
 (defmacro loopy-iter (&rest body)

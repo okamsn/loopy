@@ -116,7 +116,8 @@
                                                 (for expr test (cl-evenp i))
                                                 test)
                                               (accum collect evens i)
-                                            (accum collect odds i)))))))
+                                            (accum collect odds i))
+                                          (finally-return evens odds))))))
   (should
    (equal '(2 4)
           (eval (quote
@@ -302,9 +303,10 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                (when t ; Should not be treated as a command.
                                  (let ((a (1+ elem)))
                                    (collect a)))))))))
-  (let ((loopy-iter-ignored-commands '(if)))
-    (should
-     (equal '((4) (3 5))
+
+  (should
+   (equal '((4) (3 5))
+          (let ((loopy-iter-ignored-commands '(if)))
             (eval
              (quote
               (loopy-iter (flag lax-naming)
@@ -314,7 +316,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                               (let ((a (+ 2 elem)))
                                 (collect evens a))
                             (let ((a (+ 2 elem)))
-                              (collect odds a)))))))))
+                              (collect odds a)))
+                          (finally-return evens odds)))))))
 
   (let ((loopy-iter-ignored-commands '(if)))
     (should
@@ -331,28 +334,30 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                                a))
                             (collect odds (progn
                                             (expr a (+ 2 elem))
-                                            a))))))))))
+                                            a)))
+                          (finally-return evens odds))))))))
 
 (ert-deftest wrap-pcase-let* ()
   (should
    (equal '(1 2 3 4 5 6)
-           (eval (quote (loopy-iter (for list i '((1 2) (3 4) (5 6)))
-                                    (pcase-let* ((`(,a ,b) i))
-                                      (accum collect a)
-                                      (accum collect b))))))))
+          (eval (quote (loopy-iter (for list i '((1 2) (3 4) (5 6)))
+                                   (pcase-let* ((`(,a ,b) i))
+                                     (accum collect a)
+                                     (accum collect b))))))))
 
 (ert-deftest wrap-pcase ()
   (should
    (equal '((2 4) (1 3))
-           (eval
-            (quote
-             (loopy-iter (for list i '(1 2 3 4))
-                         (let ((j i))
-                           (pcase j
-                             ((pred cl-evenp) ; <- `pcase' needs predicates unquoted.
-                              (accum collect evens j))
-                             ((pred cl-oddp)
-                              (accum collect odds j))))))))))
+          (eval
+           (quote
+            (loopy-iter (for list i '(1 2 3 4))
+                        (let ((j i))
+                          (pcase j
+                            ((pred cl-evenp) ; <- `pcase' needs predicates unquoted.
+                             (accum collect evens j))
+                            ((pred cl-oddp)
+                             (accum collect odds j))))
+                        (finally-return evens odds)))))))
 
 
 (ert-deftest wrap-pcase-let ()
@@ -376,7 +381,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
           (eval (quote (loopy-iter (for list i '((1 2) (3 4) (5 6)))
                                    (cl-destructuring-bind (a b) i
                                      (accum collect firsts a)
-                                     (accum collect seconds b))))))))
+                                     (accum collect seconds b))
+                                   (finally-return firsts seconds)))))))
 
 
 (ert-deftest wrap-unwind-protect ()
@@ -425,7 +431,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
 (ert-deftest collect-coercion ()
   (should (equal [1 2 3]
                  (loopy-iter (for list j '(1 2 3))
-                             (accum collect v j :result-type 'vector))))
+                             (accum collect v j :result-type 'vector)
+                             (finally-return v))))
   (should (equal [1 2 3]
                  (loopy-iter
                   (flag lax-naming)

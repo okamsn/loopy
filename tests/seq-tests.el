@@ -73,13 +73,6 @@
                                           (collect [coll1 coll2 coll3] j)
                                           (finally-return coll1 coll2 coll3))))))))
 
-(ert-deftest seq-collect-implicit ()
-  (should
-   (equal '((1 4) (3 6))
-          (eval (quote (loopy (flag seq)
-                              (list elem '((1 (2 3)) (4 (5 6))))
-                              (collect (a (_ b)) elem)))))))
-
 (ert-deftest seq-flag-default ()
   (should (equal '(5 6)
                  (let ((loopy-default-flags '(seq)))

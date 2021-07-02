@@ -237,8 +237,8 @@ The lists will be in the order parsed (correct for insertion)."
   (let ((wrapped-main-body)
         (other-instructions))
     (dolist (instruction instructions)
-      (if (eq (car instruction) 'loopy--main-body)
-          (push (cdr instruction) wrapped-main-body)
+      (if (eq (cl-first instruction) 'loopy--main-body)
+          (push (cl-second instruction) wrapped-main-body)
         (push instruction other-instructions)))
 
     ;; Return the sub-lists.
@@ -374,15 +374,15 @@ BODY is one or more loop commands."
       (if (symbolp command)
           (setq loopy--loop-name command)
         (dolist (instruction (loopy--parse-loop-command command))
-          (cl-case (car instruction)
+          (cl-case (cl-first instruction)
             (loopy--pre-conditions
-             (push (cdr instruction) wrapped-pre-conditions))
+             (push (cl-second instruction) wrapped-pre-conditions))
             (loopy--main-body
-             (push (cdr instruction) wrapped-main-body))
+             (push (cl-second instruction) wrapped-main-body))
             (loopy--latter-body
-             (push (cdr instruction) wrapped-latter-body))
+             (push (cl-second instruction) wrapped-latter-body))
             (loopy--post-conditions
-             (push (cdr instruction) wrapped-post-conditions))
+             (push (cl-second instruction) wrapped-post-conditions))
             ;; Code for conditionally constructing the loop body.
             (loopy--skip-used
              (setq wrapped-skip-used t))
@@ -391,7 +391,7 @@ BODY is one or more loop commands."
             ;; Vars need to be reset every time the loop is entered.
             (loopy--iteration-vars
              (unless (loopy--bound-p (cadr instruction))
-               (push (cdr instruction) wrapped-iteration-vars)))
+               (push (cl-second instruction) wrapped-iteration-vars)))
             (t
              (push instruction non-wrapped-instructions))))))
 
@@ -424,14 +424,14 @@ BODY is one or more loop commands."
                 (append result
                         `((unless ,(cl-case (length wrapped-post-conditions)
                                      (0 t)
-                                     (1 (car wrapped-post-conditions))
+                                     (1 (cl-first wrapped-post-conditions))
                                      (t (cons 'and wrapped-post-conditions)))
                             ;; Unlike the normal loop, sub-loops don't have a
                             ;; return value, so we can just return nil.
                             (cl-return-from ,loopy--loop-name nil))))))
         (setq result `(while ,(cl-case (length wrapped-pre-conditions)
                                 (0 t)
-                                (1 (car wrapped-pre-conditions))
+                                (1 (cl-first wrapped-pre-conditions))
                                 (t (cons 'and wrapped-pre-conditions)))
                         ;; If using a `cl-tag-body', just insert that one
                         ;; expression, but if not, break apart into the while
@@ -462,7 +462,7 @@ BODY is one or more loop commands."
           (push 'progn result)))
 
       ;; Return the new instructions.
-      (cons `(loopy--main-body . ,result)
+      (cons `(loopy--main-body ,result)
             non-wrapped-instructions))))
 
 ;;;;; Genereric Evaluation
@@ -487,18 +487,18 @@ BODY is one or more loop commands."
                    var nil))
                ;; If one value, repeatedly set to that value.
                (1 (loopy--destructure-for-iteration-command
-                   var (car vals)))
+                   var (cl-first vals)))
                ;; If two values, repeatedly check against `value-selector' to
                ;; determine if we should assign the first or second value.  This
                ;; is how `cl-loop' does it.
                (2
-                `((loopy--iteration-vars . (,value-selector t))
+                `((loopy--iteration-vars (,value-selector t))
                   ,@(loopy--destructure-for-iteration-command
                      var `(if ,value-selector ,(cl-first vals) ,(cl-second vals)))
                   ;; This needs to happen right after running the above.
-                  (loopy--main-body . (setq ,value-selector nil))))
+                  (loopy--main-body (setq ,value-selector nil))))
                (t
-                `((loopy--iteration-vars . (,value-selector 0))
+                `((loopy--iteration-vars (,value-selector 0))
                   ;; Assign to var based on the value of value-selector.  For
                   ;; efficiency, we want to check for the last expression first,
                   ;; since it will probably be true the most times.  To enable
@@ -517,14 +517,14 @@ BODY is one or more loop commands."
                            (cons 'cond body-code)))
                   ;; This needs to happen right after running the above.
                   (loopy--main-body
-                   . (when (< ,value-selector ,(1- arg-length))
-                       (setq ,value-selector (1+ ,value-selector)))))))))
+                   (when (< ,value-selector ,(1- arg-length))
+                     (setq ,value-selector (1+ ,value-selector)))))))))
         (if init-arg
             (loopy--substitute-using-if
-             (cl-function (lambda ((_ . (var _)))
+             (cl-function (lambda ((_ (var _)))
                             `(loopy--iteration-vars
-                              . (,var ,init-arg))))
-             (lambda (x) (eq (car x) 'loopy--iteration-vars))
+                              (,var ,init-arg))))
+             (lambda (x) (eq (cl-first x) 'loopy--iteration-vars))
              needed-instructions)
           needed-instructions)))))
 
@@ -545,7 +545,7 @@ This command does not wait for VAL to change before updating VAR."
     ;; TODO: This feels more complicated than it needs to be, but the resulting
     ;;       code is pretty simple.
     `(,@(if init
-            `((loopy--iteration-vars . (,init-value-holder ,init))
+            `((loopy--iteration-vars (,init-value-holder ,init))
               ;; When using destructuring, each variable in `holding-vars'
               ;; needs to be initialized to a value that can be destructured
               ;; according to VAR.
@@ -554,32 +554,32 @@ This command does not wait for VAL to change before updating VAR."
               ;; destructuring, so we require two holding variables.
               ,@(if using-destructuring
                     `((loopy--iteration-vars
-                       . (,init-destr-value-holder
-                          (loopy--mimic-init-structure
-                           (quote ,var) ,init-value-holder)))
+                       (,init-destr-value-holder
+                        (loopy--mimic-init-structure
+                         (quote ,var) ,init-value-holder)))
                       ,@(mapcar (lambda (x)
                                   `(loopy--iteration-vars
-                                    . (,x ,init-destr-value-holder)))
+                                    (,x ,init-destr-value-holder)))
                                 holding-vars))
                   (mapcar (lambda (x)
-                            `(loopy--iteration-vars . (,x ,init-value-holder)))
+                            `(loopy--iteration-vars  (,x ,init-value-holder)))
                           holding-vars)))
           (mapcar (lambda (x)
-                    `(loopy--iteration-vars . (,x nil)))
+                    `(loopy--iteration-vars (,x nil)))
                   holding-vars))
       ,@(loopy--substitute-using
-         (pcase-lambda ((and instr `(,place . (,var ,_))))
+         (pcase-lambda ((and instr `(,place (,var ,_))))
            (if (eq place 'loopy--iteration-vars)
-               `(,place . (,var ,(when init
-                                   init-value-holder)))
+               `(,place (,var ,(when init
+                                 init-value-holder)))
              instr))
          (loopy--destructure-for-iteration-command
           var (car (last holding-vars))))
       (loopy--latter-body
-       . (setq ,@(apply #'append
-                        (nreverse (cl-loop for pvar = val then hv
-                                           for hv in holding-vars
-                                           collect (list hv pvar)))))))))
+       (setq ,@(apply #'append
+                      (nreverse (cl-loop for pvar = val then hv
+                                         for hv in holding-vars
+                                         collect (list hv pvar)))))))))
 
 ;;;;;; Group
 (cl-defun loopy--parse-group-command ((_ &rest body))
@@ -592,7 +592,7 @@ This command is suitable for using as the first sub-command in an
     (cl-destructuring-bind (progn-body rest)
         (loopy--extract-main-body (loopy--parse-loop-commands body))
       ;; Return the instructions.
-      (cons `(loopy--main-body . (progn ,@progn-body))
+      (cons `(loopy--main-body (progn ,@progn-body))
             rest))))
 
 ;;;;;; Do
@@ -601,7 +601,7 @@ This command is suitable for using as the first sub-command in an
 
 Expressions are normal Lisp expressions, which are inserted into
 the loop literally (not even in a `progn')."
-  (mapcar (lambda (expr) (cons 'loopy--main-body expr))
+  (mapcar (lambda (expr) (list 'loopy--main-body expr))
           expressions))
 
 ;;;;; Conditionals
@@ -627,7 +627,7 @@ the loop literally (not even in a `progn')."
 
       ;; Return the full instruction list.
       `((loopy--main-body
-         . (if ,condition ,if-true-main-body ,@if-false-main-body))
+         (if ,condition ,if-true-main-body ,@if-false-main-body))
         ,@true-rest
         ,@false-rest))))
 
@@ -650,7 +650,7 @@ command are inserted into a `cond' special form."
              do
              (push (cons (cl-first clause) main-body) cond-body)
              (push rest rest-instructions))
-    (cons `(loopy--main-body . (cond ,@(nreverse cond-body)))
+    (cons `(loopy--main-body (cond ,@(nreverse cond-body)))
           (apply #'append (nreverse rest-instructions)))))
 
 ;;;;;; When Unless
@@ -669,7 +669,7 @@ command are inserted into a `cond' special form."
         (push main-body when-body)
         (push rest other-instructions)))
     (cons `(loopy--main-body
-            . (,name ,condition ,@(apply #'append (nreverse when-body))))
+            (,name ,condition ,@(apply #'append (nreverse when-body))))
           (apply #'append (nreverse other-instructions)))))
 
 ;;;;; Iteration
@@ -947,26 +947,26 @@ using the function `loopy--distribute-array-elements'."
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars . (,increment-holder ,by))
+      `((loopy--iteration-vars (,increment-holder ,by))
         (loopy--iteration-vars
-         . (,value-holder ,(if (null other-vals)
+         (,value-holder ,(if (null other-vals)
                                val
                              `(loopy--distribute-array-elements
                                ,val ,@other-vals))))
-        (loopy--iteration-vars . (,end-holder ,(or key-end
+        (loopy--iteration-vars (,end-holder ,(or key-end
                                                    (if decreasing
                                                        -1
                                                      `(length ,value-holder)))))
-        (loopy--iteration-vars . (,index-holder ,(or key-start
+        (loopy--iteration-vars (,index-holder ,(or key-start
                                                      (if decreasing
                                                          `(1- (length ,value-holder))
                                                        0))))
         ,@(loopy--destructure-for-iteration-command
            var `(aref ,value-holder ,index-holder))
-        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
                                                       ,index-holder
                                                       ,increment-holder)))
-        (loopy--pre-conditions . (,(if (or (null key-end)
+        (loopy--pre-conditions (,(if (or (null key-end)
                                            (not inclusive))
                                        (if decreasing #'> #'<)
                                      (if decreasing #'>= #'<=))
@@ -1000,22 +1000,22 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars . (,increment-holder ,by))
-        (loopy--iteration-vars . (,value-holder ,val))
-        (loopy--iteration-vars . (,end-holder ,(or key-end
+      `((loopy--iteration-vars (,increment-holder ,by))
+        (loopy--iteration-vars (,value-holder ,val))
+        (loopy--iteration-vars (,end-holder ,(or key-end
                                                    (if decreasing
                                                        -1
                                                      `(length ,value-holder)))))
-        (loopy--iteration-vars . (,index-holder ,(or key-start
+        (loopy--iteration-vars (,index-holder ,(or key-start
                                                      (if decreasing
                                                          `(1- (length ,value-holder))
                                                        0))))
         ,@(loopy--destructure-for-generalized-command
            var `(aref ,value-holder ,index-holder))
-        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
                                                       ,index-holder
                                                       ,increment-holder)))
-        (loopy--pre-conditions . (,(if (or (null key-end)
+        (loopy--pre-conditions (,(if (or (null key-end)
                                            (not inclusive))
                                        (if decreasing #'> #'<)
                                      (if decreasing #'>= #'<=))
@@ -1030,12 +1030,12 @@ is a function by which to update VAR (default `cdr')."
   :keywords (:by)
   :instructions
   (let ((value-holder (gensym "cons-")))
-    `((loopy--iteration-vars . (,value-holder ,val))
+    `((loopy--iteration-vars (,value-holder ,val))
       ,@(loopy--destructure-for-iteration-command var value-holder)
       (loopy--latter-body
-       . (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
+       (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
                                                      value-holder)))
-      (loopy--pre-conditions . (consp ,value-holder)))))
+      (loopy--pre-conditions (consp ,value-holder)))))
 
 ;;;;;; List
 (defmacro loopy--distribute-list-elements (&rest lists)
@@ -1072,13 +1072,13 @@ using the function `loopy--distribute-list-elements'."
                       (quote #'cdr))))
     (let ((value-holder (gensym "list-")))
       `((loopy--iteration-vars
-         . (,value-holder ,(if (null other-vals)
-                               val
-                             `(loopy--distribute-list-elements
-                               ,val ,@other-vals))))
+         (,value-holder ,(if (null other-vals)
+                             val
+                           `(loopy--distribute-list-elements
+                             ,val ,@other-vals))))
         (loopy--latter-body
-         . (setq ,value-holder ,(loopy--apply-function by-func value-holder)))
-        (loopy--pre-conditions . (consp ,value-holder))
+         (setq ,value-holder ,(loopy--apply-function by-func value-holder)))
+        (loopy--pre-conditions (consp ,value-holder))
         ,@(loopy--destructure-for-iteration-command
            var `(car ,value-holder))))))
 
@@ -1092,11 +1092,11 @@ BY is the function to use to move through the list (default `cdr')."
   (let ((val-holder (gensym "list-ref"))
         ;; Need to quote as if passed in to macro
         (by-func (or by (quote #'cdr))))
-    `((loopy--iteration-vars . (,val-holder ,val))
+    `((loopy--iteration-vars (,val-holder ,val))
       ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
       (loopy--latter-body
-       . (setq ,val-holder ,(loopy--apply-function by-func val-holder)))
-      (loopy--pre-conditions . (consp ,val-holder)))))
+       (setq ,val-holder ,(loopy--apply-function by-func val-holder)))
+      (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
 (cl-defun loopy--parse-map-command ((_ var val))
@@ -1108,10 +1108,10 @@ vector using the library `map.el'."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'map))
   (let ((value-holder (gensym "map-")))
-    `((loopy--iteration-vars . (,value-holder (map-pairs ,val)))
+    `((loopy--iteration-vars (,value-holder (map-pairs ,val)))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
-      (loopy--pre-conditions . (consp ,value-holder))
-      (loopy--latter-body . (setq ,value-holder (cdr ,value-holder))))))
+      (loopy--pre-conditions (consp ,value-holder))
+      (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
 ;;;;;; Nums
 (loopy--defiteration nums
@@ -1151,15 +1151,15 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
             (end-val-holder (gensym "nums-end"))
             (start (or explicit-start key-start 0)))
 
-        `((loopy--iteration-vars . (,var ,start))
-          (loopy--iteration-vars . (,increment-val-holder ,by))
+        `((loopy--iteration-vars (,var ,start))
+          (loopy--iteration-vars (,increment-val-holder ,by))
           ,@(when end
-              `((loopy--iteration-vars . (,end-val-holder ,end))
-                (loopy--pre-conditions . (,(if inclusive
+              `((loopy--iteration-vars (,end-val-holder ,end))
+                (loopy--pre-conditions (,(if inclusive
                                                (if decreasing #'>= #'<=)
                                              (if decreasing #'> #'<))
                                           ,var ,end-val-holder))))
-          (loopy--latter-body . (setq ,var ,(cond
+          (loopy--latter-body (setq ,var ,(cond
                                              (by   `(,(if decreasing #'- #'+)
                                                      ,var ,increment-val-holder))
                                              (decreasing `(1- ,var))
@@ -1209,13 +1209,13 @@ an integer, to be used if a variable name is provided."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'repeat))
   (if count
-      `((loopy--iteration-vars . (,var-or-count 0))
-        (loopy--latter-body . (setq ,var-or-count (1+ ,var-or-count)))
-        (loopy--pre-conditions . (< ,var-or-count ,count)))
+      `((loopy--iteration-vars (,var-or-count 0))
+        (loopy--latter-body (setq ,var-or-count (1+ ,var-or-count)))
+        (loopy--pre-conditions (< ,var-or-count ,count)))
     (let ((value-holder (gensym "repeat-limit-")))
-      `((loopy--iteration-vars . (,value-holder 0))
-        (loopy--latter-body . (setq ,value-holder (1+ ,value-holder)))
-        (loopy--pre-conditions . (< ,value-holder ,var-or-count))))))
+      `((loopy--iteration-vars (,value-holder 0))
+        (loopy--latter-body (setq ,value-holder (1+ ,value-holder)))
+        (loopy--pre-conditions (< ,value-holder ,var-or-count))))))
 
 ;;;;;; Seq
 (defmacro loopy--distribute-sequence-elements (&rest sequences)
@@ -1270,21 +1270,21 @@ distributed using the function `loopy--distribute-sequence-elements'."
         (loopy--find-start-by-end-dir-vals opts)
 
 
-      `((loopy--iteration-vars . (,increment-holder ,by))
+      `((loopy--iteration-vars (,increment-holder ,by))
         (loopy--iteration-vars
-         . (,value-holder ,(if other-vals
+         (,value-holder ,(if other-vals
                                `(loopy--distribute-sequence-elements
                                  ,val ,@other-vals)
                              val)))
         (loopy--iteration-vars
-         . (,index-holder ,(or starting-index (if going-down
+         (,index-holder ,(or starting-index (if going-down
                                                   `(1- (length ,value-holder))
                                                 0))))
         (loopy--iteration-vars
-         . (,end-index-holder ,(or ending-index (if going-down
+         (,end-index-holder ,(or ending-index (if going-down
                                                     -1
                                                   `(length ,value-holder)))))
-        (loopy--latter-body . (setq ,index-holder (,(if going-down '- '+)
+        (loopy--latter-body (setq ,index-holder (,(if going-down '- '+)
                                                    ,index-holder
                                                    ,increment-holder)))
 
@@ -1301,7 +1301,7 @@ distributed using the function `loopy--distribute-sequence-elements'."
                           (pop ,value-holder)
                         (aref ,value-holder ,index-holder)))
               (loopy--pre-conditions
-               . (and ,value-holder
+               (and ,value-holder
                       ,(if ending-index
                            `(,(if inclusive #'<= #'<)
                              ,index-holder ,end-index-holder)
@@ -1311,7 +1311,7 @@ distributed using the function `loopy--distribute-sequence-elements'."
            (t
             `(,@(loopy--destructure-for-iteration-command
                  var `(elt ,value-holder ,index-holder))
-              (loopy--pre-conditions . (,(if (or (null ending-index)
+              (loopy--pre-conditions (,(if (or (null ending-index)
                                                  (not inclusive))
                                              (if going-down '> '<)
                                            (if going-down '>= '<=))
@@ -1344,22 +1344,22 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars . (,var nil))
-        (loopy--iteration-vars . (,increment-holder ,by))
-        (loopy--iteration-vars . (,value-holder ,val))
-        (loopy--iteration-vars . (,end-holder ,(or key-end
+      `((loopy--iteration-vars (,var nil))
+        (loopy--iteration-vars (,increment-holder ,by))
+        (loopy--iteration-vars (,value-holder ,val))
+        (loopy--iteration-vars (,end-holder ,(or key-end
                                                    (if decreasing
                                                        -1
                                                      `(length ,value-holder)))))
-        (loopy--iteration-vars . (,index-holder ,(or key-start
+        (loopy--iteration-vars (,index-holder ,(or key-start
                                                      (if decreasing
                                                          `(1- (length ,value-holder))
                                                        0))))
-        (loopy--main-body      . (setq ,var ,index-holder))
-        (loopy--latter-body    . (setq ,index-holder (,(if decreasing #'- #'+)
+        (loopy--main-body      (setq ,var ,index-holder))
+        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
                                                       ,index-holder
                                                       ,increment-holder)))
-        (loopy--pre-conditions . (,(if (or (null key-end)
+        (loopy--pre-conditions (,(if (or (null key-end)
                                            (not inclusive))
                                        (if decreasing #'> #'<)
                                      (if decreasing #'>= #'<=))
@@ -1393,22 +1393,22 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars . (,increment-holder ,by))
-        (loopy--iteration-vars . (,value-holder ,val))
+      `((loopy--iteration-vars (,increment-holder ,by))
+        (loopy--iteration-vars (,value-holder ,val))
         (loopy--iteration-vars
-         . (,index-holder ,(or starting-index (if going-down
+         (,index-holder ,(or starting-index (if going-down
                                                   `(1- (length ,value-holder))
                                                 0))))
         (loopy--iteration-vars
-         . (,end-index-holder ,(or ending-index (if going-down
+         (,end-index-holder ,(or ending-index (if going-down
                                                     -1
                                                   `(length ,value-holder)))))
-        (loopy--latter-body . (setq ,index-holder (,(if going-down '- '+)
+        (loopy--latter-body (setq ,index-holder (,(if going-down '- '+)
                                                    ,index-holder
                                                    ,increment-holder)))
         ,@(loopy--destructure-for-generalized-command
            var `(elt ,value-holder ,index-holder))
-        (loopy--pre-conditions . (,(if (or (null ending-index)
+        (loopy--pre-conditions (,(if (or (null ending-index)
                                            (not inclusive))
                                        (if going-down '> '<)
                                      (if going-down '>= '<=))
@@ -1644,15 +1644,15 @@ the inputs to test."
   :num-args 3
   :explicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var ,init))
+              `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-third args) val var)))))
+                 (setq ,var ,(loopy--apply-function (cl-third args) val var)))))
   :implicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var ,init))
+              `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-second args) val var)))
-                (loopy--implicit-return . ,var))))
+                 (setq ,var ,(loopy--apply-function (cl-second args) val var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Adjoin
 (loopy--defaccumulation adjoin
@@ -1666,21 +1666,21 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                        :result-type (result-type 'list))
       opts
     (loopy--check-accumulation-compatibility var 'list cmd)
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,@(cond
          ((member pos '(start beginning 'start 'beginning))
           `((loopy--main-body
-             . (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
+             (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
          ((member pos '(end nil 'end))
           (let* ((val-is-expression (not (symbolp val)))
                  (value-holder (if val-is-expression
                                    (gensym "adjoin-value")
                                  val)))
             `(,@(when val-is-expression
-                  `((loopy--accumulation-vars . (,value-holder nil))
-                    (loopy--main-body . (setq ,value-holder ,val))))
+                  `((loopy--accumulation-vars (,value-holder nil))
+                    (loopy--main-body (setq ,value-holder ,val))))
               (loopy--main-body
-               . (if ,(if key
+               (if ,(if key
                           ;; `adjoin' applies KEY to both the new item
                           ;; and old items in list, while `member' only
                           ;; applies KEY to items in the list.  To be
@@ -1702,19 +1702,19 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           (error "Bad `:at' position: %s" cmd)))
       ,(when (and result-type (not (eq result-type 'list)))
          `(loopy--accumulation-final-updates
-           . (,var . (setq ,var (cl-coerce ,var
+           (,var . (setq ,var (cl-coerce ,var
                                            (quote ,(loopy--get-quoted-symbol
                                                     result-type)))))))))
   :implicit
   (loopy--plist-bind ( :test test :key key :at (pos 'end)
                        :result-type (result-type 'list))
       opts
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,@(cond
          ((member pos '(start beginning 'start 'beginning))
           (loopy--check-accumulation-compatibility var 'list cmd)
           `((loopy--main-body
-             . (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
+             (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
          ((member pos '(end 'end))
           (let* ((val-is-expression (not (symbolp val)))
                  (value-holder (if val-is-expression
@@ -1739,19 +1739,19 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     `(cl-member ,value-holder ,var :test ,test))))
 
             `(,@(when val-is-expression
-                  `((loopy--accumulation-vars . (,value-holder nil))
-                    (loopy--main-body . (setq ,value-holder ,val))))
+                  `((loopy--accumulation-vars (,value-holder nil))
+                    (loopy--main-body (setq ,value-holder ,val))))
               ,@(if loopy--split-implied-accumulation-results
                     (progn
                       (loopy--check-accumulation-compatibility var 'reverse-list cmd)
-                      `((loopy--main-body . (if ,membership-test
+                      `((loopy--main-body (if ,membership-test
                                                 nil
                                               (setq ,var (cons ,value-holder ,var))))))
                   (let ((last-link (loopy--get-accumulation-list-end-var var)))
                     (loopy--check-accumulation-compatibility var 'list cmd)
-                    `((loopy--accumulation-vars . (,last-link nil))
+                    `((loopy--accumulation-vars (,last-link nil))
                       (loopy--main-body
-                       . (cond
+                       (cond
                           (,membership-test nil)
                           ;; If `last-link' is know, set it's cdr.
                           (,last-link
@@ -1771,14 +1771,14 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                              (member pos '(end 'end)))))
          (if (not (member result-type '(list 'list)))
              `(loopy--accumulation-final-updates
-               . (,var
+               (,var
                   . (setq ,var (cl-coerce ,(if reversing `(nreverse ,var) var)
                                           (quote ,(loopy--get-quoted-symbol
                                                    result-type))))))
            (when reversing
              `(loopy--accumulation-final-updates
-               . (,var . (setq ,var (nreverse ,var)))))))
-      (loopy--implicit-return . ,var))))
+               (,var . (setq ,var (nreverse ,var)))))))
+      (loopy--implicit-return ,var))))
 
 ;;;;;; Append
 (loopy--defaccumulation append
@@ -1787,9 +1787,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit
   (loopy--plist-bind (:at (pos 'end)) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       (loopy--main-body
-       . (setq ,var ,(cond
+       (setq ,var ,(cond
                       ((member pos '(start beginning 'start 'beginning))
                        `(append ,val ,var))
                       ((member pos '(end 'end))
@@ -1798,26 +1798,26 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                        (error "Bad `:at' position: %s" cmd)))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,@(cond
          ;; TODO: Is there a better way of appending to the beginning
          ;;       of a list?
          ((member pos '(start beginning 'start 'beginning))
           (loopy--check-accumulation-compatibility var 'list cmd)
           ;; `append' doesn't copy the last argument.
-          `((loopy--main-body . (setq ,var (append ,val ,var)))))
+          `((loopy--main-body (setq ,var (append ,val ,var)))))
          ((member pos '(end 'end))
           (if loopy--split-implied-accumulation-results
               (progn
                 (loopy--check-accumulation-compatibility var 'reverse-list cmd)
-                `((loopy--main-body . (setq ,var (nconc (reverse ,val) ,var)))
+                `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var)))
                   (loopy--accumulation-final-updates
-                   . (,var . (setq ,var (nreverse ,var))))))
+                   (,var . (setq ,var (nreverse ,var))))))
             (let ((last-link (loopy--get-accumulation-list-end-var var)))
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,last-link nil))
+              `((loopy--accumulation-vars (,last-link nil))
                 (loopy--main-body
-                 . (cond
+                 (cond
                     (,last-link
                      (setcdr ,last-link (copy-sequence ,val))
                      (setq ,last-link (last ,last-link)))
@@ -1830,7 +1830,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                            ,last-link (last ,var)))))))))
          (t
           (error "Bad `:at' position: %s" cmd)))
-      (loopy--implicit-return . ,var))))
+      (loopy--implicit-return ,var))))
 
 ;;;;;; Collect
 (loopy--defaccumulation collect
@@ -1840,9 +1840,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                  :result-type (result-type 'list))
                 opts
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
+              `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 . (setq ,var
+                 (setq ,var
                          ,(cond
                            ((member pos '(start beginning 'start 'beginning))
                             `(cons ,val ,var))
@@ -1850,7 +1850,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                             `(nconc ,var (list ,val))))))
                 ,(unless (member result-type '(list 'list))
                    `(loopy--accumulation-final-updates
-                     . (,var . (setq ,var
+                     (,var . (setq ,var
                                      (cl-coerce ,var (quote
                                                       ,(loopy--get-quoted-symbol
                                                         result-type)))))))))
@@ -1858,25 +1858,25 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :implicit (loopy--plist-bind ( :at (pos (quote 'end))
                                  :result-type (result-type 'list))
                 opts
-              `((loopy--accumulation-vars . (,var nil))
+              `((loopy--accumulation-vars (,var nil))
                 ,@(cond
                    ((member pos '(start beginning 'start 'beginning))
                     (loopy--check-accumulation-compatibility var 'list cmd)
-                    `((loopy--main-body . (setq ,var (cons ,val ,var)))))
+                    `((loopy--main-body (setq ,var (cons ,val ,var)))))
                    ((member pos '(end 'end))
                     (if loopy--split-implied-accumulation-results
                         ;; If we can, construct the list in reverse.
                         (progn
                           (loopy--check-accumulation-compatibility
                            var 'reverse-list cmd)
-                          `((loopy--main-body . (setq ,var (cons ,val ,var)))))
+                          `((loopy--main-body (setq ,var (cons ,val ,var)))))
                       ;; End tracking is a bit slower than `nconc' for short
                       ;; lists, but much faster for longer lists.
                       (let ((last-link (loopy--get-accumulation-list-end-var var)))
                         (loopy--check-accumulation-compatibility var 'list cmd)
-                        `((loopy--accumulation-vars . (,last-link (last ,var)))
+                        `((loopy--accumulation-vars (,last-link (last ,var)))
                           (loopy--main-body
-                           . (cond
+                           (cond
                               (,last-link
                                (setcdr ,last-link (list ,val))
                                (setq ,last-link (cdr ,last-link)))
@@ -1895,21 +1895,21 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                           loopy--split-implied-accumulation-results)
                      (if (member result-type '(list 'list))
                          `(loopy--accumulation-final-updates
-                           . (,var . (setq ,var (nreverse ,var))))
+                           (,var . (setq ,var (nreverse ,var))))
                        `(loopy--accumulation-final-updates
-                         . (,var . (setq ,var
+                         (,var . (setq ,var
                                          (cl-coerce (nreverse ,var)
                                                     (quote
                                                      ,(loopy--get-quoted-symbol
                                                        result-type)))))))
                    (unless (member result-type '(list 'list))
                      `(loopy--accumulation-final-updates
-                       . (,var . (setq ,var
+                       (,var . (setq ,var
                                        (cl-coerce ,var
                                                   (quote
                                                    ,(loopy--get-quoted-symbol
                                                      result-type))))))))
-                (loopy--implicit-return . ,var))))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Concat
 (loopy--defaccumulation concat
@@ -1917,9 +1917,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'string cmd)
-              `((loopy--accumulation-vars . (,var nil))
+              `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 . (setq ,var
+                 (setq ,var
                          ,(cond
                            ((member pos '(start beginning 'start 'beginning))
                             `(concat ,val ,var))
@@ -1929,10 +1929,10 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                             (error "Bad `:at' position: %s" cmd)))))))
   :implicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'string cmd)
-              `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (cons ,val ,var)))
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (setq ,var (cons ,val ,var)))
                 (loopy--accumulation-final-updates
-                 . (,var . (setq ,var
+                 (,var . (setq ,var
                                  ,(cond
                                    ((member pos '( start beginning
                                                    'start 'beginning))
@@ -1941,7 +1941,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                     `(apply #'concat (reverse ,var)))
                                    (t
                                     (error "Bad `:at' position: %s" cmd))))))
-                (loopy--implicit-return . ,var))))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Count
 (loopy--defaccumulation count
@@ -1949,13 +1949,13 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 0))
-                (loopy--main-body . (if ,val (setq ,var (1+ ,var))))))
+              `((loopy--accumulation-vars (,var 0))
+                (loopy--main-body (if ,val (setq ,var (1+ ,var))))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 0))
-                (loopy--main-body . (if ,val (setq ,var (1+ ,var))))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var 0))
+                (loopy--main-body (if ,val (setq ,var (1+ ,var))))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Find
 (loopy--defaccumulation find
@@ -1967,69 +1967,69 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
                    (on-failure (plist-get opts :on-failure)))
-              `((loopy--tagbody-exit-used . t)
-                (loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (when ,test-form
+              `((loopy--tagbody-exit-used t)
+                (loopy--accumulation-vars (,var nil))
+                (loopy--main-body (when ,test-form
                                       (setq ,var ,val)
                                       (go loopy--non-returning-exit-tag)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
                    `(loopy--accumulation-final-updates
-                     . (,var . (if ,var nil (setq ,var ,on-failure)))))))
+                     (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
                    (test-form (if (loopy--quoted-symbol-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
                    (on-failure (plist-get opts :on-failure)))
-              `((loopy--tagbody-exit-used . t)
-                (loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (when ,test-form
+              `((loopy--tagbody-exit-used t)
+                (loopy--accumulation-vars (,var nil))
+                (loopy--main-body (when ,test-form
                                       (setq ,var ,val)
                                       (go loopy--non-returning-exit-tag)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
                    `(loopy--accumulation-final-updates
-                     . (,var . (if ,var nil (setq ,var ,on-failure)))))
-                (loopy--implicit-return   . ,var))))
+                     (,var . (if ,var nil (setq ,var ,on-failure)))))
+                (loopy--implicit-return   ,var))))
 
 ;;;;;; Max
 (loopy--defaccumulation max
   "Parse the `max' command as (max VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var -1.0e+INF))
-                (loopy--main-body . (setq ,var (max ,val ,var)))))
+              `((loopy--accumulation-vars (,var -1.0e+INF))
+                (loopy--main-body (setq ,var (max ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var -1.0e+INF))
-                (loopy--main-body . (setq ,var (max ,val ,var)))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var -1.0e+INF))
+                (loopy--main-body (setq ,var (max ,val ,var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Min
 (loopy--defaccumulation min
   "Parse the `min' command as (min VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var +1.0e+INF))
-                (loopy--main-body . (setq ,var (min ,val ,var)))))
+              `((loopy--accumulation-vars (,var +1.0e+INF))
+                (loopy--main-body (setq ,var (min ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var +1.0e+INF))
-                (loopy--main-body . (setq ,var (min ,val ,var)))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var +1.0e+INF))
+                (loopy--main-body (setq ,var (min ,val ,var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Multiply
 (loopy--defaccumulation multiply
   "Parse the `multiply' command as (multiply VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 1))
-                (loopy--main-body . (setq ,var (* ,val ,var)))))
+              `((loopy--accumulation-vars (,var 1))
+                (loopy--main-body (setq ,var (* ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 1))
-                (loopy--main-body . (setq ,var (* ,val ,var)))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var 1))
+                (loopy--main-body (setq ,var (* ,val ,var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Nconc
 (loopy--defaccumulation nconc
@@ -2037,9 +2037,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
+              `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 . (setq ,var
+                 (setq ,var
                          ,(cond
                            ((member pos '(start beginning 'start 'beginning))
                             `(nconc ,val ,var))
@@ -2049,24 +2049,24 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                             (error "Bad `:at' position: %s" cmd)))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,@(cond
          ((member pos '(start beginning 'start 'beginning))
           (loopy--check-accumulation-compatibility var 'list cmd)
-          `((loopy--main-body . (setq ,var (nconc ,val ,var)))))
+          `((loopy--main-body (setq ,var (nconc ,val ,var)))))
          ((member pos '(end 'end))
           (if loopy--split-implied-accumulation-results
               (progn
                 (loopy--check-accumulation-compatibility
                  var 'reverse-list cmd)
-                `((loopy--main-body . (setq ,var (nconc (nreverse ,val) ,var)))
+                `((loopy--main-body (setq ,var (nconc (nreverse ,val) ,var)))
                   (loopy--accumulation-final-updates
-                   . (,var . (setq ,var (nreverse ,var))))))
+                   (,var . (setq ,var (nreverse ,var))))))
             (let ((last-link (loopy--get-accumulation-list-end-var var)))
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,last-link nil))
+              `((loopy--accumulation-vars (,last-link nil))
                 (loopy--main-body
-                 . (cond
+                 (cond
                     (,last-link
                      ;; Since this is `nconc', don't copy
                      ;; `val'.  `val' will be modified in
@@ -2082,7 +2082,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                            ,last-link (last ,var)))))))))
          (t
           (error "Bad `:at' position: %s" cmd)))
-      (loopy--implicit-return . ,var))))
+      (loopy--implicit-return ,var))))
 
 ;;;;;; Nunion
 (loopy--defaccumulation nunion
@@ -2091,42 +2091,42 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,@(let ((test-method (loopy--get-union-test-method var key test)))
           (cond
            ((member pos '(start beginning 'start 'beginning))
             `((loopy--main-body
-               . (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
+               (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
            ((member pos '(end 'end))
             `((loopy--main-body
-               . (setq ,var (nconc ,var (cl-delete-if ,test-method ,val))))))
+               (setq ,var (nconc ,var (cl-delete-if ,test-method ,val))))))
            (t
             (error "Bad `:at' position: %s" cmd))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
-    `((loopy--accumulation-vars . (,var nil))
-      (loopy--implicit-return . ,var)
+    `((loopy--accumulation-vars (,var nil))
+      (loopy--implicit-return ,var)
       ,@(let ((test-method (loopy--get-union-test-method var key test)))
           (cond
            ((member pos '(start beginning 'start 'beginning))
             (loopy--check-accumulation-compatibility var 'list cmd)
             `((loopy--main-body
-               . (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
+               (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
            ((member pos '(end 'end))
             (if loopy--split-implied-accumulation-results
                 (progn
                   (loopy--check-accumulation-compatibility var 'reverse-list cmd)
                   `((loopy--main-body
-                     . (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
+                     (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
                                          ,var)))
                     (loopy--accumulation-final-updates
-                     . (var . (setq ,var (nreverse ,var))))))
+                     (var . (setq ,var (nreverse ,var))))))
               (let ((last-link (loopy--get-accumulation-list-end-var var))
                     (new-items (gensym "new-items")))
                 (loopy--check-accumulation-compatibility var 'list cmd)
-                `((loopy--accumulation-vars . (,last-link nil))
+                `((loopy--accumulation-vars (,last-link nil))
                   (loopy--main-body
-                   . (if-let ((,new-items (cl-delete-if ,test-method ,val)))
+                   (if-let ((,new-items (cl-delete-if ,test-method ,val)))
                          (cond
                           (,last-link
                            (setcdr ,last-link ,new-items)
@@ -2146,29 +2146,29 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   "Parse the `prepend' command as (prepend VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (append ,val ,var)))))
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (setq ,var (append ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (nconc ,(if (symbolp val)
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (setq ,var (nconc ,(if (symbolp val)
                                                            `(copy-sequence  ,val)
                                                          val)
                                                       ,var)))
-                (loopy--implicit-return . ,var))))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Push Into
 (loopy--defaccumulation push-into
   "Parse the `push' command as (push VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (cons ,val  ,var)))))
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (setq ,var (cons ,val  ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars . (,var nil))
-                (loopy--main-body . (setq ,var (cons ,val  ,var)))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (setq ,var (cons ,val  ,var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Reduce
 (loopy--defaccumulation reduce
@@ -2179,15 +2179,15 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :keywords (init)
   :implicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var ,init))
+              `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-second args) var val)))
-                (loopy--implicit-return . ,var)))
+                 (setq ,var ,(loopy--apply-function (cl-second args) var val)))
+                (loopy--implicit-return ,var)))
   :explicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var ,init))
+              `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
-                 . (setq ,var ,(loopy--apply-function (cl-third args) var val))))))
+                 (setq ,var ,(loopy--apply-function (cl-third args) var val))))))
 
 ;;;;;; Sum
 (loopy--defaccumulation sum
@@ -2195,13 +2195,13 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 0))
-                (loopy--main-body . (setq ,var (+ ,val ,var)))))
+              `((loopy--accumulation-vars (,var 0))
+                (loopy--main-body (setq ,var (+ ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility var 'value cmd)
-              `((loopy--accumulation-vars . (,var 0))
-                (loopy--main-body . (setq ,var (+ ,val ,var)))
-                (loopy--implicit-return . ,var))))
+              `((loopy--accumulation-vars (,var 0))
+                (loopy--main-body (setq ,var (+ ,val ,var)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;; Union
 (loopy--defaccumulation union
@@ -2210,29 +2210,29 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :explicit
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
-    `((loopy--accumulation-vars . (,var nil))
+    `((loopy--accumulation-vars (,var nil))
       ,(let ((test-method (loopy--get-union-test-method var key test)))
          (cond
           ((member pos '(start beginning 'start 'beginning))
            `(loopy--main-body
-             . (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
+             (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
                                  ,var))))
           ((member pos '(end 'end))
            `(loopy--main-body
-             . (setq ,var (nconc ,var (cl-delete-if ,test-method
+             (setq ,var (nconc ,var (cl-delete-if ,test-method
                                                     (copy-sequence ,val))))))
           (t
            (error "Bad `:at' position: %s" cmd))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
-    `((loopy--accumulation-vars . (,var nil))
-      (loopy--implicit-return . ,var)
+    `((loopy--accumulation-vars (,var nil))
+      (loopy--implicit-return ,var)
       ,@(let ((test-method (loopy--get-union-test-method var key test)))
           (cond
            ((member pos '(start beginning 'start 'beginning))
             (loopy--check-accumulation-compatibility var 'list cmd)
             `((loopy--main-body
-               . (setq ,var
+               (setq ,var
                        (nconc (cl-delete-if ,test-method (copy-sequence ,val))
                               ,var)))))
            ((member pos '(end 'end))
@@ -2240,14 +2240,14 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                 (progn
                   (loopy--check-accumulation-compatibility var 'reverse-list cmd)
                   `((loopy--main-body
-                     . (setq ,var (nconc (reverse ,val) ,var)))
+                     (setq ,var (nconc (reverse ,val) ,var)))
                     (loopy--accumulation-final-updates
-                     . (,var . (setq ,var (nreverse ,var))))))
+                     (,var . (setq ,var (nreverse ,var))))))
               (let ((last-link (loopy--get-accumulation-list-end-var var)))
                 (loopy--check-accumulation-compatibility var 'list cmd)
-                `((loopy--accumulation-vars . (,last-link (last ,var)))
+                `((loopy--accumulation-vars (,last-link (last ,var)))
                   (loopy--main-body
-                   . (cond
+                   (cond
                       (,last-link
                        (setcdr ,last-link (cl-delete-if ,test-method
                                                         (copy-sequence ,val)))
@@ -2270,9 +2270,9 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'vector cmd)
-              `((loopy--accumulation-vars . (,var nil))
+              `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 . (setq ,var
+                 (setq ,var
                          ,(cond
                            ((member pos '(start beginning 'start 'beginning))
                             `(vconcat ,val ,var))
@@ -2283,17 +2283,17 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     (loopy--check-accumulation-compatibility var 'vector cmd)
-    `((loopy--accumulation-vars . (,var nil))
-      (loopy--main-body . (setq ,var (cons ,val ,var)))
+    `((loopy--accumulation-vars (,var nil))
+      (loopy--main-body (setq ,var (cons ,val ,var)))
       (loopy--accumulation-final-updates
-       . (,var . (setq ,var ,(cond
+       (,var . (setq ,var ,(cond
                               ((member pos '( start beginning 'start 'beginning))
                                `(apply #'vconcat ,var))
                               ((member pos '(end 'end))
                                `(apply #'vconcat (reverse ,var)))
                               (t
                                (error "Bad `:at' position: %s" cmd))))))
-      (loopy--implicit-return . ,var))))
+      (loopy--implicit-return ,var))))
 
 
 ;;;;; Boolean Commands
@@ -2310,9 +2310,9 @@ or t if the command is never evaluated."
                                 (format "loopy--%s-always-never-return-val"
                                         loopy--loop-name)
                               "loopy-always-never-return-val"))))
-    `((loopy--iteration-vars . (,return-val t))
-      (loopy--implicit-return . ,return-val)
-      (loopy--main-body . (progn
+    `((loopy--iteration-vars (,return-val t))
+      (loopy--implicit-return ,return-val)
+      (loopy--main-body (progn
 			    (setq ,return-val
                                   ,(if other-conditions
                                        `(and ,condition ,@other-conditions)
@@ -2332,9 +2332,9 @@ Otherwise, `loopy' should return t."
                                 (format "loopy--%s-always-never-return-val"
                                         loopy--loop-name)
                               "loopy-always-never-return-val"))))
-    `((loopy--iteration-vars . (,return-val t))
-      (loopy--implicit-return  . ,return-val)
-      (loopy--main-body . (when ,(if other-conditions
+    `((loopy--iteration-vars (,return-val t))
+      (loopy--implicit-return  ,return-val)
+      (loopy--main-body (when ,(if other-conditions
                                      `(or ,condition ,@other-conditions)
                                    condition)
                             (cl-return-from ,loopy--loop-name nil))))))
@@ -2347,9 +2347,9 @@ If any condition is non-nil, its value is immediately returned
 and the loop is exited.  Otherwise the loop continues and nil is
 returned."
   (let ((value-holder (gensym "thereis-var-")))
-    `((loopy--implicit-return  . nil)
+    `((loopy--implicit-return  nil)
       (loopy--main-body
-       . (if-let ((,value-holder ,(if other-conditions
+       (if-let ((,value-holder ,(if other-conditions
                                       `(and ,condition ,@other-conditions)
                                     condition)))
 	     (cl-return-from ,loopy--loop-name ,value-holder))))))
@@ -2359,14 +2359,14 @@ returned."
 ;;;;;; Leave
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
-  '((loopy--tagbody-exit-used . t)
-    (loopy--main-body . (go loopy--non-returning-exit-tag))))
+  '((loopy--tagbody-exit-used t)
+    (loopy--main-body (go loopy--non-returning-exit-tag))))
 
 ;;;;;; Return
 (cl-defun loopy--parse-return-command ((_ &rest values))
   "Parse the `return' command as (return [VALUES])."
   `((loopy--main-body
-     . (cl-return-from ,loopy--loop-name
+     (cl-return-from ,loopy--loop-name
          ,(cond
            ((cl-rest values)  `(list ,@values))
            ((cl-first values) (cl-first values))
@@ -2375,7 +2375,7 @@ returned."
 (cl-defun loopy--parse-return-from-command ((_ loop-name &rest values))
   "Parse the `return-from' command as (return-from LOOP-NAME [VALUES])."
   `((loopy--main-body
-     . (cl-return-from ,loop-name
+     (cl-return-from ,loop-name
          ,(cond
            ((cl-rest values)  `(list ,@values))
            ((cl-first values) (cl-first values))
@@ -2384,8 +2384,8 @@ returned."
 ;;;;;; Skip
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
-  '((loopy--skip-used . t)
-    (loopy--main-body . (go loopy--continue-tag))))
+  '((loopy--skip-used t)
+    (loopy--main-body (go loopy--continue-tag))))
 
 ;;;;;; While Until
 (cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
@@ -2393,9 +2393,9 @@ returned."
 
 NAME is `while' or `until'.  CONDITION is a required condition.
 CONDITIONS is the remaining optional conditions."
-  `((loopy--tagbody-exit-used . t)
+  `((loopy--tagbody-exit-used t)
     (loopy--main-body
-     . ,(cl-ecase name
+     ,(cl-ecase name
           (until `(if ,(if (zerop (length conditions))
                            condition
                          `(and ,condition ,@conditions))
@@ -2418,7 +2418,7 @@ VALUE-EXPRESSION."
          (loopy--destructure-generalized-variables var value-expression))
         (instructions nil))
     (dolist (destructuring destructurings)
-      (push (cons 'loopy--generalized-vars
+      (push (list 'loopy--generalized-vars
                   destructuring)
             instructions))
     (nreverse instructions)))
@@ -2485,14 +2485,14 @@ variables (`setf'-able places).  For that, see the function
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
   (if (symbolp var)
-      `((loopy--iteration-vars . (,var nil))
-        (loopy--main-body . (setq ,var ,value-expression)))
+      `((loopy--iteration-vars (,var nil))
+        (loopy--main-body (setq ,var ,value-expression)))
     (cl-destructuring-bind (destructuring-expression var-list)
         (funcall (or loopy--destructuring-for-iteration-function
                      #'loopy--destructure-for-iteration-default)
                  var value-expression)
-      `((loopy--main-body . ,destructuring-expression)
-        ,@(mapcar (lambda (x) `(loopy--iteration-vars . (,x nil)))
+      `((loopy--main-body ,destructuring-expression)
+        ,@(mapcar (lambda (x) `(loopy--iteration-vars (,x nil)))
                   var-list)))))
 
 (cl-defun loopy--parse-destructuring-accumulation-command
@@ -2508,8 +2508,8 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
      (let ((value-holder (gensym (concat (symbol-name name) "-destructuring-list-")))
            (is-proper-list (proper-list-p var))
            (normalized-reverse-var))
-       (let ((instructions `(((loopy--iteration-vars . (,value-holder nil))
-                              (loopy--main-body . (setq ,value-holder ,val))))))
+       (let ((instructions `(((loopy--iteration-vars (,value-holder nil))
+                              (loopy--main-body (setq ,value-holder ,val))))))
          ;; If `var' is a list, always create a "normalized" variable
          ;; list, since proper lists are easier to work with, as many
          ;; looping/mapping functions expect them.
@@ -2540,8 +2540,8 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
     (array
      (let* ((value-holder (gensym (concat (symbol-name name) "-destructuring-array-")))
             (instructions
-             `(((loopy--iteration-vars . (,value-holder nil))
-                (loopy--main-body . (setq ,value-holder ,val))))))
+             `(((loopy--iteration-vars (,value-holder nil))
+                (loopy--main-body (setq ,value-holder ,val))))))
        (cl-loop for symbol-or-seq across var
                 for index from 0
                 do (push (loopy--parse-loop-command

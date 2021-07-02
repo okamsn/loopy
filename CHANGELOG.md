@@ -2,6 +2,14 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Breaking Changes
+
+- Instructions are no longer dotted pairs (such as `(A . B)`), but normal lists
+  (such as `(A B)`).  For custom commands, simply switch the dotted pairs to
+  un-dotted pairs.
+
 ## 0.7.2
 
 ### Bugs Fixed

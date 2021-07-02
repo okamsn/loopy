@@ -3133,8 +3133,8 @@ Not multiple of 3: 7")))
 
     (cl-defun my-loopy-sum-command ((_ target &rest items))
       "Set TARGET to the sum of ITEMS."
-      `((loopy--iteration-vars . (,target nil))
-        (loopy--main-body . (setq ,target (apply #'+ (list ,@items))))))
+      `((loopy--iteration-vars (,target nil))
+        (loopy--main-body (setq ,target (apply #'+ (list ,@items))))))
 
     (should (= 6
                (eval (quote (loopy  (target-sum my-target 1 2 3)
@@ -3153,7 +3153,7 @@ Not multiple of 3: 7")))
      Otherwise, `loopy' should return t."
       (let (instructions)
         ;; Return t if loop completes successfully.
-        (push `(loopy--after-do . (cl-return t)) instructions)
+        (push `(loopy--after-do (cl-return t)) instructions)
         ;; Check all conditions at the end of the loop body, forcing an exit if any
         ;; evaluate to nil.  Since the default return value of the macro is nil, we
         ;; don’t need to do anything else.
@@ -3161,7 +3161,7 @@ Not multiple of 3: 7")))
         ;; NOTE: We must not add anything to `loopy--final-return', since that
         ;;       would override the value of any early returns.
         (dolist (condition conditions)
-          (push `(loopy--post-conditions . ,condition) instructions))
+          (push `(loopy--post-conditions ,condition) instructions))
         instructions))
 
     ;; One condition: => t

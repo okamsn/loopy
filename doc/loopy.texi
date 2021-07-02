@@ -505,7 +505,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org477bb3f
+@float Listing,org3300c49
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -575,7 +575,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,orgb9f641b
+@float Listing,org6619662
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2921,10 +2921,10 @@ add custom commands to @code{loopy}.  Two examples are provided.
 @section Background Info
 
 @cindex instruction, instructions
-The core working of @code{loopy} is taking a command and generating code that is
-substituted into or around a loop body.  This code is transmitted between
-functions as @dfn{instructions}, which describe how the code is to be
-used.
+The core working of @code{loopy} is taking a loop command and generating code that
+becomes part of a @code{while}-loop.  This code is represented by
+@dfn{instructions}, which basically describe where and how code is
+inserted into/around a template of a @code{while}-loop.
 
 Some examples of instructions are:
 @itemize
@@ -2936,11 +2936,12 @@ Declaring a generated variable in a let form to contain a given value.
 @item
 Adding a condition for continuing/exiting the loop.
 @item
-Adding code to be run during the main loop body (the main processing
-section of the @code{while}-loop).
+Adding code to be run during the main processing section of the
+@code{while}-loop.  This location is referred to as the @dfn{main body} of
+the loop.
 @item
-Adding code to be run in the latter loop body (the section for updating
-variables after running the main loop body).
+Adding code to be run after the main processing section, such as for
+updating variables.  This location is referred to as the @dfn{latter body} of the loop.
 @end itemize
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
@@ -2948,102 +2949,119 @@ list of instructions.  Some commands require the creation of unique temporary
 variables, such as @samp{list-3717} in the below output.
 
 @lisp
-((loopy--iteration-vars list-3717 '(1 2 3))
- (loopy--latter-body setq list-3717 (cdr list-3717))
- (loopy--pre-conditions consp list-3717)
- (loopy--main-body setq i (car list-3717))
- (loopy--iteration-vars i nil))
+((loopy--iteration-vars (list-211 '(1 2 3)))
+ (loopy--latter-body    (setq list-211 (cdr list-211)))
+ (loopy--pre-conditions (consp list-211))
+ (loopy--iteration-vars (i nil))
+ (loopy--main-body      (setq i (car list-211))))
 @end lisp
 
-The @code{car} of an instruction is the place to put code and the @code{cdr} of the
-instruction is said code to put.  You can see that not all of the code to be
-inserted is a valid Lisp form.  Instead of being evaluated as an expression,
-some instructions insert pairs of names and values into variable lists like
-in @code{let} and @code{let*} .
+The first element of an instruction describes where to insert code into the
+template.  The second element of an instruction is said code to insert.  You
+can see that not all of the code to be inserted is a valid Lisp form.  For
+example, the above instruction referencing @code{loopy--iteration-vars} inserts
+a binding for the variable @samp{i} into a @code{let}-like form.
 
-@multitable {aaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@multitable {aaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem Place
 @tab Code
 @item @samp{loopy--iteration-vars}
-@tab @samp{(list-3717 '(1 2 3))}
+@tab @samp{(list-211 '(1 2 3))}
 @item @samp{loopy--latter-body}
-@tab @samp{(setq list-3717 (cdr list-3717))}
+@tab @samp{(setq list-211 (cdr list-211))}
 @item @samp{loopy--pre-conditions}
-@tab @samp{(consp list-3717)}
-@item @samp{loopy--main-body}
-@tab @samp{(setq i (car list-3717))}
+@tab @samp{(consp list-211)}
 @item @samp{loopy--iteration-vars}
 @tab @samp{(i nil)}
+@item @samp{loopy--main-body}
+@tab @samp{(setq i (car list-211)))}
 @end multitable
 
 Commands are parsed by @code{loopy--parse-loop-command}, which receives a command
-call and returns a list of instructions.  It does this by searching for an
-appropriate command-specific parsing function in @code{loopy-command-aliases} and
-ultimately in @code{loopy-command-parsers}.  For parsing multiple commands at
-once, there is @code{loopy--parse-loop-commands}, which wraps the single-command
-version.
+call, such as @samp{(list i '(1 2 3))}, and returns a list of instructions.  It
+does this by searching for an appropriate command-specific parsing function
+in @code{loopy-command-aliases} and ultimately in @code{loopy-command-parsers}.  For
+parsing multiple commands in order, there is @code{loopy--parse-loop-commands},
+which wraps the single-command version.
 
 For example, consider the function @code{loopy--parse-if-command}, which parses
-the @samp{if} command.  It needs to be able to group any code going to the loop
-body under an @code{if}-form.  To do this, it uses @code{loopy--parse-loop-command} to
-turn its sub-commands into a list of instructions, and then checks the @code{car}
-of each instruction to see whether the instruction's code is meant to be
-inserted into the loop's main body (and so whether it should be wrapped in
-the @code{if}-form).
+the @samp{if} loop command.  It needs to check the instructions of the
+sub-commands passed to @samp{if}, looking for code that would be inserted into the
+main loop body (as determined by the first element of the instruction).  Once
+found, it wraps that code with an @code{if}-form.
+
+@lisp
+;; => ((loopy--iteration-vars (i nil))
+;;     (loopy--main-body (setq i 1)))
+(loopy--parse-loop-command '(expr i 1))
+
+;; => ((loopy--iteration-vars (i nil))
+;;     (loopy--main-body (if (my-condition)
+;;                           (setq i 1)
+;;                         (setq i 2))))
+(loopy--parse-if-command '(if (my-condition)
+                              (expr i 1)
+                            (expr i 2)))
+@end lisp
 
 For the purpose of this example, below is a version of the parsing function
 made of the basic Lisp features with which you are familiar.  The actual
-definition is simpler.
+definition makes use of more convenient Emacs Lisp libraries.
 
 @lisp
-(cl-defun loopy--parse-if-command
-    ((_ condition &optional if-true &rest if-false))
-  "Parse the `if' loop command.  This takes the entire command.
+(require 'loopy-commands)
+(defun loopy--parse-if-command (arg)
+  "Parse the `if' loop command usage ARG.
+ARG is of the form (if CONDITION IF-TRUE &rest IF-FALSE)."
 
-- CONDITION is a Lisp expression.
-- IF-TRUE is the first sub-command of the `if' command.
-- IF-FALSE are all the other sub-commands."
+  (let ((condition (cadr arg))   ; Second element of `arg'.
+        (if-true   (caddr arg))  ; Third element of `arg'.
+        (if-false  (cdddr arg))) ; Remaining elements of `arg'.
 
-  ;; The main processing of this function is to separate instructions
-  ;; for the loop's main body from other instructions,
-  ;; and to then wrap those main-body instructions with an
-  ;; `if' special form.
-  (let ((full-instructions)
-        (if-true-main-body)
-        (if-false-main-body)
-        ;; This variable is just so that iteration commands know when
-        ;; they are being used away from the top level of the loop's
-        ;; structure (which is an error).
-        (loopy--in-sub-level t))
+    ;; The main processing of this function is to separate instructions
+    ;; for the loop's main body from other instructions,
+    ;; and to then wrap those main-body instructions with an
+    ;; `if' special form.
+    (let ((full-instructions)
+          (if-true-main-body)
+          (if-false-main-body)
+          ;; This variable is just so that iteration commands know when
+          ;; they are being used away from the top level of the loop's
+          ;; structure (which is an error).
+          (loopy--in-sub-level t))
 
-    ;; Process the instructions for the command that should run if the
-    ;; condition is true.
-    (dolist (instruction (loopy--parse-loop-command if-true))
-      (if (eq 'loopy--main-body (car instruction))
-          (push (cdr instruction) if-true-main-body)
-        (push instruction full-instructions)))
+      ;; Process the instructions for the command that should run if the
+      ;; condition is true.
+      (dolist (instruction (loopy--parse-loop-command if-true))
+        (if (eq 'loopy--main-body (car instruction))
+            (push (cadr instruction) if-true-main-body)
+          (push instruction full-instructions)))
 
-    ;; Process the instructions for the command that should run
-    ;; if the condition is true.
-    (dolist (instruction (loopy--parse-loop-commands if-false))
-      (if (eq 'loopy--main-body (car instruction))
-          (push (cdr instruction) if-false-main-body)
-        (push instruction full-instructions)))
+      ;; Process the instructions for the commands that should run
+      ;; if the condition is false.
+      (dolist (instruction (loopy--parse-loop-commands if-false))
+        (if (eq 'loopy--main-body (car instruction))
+            (push (cadr instruction) if-false-main-body)
+          (push instruction full-instructions)))
 
-    ;; `loopy--parse-loop-command' always returns a list instructions.
-    ;; For some commands, that means wrapping multiple instructions in
-    ;; a `progn' form.  For others, we need to extract the only element.
-    (setq if-true-main-body
-          (if (= 1 (length if-true-main-body))
-              (car if-true-main-body)
-            (cons 'progn (nreverse if-true-main-body))))
+      ;; Note: `push' adds elements to the front of a list,
+      ;;       so we need to reverse these lists before returning
+      ;;       the new list of instructions.
 
-    ;; Return the new, full list of instructions.
-    (cons `(loopy--main-body
-            . (if ,condition
-                  ,if-true-main-body
-                ,@@(nreverse if-false-main-body)))
-          (nreverse full-instructions))))
+      ;; `loopy--parse-loop-command' always returns a list of instructions.
+      ;; For some commands, that means wrapping multiple instructions in
+      ;; a `progn' form.  For others, we need to extract the only element.
+      (setq if-true-main-body
+            (if (= 1 (length if-true-main-body))
+                (car if-true-main-body)
+              (cons 'progn (nreverse if-true-main-body))))
+
+      ;; Return the new, full list of instructions.
+      (cons `(loopy--main-body
+              . (if ,condition
+                    ,if-true-main-body
+                  ,@@(nreverse if-false-main-body)))
+            (nreverse full-instructions)))))
 @end lisp
 
 The hardest part of this exchange is making sure that the inserted code ends
@@ -3153,7 +3171,7 @@ Each accumulation variable can only be updated once, in a single way.  For
 example, a variable cannot be reversed according to the needs of one
 command and then coerced into a new type according to the needs of another.
 Commands acting on the same accumulation variable must require the same
-final update, for commands that require any update.
+final update, if they require any final update.
 @end table
 
 There are 4 more variables a loop command can push to, but they are derived
@@ -3246,11 +3264,14 @@ For example, say that you're tired of typing out
 loopy body, so the definition of the parsing function is quite simple.
 
 @lisp
-(cl-defun my-loopy-greet-command-parser ((_ first &optional last))
-  "Greet one with first name FIRST and optional last name LAST."
-  `((loopy--main-body . (if ,last
-                            (message "Hello, %s %s" ,first ,last)
-                          (message "Hello, %s" ,first)))))
+(require 'cl-lib)
+(cl-defun my-loopy-greet-command-parser
+    ((_ personal-name &optional family-name))
+  "Greet one with PERSONAL-NAME and optional FAMILY-NAME."
+  `((loopy--main-body (if ,family-name
+                          (message "Hello, %s %s"
+                                   ,personal-name ,family-name)
+                        (message "Hello, %s" ,personal-name)))))
 @end lisp
 
 @samp{loopy} will pass the entire command expression to the parsing function, and
@@ -3260,7 +3281,7 @@ expects back a list of instructions.
 To tell @samp{loopy} about this function, add it and the command name @samp{greet} to
 the variable @samp{loopy-command-parsers}, which associates commands with parsing
 functions.  The function that is paired with the symbol receives the entire
-command expressions, and should produce a list of valid instructions.
+command expression, and should produce a list of valid instructions.
 
 @lisp
 ;; Using the Map library, for convenience.
@@ -3274,15 +3295,17 @@ After that, you can use your custom command in the loop body.
 @lisp
 (loopy (list name '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
        (greet (car name) (cadr name)))
-
-;; With destructuring:
-(loopy (list (first-name last-name)
-             '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
-       (greet first-name last-name))
 @end lisp
 
-By running @samp{M-x pp-macroexpand-last-sexp} on the above expression, you can
-see that it expands to do what we want, as expected.
+By running @kbd{M-x pp-macroexpand-last-sexp RET} on the above
+expression, you can see that it expands to do what we want, as expected.  You
+might notice that one shortcoming of the current definition is that if a
+function is used to produce the second argument, as in @code{(greet
+   (personal-name) (family-name))}, then that function is called twice.  This
+occurs with @code{(cadr name)} in the below output, and can cause problems when
+using stateful functions.  This particular case can be resolved by using
+@code{if-let} to first store the result of @code{(cadr name)}, and is something to keep
+in mind when defining Lisp macro expansions in general.
 
 @lisp
 ;; An example expansion.
@@ -3314,7 +3337,7 @@ Here is an example:
 
 @lisp
 ;; => t
-(cl-loop for i in (number-sequence 1 9) always (< i 10))
+(cl-loop for i from 1 to 9 always (< i 10))
 @end lisp
 
 While @code{loopy} already has an @samp{always} command, we'll ignore it for the sake
@@ -3323,8 +3346,8 @@ the following code:
 
 @lisp
 ;; => t
-(loopy (list i (number-sequence 1 9))
-       (when (not (< i 10)) (return nil))
+(loopy (nums i 1 9)
+       (unless (< i 10) (return nil))
        (else-do (cl-return t)))
 @end lisp
 
@@ -3355,7 +3378,6 @@ to @code{nil}.
 The loop should return @code{t} if the loop is able to complete successfully.
 @end enumerate
 
-
 This simplest way to satisfy the first requirement is to conditionally use
 @code{cl-return} if the expressions ever evaluates to @code{nil}.  We want to do this
 while the loop is running, so we should use an instruction for
@@ -3367,7 +3389,7 @@ while the loop is running, so we should use an instruction for
   (cl-return nil))
 
 ;; so we use the instruction
-`(loopy--main-body . (unless ,CONDITION (cl-return nil)))
+`(loopy--main-body (unless ,CONDITION (cl-return nil)))
 
 ;; where CONDITION is supplied by the parsing function.
 @end lisp
@@ -3380,8 +3402,8 @@ Therefore, it is better to use @code{cl-return-from} with the variable
 stores the symbol which names the loop.
 
 @lisp
-`(loopy--main-body
-  . (unless ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+`(loopy--main-body (unless ,CONDITION
+                     (cl-return-from ,loopy--loop-name nil)))
 @end lisp
 
 The best way to satisfy the second requirement is to use an instruction for
@@ -3396,7 +3418,7 @@ values the macro returns if nothing else would be returned.  If that list is
 just @code{'(t)}, then the macro knows to just return @code{t}.
 
 @lisp
-'(loopy--implicit-return . t)
+'(loopy--implicit-return t)
 @end lisp
 
 Once we've chosen our instructions, we need to tell @samp{loopy} what function to
@@ -3413,9 +3435,9 @@ the parsing function and add it to @code{loopy-command-parsers}.
 
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--implicit-return . t)
-    (loopy--main-body . (unless ,condition
-                          (cl-return-from ,loopy--loop-name nil)))))
+  `((loopy--implicit-return t)
+    (loopy--main-body (unless ,condition
+                        (cl-return-from ,loopy--loop-name nil)))))
 
 (setf (map-elt loopy-command-parsers 'always)
       #'my--loopy-always-command-parser)
@@ -3440,12 +3462,12 @@ and that is indeed what the built-in parser does.
 
 If any condition is nil, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  `((loopy--implicit-return . t)
+  `((loopy--implicit-return t)
     ;; If there are multiple conditions, wrap these conditions in `and'.
-    (loopy--main-body . (unless ,(if (= 1 (length conditions))
-                                     (cl-first conditions)
-                                   `(and ,@@conditions))
-                          (cl-return-from ,loopy--loop-name nil)))))
+    (loopy--main-body (unless ,(if (= 1 (length conditions))
+                                   (cl-first conditions)
+                                 `(and ,@@conditions))
+                        (cl-return-from ,loopy--loop-name nil)))))
 @end lisp
 
 Here are some examples of the command in action:

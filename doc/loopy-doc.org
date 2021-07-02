@@ -2711,115 +2711,134 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    :END:
 
    #+cindex: instruction, instructions
-   The core working of ~loopy~ is taking a command and generating code that is
-   substituted into or around a loop body.  This code is transmitted between
-   functions as {{{dfn(instructions)}}}, which describe how the code is to be
-   used.
+   The core working of ~loopy~ is taking a loop command and generating code that
+   becomes part of a ~while~-loop.  This code is represented by
+   {{{dfn(instructions)}}}, which basically describe where and how code is
+   inserted into/around a template of a ~while~-loop.
 
    Some examples of instructions are:
    - Declaring a given variable in a let form to make sure it's locally
      scoped.
    - Declaring a generated variable in a let form to contain a given value.
    - Adding a condition for continuing/exiting the loop.
-   - Adding code to be run during the main loop body (the main processing
-     section of the ~while~-loop).
-   - Adding code to be run in the latter loop body (the section for updating
-     variables after running the main loop body).
+   - Adding code to be run during the main processing section of the
+     ~while~-loop.  This location is referred to as the {{{dfn(main body)}}} of
+     the loop.
+   - Adding code to be run after the main processing section, such as for
+     updating variables.  This location is referred to as the {{{dfn(latter
+     body)}}} of the loop.
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
    variables, such as =list-3717= in the below output.
 
    #+BEGIN_SRC emacs-lisp
-     ((loopy--iteration-vars list-3717 '(1 2 3))
-      (loopy--latter-body setq list-3717 (cdr list-3717))
-      (loopy--pre-conditions consp list-3717)
-      (loopy--main-body setq i (car list-3717))
-      (loopy--iteration-vars i nil))
+     ((loopy--iteration-vars (list-211 '(1 2 3)))
+      (loopy--latter-body    (setq list-211 (cdr list-211)))
+      (loopy--pre-conditions (consp list-211))
+      (loopy--iteration-vars (i nil))
+      (loopy--main-body      (setq i (car list-211))))
    #+END_SRC
 
-   The ~car~ of an instruction is the place to put code and the ~cdr~ of the
-   instruction is said code to put.  You can see that not all of the code to be
-   inserted is a valid Lisp form.  Instead of being evaluated as an expression,
-   some instructions insert pairs of names and values into variable lists like
-   in ~let~ and ~let*~ .
+   The first element of an instruction describes where to insert code into the
+   template.  The second element of an instruction is said code to insert.  You
+   can see that not all of the code to be inserted is a valid Lisp form.  For
+   example, the above instruction referencing ~loopy--iteration-vars~ inserts
+   a binding for the variable =i= into a ~let~-like form.
 
-   | Place                   | Code                               |
-   |-------------------------+------------------------------------|
-   | =loopy--iteration-vars= | =(list-3717 '(1 2 3))=             |
-   | =loopy--latter-body=    | =(setq list-3717 (cdr list-3717))= |
-   | =loopy--pre-conditions= | =(consp list-3717)=                |
-   | =loopy--main-body=      | =(setq i (car list-3717))=         |
-   | =loopy--iteration-vars= | =(i nil)=                          |
+   | Place                   | Code                             |
+   |-------------------------+----------------------------------|
+   | =loopy--iteration-vars= | =(list-211 '(1 2 3))=            |
+   | =loopy--latter-body=    | =(setq list-211 (cdr list-211))= |
+   | =loopy--pre-conditions= | =(consp list-211)=               |
+   | =loopy--iteration-vars= | =(i nil)=                        |
+   | =loopy--main-body=      | =(setq i (car list-211)))=       |
 
    Commands are parsed by ~loopy--parse-loop-command~, which receives a command
-   call and returns a list of instructions.  It does this by searching for an
-   appropriate command-specific parsing function in ~loopy-command-aliases~ and
-   ultimately in ~loopy-command-parsers~.  For parsing multiple commands at
-   once, there is ~loopy--parse-loop-commands~, which wraps the single-command
-   version.
+   call, such as =(list i '(1 2 3))=, and returns a list of instructions.  It
+   does this by searching for an appropriate command-specific parsing function
+   in ~loopy-command-aliases~ and ultimately in ~loopy-command-parsers~.  For
+   parsing multiple commands in order, there is ~loopy--parse-loop-commands~,
+   which wraps the single-command version.
 
    For example, consider the function ~loopy--parse-if-command~, which parses
-   the =if= command.  It needs to be able to group any code going to the loop
-   body under an ~if~-form.  To do this, it uses ~loopy--parse-loop-command~ to
-   turn its sub-commands into a list of instructions, and then checks the ~car~
-   of each instruction to see whether the instruction's code is meant to be
-   inserted into the loop's main body (and so whether it should be wrapped in
-   the ~if~-form).
+   the =if= loop command.  It needs to check the instructions of the
+   sub-commands passed to =if=, looking for code that would be inserted into the
+   main loop body (as determined by the first element of the instruction).  Once
+   found, it wraps that code with an ~if~-form.
+
+   #+begin_src emacs-lisp
+     ;; => ((loopy--iteration-vars (i nil))
+     ;;     (loopy--main-body (setq i 1)))
+     (loopy--parse-loop-command '(expr i 1))
+
+     ;; => ((loopy--iteration-vars (i nil))
+     ;;     (loopy--main-body (if (my-condition)
+     ;;                           (setq i 1)
+     ;;                         (setq i 2))))
+     (loopy--parse-if-command '(if (my-condition)
+                                   (expr i 1)
+                                 (expr i 2)))
+   #+end_src
 
    For the purpose of this example, below is a version of the parsing function
    made of the basic Lisp features with which you are familiar.  The actual
-   definition is simpler.
+   definition makes use of more convenient Emacs Lisp libraries.
 
    #+BEGIN_SRC emacs-lisp
-     (cl-defun loopy--parse-if-command
-         ((_ condition &optional if-true &rest if-false))
-       "Parse the `if' loop command.  This takes the entire command.
+     (require 'loopy-commands)
+     (defun loopy--parse-if-command (arg)
+       "Parse the `if' loop command usage ARG.
+     ARG is of the form (if CONDITION IF-TRUE &rest IF-FALSE)."
 
-     - CONDITION is a Lisp expression.
-     - IF-TRUE is the first sub-command of the `if' command.
-     - IF-FALSE are all the other sub-commands."
+       (let ((condition (cadr arg))   ; Second element of `arg'.
+             (if-true   (caddr arg))  ; Third element of `arg'.
+             (if-false  (cdddr arg))) ; Remaining elements of `arg'.
 
-       ;; The main processing of this function is to separate instructions
-       ;; for the loop's main body from other instructions,
-       ;; and to then wrap those main-body instructions with an
-       ;; `if' special form.
-       (let ((full-instructions)
-             (if-true-main-body)
-             (if-false-main-body)
-             ;; This variable is just so that iteration commands know when
-             ;; they are being used away from the top level of the loop's
-             ;; structure (which is an error).
-             (loopy--in-sub-level t))
+         ;; The main processing of this function is to separate instructions
+         ;; for the loop's main body from other instructions,
+         ;; and to then wrap those main-body instructions with an
+         ;; `if' special form.
+         (let ((full-instructions)
+               (if-true-main-body)
+               (if-false-main-body)
+               ;; This variable is just so that iteration commands know when
+               ;; they are being used away from the top level of the loop's
+               ;; structure (which is an error).
+               (loopy--in-sub-level t))
 
-         ;; Process the instructions for the command that should run if the
-         ;; condition is true.
-         (dolist (instruction (loopy--parse-loop-command if-true))
-           (if (eq 'loopy--main-body (car instruction))
-               (push (cdr instruction) if-true-main-body)
-             (push instruction full-instructions)))
+           ;; Process the instructions for the command that should run if the
+           ;; condition is true.
+           (dolist (instruction (loopy--parse-loop-command if-true))
+             (if (eq 'loopy--main-body (car instruction))
+                 (push (cadr instruction) if-true-main-body)
+               (push instruction full-instructions)))
 
-         ;; Process the instructions for the command that should run
-         ;; if the condition is true.
-         (dolist (instruction (loopy--parse-loop-commands if-false))
-           (if (eq 'loopy--main-body (car instruction))
-               (push (cdr instruction) if-false-main-body)
-             (push instruction full-instructions)))
+           ;; Process the instructions for the commands that should run
+           ;; if the condition is false.
+           (dolist (instruction (loopy--parse-loop-commands if-false))
+             (if (eq 'loopy--main-body (car instruction))
+                 (push (cadr instruction) if-false-main-body)
+               (push instruction full-instructions)))
 
-         ;; `loopy--parse-loop-command' always returns a list instructions.
-         ;; For some commands, that means wrapping multiple instructions in
-         ;; a `progn' form.  For others, we need to extract the only element.
-         (setq if-true-main-body
-               (if (= 1 (length if-true-main-body))
-                   (car if-true-main-body)
-                 (cons 'progn (nreverse if-true-main-body))))
+           ;; Note: `push' adds elements to the front of a list,
+           ;;       so we need to reverse these lists before returning
+           ;;       the new list of instructions.
 
-         ;; Return the new, full list of instructions.
-         (cons `(loopy--main-body
-                 . (if ,condition
-                       ,if-true-main-body
-                     ,@(nreverse if-false-main-body)))
-               (nreverse full-instructions))))
+           ;; `loopy--parse-loop-command' always returns a list of instructions.
+           ;; For some commands, that means wrapping multiple instructions in
+           ;; a `progn' form.  For others, we need to extract the only element.
+           (setq if-true-main-body
+                 (if (= 1 (length if-true-main-body))
+                     (car if-true-main-body)
+                   (cons 'progn (nreverse if-true-main-body))))
+
+           ;; Return the new, full list of instructions.
+           (cons `(loopy--main-body
+                   . (if ,condition
+                         ,if-true-main-body
+                       ,@(nreverse if-false-main-body)))
+                 (nreverse full-instructions)))))
    #+END_SRC
 
    The hardest part of this exchange is making sure that the inserted code ends
@@ -2899,7 +2918,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
      example, a variable cannot be reversed according to the needs of one
      command and then coerced into a new type according to the needs of another.
      Commands acting on the same accumulation variable must require the same
-     final update, for commands that require any update.
+     final update, if they require any final update.
 
    There are 4 more variables a loop command can push to, but they are derived
    from the macro's arguments.  Adding to them after using a macro argument
@@ -2978,11 +2997,14 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    loopy body, so the definition of the parsing function is quite simple.
 
    #+BEGIN_SRC emacs-lisp
-     (cl-defun my-loopy-greet-command-parser ((_ first &optional last))
-       "Greet one with first name FIRST and optional last name LAST."
-       `((loopy--main-body . (if ,last
-                                 (message "Hello, %s %s" ,first ,last)
-                               (message "Hello, %s" ,first)))))
+     (require 'cl-lib)
+     (cl-defun my-loopy-greet-command-parser
+         ((_ personal-name &optional family-name))
+       "Greet one with PERSONAL-NAME and optional FAMILY-NAME."
+       `((loopy--main-body (if ,family-name
+                               (message "Hello, %s %s"
+                                        ,personal-name ,family-name)
+                             (message "Hello, %s" ,personal-name)))))
    #+END_SRC
 
    =loopy= will pass the entire command expression to the parsing function, and
@@ -2992,7 +3014,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    To tell =loopy= about this function, add it and the command name =greet= to
    the variable =loopy-command-parsers=, which associates commands with parsing
    functions.  The function that is paired with the symbol receives the entire
-   command expressions, and should produce a list of valid instructions.
+   command expression, and should produce a list of valid instructions.
 
    #+BEGIN_SRC emacs-lisp
      ;; Using the Map library, for convenience.
@@ -3006,15 +3028,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    #+BEGIN_SRC emacs-lisp
      (loopy (list name '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
             (greet (car name) (cadr name)))
-
-     ;; With destructuring:
-     (loopy (list (first-name last-name)
-                  '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
-            (greet first-name last-name))
    #+END_SRC
 
-   By running =M-x pp-macroexpand-last-sexp= on the above expression, you can
-   see that it expands to do what we want, as expected.
+   By running {{{kbd(M-x pp-macroexpand-last-sexp RET)}}} on the above
+   expression, you can see that it expands to do what we want, as expected.  You
+   might notice that one shortcoming of the current definition is that if a
+   function is used to produce the second argument, as in ~(greet
+   (personal-name) (family-name))~, then that function is called twice.  This
+   occurs with ~(cadr name)~ in the below output, and can cause problems when
+   using stateful functions.  This particular case can be resolved by using
+   ~if-let~ to first store the result of ~(cadr name)~, and is something to keep
+   in mind when defining Lisp macro expansions in general.
 
    #+BEGIN_SRC emacs-lisp
      ;; An example expansion.
@@ -3049,7 +3073,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+BEGIN_SRC emacs-lisp
      ;; => t
-     (cl-loop for i in (number-sequence 1 9) always (< i 10))
+     (cl-loop for i from 1 to 9 always (< i 10))
    #+END_SRC
 
    While ~loopy~ already has an =always= command, we'll ignore it for the sake
@@ -3058,8 +3082,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    #+BEGIN_SRC emacs-lisp
      ;; => t
-     (loopy (list i (number-sequence 1 9))
-            (when (not (< i 10)) (return nil))
+     (loopy (nums i 1 9)
+            (unless (< i 10) (return nil))
             (else-do (cl-return t)))
    #+END_SRC
 
@@ -3086,7 +3110,6 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
       to ~nil~.
    2. The loop should return ~t~ if the loop is able to complete successfully.
 
-
    This simplest way to satisfy the first requirement is to conditionally use
    ~cl-return~ if the expressions ever evaluates to ~nil~.  We want to do this
    while the loop is running, so we should use an instruction for
@@ -3098,7 +3121,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        (cl-return nil))
 
      ;; so we use the instruction
-     `(loopy--main-body . (unless ,CONDITION (cl-return nil)))
+     `(loopy--main-body (unless ,CONDITION (cl-return nil)))
 
      ;; where CONDITION is supplied by the parsing function.
    #+end_src
@@ -3111,8 +3134,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    stores the symbol which names the loop.
 
    #+begin_src emacs-lisp
-     `(loopy--main-body
-       . (unless ,CONDITION (cl-return-from ,loopy--loop-name nil)))
+     `(loopy--main-body (unless ,CONDITION
+                          (cl-return-from ,loopy--loop-name nil)))
    #+end_src
 
    The best way to satisfy the second requirement is to use an instruction for
@@ -3127,7 +3150,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    just ~'(t)~, then the macro knows to just return ~t~.
 
    #+begin_src emacs-lisp
-     '(loopy--implicit-return . t)
+     '(loopy--implicit-return t)
    #+end_src
 
    Once we've chosen our instructions, we need to tell =loopy= what function to
@@ -3144,9 +3167,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-       `((loopy--implicit-return . t)
-         (loopy--main-body . (unless ,condition
-                               (cl-return-from ,loopy--loop-name nil)))))
+       `((loopy--implicit-return t)
+         (loopy--main-body (unless ,condition
+                             (cl-return-from ,loopy--loop-name nil)))))
 
      (setf (map-elt loopy-command-parsers 'always)
            #'my--loopy-always-command-parser)
@@ -3171,12 +3194,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      If any condition is nil, `loopy' should immediately return nil.
      Otherwise, `loopy' should return t."
-       `((loopy--implicit-return . t)
+       `((loopy--implicit-return t)
          ;; If there are multiple conditions, wrap these conditions in `and'.
-         (loopy--main-body . (unless ,(if (= 1 (length conditions))
-                                          (cl-first conditions)
-                                        `(and ,@conditions))
-                               (cl-return-from ,loopy--loop-name nil)))))
+         (loopy--main-body (unless ,(if (= 1 (length conditions))
+                                        (cl-first conditions)
+                                      `(and ,@conditions))
+                             (cl-return-from ,loopy--loop-name nil)))))
    #+end_src
 
    Here are some examples of the command in action:
