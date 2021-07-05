@@ -1107,6 +1107,9 @@ extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'map))
+  (unless (and (consp var)
+               (not (proper-list-p var)))
+    (lwarn '(loopy) :warning "Loopy: `map' iterates through dotted pairs: %s" var))
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars (,value-holder (map-pairs ,val)))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
