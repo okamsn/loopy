@@ -505,7 +505,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org5455627
+@float Listing,orga9e0feb
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -575,7 +575,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,orga9d41c1
+@float Listing,org516c5b6
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -3550,11 +3550,15 @@ built-in loop commands.  You can easily find this file using
 mind the following:
 @itemize
 @item
-It is probably less efficient than @code{cl-loop}, though I am so far trying to
-keep the same logic that @code{cl-loop} uses.
+It is more flexible than @code{cl-loop}, at the cost of being slightly slower
+depending on the features used.
 @item
 It has more flexible control-flow commands, under which you can easily group
 sub-commands, including assignments.
+@item
+It has more flexible accumulation commands.
+@item
+It has more flexible iteration commands.
 @item
 It has a @samp{skip} command to skip the rest of the loop body and immediately
 start the next iteration.  Of course, a similar effect could be achieved
@@ -3699,17 +3703,21 @@ an exact equivalent for every @samp{for}-clause that @code{cl-loop} has.  Instea
 can just iterate through the return value of the appropriate function using
 the @samp{list} command.
 
+For the commands operating on hash tables, see also the generic iteration
+command @samp{map-pairs}, which works generically on hash tables, association
+lists (``alists''), property lists (``plists''), and vectors.
+
 @multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem @code{cl-loop}
 @tab @code{loopy}
 @item @samp{for VAR from EXPR1 to EXPR2 by EXPR3}
 @tab @samp{(numbers VAR EXPR1 EXPR2 :by EXPR3)}
 @item @samp{for VAR in LIST [by FUNCTION]}
-@tab @samp{(list VAR LIST [FUNC])}
+@tab @samp{(list VAR LIST :by FUNC)}
 @item @samp{for VAR on LIST [by FUNCTION]}
-@tab @samp{(cons VAR VAL [FUNC])}
+@tab @samp{(cons VAR VAL :by FUNC)}
 @item @samp{for VAR in-ref LIST by FUNCTION}
-@tab @samp{(list-ref VAR LIST [FUNC])}
+@tab @samp{(list-ref VAR LIST :by FUNC)}
 @item @samp{for VAR across ARRAY}
 @tab @samp{(array VAR ARRAY)}
 @item @samp{for VAR across-ref ARRAY}

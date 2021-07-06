@@ -3283,10 +3283,12 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
   ~loopy~ should be comparable with ~cl-loop~ for most things, keeping in
   mind the following:
-  - It is probably less efficient than ~cl-loop~, though I am so far trying to
-    keep the same logic that ~cl-loop~ uses.
+  - It is more flexible than ~cl-loop~, at the cost of being slightly slower
+    depending on the features used.
   - It has more flexible control-flow commands, under which you can easily group
     sub-commands, including assignments.
+  - It has more flexible accumulation commands.
+  - It has more flexible iteration commands.
   - It has a =skip= command to skip the rest of the loop body and immediately
     start the next iteration.  Of course, a similar effect could be achieved
     using the =when= or =unless= commands.
@@ -3427,28 +3429,32 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    can just iterate through the return value of the appropriate function using
    the =list= command.
 
-   | ~cl-loop~                                     | ~loopy~                                          |
-   |-----------------------------------------------+--------------------------------------------------|
-   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(numbers VAR EXPR1 EXPR2 :by EXPR3)=          |
-   | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST [FUNC])=                         |
-   | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL [FUNC])=                          |
-   | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST [FUNC])=                     |
-   | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                              |
-   | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                          |
-   | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                             |
-   | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                         |
-   | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.                    |
-   | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=        |
-   | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))=      |
-   | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.                  |
-   | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.                  |
-   | =for VAR being the key-seqs of KEYMAP=        | None so far.                                     |
-   | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.               |
-   | =for VAR being the intervals [of BUFFER]=     | None so far.                                     |
-   | =for VAR being the frames=                    | =(list VAR (frame-list))=                        |
-   | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=                 |
-   | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                       |
-   | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                         |
+   For the commands operating on hash tables, see also the generic iteration
+   command =map-pairs=, which works generically on hash tables, association
+   lists ("alists"), property lists ("plists"), and vectors.
+
+   | ~cl-loop~                                     | ~loopy~                                     |
+   |-----------------------------------------------+---------------------------------------------|
+   | =for VAR from EXPR1 to EXPR2 by EXPR3=        | =(numbers VAR EXPR1 EXPR2 :by EXPR3)=       |
+   | =for VAR in LIST [by FUNCTION]=               | =(list VAR LIST :by FUNC)=                  |
+   | =for VAR on LIST [by FUNCTION]=               | =(cons VAR VAL :by FUNC)=                   |
+   | =for VAR in-ref LIST by FUNCTION=             | =(list-ref VAR LIST :by FUNC)=              |
+   | =for VAR across ARRAY=                        | =(array VAR ARRAY)=                         |
+   | =for VAR across-ref ARRAY=                    | =(array-ref VAR ARRAY)=                     |
+   | =for VAR being the elements of SEQUENCE=      | =(seq VAR SEQUENCE)=                        |
+   | =for VAR being the elements of-ref SEQUENCE=  | =(seq-ref VAR SEQUENCE)=                    |
+   | =for VAR being the symbols [of OBARRAY]=      | None so far.  Use ~mapatoms~.               |
+   | =for VAR being the hash-keys of HASH-TABLE=   | =(list VAR (hash-table-keys HASH-TABLE))=   |
+   | =for VAR being the hash-values of HASH-TABLE= | =(list VAR (hash-table-values HASH-TABLE))= |
+   | =for VAR being the key-codes of KEYMAP=       | None so far.  Use ~map-keymap~.             |
+   | =for VAR being the key-bindings of KEYMAP=    | None so far.  Use ~map-keymap~.             |
+   | =for VAR being the key-seqs of KEYMAP=        | None so far.                                |
+   | =for VAR being the overlays [of BUFFER]=      | None so far.  Use ~overlay-lists~.          |
+   | =for VAR being the intervals [of BUFFER]=     | None so far.                                |
+   | =for VAR being the frames=                    | =(list VAR (frame-list))=                   |
+   | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=            |
+   | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                  |
+   | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                    |
 
 ** Iteration Clauses
    :PROPERTIES:
