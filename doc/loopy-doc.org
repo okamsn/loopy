@@ -1033,11 +1033,11 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (collect i))
       #+END_SRC
 
-    #+findex: map
+    #+findex: map, map-pairs
     - =(map|map-pairs VAR EXPR)= :: Iterate through the dotted key-value pairs
-      of =EXPR=, using the =map.el= library.  This library generalizes working
-      with association lists ("alists"), property lists ("plists"), hash-tables,
-      and vectors.
+      of =EXPR=, using the function ~map-pairs~ from the =map.el= library.  This
+      library generalizes working with association lists ("alists"), property
+      lists ("plists"), hash-tables, and vectors.
 
       In each dotted pair assigned to =VAR=, the first element is the key and
       the second element is the value.  For vectors, the key is the index.  You
@@ -1285,6 +1285,51 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (do (setf i 7))
                (finally-return my-list))
       #+END_SRC
+
+    #+findex: map-ref, mapf
+    - =(map-ref|mapf VAR EXPR &key key)= :: Loop through the values of map
+      =EXPR=, binding =VAR= as a ~setf~-able place.  Like the command =map=,
+      this command uses the =map.el= library.
+
+      =key= is a variable in which to store the current key for the ~setf~-able
+      place referred to by =VAR=.  This is similar to the =index= keyword
+      parameter of other commands.
+
+      Similar to =map=, the keys of the map are generated before the loop is
+      run, which can be expensive for large maps.
+
+      Unlike =map=, any duplicate keys are ignored regardless of the type of
+      map used.
+
+      #+begin_src emacs-lisp
+        ;; Duplicate keys are ignored.
+        ;;
+        ;; => (:a 8 :a 'ignored :b 10)
+        (loopy (with (map (list :a 1 :a 'ignored :b 3)))
+               (map-ref i map)
+               (do (cl-incf i 7))
+               (finally-return map))
+
+        ;; Works the same as the above:
+        ;; => (:a 8 :a ignored :b 10)
+        (loopy (with (map (list :a 1 :a 'ignored :b 3)))
+               (list (key . _) (cl-remove-duplicates (map-pairs map)
+                                                     :key #'car))
+               (do (cl-incf (map-elt map key) 7))
+               (finally-return map))
+
+        ;; => (((cat . 7)       ; The map itself
+        ;;      (dog . 7)
+        ;;      (zebra . 7))
+        ;;     (cat dog zebra)) ; The keys
+        (loopy (with (map (list (cons 'cat 1)
+                                (cons 'dog 2)
+                                (cons 'zebra 3))))
+               (map-ref i map :key my-key)
+               (do (setf i 7))
+               (collect my-key)
+               (finally-return map loopy-result))
+      #+end_src
 
     #+findex: seq-ref, seqf, sequence-ref, sequencef, elements-ref
     - =(seq-ref|seqf|sequence-ref|sequencef|elements-ref VAR EXPR &key KEYS)= :: Loop

@@ -9,6 +9,7 @@ This document describes the user-facing changes to Loopy.
 - Instructions are no longer dotted pairs (such as `(A . B)`), but normal lists
   (such as `(A B)`).  For custom commands, simply switch the dotted pairs to
   un-dotted pairs.
+- Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 
 ## 0.7.2
 

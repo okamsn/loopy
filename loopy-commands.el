@@ -1116,6 +1116,26 @@ vector using the library `map.el'."
       (loopy--pre-conditions (consp ,value-holder))
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
+;;;;;; Map-Ref
+(cl-defun loopy--parse-map-ref-command ((_ var val &key key))
+  "Parse the `map-ref' command as (map-ref VAR VAL).
+
+KEY is a variable name in which to store the current key.
+
+Uses `map-elt' as a `setf'-able place, iterating through the
+map's keys.  Duplicate keys are ignored."
+  (when loopy--in-sub-level
+    (loopy--signal-bad-iter 'map-ref))
+  (let ((key-list (gensym "map-ref-keys")))
+    `((loopy--iteration-vars (,key-list (seq-uniq (map-keys ,val))))
+      ,@(when key
+          `((loopy--iteration-vars (,key nil))
+            (loopy--main-body (setq ,key (car ,key-list)))))
+      ,@(loopy--destructure-for-generalized-command
+         var `(map-elt ,val ,(or key `(car ,key-list))))
+      (loopy--pre-conditions (consp ,key-list))
+      (loopy--latter-body (setq ,key-list (cdr ,key-list))))))
+
 ;;;;;; Nums
 (loopy--defiteration nums
   "Parse the `nums' command as (nums VAR [START [END]] &key KEYS).
@@ -2627,6 +2647,8 @@ COMMAND-LIST."
     (loop         . loopy--parse-sub-loop-command)
     (map          . loopy--parse-map-command)
     (map-pairs    . loopy--parse-map-command)
+    (map-ref      . loopy--parse-map-ref-command)
+    (mapf         . loopy--parse-map-ref-command)
     (max          . loopy--parse-max-command)
     (maxing       . loopy--parse-max-command)
     (maximize     . loopy--parse-max-command)

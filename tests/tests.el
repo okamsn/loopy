@@ -892,6 +892,46 @@ implicit variable without knowing it's name, even for named loops."
                                        (collect vals val)
                                        (finally-return keys vals))))))))
 
+;;;;; Map Ref
+
+(ert-deftest map-ref ()
+  ;; Test that no keys duplicated.
+  (should (equal '(:a 8 :a ignored :b 10)
+                 (let ((map (list :a 1 :a 'ignored :b 3)))
+                   (eval (quote (loopy (map-ref i map)
+                                       (do (cl-incf i 7))
+                                       (finally-return map)))))))
+
+  (should (equal [17 18 19 20 21]
+                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
+                                     (mapf i map)
+                                     (do (cl-incf i 7))
+                                     (finally-return map))))))
+
+  (should (equal '([17 18 19 20 21] (0 1 2 3 4))
+                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
+                                     (mapf i map :key my-key)
+                                     (do (cl-incf i 7))
+                                     (collect my-key)
+                                     (finally-return map loopy-result)))))))
+
+(ert-deftest map-ref-destructuring ()
+  (should (equal [[7 8] [7 8]]
+                 (eval (quote (loopy (with (map (vector (vector 10 11)
+                                                        (vector 12 13))))
+                                     (mapf [i j] map)
+                                     (do (setf i 7)
+                                         (setf j 8))
+                                     (finally-return map))))))
+
+  (should (equal '((a 7 8) (b 7 8))
+                 (eval (quote (loopy (with (map (list (cons 'a (list 1 2))
+                                                      (cons 'b (list 3 4)))))
+                                     (mapf (i j) map)
+                                     (do (setf i 7)
+                                         (setf j 8))
+                                     (finally-return map)))))))
+
 ;;;;; Nums
 (ert-deftest nums ()
   (should (equal '(1 2 3 4 5)
