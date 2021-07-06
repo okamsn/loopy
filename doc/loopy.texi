@@ -505,7 +505,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org3300c49
+@float Listing,org5455627
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -575,7 +575,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org6619662
+@float Listing,orga9d41c1
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -1110,13 +1110,13 @@ of the command.
 @end lisp
 @end table
 
-@findex map
+@findex map, map-pairs
 @table @asis
 @item @samp{(map|map-pairs VAR EXPR)}
 Iterate through the dotted key-value pairs
-of @samp{EXPR}, using the @samp{map.el} library.  This library generalizes working
-with association lists (``alists''), property lists (``plists''), hash-tables,
-and vectors.
+of @samp{EXPR}, using the function @code{map-pairs} from the @samp{map.el} library.  This
+library generalizes working with association lists (``alists''), property
+lists (``plists''), hash-tables, and vectors.
 
 In each dotted pair assigned to @samp{VAR}, the first element is the key and
 the second element is the value.  For vectors, the key is the index.  You
@@ -1369,6 +1369,54 @@ the list via function @samp{by} instead of @samp{cdr}.
        (list-ref [_ i] my-list)
        (do (setf i 7))
        (finally-return my-list))
+@end lisp
+@end table
+
+@findex map-ref, mapf
+@table @asis
+@item @samp{(map-ref|mapf VAR EXPR &key key)}
+Loop through the values of map
+@samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Like the command @samp{map},
+this command uses the @samp{map.el} library.
+
+@samp{key} is a variable in which to store the current key for the @code{setf}-able
+place referred to by @samp{VAR}.  This is similar to the @samp{index} keyword
+parameter of other commands.
+
+Similar to @samp{map}, the keys of the map are generated before the loop is
+run, which can be expensive for large maps.
+
+Unlike @samp{map}, any duplicate keys are ignored regardless of the type of
+map used.
+
+@lisp
+;; Duplicate keys are ignored.
+;;
+;; => (:a 8 :a 'ignored :b 10)
+(loopy (with (map (list :a 1 :a 'ignored :b 3)))
+       (map-ref i map)
+       (do (cl-incf i 7))
+       (finally-return map))
+
+;; Works the same as the above:
+;; => (:a 8 :a ignored :b 10)
+(loopy (with (map (list :a 1 :a 'ignored :b 3)))
+       (list (key . _) (cl-remove-duplicates (map-pairs map)
+                                             :key #'car))
+       (do (cl-incf (map-elt map key) 7))
+       (finally-return map))
+
+;; => (((cat . 7)       ; The map itself
+;;      (dog . 7)
+;;      (zebra . 7))
+;;     (cat dog zebra)) ; The keys
+(loopy (with (map (list (cons 'cat 1)
+                        (cons 'dog 2)
+                        (cons 'zebra 3))))
+       (map-ref i map :key my-key)
+       (do (setf i 7))
+       (collect my-key)
+       (finally-return map loopy-result))
 @end lisp
 @end table
 
