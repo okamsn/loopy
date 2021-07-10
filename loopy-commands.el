@@ -296,21 +296,31 @@ assumed to be a keyword."
   (null (cl-set-difference (loopy--extract-keywords list) correct)))
 
 ;; TODO: Would this be more useful as a `pcase' macro?
+
+;; Note: This macro cannot currently be replaced by `cl-destructuring-bind' or
+;;       `map-let'.
+;;       - `map-let' provides no way to specify a default value when a key is
+;;         not in PLIST.  This macro does.
+;;       - `cl-destructuring-bind' signals an error when a key is in PLIST that
+;;         is not in BINDINGS.  This macro does not.
 (defmacro loopy--plist-bind (bindings plist &rest body)
   "Bind values in PLIST to variables in BINDINGS, surrounding BODY.
 
 - PLIST is a property list.
 
-- BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR can be a
-  list of two elements: a variable name and a default value,
-  similar to what one would use for expressing keyword parameters
-  in `cl-defun'.  The default value is used /only/ when KEY is not
-  found in PLIST.
+- BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR can
+  optionally be a list of two elements: a variable name and a
+  default value, similar to what one would use for expressing
+  keyword parameters in `cl-defun' or `cl-destructuring-bind'.
+  The default value is used /only/ when KEY is not found in
+  PLIST.
 
 - BODY is the same as in `let'.
 
-This function is similar in use to `cl-destructuring-bind', and
-is basically a wrapper around `plist-member' and `plist-get'."
+This macro works the same as `cl-destructuring-bind', except for
+the case when keys exist in PLIST that are not listed in
+BINDINGS.  While `cl-destructuring-bind' would signal an error,
+this macro simply ignores them."
   (declare (indent 2))
   (let ((value-holder (gensym "plist-let-"))
         (found-key (gensym "plist-prop-found-")))
