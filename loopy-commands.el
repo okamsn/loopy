@@ -304,20 +304,27 @@ assumed to be a keyword."
 - BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR can be a
   list of two elements: a variable name and a default value,
   similar to what one would use for expressing keyword parameters
-  in `cl-defun'.
+  in `cl-defun'.  The default value is used /only/ when KEY is not
+  found in PLIST.
 
 - BODY is the same as in `let'.
 
-This function is similar in use to `cl-destructuring-bind',
-and is basically a wrapper around `plist-get'."
+This function is similar in use to `cl-destructuring-bind', and
+is basically a wrapper around `plist-member' and `plist-get'."
   (declare (indent 2))
-  (let ((value-holder (gensym "plist-let-")))
+  (let ((value-holder (gensym "plist-let-"))
+        (found-key (gensym "plist-prop-found-")))
     `(let* ((,value-holder ,plist)
             ,@(cl-loop for (key var . _) on bindings by #'cddr
                        if (consp var)
                        collect `(,(cl-first var)
-                                 (or (plist-get ,value-holder ,key)
-                                     ,(cl-second var)))
+                                 ;; Use `plist-member' instead of `plist-get' to
+                                 ;; allow giving `nil' as an argument without
+                                 ;; using the default value.
+                                 (if-let ((,found-key (plist-member ,value-holder
+                                                                    ,key)))
+                                     (cl-second ,found-key)
+                                   ,(cl-second var)))
                        else collect `(,var (plist-get ,value-holder ,key))))
        ,@body)))
 
@@ -860,12 +867,13 @@ The values are returned in a list in that order as a plist.
 PLIST contains the keyword arguments passed to a sequence
 iteration command.  The supported keywords are:
 
-- from, upfrom (inclusive)
-- downfrom (inclusive)
-- to, upto (inclusive)
-- downto (inclusive)
-- above (exclusive)
-- below (exclusive)"
+- from, upfrom (inclusive start)
+- downfrom (inclusive start)
+- to, upto (inclusive end)
+- downto (inclusive end)
+- above (exclusive end)
+- below (exclusive end)
+- by (increment)"
 
   (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
                        :to to :upto upto :downto downto
@@ -888,11 +896,14 @@ iteration command.  The supported keywords are:
                 (and above (not decreasing)))
         (error "Conflicting arguments: %s" plist))
 
-      (list :start (or from upfrom downfrom)
-            :by by
-            :end (or to downto above below upto)
-            :decreasing decreasing
-            :inclusive (not (or above below))))))
+      `(,@(when-let ((start (or from upfrom downfrom)))
+            `(:start ,start))
+        ,@(when by
+            `(:by ,by))
+        ,@(when-let ((end (or to downto above below upto)))
+            `(:end ,end))
+        :decreasing ,decreasing
+        :inclusive ,(not (or above below))))))
 
 ;;;;;; Array
 (defmacro loopy--distribute-array-elements (&rest arrays)
