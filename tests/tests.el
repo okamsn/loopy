@@ -192,6 +192,289 @@
                    (eval (quote (loopy (repeat 1)
                                        (finally-do (1+ 1)))))))))
 
+;;; Destructuring
+(ert-deftest destructure-arrays ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy-let* (([a b c] [1 2 3]))
+                                (list a b c))))))
+
+  (should (equal '([1 2 3] 1 2 3)
+                 (eval (quote (loopy-let* (([&whole cat a b c] [1 2 3]))
+                                (list cat a b c))))))
+
+  (should (equal '(1 [2 3])
+                 (eval (quote (loopy-let* (([a &rest b] [1 2 3]))
+                                (list a b))))))
+
+  (should (equal '([1 2 3] 1 [2 3])
+                 (eval (quote (loopy-let* (([&whole cat a &rest b] [1 2 3]))
+                                (list cat a b))))))
+
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy-let* (([a &rest [b c]] [1 2 3]))
+                                (list a b c))))))
+
+  (should (equal '([1 2 3] 1 2 3)
+                 (eval (quote (loopy-let* (([&whole cat a &rest [b c]] [1 2 3]))
+                                (list cat a b c)))))))
+
+(ert-deftest destructure-lists ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy-let* (((a b c) '(1 2 3)))
+                                (list a b c))))))
+
+  (should (equal '(1 2 3 (4 5))
+                 (eval (quote (loopy-let* (((a b c . d) '(1 2 3 4 5)))
+                                (list a b c d))))))
+
+  (should (equal '(1 2 3 (4 5))
+                 (eval (quote (loopy-let* (((a b c &rest d) '(1 2 3 4 5)))
+                                (list a b c d))))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote (loopy-let* (((a b c &key d e) '(1 2 3 :e 5 :d 4)))
+                                (list a b c d e))))))
+
+  (should (equal '(1 2 3 4 5 (:e 5 :d 4))
+                 (eval (quote (loopy-let* (((a b c &key d e . f) '(1 2 3 :e 5 :d 4)))
+                                (list a b c d e f))))))
+
+  (should (equal '(1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((a b c &key d e . f) '(1 2 3 4 5 :e 6 :d 7)))
+                                (list a b c d e f))))))
+
+  (should (equal '(1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((a b c &key d e &rest f)
+                                            '(1 2 3 4 5 :e 6 :d 7)))
+                                (list a b c d e f))))))
+
+  (should (equal '(1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((a b c &rest f &key d e)
+                                            '(1 2 3 4 5 :e 6 :d 7)))
+                                (list a b c d e f))))))
+
+  (should (equal '(4 5)
+                 (eval (quote (loopy-let* (((&key d e) '(:a 7 :e 5 :d 4)))
+                                (list d e)))))))
+
+;; We separate this since there's just way too many conditions in one test
+;; otherwise.
+(ert-deftest destructure-list-with-whole ()
+  (should (equal '((1 2 3) 1 2 3)
+                 (eval (quote (loopy-let* (((&whole cat a b c) '(1 2 3)))
+                                (list cat a b c))))))
+
+  (should (equal '((1 2 3 4 5) 1 2 3 (4 5))
+                 (eval (quote (loopy-let* (((&whole cat a b c . d) '(1 2 3 4 5)))
+                                (list cat a b c d))))))
+
+  (should (equal '((1 2 3 4 5) 1 2 3 (4 5))
+                 (eval (quote (loopy-let* (((&whole cat a b c &rest d)
+                                            '(1 2 3 4 5)))
+                                (list cat a b c d))))))
+
+  (should (equal '((1 2 3 :e 5 :d 4) 1 2 3 4 5)
+                 (eval (quote (loopy-let* (((&whole cat a b c &key d e)
+                                            '(1 2 3 :e 5 :d 4)))
+                                (list cat a b c d e))))))
+
+  (should (equal '((1 2 3 :e 5 :d 4) 1 2 3 4 5 (:e 5 :d 4))
+                 (eval (quote (loopy-let* (((&whole cat a b c &key d e . f)
+                                            '(1 2 3 :e 5 :d 4)))
+                                (list cat a b c d e f))))))
+
+  (should (equal '((1 2 3 4 5 :e 6 :d 7) 1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((&whole cat a b c &key d e . f)
+                                            '(1 2 3 4 5 :e 6 :d 7)))
+                                (list cat a b c d e f))))))
+
+  (should (equal '((1 2 3 4 5 :e 6 :d 7) 1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((&whole cat a b c &key d e &rest f)
+                                            '(1 2 3 4 5 :e 6 :d 7)))
+                                (list cat a b c d e f))))))
+
+  (should (equal '((1 2 3 4 5 :e 6 :d 7) 1 2 3 7 6 (4 5 :e 6 :d 7))
+                 (eval (quote (loopy-let* (((&whole cat a b c &rest f &key d e)
+                                            '(1 2 3 4 5 :e 6 :d 7)))
+                                (list cat a b c d e f))))))
+
+  (should (equal '((:a 7 :e 5 :d 4) 4 5)
+                 (eval (quote (loopy-let* (((&whole cat &key d e)
+                                            '(:a 7 :e 5 :d 4)))
+                                (list cat d e)))))))
+
+;; This only tests the getting of values.
+(ert-deftest destructure-lists-ref-values ()
+  (should (equal '(1 2 3)
+                 (eval (quote (loopy-ref (((a b c) '(1 2 3)))
+                                (list a b c))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy-ref (((a b (c d)) '(1 2 (3 4))))
+                                (list a b c d))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy-ref (((a b &rest (c d)) '(1 2 3 4)))
+                                (list a b c d))))))
+
+  (should (equal '(1 2 (3 4))
+                 (eval (quote (loopy-ref (((a b . c) '(1 2 3 4)))
+                                (list a b c))))))
+
+  (should (equal '(1 2 3 5 6)
+                 (eval (quote (loopy-ref (((a b c &key d e) '(1 2 3 :e 6 :d 5)))
+                                (list a b c d e))))))
+
+  (should (equal '(1 2 3 5 6 (:e 6 :d 5))
+                 (eval (quote (loopy-ref (((a b c &rest rest &key d e)
+                                           '(1 2 3 :e 6 :d 5)))
+                                (list a b c d e rest))))))
+
+  (should (equal '(1 2 3 5 6 (:e 6 :d 5))
+                 (eval (quote (loopy-ref (((a b c &key d e . rest)
+                                           '(1 2 3 :e 6 :d 5)))
+                                (list a b c d e rest))))))
+
+  (should (equal '(1 2 3 5 6 (:e 6 :d 5))
+                 (eval (quote (loopy-ref (((a b c &key d e &rest rest)
+                                           '(1 2 3 :e 6 :d 5)))
+                                (list a b c d e rest))))))
+
+  (should (equal '(5 6)
+                 (eval (quote (loopy-ref (((&key d e) '(1 2 :e 6 :d 5)))
+                                (list d e)))))))
+
+;; This tests the setting of values.
+(ert-deftest destructure-list-ref-setf ()
+  (should (equal '(1 2 3)
+                 (let ((l (list 7 7 7)))
+                   (eval (quote (loopy-ref (((a b c) l))
+                                  (setf a 1 b 2 c 3)
+                                  l))))))
+
+  (should (equal '(1 2 (3 4))
+                 (let ((l (list 7 7 (list 7 7))))
+                   (eval (quote (loopy-ref (((a b (c d)) l))
+                                  (setf a 1 b 2 c 3 d 4)
+                                  l))))))
+
+  (should (equal '(1 2 3 4)
+                 (let ((l (list 7 7 7 7)))
+                   (eval (quote (loopy-ref (((a b &rest (c d)) l))
+                                  (setf a 1 b 2 c 3 d 4)
+                                  l))))))
+
+  (should (equal '(1 2 . 3)
+                 (let ((l (list 7 7 7 7)))
+                   (eval (quote (loopy-ref (((a b . c) l))
+                                  (setf a 1 b 2 c 3))))
+                   l)))
+
+  (should (equal '(1 2 3 :d 4 :e 5)
+                 (let ((l (list 7 7 7 :d 7 :e 7)))
+                   (eval (quote (loopy-ref (((a b c &key d e) l))
+                                  (setf a 1 b 2 c 3 d 4 e 5))))
+                   l)))
+
+  (should (equal '(1 2 3 :e 10 :d 8)
+                 (let ((l (list 7 7 7 :e 7 :d 7)))
+                   (eval (quote (loopy-ref (((a b c &rest rest &key d e)
+                                             l))
+                                  (setf a 1 b 2 c 3 d 4 e 5
+                                        rest (mapcar (lambda (x)
+                                                       (if (numberp x)
+                                                           (* 2 x)
+                                                         x))
+                                                     rest)))))
+                   l)))
+
+  (should (equal '(1 2 3 :e 10 :d 8)
+                 (let ((l (list 7 7 7 :e 7 :d 7)))
+                   (eval (quote (loopy-ref (((a b c &key d e . rest)
+                                             l))
+                                  (setf a 1 b 2 c 3 d 4 e 5
+                                        rest (mapcar (lambda (x)
+                                                       (if (numberp x)
+                                                           (* 2 x)
+                                                         x))
+                                                     rest)))))
+                   l)))
+
+  (should (equal '(1 2 3 :e 10 :d 8)
+                 (let ((l (list 7 7 7 :e 7 :d 7)))
+                   (eval (quote (loopy-ref (((a b c &key d e &rest rest) l))
+                                  (setf a 1 b 2 c 3 d 4 e 5
+                                        rest (mapcar (lambda (x)
+                                                       (if (numberp x)
+                                                           (* 2 x)
+                                                         x))
+                                                     rest)))))
+                   l)))
+
+  (should (equal '(7 7 :a 1 :b 2)
+                 (let ((l (list 7 7 :a 7 :b 7)))
+                   (eval (quote (loopy-ref (((&key a b) l))
+                                  (setf a 1 b 2))))
+                   l)))
+
+  (should (equal '(2 3)
+                 (eval (quote
+                        (let ((l (list 7 7)))
+                          (loopy-ref (((&whole whole a b) l))
+                            (setf a 1 b 2
+                                  whole (mapcar #'1+ whole)))
+                          l))))))
+
+(ert-deftest destructure-array-refs ()
+  (should (equal [1 2 3]
+                 (let ((arr [7 7 7]))
+                   (eval (quote (loopy-ref (([a b c] arr))
+                                  (setf a 1 b 2 c 3))))
+                   arr)))
+
+  (should (equal [2 3 4]
+                 (let ((arr [7 7 7]))
+                   (eval (quote (loopy-ref (([&whole whole a b c] arr))
+                                  (setf a 1 b 2 c 3
+                                        whole (cl-map 'vector #'1+ whole)))))
+                   arr)))
+
+  (should (equal [1 2 3 [4 5]]
+                 (let ((arr [7 7 7 [7 7]]))
+                   (eval (quote (loopy-ref (([a b c [d e]] arr))
+                                  (setf a 1 b 2 c 3 d 4 e 5))))
+                   arr)))
+
+  ;; TODO: This test currently doesn't pass due to Elisp limitations.
+  ;; (should (equal [1 2 3 4 5]
+  ;;                (eval (quote
+  ;;                       (let ((arr [7 7 7 7 7]))
+  ;;                         (loopy-ref (([a b c &rest [d e]] arr))
+  ;;                           (setf a 1 b 2 c 3 d 4 e 5))
+  ;;                         arr)))))
+
+  ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
+  (should (equal [1 2 3 4 7]
+                 (eval (quote
+                        (let ((arr [7 7 7 7 7]))
+                          (loopy-ref (([a b c &rest d] arr))
+                            (setf a 1 b 2 c 3 d [4]))
+                          arr)))))
+
+  (should (equal [1 2 3 4 7]
+                 (eval (quote
+                        (let ((arr [7 7 7 7 7]))
+                          (loopy-ref (([a b c &rest d] arr))
+                            (setf a 1 b 2 c 3 d [4]))
+                          arr)))))
+
+  (should (equal [2 3]
+                 (let ((arr [7 7]))
+                   (loopy-ref (([&whole cat a b] arr))
+                     (setf a 1 b 2
+                           cat (cl-map 'vector #'1+ cat)))
+                   arr))))
+
 ;;; Loop Commands
 ;;;; Miscellaneous
 ;;;;; Sub Loop
@@ -2923,6 +3206,78 @@ implicit variable without knowing it's name, even for named loops."
            (eval (quote (loopy (list i '((1 (2 . [3 4])) (3 (4 . [5 6]))))
                                (collect (c1 (c2 . [c3 c4])) i)
                                (finally-return c1 c2 c3 c4))))))))
+
+(ert-deftest accumulation-array-destructuring ()
+  (should (equal '((1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '([1 2 3] [4 5 6]))
+                                      (collect [i j k] elem)
+                                      (finally-return i j k))))))
+
+  (should (equal '(([1 2 3] [4 5 6]) (1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '([1 2 3] [4 5 6]))
+                                      (collect [&whole whole i j k] elem)
+                                      (finally-return whole i j k))))))
+
+  (should (equal '((1 4) (3 6))
+                  (eval (quote (loopy (list elem '([1 2 3] [4 5 6]))
+                                      (collect [i _ k] elem)
+                                      (finally-return i k))))))
+
+  (should (equal '((1 4) ([2 3] [5 6]))
+                  (eval (quote (loopy (list elem '([1 2 3] [4 5 6]))
+                                      (collect [i &rest k] elem)
+                                      (finally-return i  k))))))
+
+  (should (equal '((1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '([1 2 3] [4 5 6]))
+                                      (collect [i &rest [j k]] elem)
+                                      (finally-return i j k)))))))
+
+(ert-deftest accumulation-list-destructuring ()
+  (should (equal '((1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '((1 2 3) (4 5 6)))
+                                      (collect (i j k) elem)
+                                      (finally-return i j k))))))
+
+  (should (equal '((1 4) (3 6))
+                  (eval (quote (loopy (list elem '((1 2 3) (4 5 6)))
+                                      (collect (i _ k) elem)
+                                      (finally-return i k))))))
+
+  (should (equal '(((1 2 3) (4 5 6)) (1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '((1 2 3) (4 5 6)))
+                                      (collect (&whole tot i j k) elem)
+                                      (finally-return tot i j k))))))
+
+  (should (equal '((1 4) (2 5) (3 6))
+                  (eval (quote (loopy (list elem '((1 2 3) (4 5 6)))
+                                      (collect (i &rest (j k)) elem)
+                                      (finally-return i j k))))))
+
+  (should (equal '((1 4) ((2 3) (5 6)))
+                  (eval (quote (loopy (list elem '((1 2 3) (4 5 6)))
+                                      (collect (i . j) elem)
+                                      (finally-return i j))))))
+
+  (should (equal '((1 4) (2 5) (3 6) (4 27) (5 8))
+                  (eval (quote (loopy (list elem '((1 2 3 :k1 4 :k2 5) (4 5 6 :k2 8)))
+                                      (collect (i j k &key (k1 27) k2) elem)
+                                      (finally-return i j k k1 k2))))))
+
+  (should (equal '((1 4) (2 5) (3 6) ((:k1 4 :k2 5) (:k2 8)) (4 27) (5 8))
+                  (eval (quote (loopy (list elem '((1 2 3 :k1 4 :k2 5) (4 5 6 :k2 8)))
+                                      (collect (i j k &rest rest &key (k1 27) k2) elem)
+                                      (finally-return i j k rest k1 k2))))))
+
+  (should (equal '((1 4) (2 5) (3 6) ((:k1 4 :k2 5) (:k2 8)) (4 27) (5 8))
+                  (eval (quote (loopy (list elem '((1 2 3 :k1 4 :k2 5) (4 5 6 :k2 8)))
+                                      (collect (i j k &key (k1 27) k2 &rest rest) elem)
+                                      (finally-return i j k rest k1 k2))))))
+
+  (should (equal '((1 4) (2 5) (3 6) ((:k1 4 :k2 5) (:k2 8)) (4 27) (5 8))
+                  (eval (quote (loopy (list elem '((1 2 3 :k1 4 :k2 5) (4 5 6 :k2 8)))
+                                      (collect (i j k &key (k1 27) k2 . rest) elem)
+                                      (finally-return i j k rest k1 k2)))))))
 
 ;;; Control Flow
 ;;;; Conditionals

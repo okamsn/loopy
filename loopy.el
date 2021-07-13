@@ -5,7 +5,7 @@
 ;; Author: Earl Hyatt
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
-;; Version: 0.7.2
+;; Version: 0.8.1
 ;; Package-Requires: ((emacs "27.1") (map "3.0"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs
@@ -74,6 +74,7 @@
 (require 'pcase)
 (require 'seq)
 (require 'subr-x)
+(require 'loopy-misc)
 (require 'loopy-commands)
 
 (defvar loopy-iter--lax-naming) ; A flag defined in file "loopy-iter.el".
@@ -472,104 +473,66 @@ this means that an explicit \"nil\" is always required."
   "Ensure BINDINGS valid according to `loopy--validate-binding'."
   (mapc #'loopy--validate-binding bindings))
 
-;;;; Destructuring functions.
-;; Note that functions which are only used for commands are found in
-;; `loopy-commands.el'.  The functions found here are used generally.
 
-(defun loopy--basic-builtin-destructuring (var value-expression)
+;;;###autoload
+(defalias 'loopy-dsetq #'loopy-setq) ; Named for Iterate's `dsetq'.
+;;;###autoload
+(defmacro loopy-setq (&rest args)
+  "Use Loopy destructuring in a `setq' form.
+
+This macro supports only the built-in style of destructuring, and
+is unaffected by flags like `seq' or `pcase'.  For example, if
+you wish to use `pcase' destructuring, you should use `pcase-let'
+instead of this macro.
+
+\(fn SYM VAL SYM VAL ...)"
+  (declare (debug (&rest [sexp form])))
+  `(setq ,@(apply #'append
+                  (cl-loop for (var val . _) on args by #'cddr
+                           append (loopy--destructure-sequence var val)))))
+
+;;;###autoload
+(defmacro loopy-let* (bindings &rest body)
+  "Use Loopy destructuring on BINDINGS in a `let*' form wrapping BODY.
+
+This macro supports only the built-in style of destructuring, and
+is unaffected by flags like `seq' or `pcase'.  For example, if
+you wish to use `pcase' destructuring, you should use `pcase-let'
+instead of this macro."
+  (declare (debug ((&rest [sexp form]) body))
+           (indent 1))
+  `(let* ,(cl-loop for (var val) in bindings
+                   append (loopy--destructure-sequence var val))
+     ,@body))
+
+;;;###autoload
+(defmacro loopy-ref (bindings &rest body)
+  "Destructure BINDINGS as `setf'-able places around BODY.
+
+This macro only creates references to those places via
+`cl-symbol-macrolet'.  It does /not/ create new variables or bind
+values.  Its behavior should not be mistaken with that of
+`cl-letf*', which temporarily binds values to those places.
+
+As these places are not true variable, BINDINGS is not
+order-sensitive.
+
+This macro supports only the built-in style of destructuring,
+and is unaffected by flags like `pcase' and `seq'."
+  (declare (debug ((&rest [sexp form]) body))
+           (indent 1))
+  `(cl-symbol-macrolet
+       ,(cl-loop for (var val) in bindings
+                 append (loopy--destructure-generalized-sequence
+                         var val))
+     ,@body))
+
+(defalias 'loopy--basic-builtin-destructuring #'loopy--destructure-sequence
   "Destructure VALUE-EXPRESSION according to VAR.
 
 Return a list of variable-value pairs (not dotted), suitable for
-substituting into a `let*' form or being combined under a
-`setq' form."
-  (cl-typecase var
-    (symbol
-     `((,(if (eq var '_) (gensym "discarded-value-") var)
-        ,value-expression)))
-    (list
-     ;; NOTE: (A . (B C)) is really just (A B C), so you can't have a
-     ;;       non-proper list with a list as the last element.  However, the
-     ;;       last element can be an array.
-     ;;
-     (let* ((is-proper-list (proper-list-p var))
-            (normalized-reverse-var nil))
-       ;; If `var' is a list, always create a "normalized" variable list,
-       ;; since proper lists are easier to work with, as many looping/mapping
-       ;; functions expect them.
-       (while (car-safe var)
-         (push (pop var) normalized-reverse-var))
-       ;; If the last element in `var' was a dotted pair, then `var' is now a
-       ;; single symbol, which must still be added to the normalized `var'
-       ;; list.
-       (when var (push var normalized-reverse-var))
-
-       ;; The `last' of (A B . C) is (B . C), but we actually want C, so we
-       ;; check the "normalized" var list.
-       (let* ((last-var (cl-first normalized-reverse-var))
-              (last-var-is-symbol (symbolp last-var))
-              ;; To only evaluate `value-expression' once, we bind it's value
-              ;; to last declared element/variable in `var', and set the
-              ;; remaining variables by `pop'-ing that lastly listed, firstly
-              ;; set variable.  However, if that variable is actually a
-              ;; sequence, then we need to use a `value-holder' instead.
-              (value-holder (if last-var-is-symbol
-                                (if (eq '_ last-var)
-                                    (gensym "discarded-value-")
-                                  last-var)
-                              (gensym "destructuring-list-")))
-              (destructurings
-               ;; Will push lists of destructurings, and then append together
-               ;; with `apply'.
-               `(((,value-holder ,value-expression)))))
-
-         (let ((passed-value-expression `(pop ,value-holder)))
-           (dolist (symbol-or-seq (reverse (cl-rest normalized-reverse-var)))
-             (push (loopy--basic-builtin-destructuring
-                    symbol-or-seq passed-value-expression)
-                   destructurings)))
-
-         ;; Now come back to end.  If `var' is not a proper list and
-         ;; `last-var' is a symbol (as with the B in '(A . B)) , then B is now
-         ;; already the correct value (which is the ending `cdr' of the list),
-         ;; and we don't have to do anything else.
-         (if is-proper-list
-             (if last-var-is-symbol
-                 ;; Otherwise, if `var' is a proper list and `last-var' is a
-                 ;; symbol, then we need to take the `car' of that `cdr'.
-                 (push `((,value-holder (car ,value-holder)))
-                       destructurings)
-               ;; If `last-var' is not a symbol, then if `var' is a proper list,
-               ;; then we now have a list like ((C D)) from (A B (C D)).  We
-               ;; only want to pass in the (C D).
-               (push (loopy--basic-builtin-destructuring
-                      last-var `(car ,value-holder))
-                     destructurings))
-           ;; Otherwise, we might have something like [C D] from
-           ;; (A B . [C D]), where we don't need to take the `car'.
-           (unless last-var-is-symbol
-             (push (loopy--basic-builtin-destructuring
-                    last-var value-holder)
-                   destructurings)))
-
-         ;; Return the list of instructions.
-         (apply #'append (nreverse destructurings)))))
-
-    (array
-     ;; For arrays, we always need a value holder so that `value-expression'
-     ;; is evaluated only once.
-     (let* ((value-holder (gensym "destructuring-array-"))
-            (destructurings
-             `(((,value-holder ,value-expression)))))
-       (cl-loop for symbol-or-seq across var
-                for index from 0
-                do (push (loopy--basic-builtin-destructuring
-                          symbol-or-seq `(aref ,value-holder ,index))
-                         destructurings))
-
-       ;; Return the list of instructions.
-       (apply #'append (nreverse destructurings))))
-    (t
-     (error "Don't know how to destructure this: %s" var))))
+substituting into a `let*' form or being combined under a `setq'
+form.")
 
 (defun loopy--destructure-for-with-vars (bindings)
   "Destructure BINDINGS into bindings suitable for something like `let*'.
@@ -600,7 +563,7 @@ Returns a list of two elements:
   (list 'let*
         (mapcan (cl-function
                  (lambda ((var val))
-                   (loopy--basic-builtin-destructuring var val)))
+                   (loopy--destructure-sequence var val)))
                 bindings)))
 
 (cl-defun loopy--find-special-macro-arguments (names body)

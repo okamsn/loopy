@@ -11,6 +11,15 @@ This document describes the user-facing changes to Loopy.
   un-dotted pairs.
 - Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 
+### Other Changes
+
+- The default destructuring system now takes on some of the features of Emacs
+  `cl-lib` destructuring functions.  The special arguments `&key`, `&whole`, and
+  `&rest` were added in ways that make sense for Loopy.  Because the functions
+  in `seq.el` can be extended for new types, this addition only makes
+  `loopy-seq.el` redundant for the destructuring of lists and arrays.
+  - See also the new features `loopy-dsetq`, `loopy-let*`, and `loopy-ref`.
+
 ## 0.7.2
 
 ### Bugs Fixed
