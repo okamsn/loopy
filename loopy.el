@@ -472,9 +472,184 @@ this means that an explicit \"nil\" is always required."
   "Ensure BINDINGS valid according to `loopy--validate-binding'."
   (mapc #'loopy--validate-binding bindings))
 
+(cl-defun loopy--split-list-before (list element &key key (test #'eq))
+  "Split LIST on ELEMENT, so that ELEMENT begins the latter part.
+
+TEST is used to determine equality.  KEY is applied to ELEMENT
+and each item in LIST.
+
+For example, using 2 as ELEMENT would split (1 2 3)
+into (1) and (2 3)."
+  (let ((first-part nil)
+        (second-part nil))
+    (setq second-part
+          (if key
+              (cl-loop for cell on list
+                       for item = (car cell)
+                       if (funcall test
+                                   (funcall key item)
+                                   (funcall key element))
+                       return cell
+                       else do (push item first-part))
+            (cl-loop for cell on list
+                     for item = (car cell)
+                     if (funcall test item element)
+                     return cell
+                     else do (push item first-part))))
+    (list (nreverse first-part)
+          second-part)))
+
+(defun loopy--split-off-last-item (list)
+  "Split LIST, returning a list of the first items and the last item.
+
+For example, splitting (1 2 3) returns ((1 2) 3)."
+  ;; TODO: How does this compare with `last' and `butlast' for small lists?
+  (let ((reverse-list (reverse list)))
+    (list (reverse (cl-rest reverse-list))
+          (cl-first reverse-list))))
+
 ;;;; Destructuring functions.
 ;; Note that functions which are only used for commands are found in
 ;; `loopy-commands.el'.  The functions found here are used generally.
+
+(cl-defun loopy--destructure-cl-vars (var value-expression)
+  "Destruture list VAR like cl-lib.
+
+- If the first element of VAR is `&whole', then the next element
+  names a variable containing the entire value.
+- Positional variable names can be next.
+- A variable named after `&rest' or after the dot in a dotted list
+  sets that variable to the remainder of the list.  If no positional
+  variables are given, then this is the same as `&whole'.
+- Variables named after `&key' are values found using plist functions.
+  These can optionally be a list of 2 element: (1) a variable name
+  and (2) a default value if the corresponding key is not present.
+  Keys are only sought in the remainder of the list, be that after
+  positional variable names or in a variable named `&rest'."
+  (let ((bindings nil)
+        (whole-var nil)
+        (rest-var nil)
+        (key-target-var (gensym "key-target-"))
+        (key-vars))
+
+    (when (eq (cl-first var) '&whole)
+      (cond
+       ;; Make sure there is a variable named.
+       ((not (cdr var))
+        (error "Bad destructuring: %s" var))
+       ;; If it's the only variable named, just bind it and return.
+       ((not (cddr var))
+        (warn "`&whole' used when only one variable listed: %s"
+              var)
+        (cl-return-from loopy--destructure-cl-vars
+          `((,(cl-second var) ,value-expression))))
+       (t
+        (setq whole-var (cl-second var)
+              ;; Now just operate on remaining variables.
+              var (cddr var))
+        (push `(,whole-var ,value-expression)
+              bindings))))
+
+    (if (proper-list-p var)
+        (progn
+          (seq-let (before after)
+              (loopy--split-list-before var '&rest)
+            (when after
+              (setq rest-var (cadr after)
+                    ;; Now just operate on remaining variables.
+                    var (append before (cddr after)))
+              (push `(,rest-var ,(or whole-var value-expression))
+                    bindings))))
+
+      ;; If VAR is not a proper list, then the last cons cell is dotted.
+      (setq rest-var (cdr (last var))
+            ;; Now just operate on remaining variables.
+            ;; TODO: We use this `car-safe' phrasing in several places.
+            ;;       Is there a better way?
+            var (let ((var-copy var)
+                      (result))
+                  ;; For a dotted pair, the final `cdr' is not `car-safe',
+                  ;; since it is not a list.  We drop that final `cdr'.
+                  (while (car-safe var-copy)
+                    (push (pop var-copy)
+                          result))
+                  (nreverse result)))
+      (push `(,rest-var ,(or whole-var value-expression))
+            bindings))
+
+    ;; Find the key vars, if any.  The key vars must be drawn from
+    ;; the remaining part after the normal variables of bound.
+    (seq-let (before after)
+        (loopy--split-list-before var '&key)
+      (when after
+        (setq key-vars (cdr after)
+              var (append before (cddr after)))))
+
+    ;; Handle the normal values.
+    (when var
+      (cond
+       (rest-var
+        (dolist (i var)
+          (push `(,i (pop ,rest-var))
+                bindings)))
+       (key-vars
+        (if whole-var
+            (push `(,key-target-var ,whole-var)
+                  bindings)
+          (push `(,key-target-var ,value-expression)
+                bindings))
+        (dolist (i var)
+          ;; `pop' off of key-target-var to reduce the search for keys.
+          (push `(,i (pop ,key-target-var))
+                bindings)))
+       (whole-var
+        (seq-let (other-vars last-var)
+            (loopy--split-off-last-item var)
+          (push `(,last-var ,whole-var)
+                bindings)
+          (dolist (i other-vars)
+            (push `(,i (pop ,last-var))
+                  bindings))
+          (push `(,last-var (car ,last-var))
+                bindings)))
+       (t
+        (let ((last-is-bound)
+              (last-var))
+          (dolist (i (reverse var))
+            (if last-is-bound
+                (push `(,i (pop ,last-var))
+                      bindings)
+              (push `(,i ,value-expression)
+                    bindings)
+              (setq last-var i
+                    last-is-bound t)))
+          ;; Extract final value from the list of a single value.
+          (push `(,last-var (car ,last-var))
+                bindings)))))
+
+    ;; Now process the keys.
+    (when key-vars
+      (unless bindings
+        (push `(,key-target-var ,value-expression)
+              bindings))
+      (let ((target-var (or rest-var
+                            ;; If we used positional variables.
+                            (if var key-target-var)
+                            whole-var
+                            key-target-var)))
+        (dolist (i key-vars)
+          (push (if (consp i)
+                    `(,(car i)
+                      ,(let ((key (intern (format ":%s" (car i)))))
+                         `(if-let ((key-found (plist-member ,target-var ,key)))
+                              (cl-second key-found)
+                            ,(cl-second i))))
+                  (let ((key (intern (format ":%s" i))))
+                    `(,i (plist-get ,target-var ,key))))
+                bindings))))
+
+    ;; Process
+    (nreverse bindings)))
 
 (defun loopy--basic-builtin-destructuring (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR.
