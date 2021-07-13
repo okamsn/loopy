@@ -512,6 +512,33 @@ For example, splitting (1 2 3) returns ((1 2) 3)."
 ;; Note that functions which are only used for commands are found in
 ;; `loopy-commands.el'.  The functions found here are used generally.
 
+(defun loopy--destructure-cl-array (var value-expression)
+  "Destructure array VAR like cl-lib.
+
+- If `&rest', bind the remaining values in the array.
+- If `&whole', name a variable holding the whole value."
+  (let ((bindings)
+        (holding-var))
+    (if (eq '&whole (aref var 0))
+        (setq holding-var (aref var 1)
+              var (seq-drop var 2))
+      (setq holding-var (gensym "cl-array-")))
+
+    (push `(,holding-var ,value-expression)
+          bindings)
+
+    (cl-loop for v across var
+             for idx from 0
+             if (eq v '&rest)
+             do (push `(,(aref var (1+ idx))
+                        (seq-subseq ,holding-var ,(1+ idx)))
+                      bindings)
+             and return nil
+             else
+             do (push `(,v (aref ,holding-var ,idx))
+                      bindings))
+    (nreverse bindings)))
+
 (cl-defun loopy--destructure-cl-vars (var value-expression)
   "Destruture list VAR like cl-lib.
 
@@ -525,7 +552,9 @@ For example, splitting (1 2 3) returns ((1 2) 3)."
   These can optionally be a list of 2 element: (1) a variable name
   and (2) a default value if the corresponding key is not present.
   Keys are only sought in the remainder of the list, be that after
-  positional variable names or in a variable named `&rest'."
+  positional variable names or in a variable named `&rest'.
+
+Only the positional variables and the remainder can be recursive."
   (let ((bindings nil)
         (whole-var nil)
         (rest-var nil)
