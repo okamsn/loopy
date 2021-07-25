@@ -242,6 +242,8 @@ for iteration.")
 (defvar loopy--accumulation-vars nil
   "Initializations of the variables needed for accumulation.
 
+These initializations are sensitive to order.
+
 This list includes variables explicitly named in a command (such
 as the `collection' in `(collect collection value)') and variables
 required for destructuring in accumulation commands.
