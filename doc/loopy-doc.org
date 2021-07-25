@@ -3044,9 +3044,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
    Importantly, your custom commands cannot share a name.
 
    For example, say that you're tired of typing out
-   =(do (message "Hello, %s" first last))= and would prefer to instead use
-   =(greet FIRST [LAST])=.  This only requires pushing code into the main
-   loopy body, so the definition of the parsing function is quite simple.
+   =(do (message "Hello, %s %s" PERSONAL-NAME FAMILY-NAME))= and would prefer
+   to instead use =(greet PERSONAL-NAME [FAMILY-NAME])=.  This only requires
+   adding code to the loop's main body, so the definition of the parsing
+   function is quite simple.
 
    #+BEGIN_SRC emacs-lisp
      (require 'cl-lib)
