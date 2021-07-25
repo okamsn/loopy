@@ -3006,18 +3006,24 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
           (let ,loopy--accumulation-vars
             (let* ,loopy--iteration-vars
               (let ((loopy--early-return-capture
-                     (cl-block ,loopy--name-arg
-                       ,@loopy--before-do
-                       (while ,(cl-case (length loopy--pre-conditions)
-                                 (0 t)
-                                 (1 (car loopy--pre-conditions))
-                                 (t (cons 'and loopy--pre-conditions)))
-                         (cl-tagbody
-                          ,@loopy--main-body
-                          loopy--continue-tag
-                          ,@loopy--latter-body))
-                       ,@loopy--after-do
-                       nil)))
+                     (cl-block ,loopy--loop-name
+                       (cl-tagbody
+                        ,@loopy--before-do
+                        (while ,(cl-case (length loopy--pre-conditions)
+                                  (0 t)
+                                  (1 (car loopy--pre-conditions))
+                                  (t (cons 'and loopy--pre-conditions)))
+                          (cl-tagbody
+                           ,@loopy--main-body
+                           loopy--continue-tag
+                           ,@loopy--latter-body
+                           (unless ,loopy--post-conditions
+                             (cl-return-from ,loopy--loop-name
+                               ,loopy--implicit-return))))
+                        ,@loopy--after-do
+                        loopy--non-returning-exit-tag
+                        ,loopy--accumulation-final-updates))
+                     ,loopy--implicit-return))
                 ,@loopy--final-do
                 ,(if loopy--final-return
                      loopy--final-return

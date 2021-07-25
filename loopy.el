@@ -638,15 +638,16 @@ The function creates quoted code that should be used by a macro."
   ;;
   ;; `(cl-symbol-macrolet ,loopy--generalized-vars
   ;;    (let* ,loopy--with-vars
-  ;;      (let* ,loopy--iteration-vars
-  ;;        (let ,loopy--accumulation-vars
-  ;;          ;; If we need to, capture early return, those that has less
-  ;;          ;; priority than a final return.
+  ;;      (let ,loopy--accumulation-vars
+  ;;        (let* ,loopy--iteration-vars
   ;;          (let ((loopy--early-return-capture
   ;;                 (cl-block ,loopy--loop-name
-  ;;                   ,@loopy--before-do
   ;;                   (cl-tagbody
-  ;;                    (while ,loopy--pre-conditions
+  ;;                    ,@loopy--before-do
+  ;;                    (while ,(cl-case (length loopy--pre-conditions)
+  ;;                              (0 t)
+  ;;                              (1 (car loopy--pre-conditions))
+  ;;                              (t (cons 'and loopy--pre-conditions)))
   ;;                      (cl-tagbody
   ;;                       ,@loopy--main-body
   ;;                       loopy--continue-tag
@@ -654,10 +655,10 @@ The function creates quoted code that should be used by a macro."
   ;;                       (unless ,loopy--post-conditions
   ;;                         (cl-return-from ,loopy--loop-name
   ;;                           ,loopy--implicit-return))))
-  ;;                    ,@loopy--after-do)
-  ;;                   loopy--non-returning-exit-tag
-  ;;                   ,loopy--accumulation-final-updates
-  ;;                   ,loopy--implicit-return)))
+  ;;                    ,@loopy--after-do
+  ;;                    loopy--non-returning-exit-tag
+  ;;                    ,loopy--accumulation-final-updates))
+  ;;                 ,loopy--implicit-return))
   ;;            ,@loopy--final-do
   ;;            ,(if loopy--final-return
   ;;                 loopy--final-return
