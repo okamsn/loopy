@@ -2828,7 +2828,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    For the purpose of this example, below is a version of the parsing function
    made of the basic Lisp features with which you are familiar.  The actual
-   definition makes use of more convenient Emacs Lisp libraries.
+   definition makes use of more convenient Emacs Lisp libraries and can be seen
+   in the library {{{file(loopy-commands.el)}}}.
 
    #+BEGIN_SRC emacs-lisp
      (require 'loopy-commands)
