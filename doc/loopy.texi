@@ -505,7 +505,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orga9e0feb
+@float Listing,org634bb44
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -575,7 +575,7 @@ symbols can be shorter than the destructured sequence, @emph{but not longer}.  I
 shorter, the unassigned elements of the list are simply ignored.  To assign
 the final @code{cdr} of a destructured list, use dotted notation.
 
-@float Listing,org516c5b6
+@float Listing,org232b05a
 @lisp
 ;; => [(9 10 11 4) (9 10 11 8)]
 (loopy (with (my-array [(1 2 3 4) (5 6 7 8)]))
@@ -2994,21 +2994,21 @@ updating variables.  This location is referred to as the @dfn{latter body} of th
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
 list of instructions.  Some commands require the creation of unique temporary
-variables, such as @samp{list-3717} in the below output.
+variables, such as @samp{list-211} in the below output.
 
 @lisp
 ((loopy--iteration-vars (list-211 '(1 2 3)))
- (loopy--latter-body    (setq list-211 (cdr list-211)))
- (loopy--pre-conditions (consp list-211))
  (loopy--iteration-vars (i nil))
- (loopy--main-body      (setq i (car list-211))))
+ (loopy--pre-conditions (consp list-211))
+ (loopy--main-body      (setq i (car list-211)))
+ (loopy--latter-body    (setq list-211 (cdr list-211))))
 @end lisp
 
 The first element of an instruction describes where to insert code into the
 template.  The second element of an instruction is said code to insert.  You
 can see that not all of the code to be inserted is a valid Lisp form.  For
 example, the above instruction referencing @code{loopy--iteration-vars} inserts
-a binding for the variable @samp{i} into a @code{let}-like form.
+a binding for the variable @samp{list-211} into a @code{let}-like form.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem Place
@@ -3054,7 +3054,8 @@ found, it wraps that code with an @code{if}-form.
 
 For the purpose of this example, below is a version of the parsing function
 made of the basic Lisp features with which you are familiar.  The actual
-definition makes use of more convenient Emacs Lisp libraries.
+definition makes use of more convenient Emacs Lisp libraries and can be seen
+in the library @file{loopy-commands.el}.
 
 @lisp
 (require 'loopy-commands)
@@ -3274,18 +3275,24 @@ will work similar to the below example.
      (let ,loopy--accumulation-vars
        (let* ,loopy--iteration-vars
          (let ((loopy--early-return-capture
-                (cl-block ,loopy--name-arg
-                  ,@@loopy--before-do
-                  (while ,(cl-case (length loopy--pre-conditions)
-                            (0 t)
-                            (1 (car loopy--pre-conditions))
-                            (t (cons 'and loopy--pre-conditions)))
-                    (cl-tagbody
-                     ,@@loopy--main-body
-                     loopy--continue-tag
-                     ,@@loopy--latter-body))
-                  ,@@loopy--after-do
-                  nil)))
+                (cl-block ,loopy--loop-name
+                  (cl-tagbody
+                   ,@@loopy--before-do
+                   (while ,(cl-case (length loopy--pre-conditions)
+                             (0 t)
+                             (1 (car loopy--pre-conditions))
+                             (t (cons 'and loopy--pre-conditions)))
+                     (cl-tagbody
+                      ,@@loopy--main-body
+                      loopy--continue-tag
+                      ,@@loopy--latter-body
+                      (unless ,loopy--post-conditions
+                        (cl-return-from ,loopy--loop-name
+                          ,loopy--implicit-return))))
+                   ,@@loopy--after-do
+                   loopy--non-returning-exit-tag
+                   ,loopy--accumulation-final-updates))
+                ,loopy--implicit-return))
            ,@@loopy--final-do
            ,(if loopy--final-return
                 loopy--final-return
@@ -3307,9 +3314,10 @@ The parsing function that can turn uses of your command into instructions.
 Importantly, your custom commands cannot share a name.
 
 For example, say that you're tired of typing out
-@samp{(do (message "Hello, %s" first last))} and would prefer to instead use
-@samp{(greet FIRST [LAST])}.  This only requires pushing code into the main
-loopy body, so the definition of the parsing function is quite simple.
+@samp{(do (message "Hello, %s %s" PERSONAL-NAME FAMILY-NAME))} and would prefer
+to instead use @samp{(greet PERSONAL-NAME [FAMILY-NAME])}.  This only requires
+adding code to the loop's main body, so the definition of the parsing
+function is quite simple.
 
 @lisp
 (require 'cl-lib)
