@@ -2775,21 +2775,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
-   variables, such as =list-3717= in the below output.
+   variables, such as =list-211= in the below output.
 
    #+BEGIN_SRC emacs-lisp
      ((loopy--iteration-vars (list-211 '(1 2 3)))
-      (loopy--latter-body    (setq list-211 (cdr list-211)))
-      (loopy--pre-conditions (consp list-211))
       (loopy--iteration-vars (i nil))
-      (loopy--main-body      (setq i (car list-211))))
+      (loopy--pre-conditions (consp list-211))
+      (loopy--main-body      (setq i (car list-211)))
+      (loopy--latter-body    (setq list-211 (cdr list-211))))
    #+END_SRC
 
    The first element of an instruction describes where to insert code into the
    template.  The second element of an instruction is said code to insert.  You
    can see that not all of the code to be inserted is a valid Lisp form.  For
    example, the above instruction referencing ~loopy--iteration-vars~ inserts
-   a binding for the variable =i= into a ~let~-like form.
+   a binding for the variable =list-211= into a ~let~-like form.
 
    | Place                   | Code                             |
    |-------------------------+----------------------------------|
