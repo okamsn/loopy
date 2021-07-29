@@ -2637,6 +2637,8 @@ COMMAND-LIST."
     (arrayi       . loopy--parse-seq-index-command)
     (array-ref    . loopy--parse-array-ref-command)
     (arrayf       . loopy--parse-array-ref-command)
+    (callf        . loopy--parse-reduce-command)
+    (callf2       . loopy--parse-accumulate-command)
     (collect      . loopy--parse-collect-command)
     (collecting   . loopy--parse-collect-command)
     (command-do   . loopy--parse-group-command)

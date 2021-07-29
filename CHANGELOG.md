@@ -17,6 +17,14 @@ This document describes the user-facing changes to Loopy.
   Previously, the literal symbol `:init` would be the last value assigned to the
   variable, instead of correctly stopping at the expression before the symbol.
 
+### Other Changes
+
+- The accumulation commands `reduce` and `accumulate` have gained the aliases
+  `callf` and `callf2`, respectively.  This is intended to help users remember
+  the order of arguments.  Unlike the `callf*` macros from which these aliases
+  derive, the function argument to these commands is the third argument and must
+  be quoted.
+
 ## 0.7.2
 
 ### Bugs Fixed

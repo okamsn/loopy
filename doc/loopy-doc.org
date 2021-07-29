@@ -1675,6 +1675,22 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (finally-return accum1 accum2))
      #+end_src
 
+     This command also has the alias =callf2=.  It is similar to using the
+     function ~cl-callf2~, except that the function argument is given last and
+     must be quoted.  This alias is intended to help users remember argument
+     order.
+
+     #+begin_src emacs-lisp
+       (loopy (list i '(1 2))
+              (callf2 my-accum i #'cons :init nil)
+              (finally-return my-accum))
+
+       ;; Is the same as the above:
+       (loopy (with (my-accum))
+              (list i '(1 2))
+              (do (cl-callf2 cons i my-accum))
+              (finally-return my-accum))
+     #+end_src
 
    #+findex: adjoin
    - =(adjoin|adjoining VAR EXPR &key at test key init result-type)= :: Repeatedly
@@ -1990,6 +2006,23 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
        ;; => 24
        (loopy (list i '(1 2 3 4))
               (reduce i #'* :init 1))
+     #+end_src
+
+     This command also has the alias =callf=.  It is similar to using the
+     function ~cl-callf~, except that the function argument is given last and
+     must be quoted.  This alias is intended to help users remember argument
+     order.
+
+     #+begin_src emacs-lisp
+       (loopy (list i '(1 2 3))
+              (callf my-reduction i #'+ :init 0)
+              (finally-return my-reduction))
+
+       ;; Is similar to the above:
+       (loopy (with (my-reduction 0))
+              (list i '(1 2 3))
+              (do (cl-callf + my-reduction i))
+              (finally-return my-reduction))
      #+end_src
 
    #+findex: sum
