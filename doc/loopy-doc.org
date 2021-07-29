@@ -1653,6 +1653,9 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      This is a generic command in case the others don't meet your needs.
 
+     This command is similar to the =expr= command, except that this command
+     will not create variables local to loops made by the =sub-loop= command.
+
      #+begin_src emacs-lisp
        ;; Call `(cons i my-accum)'
        ;;
@@ -1661,11 +1664,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
               (accumulate my-accum i #'cons :init nil)
               (finally-return my-accum))
 
+       ;; Works mostly the same as the above:
+       (loopy (list i '(1 2))
+              (expr my-accum (cons i my-accum))
+              (finally-return my-accum))
+
        ;; => ((3 1) (4 2))
        (loopy (list i '((1 2) (3 4)))
               (accumulate (accum1 accum2) i #'cons :init nil)
               (finally-return accum1 accum2))
      #+end_src
+
 
    #+findex: adjoin
    - =(adjoin|adjoining VAR EXPR &key at test key init result-type)= :: Repeatedly
@@ -1964,10 +1973,18 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
      =VAR= is initialized to =INIT=, if provided, or ~nil~.
 
+     This command is similar to the =expr= command, except that this command
+     will not create variables local to loops made by the =sub-loop= command.
+
      #+begin_src emacs-lisp
        ;; = > 6
        (loopy (list i '(1 2 3))
               (reduce my-reduction i #'+ :init 0)
+              (finally-return my-reduction))
+
+       ;; Works similarly to above:
+       (loopy (list i '(1 2 3))
+              (expr my-reduction (+ i my-reduction) :init 0)
               (finally-return my-reduction))
 
        ;; => 24
