@@ -286,6 +286,19 @@ implicit variable without knowing it's name, even for named loops."
                               (finally-return my-val this-nil?)))))))
 
 ;;;;; Expr
+(ert-deftest expr-init ()
+  (should (= 1 (eval (quote (loopy (repeat 3)
+                                   (expr var 1 :init 'cat)
+                                   (finally-return var))))))
+
+  (should (= 1 (eval (quote (loopy (repeat 3)
+                                   (expr var 1 :init nil)
+                                   (finally-return var))))))
+
+  (should (= 3 (eval (quote (loopy (repeat 3)
+                                   (expr var (1+ var) :init 0)
+                                   (finally-return var)))))))
+
 (ert-deftest expr-one-value ()
   (should
    (and (eval (quote (loopy (with (my-val nil))

@@ -490,10 +490,11 @@ BODY is one or more loop commands."
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let* ((length-vals (length vals))
-         (init-arg (when (eq (nth (- length-vals 2) vals)
-                             ':init)
+         (using-init-arg (eq (nth (- length-vals 2) vals)
+                             ':init))
+         (init-arg (when using-init-arg
                      (nth (1- length-vals) vals))))
-    (let ((arg-length (if init-arg
+    (let ((arg-length (if using-init-arg
                           (- length-vals 2)
                         length-vals))
           (value-selector (gensym "expr-value-selector-")))

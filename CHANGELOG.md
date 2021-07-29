@@ -11,6 +11,12 @@ This document describes the user-facing changes to Loopy.
   un-dotted pairs.
 - Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 
+### Bugs Fixed
+
+- Fix parsing error in `expr` command when redundantly passing nil to `:init`.
+  Previously, the literal symbol `:init` would be the last value assigned to the
+  variable, instead of correctly stopping at the expression before the symbol.
+
 ## 0.7.2
 
 ### Bugs Fixed
