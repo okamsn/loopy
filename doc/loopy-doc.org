@@ -1646,9 +1646,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 
    The available accumulation commands are:
 
-   - =(accumulate VAR EXPR FUNC &key init)= :: Accumulate the result of applying
-     function =FUNC= to =EXPR= and =VAR=.  =EXPR= and =VAR= are used as the
-     first and second arguments to =FUNC=, respectively.
+   #+findex: accumulate
+   - =(accumulate|accumulating VAR EXPR FUNC &key init)= :: Accumulate the
+     result of applying function =FUNC= to =EXPR= and =VAR=.  =EXPR= and =VAR=
+     are used as the first and second arguments to =FUNC=, respectively.
 
      This is a generic command in case the others don't meet your needs.
 
