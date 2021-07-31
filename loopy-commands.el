@@ -212,7 +212,7 @@ If not, then it is possible that FORM is a variable."
     `(quote ,list)))
 
 (defun loopy--apply-function (func &rest args)
-  "Return an expansion that appropriately applies FUNC to ARGS.
+  "Return an expansion to appropriately apply FUNC to ARGS.
 
 This expansion can apply FUNC directly or via `funcall'."
   (if (loopy--quoted-form-p func)
@@ -286,7 +286,7 @@ This is helpful when working with property lists."
            collect i))
 
 (defun loopy--only-valid-keywords-p (correct list)
-  "Check that LIST contains only valid keywords in every other position.
+  "Return nil if a keyword in LIST is not in CORRECT.
 
 Any keyword not in CORRECT is considered invalid.
 
@@ -1615,6 +1615,7 @@ you can use in the instructions:
                         (setq opts cons-cell
                               args (nreverse args-holding))
                       (setq args parser-args)))
+           (ignore args opts)
            (let ((arg-length (length args)))
              (cond
               ((= arg-length ,implicit-num-args)
