@@ -273,7 +273,8 @@ Only the positional variables and the remainder can be recursive."
         (rest-var nil)                  ; Variable after `&rest'.
         (rest-var-was-sequence nil)     ; Whether that var was a sequence.
         (key-target-var (gensym "key-target-")) ; Holder for if we only use keys.
-        (key-vars))                     ; Variables after `&key' or `&keys'.
+        (key-vars)                      ; Variables after `&key' or `&keys'.
+        (positional-vars))
 
     (when (eq (cl-first var) '&whole)
       (cond
@@ -365,6 +366,7 @@ Only the positional variables and the remainder can be recursive."
     ;;
     ;; TODO: This code is very simple, but could probably be condensed.
     (when var
+      (setq positional-vars var)
       (cond
        (rest-var (while var
                    (let ((i (car var)))
@@ -426,7 +428,7 @@ Only the positional variables and the remainder can be recursive."
                       (loopy--split-off-last-item var)
                     ;; If the last variable is to be ignored, we would prefer
                     ;; to just find a valid variable.
-                    (when (eq last-var '_)
+                    (when (loopy--var-ignored-p last-var)
                       (let* ((reverse-var (reverse other-vars))
                              (count (loopy--count-while
                                      #'loopy--var-ignored-p reverse-var))
@@ -489,45 +491,50 @@ Only the positional variables and the remainder can be recursive."
                         (when using-other-vars
                           (push `(,last-var (car ,last-var)) bindings))))))
 
-       (t
-        (seq-let (other-vars last-var)
-            (loopy--split-off-last-item var)
-          (if (sequencep last-var)
-              (let ((list-copy (gensym "list-copy")))
-                (push `(,list-copy ,value-expression)
-                      bindings)
-
-                (dolist (i other-vars)
-                  (if (sequencep i)
-                      (dolist (bind (loopy--destructure-sequence
-                                     i `(pop ,list-copy)))
-                        (push bind bindings))
-                    (push `(,i (pop ,list-copy)) bindings)))
-
-                (dolist (bind (loopy--destructure-sequence
-                               last-var `(car ,list-copy)))
-                  (push bind bindings)))
-            (let ((last-var-ignored (eq last-var '_)))
-              (when last-var-ignored
-                (setq last-var (gensym "last-var-in-list-")))
-              (push `(,last-var ,value-expression)
-                    bindings)
-              (dolist (i other-vars)
-                (cond
-                 ((sequencep i)
-                  (dolist (bind (loopy--destructure-sequence
-                                 i `(pop ,last-var)))
-                    (push bind bindings)))
-                 ((eq i '_)
-                  (push `(,last-var (cdr ,last-var))
-                        bindings))
-                 (t
-                  (push `(,i (pop ,last-var))
-                        bindings))))
-              ;; Extract final value from the list of a single value.
-              (unless last-var-ignored
-                (push `(,last-var (car ,last-var))
-                      bindings))))))))
+       ;; Else, we are only using positional variables.
+       (t           (seq-let (other-vars last-var)
+                        (loopy--split-off-last-item var)
+                      ;; If the last variable is to be ignored, we would prefer
+                      ;; to just find a valid variable.
+                      (when (loopy--var-ignored-p last-var)
+                        (let ((reverse-good-var
+                               (seq-drop-while #'loopy--var-ignored-p
+                                               (reverse other-vars))))
+                          (setq last-var (cl-first reverse-good-var)
+                                other-vars (reverse (cl-rest reverse-good-var)))))
+                      (let ((last-var-is-seq (sequencep last-var))
+                            ;; This only used if last-var is seq.
+                            (list-copy (gensym "list-copy-")))
+                        (if last-var-is-seq
+                            (progn
+                              (push `(,list-copy ,value-expression)
+                                    bindings)
+                              (setq last-var list-copy))
+                          (push `(,last-var ,value-expression)
+                                bindings))
+                        (while other-vars
+                          (let ((i (cl-first other-vars)))
+                            (setq other-vars (cl-rest other-vars))
+                            (cond
+                             ((sequencep i)
+                              (dolist (bind (loopy--destructure-sequence
+                                             i `(pop ,last-var)))
+                                (push bind bindings)))
+                             ((eq i '_)
+                              (let ((count (loopy--count-while
+                                            #'loopy--var-ignored-p var)))
+                                (push `(,last-var (nthcdr ,(1+ count) ,last-var))
+                                      bindings)
+                                (setq other-vars (nthcdr count other-vars))))
+                             (t
+                              (push `(,i (pop ,last-var))
+                                    bindings)))))
+                        (if last-var-is-seq
+                            (dolist (bind (loopy--destructure-sequence
+                                           list-copy `(car ,list-copy)))
+                              (push bind bindings))
+                          (push `(,last-var (car ,last-var))
+                                bindings)))))))
 
     ;; Now process the keys.
     (when key-vars
@@ -536,7 +543,7 @@ Only the positional variables and the remainder can be recursive."
               bindings))
       (let ((target-var (or rest-var
                             ;; If we used positional variables.
-                            (if var key-target-var)
+                            (if positional-vars key-target-var)
                             whole-var
                             key-target-var)))
         (dolist (i key-vars)
