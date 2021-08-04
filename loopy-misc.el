@@ -375,7 +375,7 @@ Only the positional variables and the remainder can be recursive."
                             (dolist (binding (loopy--destructure-sequence
                                               i `(pop ,rest-var)))
                               (push binding bindings)))
-                           ((eq i '_)
+                           ((loopy--var-ignored-p i)
                             ;; Combine multiple ignored vars.
                             (let ((count (loopy--count-while
                                           #'loopy--var-ignored-p var)))
@@ -410,7 +410,7 @@ Only the positional variables and the remainder can be recursive."
                             (dolist (binding (loopy--destructure-sequence
                                               i `(pop ,key-target-var)))
                               (push binding bindings)))
-                           ((eq i '_)
+                           ((loopy--var-ignored-p i)
                             ;; Combine multiple ignored vars.
                             (let ((count (loopy--count-while
                                           #'loopy--var-ignored-p var)))
@@ -429,67 +429,53 @@ Only the positional variables and the remainder can be recursive."
                     ;; If the last variable is to be ignored, we would prefer
                     ;; to just find a valid variable.
                     (when (loopy--var-ignored-p last-var)
-                      (let* ((reverse-var (reverse other-vars))
-                             (count (loopy--count-while
-                                     #'loopy--var-ignored-p reverse-var))
-                             (found (nthcdr count reverse-var)))
-                        (setq last-var (cl-first found)
-                              other-vars (reverse (cl-rest found)))))
-                    ;; TODO: Simplify these two branches.
-                    (if (and last-var (sequencep last-var))
-                        (let ((whole-copy (gensym "whole-copy-")))
-                          (push `(,whole-copy ,whole-var) bindings)
-                          (while other-vars
-                            (let ((i (cl-first other-vars)))
-                              (setq other-vars (cl-rest other-vars))
-                              (cond
-                               ;; Handle sequences.
-                               ((sequencep i)
-                                (dolist (binding (loopy--destructure-sequence
-                                                  i `(pop ,whole-copy)))
-                                  (push binding bindings)))
-                               ;; Handle ignored variables.
-                               ((eq i '_)
-                                ;; Combine multiple ignored vars.
-                                (let ((count (loopy--count-while
-                                              #'loopy--var-ignored-p var)))
-                                  (push `(,whole-copy
-                                          (nthcdr ,(1+ count) ,whole-copy))
-                                        bindings)
-                                  (setq other-vars (nthcdr count other-vars))))
-                               ;; Handle normal variables.
-                               (t
-                                (push `(,i (pop ,whole-copy))
-                                      bindings)))))
-                          ;; Now destructure the sequence on the remaining
-                          ;; value after all of the `pop'-ing.
-                          (dolist (bind (loopy--destructure-sequence
-                                         last-var `(car ,whole-copy)))
-                            (push bind bindings)))
-
-                      ;; Otherwise, we just use the last variable as the copy.
-                      (push `(,last-var ,whole-var) bindings)
-                      (let ((using-other-vars other-vars))
-                        (while other-vars
-                          (let ((i (cl-first other-vars)))
-                            (setq other-vars (cl-rest other-vars))
-                            (cond
-                             ((sequencep i)
-                              (dolist (binding (loopy--destructure-sequence
-                                                i `(pop ,last-var)))
-                                (push binding bindings)))
-                             ((eq i '_)
-                              (let ((count (loopy--count-while
-                                            #'loopy--var-ignored-p var)))
-                                (push `(,last-var (nthcdr ,(1+ count) ,last-var))
-                                      bindings)
-                                (setq other-vars (nthcdr count other-vars))))
-                             (t
-                              (push `(,i (pop ,last-var))
-                                    bindings)))))
-                        ;; Otherwise, last-var is just a copy of whole-var.
-                        (when using-other-vars
-                          (push `(,last-var (car ,last-var)) bindings))))))
+                      (let ((reverse-good-var
+                             (seq-drop-while #'loopy--var-ignored-p
+                                             (reverse other-vars))))
+                        (setq last-var (cl-first reverse-good-var)
+                              other-vars (reverse (cl-rest reverse-good-var)))))
+                    (let ((last-var-is-seq (sequencep last-var))
+                          (seq-last-var)
+                          (whole-copy (gensym "whole-copy-"))
+                          (using-other-vars))
+                      (if last-var-is-seq
+                          (progn
+                            (push `(,whole-copy ,whole-var) bindings)
+                            (setq seq-last-var last-var
+                                  last-var whole-copy))
+                        (push `(,last-var ,whole-var) bindings))
+                      (while other-vars
+                        (setq using-other-vars other-vars)
+                        (let ((i (cl-first other-vars)))
+                          (setq other-vars (cl-rest other-vars))
+                          (cond
+                           ;; Handle sequences.
+                           ((sequencep i)
+                            (dolist (binding (loopy--destructure-sequence
+                                              i `(pop ,last-var)))
+                              (push binding bindings)))
+                           ;; Handle ignored variables.
+                           ((loopy--var-ignored-p i)
+                            ;; Combine multiple ignored vars.
+                            (let ((count (loopy--count-while
+                                          #'loopy--var-ignored-p var)))
+                              (push `(,last-var
+                                      (nthcdr ,(1+ count) ,last-var))
+                                    bindings)
+                              (setq other-vars (nthcdr count other-vars))))
+                           ;; Handle normal variables.
+                           (t
+                            (push `(,i (pop ,last-var))
+                                  bindings)))))
+                      (cond
+                       (last-var-is-seq
+                        ;; Now destructure the sequence on the remaining
+                        ;; value after all of the `pop'-ing.
+                        (dolist (bind (loopy--destructure-sequence
+                                       seq-last-var `(car ,last-var)))
+                          (push bind bindings)))
+                       (using-other-vars
+                        (push `(,last-var (car ,last-var)) bindings))))))
 
        ;; Else, we are only using positional variables.
        (t           (seq-let (other-vars last-var)
@@ -503,13 +489,15 @@ Only the positional variables and the remainder can be recursive."
                           (setq last-var (cl-first reverse-good-var)
                                 other-vars (reverse (cl-rest reverse-good-var)))))
                       (let ((last-var-is-seq (sequencep last-var))
+                            (seq-last-var)
                             ;; This only used if last-var is seq.
-                            (list-copy (gensym "list-copy-")))
+                            (seq-copy (gensym "seq-copy-")))
                         (if last-var-is-seq
                             (progn
-                              (push `(,list-copy ,value-expression)
+                              (push `(,seq-copy ,value-expression)
                                     bindings)
-                              (setq last-var list-copy))
+                              (setq seq-last-var last-var
+                                    last-var seq-copy))
                           (push `(,last-var ,value-expression)
                                 bindings))
                         (while other-vars
@@ -520,7 +508,7 @@ Only the positional variables and the remainder can be recursive."
                               (dolist (bind (loopy--destructure-sequence
                                              i `(pop ,last-var)))
                                 (push bind bindings)))
-                             ((eq i '_)
+                             ((loopy--var-ignored-p i)
                               (let ((count (loopy--count-while
                                             #'loopy--var-ignored-p var)))
                                 (push `(,last-var (nthcdr ,(1+ count) ,last-var))
@@ -531,7 +519,7 @@ Only the positional variables and the remainder can be recursive."
                                     bindings)))))
                         (if last-var-is-seq
                             (dolist (bind (loopy--destructure-sequence
-                                           list-copy `(car ,list-copy)))
+                                           seq-last-var `(car ,seq-copy)))
                               (push bind bindings))
                           (push `(,last-var (car ,last-var))
                                 bindings)))))))
