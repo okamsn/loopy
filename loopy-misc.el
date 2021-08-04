@@ -198,7 +198,7 @@ form.
 
 If SEQ is `_', then a generated variable name will be used."
   (cl-typecase seq
-    (symbol `((,(if (eq '_ seq) (gensym "ignored-value-") seq)
+    (symbol `((,(if (loopy--var-ignored-p seq) (gensym "ignored-value-") seq)
                ,value-expression)))
     (list (loopy--destructure-list seq value-expression))
     (array (loopy--destructure-array seq value-expression))
@@ -226,7 +226,7 @@ If SEQ is `_', then a generated variable name will be used."
              for v across remaining-var
              for idx from 0
              do (cond
-                 ((eq v '_)) ; Do nothing if variable is `_'.
+                 ((loopy--var-ignored-p v)) ; Do nothing if variable is `_'.
                  ((eq v '&rest)
                   (let* ((next-idx (1+ idx))
                          (next-var (aref remaining-var next-idx)))
@@ -288,7 +288,7 @@ Only the positional variables and the remainder can be recursive."
           `((,(cl-second var) ,value-expression))))
        (t
         (let ((possible-whole-var (cl-second var)))
-          (setq whole-var (if (eq possible-whole-var '_)
+          (setq whole-var (if (loopy--var-ignored-p possible-whole-var)
                               (progn
                                 (warn "`&whole' won't be ignored: %s" var)
                                 (gensym "list-whole-"))
@@ -482,7 +482,7 @@ VALUE-EXPRESSION should itself be a `setf'-able place.
 
 Returns a list of bindings suitable for `cl-symbol-macrolet'."
   (cl-typecase var
-    (symbol (unless (eq var '_)
+    (symbol (unless (loopy--var-ignored-p var)
               `((,var ,value-expression))))
     (list   (loopy--destructure-generalized-list var value-expression))
     (array  (loopy--destructure-generalized-array var value-expression))
@@ -511,7 +511,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
              for v across remaining-var
              for idx from 0
              do (cond
-                 ((eq v '_)) ; Do nothing if variable is `_'.
+                 ((loopy--var-ignored-p v)) ; Do nothing if variable is `_'.
                  ((eq v '&rest)
                   (let* ((next-idx (1+ idx))
                          (next-var (aref remaining-var next-idx)))
@@ -565,7 +565,7 @@ See `loopy--destructure-list' for normal values."
           `((,(cl-second var) ,value-expression))))
        (t
         (let ((possible-whole-var (cl-second var)))
-          (if (eq possible-whole-var '_)
+          (if (loopy--var-ignored-p possible-whole-var)
               (warn "`&whole' variable being ignored: %s" var)
             ;; Now just operate on remaining variables.
             (push `(,possible-whole-var ,value-expression)
@@ -590,7 +590,7 @@ See `loopy--destructure-list' for normal values."
         (while (car-safe var)
           (setq v (car var))
           (cond
-           ((eq v '_)
+           ((loopy--var-ignored-p v)
             (setq var (cdr var))
             (cl-incf index))                  ; Do nothing in this case.
 
