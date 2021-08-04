@@ -270,12 +270,21 @@ If SEQ is `_', then a generated variable name will be used."
 Only the positional variables and the remainder can be recursive."
   (let ((bindings nil)                  ; The result of this function.
         (whole-var nil)                 ; Variable after `&whole'.
-        (rest-var nil)                  ; Variable after `&rest'.
-        (rest-var-was-sequence nil)     ; Whether that var was a sequence.
-        (key-target-var (gensym "key-target-")) ; Holder for if we only use keys.
-        (key-vars)                      ; Variables after `&key' or `&keys'.
+        ;; Variable after `&rest' or a generated symbol.
+        (rest-var nil)
+        ;; Sequence that was after `&rest', if any.
+        (rest-var-was-sequence nil)
+        ;; A value holder for if we only use keys.
+        (key-target-var (gensym "key-target-"))
+        ;; Variables after `&key' or `&keys'.  These are the final values bound,
+        ;; but must be detected before the positional variables are processed.
+        (key-vars)
+        ;; The positional variables processed.  This is a copy of `var', since
+        ;; `var' is eaten away in a `while' loop while processing those
+        ;; variables.  This affects where `&key' variables are sought.
         (positional-vars))
 
+    ;; Find `whole-var'.  If found, remove from `var'.
     (when (eq (cl-first var) '&whole)
       (cond
        ;; Make sure there is a variable named.
@@ -297,12 +306,14 @@ Only the positional variables and the remainder can be recursive."
                 var (cddr var))
           (push `(,whole-var ,value-expression) bindings)))))
 
-    ;; Find any (_ &rest `rest') or (_ . `rest') variable.
+    ;; Find any (_ &rest `rest') or (_ . `rest') variable.  If found, set
+    ;; `rest-var' and remove them from the variable list `var'.
     (let ((possible-rest-var))
       (if (proper-list-p var)
           (seq-let (before after) (loopy--split-list-before var '&rest)
 
-            (unless before (warn "`&rest' being treated same as `&whole': %s" var))
+            (unless before
+              (warn "`&rest' being treated same as `&whole': %s" var))
 
             (when after
               ;; This is the best place to check that argument only uses
@@ -365,13 +376,22 @@ Only the positional variables and the remainder can be recursive."
     ;; values off of some container variable.  This could be the variable used
     ;; after `&rest', the variable in which keys after `&key' will be sought,
     ;; a copy of the variable after `&whole', or just the last variable given.
-    ;;
-    ;; TODO: This code is very simple, but could probably be condensed.
     (when var
+      ;; Whether `positional-vars' is non-nil affects where keys are sought.
       (setq positional-vars var)
-      (let ((popped-vars)
+
+      (let (;; The positional variables sans the ignorable ones.
+            (popped-vars)
+            ;; Whence positional values are popped.  This can be a generated
+            ;; variable.
             (pop-target)
+            ;; Whether we'll need to do more destructuring after processing
+            ;; the variables in `popped-vars'.  This is the orignal sequence,
+            ;; not the generated variable.
             (pop-target-was-seq)
+            ;; Whether itself needs to be extracted from a list.  This is true
+            ;; if it is the final positional variable, and false if it is
+            ;; `rest-var'.
             (update-atomic-pop-target))
         (cond
          ;; Rest var is bound in its own section, in case there are no
