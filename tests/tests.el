@@ -1020,21 +1020,19 @@ implicit variable without knowing it's name, even for named loops."
                                           (finally-return i j k))))))))
 
 (ert-deftest list-recursive-destructuring ()
-  (should
-   (and
-    (equal '(5 5 6)
-           (eval (quote (loopy (list (a (b c)) '((1 (1 2)) (5 (5 6))))
-                               (finally-return (list a b c))))))
-    (equal '(5 5 6)
-           ;; This is more of an evaluation-time test.
-           (eval (quote (loopy (list (a . (b c)) '((1 . (1 2)) (5 . (5 6))))
-                               (finally-return (list a b c))))))
-    (equal '(4 5 6)
-           (loopy (list (a . [b c]) '((1 . [2 3]) (4 . [5 6])))
-                  (finally-return a b c)))
-    (equal '(5 5 6)
-           (eval (quote (loopy (list (a (b (c))) '((1 (1 (2))) (5 (5 (6)))))
-                               (finally-return (list a b c)))))))))
+  (should (equal '(4 5 6)
+                 (eval (quote (loopy (list (a (b c)) '((1 (2 3)) (4 (5 6))))
+                                     (finally-return (list a b c)))))))
+  (should (equal '(5 5 6)
+                 ;; This is more of an evaluation-time test.
+                 (eval (quote (loopy (list (a . (b c)) '((1 . (1 2)) (5 . (5 6))))
+                                     (finally-return (list a b c)))))))
+  (should (equal '(4 5 6)
+                 (loopy (list (a . [b c]) '((1 . [2 3]) (4 . [5 6])))
+                        (finally-return a b c))))
+  (should (equal '(5 5 6)
+                 (eval (quote (loopy (list (a (b (c))) '((1 (1 (2))) (5 (5 (6)))))
+                                     (finally-return (list a b c))))))))
 
 (ert-deftest list-multi-list ()
   (should (equal '((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))

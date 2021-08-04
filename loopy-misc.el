@@ -343,6 +343,8 @@ Only the positional variables and the remainder can be recursive."
             (setq rest-var-was-sequence possible-rest-var
                   rest-var (gensym "list-rest-"))
           (setq rest-var possible-rest-var))
+        ;; Rest var is bound here, in its own section, in case there are no
+        ;; positional variables.
         (push `(,rest-var ,(or whole-var value-expression))
               bindings)))
 
@@ -367,162 +369,86 @@ Only the positional variables and the remainder can be recursive."
     ;; TODO: This code is very simple, but could probably be condensed.
     (when var
       (setq positional-vars var)
-      (cond
-       (rest-var (while var
-                   (let ((i (car var)))
-                     (setq var (cdr var))
-                     (cond ((sequencep i)
-                            (dolist (binding (loopy--destructure-sequence
-                                              i `(pop ,rest-var)))
-                              (push binding bindings)))
-                           ((loopy--var-ignored-p i)
-                            ;; Combine multiple ignored vars.
-                            (let ((count (loopy--count-while
-                                          #'loopy--var-ignored-p var)))
-                              (push `(,rest-var (nthcdr ,(1+ count) ,rest-var))
-                                    bindings)
-                              (setq var (nthcdr count var))))
-                           (t
-                            (push `(,i (pop ,rest-var))
-                                  bindings)))))
+      (let ((popped-vars)
+            (pop-target)
+            (pop-target-was-seq)
+            (update-atomic-pop-target))
+        (cond
+         ;; Rest var is bound in its own section, in case there are no
+         ;; positional variables.  Otherwise, it would be bound here.
+         (rest-var (setq pop-target rest-var
+                         popped-vars var
+                         pop-target-was-seq rest-var-was-sequence
+                         update-atomic-pop-target nil))
 
-                 ;; NOTE: For sequence `&rest' vars, we need to destructure
-                 ;;       /after/ the normal variables have been `pop'-ed off
-                 ;;       of the value.
-                 (when rest-var-was-sequence
-                   (dolist (bind (loopy--destructure-sequence
-                                  rest-var-was-sequence rest-var))
-                     (push bind bindings))))
+         (key-vars (setq pop-target key-target-var
+                         popped-vars var
+                         pop-target-was-seq nil
+                         update-atomic-pop-target nil)
+                   ;; `key-target-var' is only used with `&key' without `&rest'.
+                   (if whole-var
+                       (push `(,key-target-var ,whole-var) bindings)
+                     (push `(,key-target-var ,value-expression) bindings)))
 
-       ;; We want to limit the search for keys to those values after the
-       ;; positional variables.
-       (key-vars (if whole-var
-                     (push `(,key-target-var ,whole-var)
+         (t      (setq update-atomic-pop-target t)
+                 (seq-let (other-vars last-var)
+                     (loopy--split-off-last-item var)
+                   ;; If the last variable is to be ignored, we would prefer
+                   ;; to just find a valid variable.
+                   (when (loopy--var-ignored-p last-var)
+                     (let ((reverse-good-var
+                            (seq-drop-while #'loopy--var-ignored-p
+                                              (reverse other-vars))))
+                       (setq last-var (cl-first reverse-good-var)
+                             other-vars (reverse (cl-rest reverse-good-var)))))
+
+                   (when (sequencep last-var)
+                     (setq pop-target-was-seq last-var))
+
+                   (setq popped-vars other-vars
+                         pop-target (if pop-target-was-seq
+                                        (gensym "pop-target-")
+                                      last-var))
+
+                   (push `(,pop-target ,(or whole-var value-expression))
+                         bindings))))
+
+        ;; Now pop `popped-vars' off of the value of `pop-target'.
+        (while popped-vars
+          (let ((i (car popped-vars)))
+            (setq popped-vars (cdr popped-vars))
+            (cond ((sequencep i)
+                   (dolist (binding (loopy--destructure-sequence
+                                     i `(pop ,pop-target)))
+                     (push binding bindings)))
+                  ((loopy--var-ignored-p i)
+                   ;; Combine multiple ignored popped-vars.
+                   (let ((count (loopy--count-while
+                                 #'loopy--var-ignored-p popped-vars)))
+                     ;; `nthcdr' is a C function, so it should be fast enough
+                     ;; even for high counts.
+                     (push `(,rest-var (nthcdr ,(1+ count) ,pop-target))
                            bindings)
-                   (push `(,key-target-var ,value-expression)
-                         bindings))
-                 (while var
-                   (let ((i (car var)))
-                     (setq var (cl-rest var))
+                     (setq popped-vars (nthcdr count popped-vars))))
+                  (t
+                   (push `(,i (pop ,pop-target))
+                         bindings)))))
 
-                     ;; `pop' off of key-target-var to reduce the search for keys.
-                     (cond ((sequencep i)
-                            (dolist (binding (loopy--destructure-sequence
-                                              i `(pop ,key-target-var)))
-                              (push binding bindings)))
-                           ((loopy--var-ignored-p i)
-                            ;; Combine multiple ignored vars.
-                            (let ((count (loopy--count-while
-                                          #'loopy--var-ignored-p var)))
-                              (push `(,key-target-var
-                                      (nthcdr ,(1+ count) ,key-target-var))
-                                    bindings)
-                              (setq var (nthcdr count var))))
-                           (t
-                            (push `(,i (pop ,key-target-var))
-                                  bindings))))))
-
-       ;; We want to create a copy of the `whole-var', then pop values
-       ;; off of that copy.
-       (whole-var (seq-let (other-vars last-var)
-                      (loopy--split-off-last-item var)
-                    ;; If the last variable is to be ignored, we would prefer
-                    ;; to just find a valid variable.
-                    (when (loopy--var-ignored-p last-var)
-                      (let ((reverse-good-var
-                             (seq-drop-while #'loopy--var-ignored-p
-                                             (reverse other-vars))))
-                        (setq last-var (cl-first reverse-good-var)
-                              other-vars (reverse (cl-rest reverse-good-var)))))
-                    (let ((last-var-is-seq (sequencep last-var))
-                          (seq-last-var)
-                          (whole-copy (gensym "whole-copy-"))
-                          (using-other-vars))
-                      (if last-var-is-seq
-                          (progn
-                            (push `(,whole-copy ,whole-var) bindings)
-                            (setq seq-last-var last-var
-                                  last-var whole-copy))
-                        (push `(,last-var ,whole-var) bindings))
-                      (while other-vars
-                        (setq using-other-vars other-vars)
-                        (let ((i (cl-first other-vars)))
-                          (setq other-vars (cl-rest other-vars))
-                          (cond
-                           ;; Handle sequences.
-                           ((sequencep i)
-                            (dolist (binding (loopy--destructure-sequence
-                                              i `(pop ,last-var)))
-                              (push binding bindings)))
-                           ;; Handle ignored variables.
-                           ((loopy--var-ignored-p i)
-                            ;; Combine multiple ignored vars.
-                            (let ((count (loopy--count-while
-                                          #'loopy--var-ignored-p var)))
-                              (push `(,last-var
-                                      (nthcdr ,(1+ count) ,last-var))
-                                    bindings)
-                              (setq other-vars (nthcdr count other-vars))))
-                           ;; Handle normal variables.
-                           (t
-                            (push `(,i (pop ,last-var))
-                                  bindings)))))
-                      (cond
-                       (last-var-is-seq
-                        ;; Now destructure the sequence on the remaining
-                        ;; value after all of the `pop'-ing.
-                        (dolist (bind (loopy--destructure-sequence
-                                       seq-last-var `(car ,last-var)))
-                          (push bind bindings)))
-                       (using-other-vars
-                        (push `(,last-var (car ,last-var)) bindings))))))
-
-       ;; Else, we are only using positional variables.
-       (t           (seq-let (other-vars last-var)
-                        (loopy--split-off-last-item var)
-                      ;; If the last variable is to be ignored, we would prefer
-                      ;; to just find a valid variable.
-                      (when (loopy--var-ignored-p last-var)
-                        (let ((reverse-good-var
-                               (seq-drop-while #'loopy--var-ignored-p
-                                               (reverse other-vars))))
-                          (setq last-var (cl-first reverse-good-var)
-                                other-vars (reverse (cl-rest reverse-good-var)))))
-                      (let ((last-var-is-seq (sequencep last-var))
-                            (seq-last-var)
-                            ;; This only used if last-var is seq.
-                            (seq-copy (gensym "seq-copy-")))
-                        (if last-var-is-seq
-                            (progn
-                              (push `(,seq-copy ,value-expression)
-                                    bindings)
-                              (setq seq-last-var last-var
-                                    last-var seq-copy))
-                          (push `(,last-var ,value-expression)
-                                bindings))
-                        (while other-vars
-                          (let ((i (cl-first other-vars)))
-                            (setq other-vars (cl-rest other-vars))
-                            (cond
-                             ((sequencep i)
-                              (dolist (bind (loopy--destructure-sequence
-                                             i `(pop ,last-var)))
-                                (push bind bindings)))
-                             ((loopy--var-ignored-p i)
-                              (let ((count (loopy--count-while
-                                            #'loopy--var-ignored-p var)))
-                                (push `(,last-var (nthcdr ,(1+ count) ,last-var))
-                                      bindings)
-                                (setq other-vars (nthcdr count other-vars))))
-                             (t
-                              (push `(,i (pop ,last-var))
-                                    bindings)))))
-                        (if last-var-is-seq
-                            (dolist (bind (loopy--destructure-sequence
-                                           seq-last-var `(car ,seq-copy)))
-                              (push bind bindings))
-                          (push `(,last-var (car ,last-var))
-                                bindings)))))))
+        ;; Do final update of `pop-target' if need be.  We only need to do this
+        ;; if it was a sequence (in which case there are more variables to bind)
+        ;; or if it was a positional variable.
+        (cond
+         (pop-target-was-seq
+          (dolist (bind (loopy--destructure-sequence
+                         ;; If `pop-target' is `rest-var', then it is the
+                         ;; remainder of the current list. Else, `pop-target' is
+                         ;; an element of that list.
+                         pop-target-was-seq (if rest-var
+                                                pop-target
+                                              `(car ,pop-target))))
+            (push bind bindings)))
+         (update-atomic-pop-target
+          (push `(,pop-target (car ,pop-target)) bindings)))))
 
     ;; Now process the keys.
     (when key-vars
