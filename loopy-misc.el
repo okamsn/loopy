@@ -330,18 +330,16 @@ Only the positional variables and the remainder can be recursive."
               (setq possible-rest-var (cl-second after))))
 
         ;; If VAR is not a proper list, then the last cons cell is dotted.
-        (setq possible-rest-var (cdr (last var))
-              ;; Now just operate on remaining variables.
-              ;; TODO: We use this `car-safe' phrasing in several places.
-              ;;       Is there a better way?
-              var (let ((var-copy var)
-                        (result))
-                    ;; For a dotted pair, the final `cdr' is not `car-safe',
-                    ;; since it is not a list.  We do not perform that final `cdr'.
-                    (while (car-safe var-copy)
-                      (push (pop var-copy)
-                            result))
-                    (nreverse result))))
+        ;; TODO: We use this `car-safe' phrasing in several places.
+        ;;       Is there a better way?
+        (let ((var-copy var)
+              (other-vars))
+          (while (car-safe var-copy)
+            (push (pop var-copy) other-vars))
+          ;; Now just operate on remaining variables.
+          (setq var (reverse other-vars)
+                ;; `var-copy' is now an atom.
+                possible-rest-var var-copy)))
 
       ;; Finally, bind the &rest var, if any.
       (when (and possible-rest-var
