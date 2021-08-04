@@ -37,6 +37,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'pcase)
 (require 'seq)
 (require 'subr-x)
 
@@ -478,16 +479,17 @@ Only the positional variables and the remainder can be recursive."
                             (if positional-vars key-target-var)
                             whole-var
                             key-target-var)))
-        (dolist (i key-vars)
-          (push (if (consp i)
-                    `(,(car i)
-                      ,(let ((key (intern (format ":%s" (car i)))))
+        (pcase-dolist ((or `(,key-var ,default)
+                           key-var)
+                       key-vars)
+          (let ((key (intern (format ":%s" key-var))))
+            (push `(,key-var
+                    ,(if default
                          `(if-let ((key-found (plist-member ,target-var ,key)))
                               (cl-second key-found)
-                            ,(cl-second i))))
-                  (let ((key (intern (format ":%s" i))))
-                    `(,i (plist-get ,target-var ,key))))
-                bindings))))
+                            ,default)
+                       `(plist-get ,target-var ,key)))
+                  bindings)))))
 
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
