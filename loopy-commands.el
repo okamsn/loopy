@@ -2501,20 +2501,26 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                            `(,name ,remaining-var ,value-holder ,@args)))
              (push instr instructions)))
 
-         (pcase-dolist ((or `(,kvar ,default) kvar)
-                        key-vars)
-           (dolist
-               (instr
-                (loopy--parse-loop-command
-                 `( ,name ,kvar
-                    ,(let ((key (intern (format ":%s" kvar))))
-                       (if default
-                           `(if-let ((key-found (plist-member ,value-holder ,key)))
-                                (cl-second key-found)
-                              ,default)
-                         `(plist-get ,value-holder ,key)))
-                    ,@args)))
-             (push instr instructions)))))
+         ;; TODO: In Emacs 28, `pcase' was changed so that all named variables
+         ;; are at least bound to nil.  Before that version, we should make sure
+         ;; that `default' is bound.
+         (let ((default nil))
+           (ignore default)
+           (pcase-dolist ((or `(,kvar ,default)
+                              kvar)
+                          key-vars)
+             (dolist (instr
+                      (loopy--parse-loop-command
+                       `( ,name ,kvar
+                          ,(let ((key (intern (format ":%s" kvar))))
+                             (if default
+                                 `(if-let ((key-found (plist-member ,value-holder
+                                                                    ,key)))
+                                      (cl-second key-found)
+                                    ,default)
+                               `(plist-get ,value-holder ,key)))
+                          ,@args)))
+               (push instr instructions))))))
 
       (array
        (cl-loop named loop

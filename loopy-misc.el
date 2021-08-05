@@ -417,7 +417,7 @@ Only the positional variables and the remainder can be recursive."
                    (when (loopy--var-ignored-p last-var)
                      (let ((reverse-good-var
                             (seq-drop-while #'loopy--var-ignored-p
-                                              (reverse other-vars))))
+                                            (reverse other-vars))))
                        (setq last-var (cl-first reverse-good-var)
                              other-vars (reverse (cl-rest reverse-good-var)))))
 
@@ -479,17 +479,22 @@ Only the positional variables and the remainder can be recursive."
                             (if positional-vars key-target-var)
                             whole-var
                             key-target-var)))
-        (pcase-dolist ((or `(,key-var ,default)
-                           key-var)
-                       key-vars)
-          (let ((key (intern (format ":%s" key-var))))
-            (push `(,key-var
-                    ,(if default
-                         `(if-let ((key-found (plist-member ,target-var ,key)))
-                              (cl-second key-found)
-                            ,default)
-                       `(plist-get ,target-var ,key)))
-                  bindings)))))
+        ;; TODO: In Emacs 28, `pcase' was changed so that all named variables
+        ;; are at least bound to nil.  Before that version, we should make sure
+        ;; that `default' is bound.
+        (let ((default nil))
+          (ignore default)
+          (pcase-dolist ((or `(,key-var ,default)
+                             key-var)
+                         key-vars)
+            (let ((key (intern (format ":%s" key-var))))
+              (push `(,key-var
+                      ,(if default
+                           `(if-let ((key-found (plist-member ,target-var ,key)))
+                                (cl-second key-found)
+                              ,default)
+                         `(plist-get ,target-var ,key)))
+                    bindings))))))
 
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
