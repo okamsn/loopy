@@ -9,7 +9,6 @@ This document describes the user-facing changes to Loopy.
 - Instructions are no longer dotted pairs (such as `(A . B)`), but normal lists
   (such as `(A B)`).  For custom commands, simply switch the dotted pairs to
   un-dotted pairs.
-- Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 
 ### Bugs Fixed
 
@@ -19,6 +18,7 @@ This document describes the user-facing changes to Loopy.
 
 ### Other Changes
 
+- Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 - The accumulation commands `reduce` and `accumulate` have gained the aliases
   `callf` and `callf2`, respectively.  This is intended to help users remember
   the order of arguments.  Unlike the `callf*` macros from which these aliases
@@ -29,7 +29,8 @@ This document describes the user-facing changes to Loopy.
   `&rest` were added in ways that make sense for Loopy.  Because the functions
   in `seq.el` can be extended for new types, this addition only makes
   `loopy-seq.el` redundant for the destructuring of lists and arrays.
-  - See also the new features `loopy-dsetq`, `loopy-let*`, and `loopy-ref`.
+  - See also the new features `loopy-dsetq`, `loopy-let*`, and `loopy-ref`,
+    expose these destructuring features for uses outside of the loop.
 
 ## 0.7.2
 
