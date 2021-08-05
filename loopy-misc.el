@@ -388,28 +388,31 @@ Only the positional variables and the remainder can be recursive."
             ;; the variables in `popped-vars'.  This is the orignal sequence,
             ;; not the generated variable.
             (pop-target-was-seq)
-            ;; Whether itself needs to be extracted from a list.  This is true
-            ;; if it is the final positional variable, and false if it is
-            ;; `rest-var'.
-            (update-atomic-pop-target))
+            ;; If `pop-target' is the last valid positional variable, then it
+            ;; needs to be extracted from a list of remaining values after the
+            ;; preceding positional variables are bound.  This is not a concern
+            ;; when `rest-var' is the `pop-target'.
+            (pop-target-is-positional-var))
+
+        ;; Choose the variables to bind and whence they will be extracted.
         (cond
          ;; Rest var is bound in its own section, in case there are no
          ;; positional variables.  Otherwise, it would be bound here.
          (rest-var (setq pop-target rest-var
                          popped-vars var
                          pop-target-was-seq rest-var-was-sequence
-                         update-atomic-pop-target nil))
+                         pop-target-is-positional-var nil))
 
          (key-vars (setq pop-target key-target-var
                          popped-vars var
                          pop-target-was-seq nil
-                         update-atomic-pop-target nil)
+                         pop-target-is-positional-var nil)
                    ;; `key-target-var' is only used with `&key' without `&rest'.
                    (if whole-var
                        (push `(,key-target-var ,whole-var) bindings)
                      (push `(,key-target-var ,value-expression) bindings)))
 
-         (t      (setq update-atomic-pop-target t)
+         (t      (setq pop-target-is-positional-var t)
                  (seq-let (other-vars last-var)
                      (loopy--split-off-last-item var)
                    ;; If the last variable is to be ignored, we would prefer
@@ -432,7 +435,10 @@ Only the positional variables and the remainder can be recursive."
                    (push `(,pop-target ,(or whole-var value-expression))
                          bindings))))
 
-        ;; Now pop `popped-vars' off of the value of `pop-target'.
+        ;; Now that variables are decide, pop `popped-vars' off of the value of
+        ;; `pop-target'.  If there are sublists of ignored variables, we wish to
+        ;; skip over all of them and simply set the `pop-target' to some nth
+        ;; `cdr' of itself.
         (while popped-vars
           (let ((i (car popped-vars)))
             (setq popped-vars (cdr popped-vars))
@@ -466,7 +472,7 @@ Only the positional variables and the remainder can be recursive."
                                                 pop-target
                                               `(car ,pop-target))))
             (push bind bindings)))
-         (update-atomic-pop-target
+         (pop-target-is-positional-var
           (push `(,pop-target (car ,pop-target)) bindings)))))
 
     ;; Now process the keys.
