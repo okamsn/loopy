@@ -11,16 +11,58 @@
 (require 'loopy "./loopy.el")
 (require 'loopy-dash "./loopy-dash.el")
 
-(load-file "tests/tests.el")
-
-(setq loopy-default-flags '(dash))
-
 (ert-deftest dash-flag-default ()
   (should (equal '(5 6)
                  (let ((loopy-default-flags '(dash)))
                    (eval (quote (loopy (list (&plist :a a  :b b)
                                              '((:a 3  :b 4) (:a 5 :b 6)))
                                        (finally-return a b))))))))
+
+(ert-deftest dash-flag-list-destructuring ()
+  (should (equal '(1 2)
+                 (eval (quote (loopy (flag dash)
+                                     (list (i) '((1) (2)))
+                                     (collect i))))))
+
+  (should (equal '(((1) 1) ((2) 2))
+                 (eval (quote (loopy (flag dash)
+                                     (list (whole &as i) '((1) (2)))
+                                     (collect (list whole i)))))))
+
+  (should (equal '((1 2) (3 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list (i j) '((1 2) (3 4)))
+                                     (collect (list i j)))))))
+
+  (should (equal '((1 2) (3 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list (i . j) '((1 . 2) (3 . 4)))
+                                     (collect (list i j)))))))
+
+  (should (equal '((1 2) (4 3))
+                 (eval (quote (loopy (flag dash)
+                                     (list (&plist :k1 i :k2 j) '((:k1 1 :k2 2)
+                                                                  (:k2 3 :k1 4)))
+                                     (collect (list i j)))))))
+
+  (should (equal '((1 2) (4 3))
+                 (eval (quote (loopy (flag dash)
+                                     (array (&alist :k1 i :k2 j) [((:k1 . 1)
+                                                                   (:k2 . 2))
+                                                                  ((:k2 . 3)
+                                                                   (:k1 . 4))])
+                                     (collect (list i j))))))))
+
+(ert-deftest dash-flag-array-destructuring ()
+  (should (equal '((1 2 3))
+                 (eval (quote (loopy (flag dash)
+                                     (list [i j k] '([1 2 3]))
+                                     (collect (list i j k)))))))
+
+  (should (equal '((1 [2 3]))
+                 (eval (quote (loopy (flag dash)
+                                     (list [i &rest j] '([1 2 3]))
+                                     (collect (list i j))))))))
 
 (ert-deftest dash-flag-default-disable ()
   :expected-result :failed
