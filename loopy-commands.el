@@ -1564,6 +1564,7 @@ you can use in the instructions:
                            ;; Make sure to adjust `args' for commands that
                            ;; might depend on positions, such as `find'.
                            (let ((args (cons into-var args)))
+                             (ignore args)
                              ,explicit)
                          ,implicit)
                     explicit)))

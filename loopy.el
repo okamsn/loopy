@@ -476,8 +476,6 @@ this means that an explicit \"nil\" is always required."
 
 
 ;;;###autoload
-(defalias 'loopy-dsetq #'loopy-setq) ; Named for Iterate's `dsetq'.
-;;;###autoload
 (defmacro loopy-setq (&rest args)
   "Use Loopy destructuring in a `setq' form.
 
@@ -491,6 +489,8 @@ instead of this macro.
   `(setq ,@(apply #'append
                   (cl-loop for (var val . _) on args by #'cddr
                            append (loopy--destructure-sequence var val)))))
+;;;###autoload
+(defalias 'loopy-dsetq 'loopy-setq) ; Named for Iterate's `dsetq'.
 
 ;;;###autoload
 (defmacro loopy-let* (bindings &rest body)
