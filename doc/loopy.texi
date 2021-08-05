@@ -506,7 +506,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org839f712
+@float Listing,org5c940a5
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -1838,13 +1838,17 @@ macro with the @samp{lax-naming} flag enabled (@ref{The @code{loopy-iter} Macro}
 
 The available accumulation commands are:
 
+@findex accumulate
 @table @asis
-@item @samp{(accumulate VAR EXPR FUNC &key init)}
-Accumulate the result of applying
-function @samp{FUNC} to @samp{EXPR} and @samp{VAR}.  @samp{EXPR} and @samp{VAR} are used as the
-first and second arguments to @samp{FUNC}, respectively.
+@item @samp{(accumulate|accumulating VAR EXPR FUNC &key init)}
+Accumulate the
+result of applying function @samp{FUNC} to @samp{EXPR} and @samp{VAR}.  @samp{EXPR} and @samp{VAR}
+are used as the first and second arguments to @samp{FUNC}, respectively.
 
 This is a generic command in case the others don't meet your needs.
+
+This command is similar to the @samp{expr} command, except that this command
+will not create variables local to loops made by the @samp{sub-loop} command.
 
 @lisp
 ;; Call `(cons i my-accum)'
@@ -1854,10 +1858,32 @@ This is a generic command in case the others don't meet your needs.
        (accumulate my-accum i #'cons :init nil)
        (finally-return my-accum))
 
+;; Works mostly the same as the above:
+(loopy (list i '(1 2))
+       (expr my-accum (cons i my-accum))
+       (finally-return my-accum))
+
 ;; => ((3 1) (4 2))
 (loopy (list i '((1 2) (3 4)))
        (accumulate (accum1 accum2) i #'cons :init nil)
        (finally-return accum1 accum2))
+@end lisp
+
+This command also has the alias @samp{callf2}.  It is similar to using the
+function @code{cl-callf2}, except that the function argument is given last and
+must be quoted.  This alias is intended to help users remember argument
+order.
+
+@lisp
+(loopy (list i '(1 2))
+       (callf2 my-accum i #'cons :init nil)
+       (finally-return my-accum))
+
+;; Is the same as the above:
+(loopy (with (my-accum))
+       (list i '(1 2))
+       (do (cl-callf2 cons i my-accum))
+       (finally-return my-accum))
 @end lisp
 @end table
 
@@ -2199,15 +2225,40 @@ the second argument.  This is unlike @samp{accumulate}, which gives @samp{VAR} a
 
 @samp{VAR} is initialized to @samp{INIT}, if provided, or @code{nil}.
 
+This command is similar to the @samp{expr} command, except that this command
+will not create variables local to loops made by the @samp{sub-loop} command.
+
 @lisp
 ;; = > 6
 (loopy (list i '(1 2 3))
        (reduce my-reduction i #'+ :init 0)
        (finally-return my-reduction))
 
+;; Works similarly to above:
+(loopy (list i '(1 2 3))
+       (expr my-reduction (+ i my-reduction) :init 0)
+       (finally-return my-reduction))
+
 ;; => 24
 (loopy (list i '(1 2 3 4))
        (reduce i #'* :init 1))
+@end lisp
+
+This command also has the alias @samp{callf}.  It is similar to using the
+function @code{cl-callf}, except that the function argument is given last and
+must be quoted.  This alias is intended to help users remember argument
+order.
+
+@lisp
+(loopy (list i '(1 2 3))
+       (callf my-reduction i #'+ :init 0)
+       (finally-return my-reduction))
+
+;; Is similar to the above:
+(loopy (with (my-reduction 0))
+       (list i '(1 2 3))
+       (do (cl-callf + my-reduction i))
+       (finally-return my-reduction))
 @end lisp
 @end table
 
@@ -3140,21 +3191,21 @@ updating variables.  This location is referred to as the @dfn{latter body} of th
 
 For example, parsing the command @samp{(list i '(1 2 3))} produces the following
 list of instructions.  Some commands require the creation of unique temporary
-variables, such as @samp{list-3717} in the below output.
+variables, such as @samp{list-211} in the below output.
 
 @lisp
 ((loopy--iteration-vars (list-211 '(1 2 3)))
- (loopy--latter-body    (setq list-211 (cdr list-211)))
- (loopy--pre-conditions (consp list-211))
  (loopy--iteration-vars (i nil))
- (loopy--main-body      (setq i (car list-211))))
+ (loopy--pre-conditions (consp list-211))
+ (loopy--main-body      (setq i (car list-211)))
+ (loopy--latter-body    (setq list-211 (cdr list-211))))
 @end lisp
 
 The first element of an instruction describes where to insert code into the
 template.  The second element of an instruction is said code to insert.  You
 can see that not all of the code to be inserted is a valid Lisp form.  For
 example, the above instruction referencing @code{loopy--iteration-vars} inserts
-a binding for the variable @samp{i} into a @code{let}-like form.
+a binding for the variable @samp{list-211} into a @code{let}-like form.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem Place
@@ -3200,7 +3251,8 @@ found, it wraps that code with an @code{if}-form.
 
 For the purpose of this example, below is a version of the parsing function
 made of the basic Lisp features with which you are familiar.  The actual
-definition makes use of more convenient Emacs Lisp libraries.
+definition makes use of more convenient Emacs Lisp libraries and can be seen
+in the library @file{loopy-commands.el}.
 
 @lisp
 (require 'loopy-commands)
@@ -3420,18 +3472,24 @@ will work similar to the below example.
      (let ,loopy--accumulation-vars
        (let* ,loopy--iteration-vars
          (let ((loopy--early-return-capture
-                (cl-block ,loopy--name-arg
-                  ,@@loopy--before-do
-                  (while ,(cl-case (length loopy--pre-conditions)
-                            (0 t)
-                            (1 (car loopy--pre-conditions))
-                            (t (cons 'and loopy--pre-conditions)))
-                    (cl-tagbody
-                     ,@@loopy--main-body
-                     loopy--continue-tag
-                     ,@@loopy--latter-body))
-                  ,@@loopy--after-do
-                  nil)))
+                (cl-block ,loopy--loop-name
+                  (cl-tagbody
+                   ,@@loopy--before-do
+                   (while ,(cl-case (length loopy--pre-conditions)
+                             (0 t)
+                             (1 (car loopy--pre-conditions))
+                             (t (cons 'and loopy--pre-conditions)))
+                     (cl-tagbody
+                      ,@@loopy--main-body
+                      loopy--continue-tag
+                      ,@@loopy--latter-body
+                      (unless ,loopy--post-conditions
+                        (cl-return-from ,loopy--loop-name
+                          ,loopy--implicit-return))))
+                   ,@@loopy--after-do
+                   loopy--non-returning-exit-tag
+                   ,loopy--accumulation-final-updates))
+                ,loopy--implicit-return))
            ,@@loopy--final-do
            ,(if loopy--final-return
                 loopy--final-return
@@ -3453,9 +3511,10 @@ The parsing function that can turn uses of your command into instructions.
 Importantly, your custom commands cannot share a name.
 
 For example, say that you're tired of typing out
-@samp{(do (message "Hello, %s" first last))} and would prefer to instead use
-@samp{(greet FIRST [LAST])}.  This only requires pushing code into the main
-loopy body, so the definition of the parsing function is quite simple.
+@samp{(do (message "Hello, %s %s" PERSONAL-NAME FAMILY-NAME))} and would prefer
+to instead use @samp{(greet PERSONAL-NAME [FAMILY-NAME])}.  This only requires
+adding code to the loop's main body, so the definition of the parsing
+function is quite simple.
 
 @lisp
 (require 'cl-lib)

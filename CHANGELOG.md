@@ -11,8 +11,19 @@ This document describes the user-facing changes to Loopy.
   un-dotted pairs.
 - Add the command `map-ref`, similar to `list-ref` and `seq-ref`.
 
+### Bugs Fixed
+
+- Fix parsing error in `expr` command when redundantly passing nil to `:init`.
+  Previously, the literal symbol `:init` would be the last value assigned to the
+  variable, instead of correctly stopping at the expression before the symbol.
+
 ### Other Changes
 
+- The accumulation commands `reduce` and `accumulate` have gained the aliases
+  `callf` and `callf2`, respectively.  This is intended to help users remember
+  the order of arguments.  Unlike the `callf*` macros from which these aliases
+  derive, the function argument to these commands is the third argument and must
+  be quoted.
 - The default destructuring system now takes on some of the features of Emacs
   `cl-lib` destructuring functions.  The special arguments `&key`, `&whole`, and
   `&rest` were added in ways that make sense for Loopy.  Because the functions

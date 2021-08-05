@@ -212,7 +212,7 @@ If not, then it is possible that FORM is a variable."
     `(quote ,list)))
 
 (defun loopy--apply-function (func &rest args)
-  "Return an expansion that appropriately applies FUNC to ARGS.
+  "Return an expansion to appropriately apply FUNC to ARGS.
 
 This expansion can apply FUNC directly or via `funcall'."
   (if (loopy--quoted-form-p func)
@@ -254,7 +254,7 @@ The lists will be in the order parsed (correct for insertion)."
            collect i))
 
 (defun loopy--only-valid-keywords-p (correct list)
-  "Check that LIST contains only valid keywords in every other position.
+  "Return nil if a keyword in LIST is not in CORRECT.
 
 Any keyword not in CORRECT is considered invalid.
 
@@ -415,10 +415,11 @@ BODY is one or more loop commands."
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
   (let* ((length-vals (length vals))
-         (init-arg (when (eq (nth (- length-vals 2) vals)
-                             ':init)
+         (using-init-arg (eq (nth (- length-vals 2) vals)
+                             ':init))
+         (init-arg (when using-init-arg
                      (nth (1- length-vals) vals))))
-    (let ((arg-length (if init-arg
+    (let ((arg-length (if using-init-arg
                           (- length-vals 2)
                         length-vals))
           (value-selector (gensym "expr-value-selector-")))
@@ -1053,9 +1054,14 @@ extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'map))
-  (unless (and (consp var)
-               (not (proper-list-p var)))
-    (lwarn '(loopy) :warning "Loopy: `map' iterates through dotted pairs: %s" var))
+  ;; Previously, this command iterated through proper lists, not dotted.  This
+  ;; was changed to make it behave more like the function `map-pairs'.  We
+  ;; signal a warning when a proper list is used, since now that is usually the
+  ;; wrong behavior.
+  (when (proper-list-p var)
+    (lwarn '(loopy) :warning "Loopy: `map' iterates through dotted pairs: %s"
+           var))
+
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars (,value-holder (map-pairs ,val)))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
@@ -1534,6 +1540,7 @@ you can use in the instructions:
                         (setq opts cons-cell
                               args (nreverse args-holding))
                       (setq args parser-args)))
+           (ignore args opts)
            (let ((arg-length (length args)))
              (cond
               ((= arg-length ,implicit-num-args)
@@ -2595,6 +2602,8 @@ COMMAND-LIST."
     (arrayi       . loopy--parse-seq-index-command)
     (array-ref    . loopy--parse-array-ref-command)
     (arrayf       . loopy--parse-array-ref-command)
+    (callf        . loopy--parse-reduce-command)
+    (callf2       . loopy--parse-accumulate-command)
     (collect      . loopy--parse-collect-command)
     (collecting   . loopy--parse-collect-command)
     (command-do   . loopy--parse-group-command)

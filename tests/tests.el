@@ -569,6 +569,19 @@ implicit variable without knowing it's name, even for named loops."
                               (finally-return my-val this-nil?)))))))
 
 ;;;;; Expr
+(ert-deftest expr-init ()
+  (should (= 1 (eval (quote (loopy (repeat 3)
+                                   (expr var 1 :init 'cat)
+                                   (finally-return var))))))
+
+  (should (= 1 (eval (quote (loopy (repeat 3)
+                                   (expr var 1 :init nil)
+                                   (finally-return var))))))
+
+  (should (= 3 (eval (quote (loopy (repeat 3)
+                                   (expr var (1+ var) :init 0)
+                                   (finally-return var)))))))
+
 (ert-deftest expr-one-value ()
   (should
    (and (eval (quote (loopy (with (my-val nil))
@@ -1810,7 +1823,13 @@ implicit variable without knowing it's name, even for named loops."
                                 (loopy (list i '((1 2) (3 4)))
                                        (accumulate (accum1 accum2) i f
                                                    :init nil)
-                                       (finally-return accum1 accum2))))))))
+                                       (finally-return accum1 accum2)))))))
+
+  (should (equal '(2 1)
+                 (eval (quote (loopy (list i '(1 2))
+                                     (callf2 my-accum i #'cons
+                                             :init nil)
+                                     (finally-return my-accum)))))))
 
 ;;;;; Adjoin
 (ert-deftest adjoin ()
@@ -2860,6 +2879,11 @@ implicit variable without knowing it's name, even for named loops."
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
                                  (reduce r i #'+ :init 0)
+                                 (finally-return r))))))
+
+  (should (= 6
+             (eval (quote (loopy (list i '(1 2 3))
+                                 (callf r i #'+ :init 0)
                                  (finally-return r))))))
 
   (should (equal '(1 2 3)
