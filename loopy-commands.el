@@ -87,7 +87,6 @@
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
-(declare-function loopy--destructure-sequence "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Variables from flags
