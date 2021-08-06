@@ -452,7 +452,7 @@ Only the positional variables and the remainder can be recursive."
                                  #'loopy--var-ignored-p popped-vars)))
                      ;; `nthcdr' is a C function, so it should be fast enough
                      ;; even for high counts.
-                     (push `(,rest-var (nthcdr ,(1+ count) ,pop-target))
+                     (push `(,pop-target (nthcdr ,(1+ count) ,pop-target))
                            bindings)
                      (setq popped-vars (nthcdr count popped-vars))))
                   (t

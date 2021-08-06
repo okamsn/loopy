@@ -255,7 +255,10 @@
 
   (should (equal '(4 5)
                  (eval (quote (loopy-let* (((&key d e) '(:a 7 :e 5 :d 4)))
-                                (list d e)))))))
+                                (list d e))))))
+
+  (should (= 4 (eval (quote (loopy-let* (((_ _ _ a _ _ _) '(1 2 3 4 5 6 7)))
+                              a))))))
 
 ;; We separate this since there's just way too many conditions in one test
 ;; otherwise.
