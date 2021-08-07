@@ -506,7 +506,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org5c940a5
+@float Listing,org050a08c
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -675,6 +675,10 @@ the dot in dotted lists.
 @end lisp
 @end itemize
 
+
+Alternative destructuring systems can be used via flags (@ref{Using Flags}).  For more
+flexible pattern matching, see the flag @samp{pcase}.  For more kinds of key-value
+destructuring, see the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Most commands that assign variables can use destructuring, but not all kinds
 of destructuring make sense in all situations.  Accumulation commands
@@ -3025,9 +3029,23 @@ The destructuring flags (@samp{pcase}, @samp{seq}, and @samp{dash}) are separate
 (respectively, @samp{loopy-pcase}, @samp{loopy-seq}, and @samp{loopy-dash}) that must be
 loaded after @samp{loopy}.  Currently, @samp{loopy-dash} is a separate package.
 
-Below are some example of using the destructuring flags.  These flags do not
-affect the destructuring of commands using generalized variables (i.e.,
-@code{setf}-able places).
+Below are some example of using the destructuring flags.  These flags affect
+the destructuring of:
+@itemize
+@item
+iteration variables
+@item
+accumulation variables
+@item
+variables bound by the special macro argument @samp{with}
+@end itemize
+
+@quotation Note
+These flags do not affect the destructuring of generalized variables
+(@code{setf}-able places) as the libraries @samp{pcase.el}, @samp{seq.el}, and @samp{dash.el} do
+not yet provide that functionality.
+
+@end quotation
 
 @lisp
 ;; => (((1 (2 3)) (4 (5 6))) ; whole
@@ -3047,12 +3065,14 @@ affect the destructuring of commands using generalized variables (i.e.,
        (collect `(,a (,_ ,b)) elem)
        (finally-return a b))
 
-;; => ((1 6) (3 8) ([4 5] [9 10]))
+;; => (14 26)
 (require 'loopy-seq)
 (loopy (flag seq)
-       (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-       (collect [a _ b &rest c] elem)
-       (finally-return a b c))
+       (with ([v1 v2] [10 20]))
+       (list (i &rest j) '((1 . 2) (3 . 4)))
+       (sum sum1 i)
+       (sum sum2 j)
+       (finally-return (+ sum1 v1) (+ sum2 v2)))
 @end lisp
 
 As noted in previous sections, the @samp{split} flag can be used to generate more

@@ -618,6 +618,10 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     #+end_src
 
 
+  Alternative destructuring systems can be used via flags ([[#flags]]).  For more
+  flexible pattern matching, see the flag =pcase=.  For more kinds of key-value
+  destructuring, see the flag =dash= provided by the package =loopy-dash=.
+
   Most commands that assign variables can use destructuring, but not all kinds
   of destructuring make sense in all situations.  Accumulation commands
   ([[#accumulation-commands]]) and commands iterating through ~setf~-able places in
@@ -2797,34 +2801,48 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   (respectively, =loopy-pcase=, =loopy-seq=, and =loopy-dash=) that must be
   loaded after =loopy=.  Currently, =loopy-dash= is a separate package.
 
-  Below are some example of using the destructuring flags.  These flags do not
-  affect the destructuring of commands using generalized variables (i.e.,
-  ~setf~-able places).
+  Below are some example of using the destructuring flags.  These flags affect
+  the destructuring of:
+  - iteration variables
+  - accumulation variables
+  - variables bound by the special macro argument =with=
+
+  #+attr_texinfo: :tag Note
+  #+begin_quote
+  These flags do not affect the destructuring of generalized variables
+  (~setf~-able places) as the libraries =pcase.el=, =seq.el=, and =dash.el= do
+  not yet provide the required functionality.
+  #+end_quote
 
   #+begin_src emacs-lisp
-    ;; => (((1 (2 3)) (4 (5 6))) ; whole
-    ;;     (1 4)                 ; i
-    ;;     (2 5)                 ; j
-    ;;     (3 6))                ; k
+    ;; => ((1 4)            coll1
+    ;;     ((2 3) (5 6))    whole
+    ;;     (2 5)            x
+    ;;     (3 6))           y
     (require 'loopy-dash)
     (loopy (flag dash)
-           (list elem '((1 (2 3)) (4 (5 6))))
-           (collect (whole &as i (j k)) elem)
-           (finally-return whole i j k))
+           (list (i j) '((1 (2 3)) (4 (5 6))))
+           (collect coll1 i)
+           (collect (whole &as x y) j)
+           (finally-return coll1 whole x y))
 
-    ;; => ((1 4) (3 6))
+    ;; => ((1 4) (3 6) 10 20 nil nil)
     (require 'loopy-pcase)
     (loopy (flag pcase)
+           (with ((or `[,v1 ,v2] `(,v3 ,v4))
+                  [10 20]))
            (list elem '((1 (2 3)) (4 (5 6))))
            (collect `(,a (,_ ,b)) elem)
-           (finally-return a b))
+           (finally-return a b v1 v2 v3 v4))
 
-    ;; => ((1 6) (3 8) ([4 5] [9 10]))
+    ;; => (14 26)
     (require 'loopy-seq)
     (loopy (flag seq)
-           (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-           (collect [a _ b &rest c] elem)
-           (finally-return a b c))
+           (with ([v1 v2] [10 20]))
+           (list (i &rest j) '((1 . 2) (3 . 4)))
+           (sum sum1 i)
+           (sum sum2 j)
+           (finally-return (+ sum1 v1) (+ sum2 v2)))
   #+end_src
 
   As noted in previous sections, the =split= flag can be used to generate more
