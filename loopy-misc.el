@@ -167,17 +167,18 @@ into (1) and (2 3)."
     (list (nreverse first-part)
           second-part)))
 
-(defun loopy--split-off-last-item (list)
-  "Split LIST, returning a list of the first items and the last item.
+(defun loopy--split-off-last-var (var-list)
+  "Split VAR-LIST, separating the last variable from the rest.
 
-For example, splitting (1 2 3) returns ((1 2) 3)."
-  ;; TODO: How does this compare with `last' and `butlast' for small lists?
-  (let ((reverse-list (reverse list)))
-    (list (reverse (cl-rest reverse-list))
-          (cl-first reverse-list))))
-
-
-
+VAR-LIST can be a proper or dotted list.  For example,
+splitting (1 2 3) or (1 2 . 3) returns ((1 2) 3)."
+  (let ((var-hold))
+    (while (car-safe var-list)
+      (push (pop var-list) var-hold))
+    (if var-list
+        (list (nreverse var-hold) var-list)
+      (let ((last (cl-first var-hold)))
+        (list (nreverse (cl-rest var-hold)) last)))))
 
 ;;;; Destructuring
 ;; This better allows for things to change in the future.
@@ -331,16 +332,10 @@ Only the positional variables and the remainder can be recursive."
               (setq possible-rest-var (cl-second after))))
 
         ;; If VAR is not a proper list, then the last cons cell is dotted.
-        ;; TODO: We use this `car-safe' phrasing in several places.
-        ;;       Is there a better way?
-        (let ((var-copy var)
-              (other-vars))
-          (while (car-safe var-copy)
-            (push (pop var-copy) other-vars))
-          ;; Now just operate on remaining variables.
-          (setq var (reverse other-vars)
-                ;; `var-copy' is now an atom.
-                possible-rest-var var-copy)))
+        (seq-let (other-vars last-var)
+            (loopy--split-off-last-var var)
+          (setq var other-vars
+                possible-rest-var last-var)))
 
       ;; Finally, bind the &rest var, if any.
       (when (and possible-rest-var
@@ -414,7 +409,7 @@ Only the positional variables and the remainder can be recursive."
 
          (t      (setq pop-target-is-positional-var t)
                  (seq-let (other-vars last-var)
-                     (loopy--split-off-last-item var)
+                     (loopy--split-off-last-var var)
                    ;; If the last variable is to be ignored, we would prefer
                    ;; to just find a valid variable.
                    (when (loopy--var-ignored-p last-var)

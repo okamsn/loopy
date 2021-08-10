@@ -14,6 +14,14 @@
   (should (cl-loop for f in (directory-files ".")
                    never (string-match-p "\\.elc\\'" f))))
 
+;;; Minor Functions
+(ert-deftest split-off-last-var ()
+  (should (equal '((a b c) d)
+                 (loopy--split-off-last-var '(a b c d))))
+
+  (should (equal '((a b c) d)
+                 (loopy--split-off-last-var '(a b c . d)))))
+
 ;;; Variables
 (ert-deftest first-iteration ()
   (should (equal '(1 2 3)
