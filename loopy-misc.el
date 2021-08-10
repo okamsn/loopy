@@ -366,15 +366,18 @@ Only the positional variables and the remainder can be recursive."
         (setq key-vars (cdr after)
               var before)))
 
-    ;; Handle the normal variables.  Generally, we want to `pop' the normal
-    ;; values off of some container variable.  This could be the variable used
-    ;; after `&rest', the variable in which keys after `&key' will be sought,
-    ;; a copy of the variable after `&whole', or just the last variable given.
+    ;; Handle the positional variables.  Generally, we want to `pop' the
+    ;; positional values off of some container variable.  This could be the
+    ;; `rest' variable, the `whole' variable, the variable in which keys are
+    ;; sought, or the last positional variable.
     (when var
       ;; Whether `positional-vars' is non-nil affects where keys are sought.
+      ;; We just need to record that they exists before we consume `var' in the
+      ;; `while' list.
       (setq positional-vars var)
 
-      (let (;; The positional variables sans the ignorable ones.
+      (let (;; The positional variables sans those that can be ignored given the
+            ;; destructuring requirements.
             (popped-vars)
             ;; Whence positional values are popped.  This can be a generated
             ;; variable.
@@ -403,15 +406,14 @@ Only the positional variables and the remainder can be recursive."
                          pop-target-was-seq nil
                          pop-target-is-positional-var nil)
                    ;; `key-target-var' is only used with `&key' without `&rest'.
-                   (if whole-var
-                       (push `(,key-target-var ,whole-var) bindings)
-                     (push `(,key-target-var ,value-expression) bindings)))
+                   (push `(,key-target-var ,(or whole-var value-expression))
+                         bindings))
 
          (t      (setq pop-target-is-positional-var t)
                  (seq-let (other-vars last-var)
                      (loopy--split-off-last-var var)
-                   ;; If the last variable is to be ignored, we would prefer
-                   ;; to just find a valid variable.
+                   ;; If the last variable is to be ignored, then we find
+                   ;; another valid variable.
                    (when (loopy--var-ignored-p last-var)
                      (let ((reverse-good-var
                             (seq-drop-while #'loopy--var-ignored-p
@@ -430,10 +432,10 @@ Only the positional variables and the remainder can be recursive."
                    (push `(,pop-target ,(or whole-var value-expression))
                          bindings))))
 
-        ;; Now that variables are decide, pop `popped-vars' off of the value of
-        ;; `pop-target'.  If there are sublists of ignored variables, we wish to
-        ;; skip over all of them and simply set the `pop-target' to some nth
-        ;; `cdr' of itself.
+        ;; Now that variables are decided, pop `popped-vars' off of the value of
+        ;; `pop-target'.  If there are sublists of ignored variables, we skip
+        ;; over all of them and simply set the `pop-target' to some nth `cdr' of
+        ;; itself.
         (while popped-vars
           (let ((i (car popped-vars)))
             (setq popped-vars (cdr popped-vars))
@@ -472,12 +474,15 @@ Only the positional variables and the remainder can be recursive."
 
     ;; Now process the keys.
     (when key-vars
+      ;; If we are only using keys, then we need to create a holding variable in
+      ;; which to search.
       (unless bindings
         (push `(,key-target-var ,value-expression)
               bindings))
       (let ((target-var (or rest-var
-                            ;; If we used positional variables.
-                            (if positional-vars key-target-var)
+                            ;; If we used positional variables, then they can be
+                            ;; popped off of `key-target-var'.
+                            (and positional-vars key-target-var)
                             whole-var
                             key-target-var)))
         ;; TODO: In Emacs 28, `pcase' was changed so that all named variables
