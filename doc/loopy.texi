@@ -150,16 +150,28 @@ one can choose whether to instead use @code{pcase-let}, @code{seq-let}, or even 
 library for destructuring.
 
 @lisp
-;; Use Seq.el to destructure an array:
-;; => ((1 4) ([2 3] [5 6]))
-(loopy (flag seq)
-       (list elem '([1 2 3] [4 5 6]))
-       (collect [i &rest j] elem)
-       (finally-return i j))
+;; Use `pcase' to destructure array elements:
+;; => ((1 2 3 4) (10 12 14) (11 13 15))
+(loopy (flag pcase)
+       (array (or `(,car . ,cdr) digit)
+              [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
+       (if digit
+           (collect digits digit)
+         (collect cars car)
+         (collect cdrs cdr))
+       (finally-return digits cars cdrs))
+
+;; Using the default destructuring:
+;; => ((1 2 3 4) (10 12 14) (11 13 15))
+(loopy (array elem [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
+       (if (numberp elem)
+           (collect digits elem)
+         (collect (cars . cdrs) elem))
+       (finally-return digits cars cdrs))
 @end lisp
 
-Variables like @samp{elem}, @samp{i}, and @samp{j} in the example above are automatically
-@code{let}-bound so as to not affect code outside of the loop.
+Variables like @samp{cars}, @samp{cdrs}, and @samp{digits} in the example above are
+automatically @code{let}-bound so as to not affect code outside of the loop.
 
 @code{loopy} has arguments for binding (or not binding) variables, executing code
 before/after the loop, executing code only if the loop completes, and for
@@ -506,7 +518,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org050a08c
+@float Listing,orgf028415
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -3043,27 +3055,30 @@ variables bound by the special macro argument @samp{with}
 @quotation Note
 These flags do not affect the destructuring of generalized variables
 (@code{setf}-able places) as the libraries @samp{pcase.el}, @samp{seq.el}, and @samp{dash.el} do
-not yet provide that functionality.
+not yet provide the required functionality.
 
 @end quotation
 
 @lisp
-;; => (((1 (2 3)) (4 (5 6))) ; whole
-;;     (1 4)                 ; i
-;;     (2 5)                 ; j
-;;     (3 6))                ; k
+;; => ((1 4)            coll1
+;;     ((2 3) (5 6))    whole
+;;     (2 5)            x
+;;     (3 6))           y
 (require 'loopy-dash)
 (loopy (flag dash)
-       (list elem '((1 (2 3)) (4 (5 6))))
-       (collect (whole &as i (j k)) elem)
-       (finally-return whole i j k))
+       (list (i j) '((1 (2 3)) (4 (5 6))))
+       (collect coll1 i)
+       (collect (whole &as x y) j)
+       (finally-return coll1 whole x y))
 
-;; => ((1 4) (3 6))
+;; => ((1 4) (3 6) 10 20 nil nil)
 (require 'loopy-pcase)
 (loopy (flag pcase)
+       (with ((or `[,v1 ,v2] `(,v3 ,v4))
+              [10 20]))
        (list elem '((1 (2 3)) (4 (5 6))))
        (collect `(,a (,_ ,b)) elem)
-       (finally-return a b))
+       (finally-return a b v1 v2 v3 v4))
 
 ;; => (14 26)
 (require 'loopy-seq)
