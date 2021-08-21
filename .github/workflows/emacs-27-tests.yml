@@ -1,0 +1,32 @@
+name: Test Emacs 27 from KellK
+on: [push]
+jobs:
+  emacs-27-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
+      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+      # Eventually, we shouldn't need this PPA.
+      - name: Add KellyK PPA
+        run: sudo add-apt-repository ppa:kelleyk/emacs && sudo apt-get update
+      - name: Install Emacs 27  
+        run: sudo apt-get install emacs27
+      - name: Check Emacs 27 version  
+        run: emacs27 --version
+      - name: Basic tests
+        run: emacs27 -batch -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+      - name: Seq tests
+        run: emacs27 -batch -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
+      - name: Pcase tests
+        run: emacs27 -batch -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
+      - name: Iter tests
+        run: emacs27 -batch -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
+      - run: echo "🍏 This job's status is ${{ job.status }}."
