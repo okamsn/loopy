@@ -80,6 +80,7 @@
 
 ;; Can't require `loopy', as that would be recursive.
 (require 'cl-lib)
+(require 'gv)
 (require 'loopy-misc)
 (require 'map)
 (require 'pcase)

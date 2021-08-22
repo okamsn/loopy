@@ -31,6 +31,11 @@ This document describes the user-facing changes to Loopy.
   `loopy-seq.el` redundant for the destructuring of lists and arrays.
   - See also the new features `loopy-dsetq`, `loopy-let*`, and `loopy-ref`,
     expose these destructuring features for uses outside of the loop.
+  - The `setf`-able places using `&key` rely on using `gv.el` for `plist-get`.
+    This feature was added to Emacs's master branch in September 2020, and its
+    definition is copied into `loopy-misc.el`, which currently contains the
+    destructuring functions.  On Emacs versions less than 28, that definition
+    will be loaded if an existing setter function is not detected.
 
 ## 0.7.2
 

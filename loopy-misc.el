@@ -37,6 +37,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'gv)
 (require 'pcase)
 (require 'seq)
 (require 'subr-x)
@@ -185,6 +186,27 @@ splitting (1 2 3) or (1 2 . 3) returns ((1 2) 3)."
 (defun loopy--var-ignored-p (var)
   "Return whether VAR should be ignored."
   (eq var '_))
+
+;; This was added to Emacs in commit 66509f2ead423b814378a44a55c9f63dcb1e149b.
+;; We copy that definition here for lower versions, since we use it for
+;; processing `&key' keys in the new destructuring features.
+(unless (and (<= 28 emacs-major-version)
+	     (function-get #'plist-get 'gv-expander))
+  (require 'gv)
+  (require 'macroexp)
+  (gv-define-expander plist-get
+    (lambda (do plist prop)
+      (macroexp-let2 macroexp-copyable-p key prop
+	(gv-letplace (getter setter) plist
+          (macroexp-let2 nil p `(cdr (plist-member ,getter ,key))
+            (funcall do
+                     `(car ,p)
+                     (lambda (val)
+                       `(if ,p
+                            (setcar ,p ,val)
+                          ,(funcall setter
+                                    `(cons ,key
+                                           (cons ,val ,getter))))))))))))
 
 ;;;;; Destructuring normal values
 ;;
