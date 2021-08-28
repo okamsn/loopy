@@ -2,7 +2,9 @@
 
 This document describes the user-facing changes to Loopy.
 
-## Unreleased
+## 0.8.1
+
+Released 2021-08-28.
 
 ### Breaking Changes
 
