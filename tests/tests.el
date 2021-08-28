@@ -2003,18 +2003,6 @@ implicit variable without knowing it's name, even for named loops."
                                      (adjoin i :at end)
                                      (adjoin (1+ i) :at end))))))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (list i '(1 2 2 3 3 4))
-                                     (adjoin i :at end)
-                                     (adjoin (1+ i) :at end))))))
-
-  (should (equal '(1 27 2 27 3 27 27 4 27 27 5)
-                 (eval (quote (loopy (list i '(1 2 2 3 3 4))
-                                     (adjoin coll i :at end :test #'=)
-                                     (do (setq coll (nconc coll (list 27))))
-                                     (adjoin coll (1+ i) :at end :test #'=)
-                                     (finally-return coll))))))
-
   (should (equal '(3 2 1 11 12 13)
                  (eval (quote (loopy (list i '(1 2 3))
                                      (adjoin i :at start)
@@ -2102,15 +2090,6 @@ implicit variable without knowing it's name, even for named loops."
                         (list i '((1 2) (3 4) (5 6)))
                         (append i :at end))))
 
-  (should (equal '(1 2 23 8 9 3 4 23 8 9 3 4 10 11 5 6 23 8 9 3 4 10 11 5 6 12 13)
-                 (loopy (list i '((1 2) (3 4) (5 6)))
-                        (append coll i :at end)
-                        (do (setq coll `(,@coll 23)))
-                        (append coll (mapcar (lambda (x) (+ x 7))
-                                             i)
-                                :at end)
-                        (finally-return coll))))
-
   (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (append i :at start)
@@ -2161,13 +2140,6 @@ implicit variable without knowing it's name, even for named loops."
                  (loopy (list i '(1 2 3 4))
                         (collect coll i :at end)
                         (collect coll (+ i 7) :at end)
-                        (finally-return coll))))
-
-  (should (equal '(1 23 8 2 23 8 2 9 3 23 8 2 9 3 10)
-                 (loopy (list i '(1 2 3))
-                        (collect coll i :at end)
-                        (do (setq coll `(,@coll 23)))
-                        (collect coll (+ 7 i) :at end)
                         (finally-return coll))))
 
   (should (equal '(1 8 2 9 3 10 4 11)
@@ -2650,14 +2622,6 @@ implicit variable without knowing it's name, even for named loops."
                                      (nconc coll j :at end)
                                      (finally-return coll))))))
 
-  (should (equal '(1 2 27 11 12 3 4 27 13 14 5 6 27 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (list j '((11 12) (13 14) (15 16)))
-                                     (nconc coll i :at end)
-                                     (do (setq coll (nconc coll (list 27))))
-                                     (nconc coll j :at end)
-                                     (finally-return coll))))))
-
   (should (equal '(1 2 11 12 3 4 13 14 5 6 15 16)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (list j '((11 12) (13 14) (15 16)))
@@ -2779,13 +2743,6 @@ implicit variable without knowing it's name, even for named loops."
   (should (equal '(1 2 3 4 5 6 7 8 9 10)
                  (eval (quote (loopy (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
                                      (nunion coll i)
-                                     (nunion coll (mapcar #'1+ i))
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 27 4 27 5 6 27 7 8 9 27 10)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
-                                     (nunion coll (copy-sequence i))
-                                     (do (setq coll (nconc coll (list 27))))
                                      (nunion coll (mapcar #'1+ i))
                                      (finally-return coll))))))
 
@@ -3101,15 +3058,6 @@ implicit variable without knowing it's name, even for named loops."
                                        (union coll (mapcar #'1+ i) :at end)
                                        (finally-return coll)))))))
 
-  (should (equal '(1 2 27 3 4 27 5 27 6 27 7)
-                 (let ((l1 (list (list 1 2) (list 3 4) (list 4 3) (list 5 6))))
-                   (eval (quote (loopy (list i l1)
-                                       (union coll i :at end)
-                                       (do (setq coll
-                                                 (append coll (list 27))))
-                                       (union coll (mapcar #'1+ i) :at end)
-                                       (finally-return coll)))))))
-
   (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
                  (loopy (list i '((1 2) (3 4) (5 6)))
                         (union i :at start)
@@ -3135,9 +3083,11 @@ implicit variable without knowing it's name, even for named loops."
     (eval (quote (loopy (list i l1) (union i :at start))))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (union i :at end))))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+  (should (equal (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+                   (eval (quote (loopy (list i l1) (union i :at end))))
+                   l1)
+                 '((1 2) (3 4) (5 6) (7 8))))
+
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
     (eval (quote (loopy (flag split) (list i l1) (union i :at end))))

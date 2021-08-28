@@ -2,6 +2,17 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Breaking Changes
+
+- Accumulation variables can no longer be edited outside of accumulation
+  commands while the loop is running.  This allows the loop to be much faster
+  when using named variables (required for destructuring) and simplifies the
+  code.  See [#83].
+
+[#83]: https://github.com/okamsn/loopy/issues/83
+
 ## 0.8.1
 
 Released 2021-08-28.

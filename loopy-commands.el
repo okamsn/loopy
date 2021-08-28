@@ -1444,6 +1444,118 @@ is the accumulation command.
           (map-insert loopy--accumulation-variable-info
                       variable (list category command)))))
 
+(defun loopy--produce-collect-end-tracking (var val)
+  "Produce instructions for an end-tracking accumulation of single items.
+
+This is used in accumulation commands like `collect'.
+
+For efficiency, accumulation command use references to track the
+end location of the results list.  For larger lists, this is much
+more efficient than repeatedly traversing the list."
+  ;; End tracking is a bit slower than `nconc' for short lists, but much faster
+  ;; for longer lists.
+  (let ((last-link (loopy--get-accumulation-list-end-var var)))
+    `((loopy--accumulation-vars (,last-link (last ,var)))
+      (loopy--main-body
+       (cond
+        (,last-link
+         (setcdr ,last-link (list ,val))
+         (setq ,last-link (cdr ,last-link)))
+        ;; Check if `var' was modified.  If so, reset
+        ;; `last-link'.  If not, set `var' directly.
+        (,var
+         (setq ,last-link (last ,var))
+         (setcdr ,last-link (list ,val))
+         (setq ,last-link (cdr ,last-link)))
+        (t
+         (setq ,var (list ,val)
+               ,last-link ,var)))))))
+
+(defun loopy--produce-adjoin-end-tracking (var val membership-test)
+  "Produce instructions for an end-tracking accumulation of single items.
+
+This is used in accumulation commands like `collect'.
+
+For efficiency, accumulation command use references to track the
+end location of the results list.  For larger lists, this is much
+more efficient than repeatedly traversing the list."
+  ;; End tracking is a bit slower than `nconc' for short lists, but much faster
+  ;; for longer lists.
+  (let ((last-link (loopy--get-accumulation-list-end-var var)))
+    `((loopy--accumulation-vars (,last-link nil))
+      (loopy--main-body
+       (cond
+        (,membership-test nil)
+        ;; If `last-link' is know, set it's cdr.
+        (,last-link
+         (setcdr ,last-link (list ,val))
+         (setq ,last-link (cdr ,last-link)))
+        ;; If `var' was updated without `last-link',
+        ;; reset `last-link'.
+        (,var
+         (setq ,last-link (last ,var))
+         (setcdr ,last-link (list ,val))
+         (setq ,last-link (cdr ,last-link)))
+        ;; Otherwise, set `var' and `last-link' directly.
+        (t
+         (setq ,var (list ,val)
+               ,last-link ,var)))))))
+
+(defun loopy--produce-multi-item-end-tracking (var val &optional destructive)
+  "Produce instructions for an end-tracking accumulation of copy-joined lists.
+
+This is used in accumulation commands like `append' and `nconc'.
+
+For efficiency, accumulation command use references to track the
+end location of the results list.  For larger lists, this is much
+more efficient than repeatedly traversing the list."
+  ;; End tracking is a bit slower than `nconc' for short lists, but much faster
+  ;; for longer lists.
+  (let ((last-link (loopy--get-accumulation-list-end-var var))
+        (accum-val (if destructive val `(copy-sequence ,val))))
+    `((loopy--accumulation-vars (,last-link (last ,var)))
+      (loopy--main-body
+       (cond
+        (,last-link
+         (setcdr ,last-link ,accum-val)
+         (setq ,last-link (last ,last-link)))
+        (,var
+         (setq ,last-link (last ,var))
+         (setcdr ,last-link ,accum-val)
+         (setq ,last-link (last ,last-link)))
+        (t
+         (setq ,var ,accum-val
+               ,last-link (last ,var))))))))
+
+(defun loopy--produce-union-end-tracking
+    (var val test-method &optional destructive)
+  "Produce instructions for an end-tracking accumulation of modify-joined lists.
+
+This is used in accumulation commands like `union' and `nunion'.
+
+For efficiency, accumulation command use references to track the
+end location of the results list.  For larger lists, this is much
+more efficient than repeatedly traversing the list."
+  ;; End tracking is a bit slower than `nconc' for short
+  ;; lists, but much faster for longer lists.
+  (let ((last-link (loopy--get-accumulation-list-end-var var))
+        (accum-val (if destructive val `(copy-sequence ,val)))
+        (new-items (gensym "new-items")))
+    `((loopy--accumulation-vars (,last-link nil))
+      (loopy--main-body
+       (if-let ((,new-items (cl-delete-if ,test-method ,accum-val)))
+           (cond
+            (,last-link
+             (setcdr ,last-link ,new-items)
+             (setq ,last-link (last ,last-link)))
+            (,var
+             (setq ,last-link (last ,var))
+             (setcdr ,last-link ,new-items)
+             (setq ,last-link (last ,last-link)))
+            (t
+             (setq ,var ,new-items
+                   ,last-link (last ,var)))))))))
+
 (cl-defmacro loopy--defaccumulation (name
                                      doc-string
                                      &key
@@ -1511,24 +1623,12 @@ you can use in the instructions:
         `(let ((args)
                (opts))
            ;; Compare with `loopy' for the equivalent code:
-           ;; (loopy (flag split)
-           ;;        (cons i parser-args)
-           ;;        (expr arg (car i))
-           ;;        (until (keyword arg))
+           ;; (loopy (cons (&whole cell arg . _) parser-args)
+           ;;        (until (keywordp arg))
            ;;        (collect arg)
            ;;        (finally-do
-           ;;          (if i
-           ;;             (set opts i args loopy-result)
-           ;;           (setq args parser-args))))
-           ;; or
-           ;; (loopy (flag dash split)
-           ;;        (cons (&whole i arg . _) parser-args)
-           ;;        (if (keyword arg)
-           ;;            (leave)
-           ;;          (collect arg))
-           ;;        (finally-do
-           ;;          (if i
-           ;;             (set opts i args loopy-result)
+           ;;         (if cell
+           ;;             (setq opts cell args loopy-result)
            ;;           (setq args parser-args))))
            (cl-loop with args-holding = nil
                     for cons-cell on parser-args
@@ -1653,36 +1753,34 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           (let* ((val-is-expression (not (symbolp val)))
                  (value-holder (if val-is-expression
                                    (gensym "adjoin-value")
-                                 val)))
+                                 val))
+                 (membership-test
+                  ;; `adjoin' applies KEY to both the new item and old items in
+                  ;; list, while `member' only applies KEY to items in the list.
+                  ;; To be consistent and apply KEY to all items, we use
+                  ;; `cl-member-if' with a custom predicate instead.
+                  (if key
+                      (let ((func-arg (gensym "adjoin-func-arg")))
+                        `(cl-member-if
+                          (lambda (,func-arg)
+                            ,(loopy--apply-function
+                              (or test (quote #'eql))
+                              (loopy--apply-function key func-arg)
+                              (loopy--apply-function key value-holder)))
+                          ,var))
+                    `(cl-member ,value-holder ,var :test ,test))))
             `(,@(when val-is-expression
                   `((loopy--accumulation-vars (,value-holder nil))
                     (loopy--main-body (setq ,value-holder ,val))))
-              (loopy--main-body
-               (if ,(if key
-                          ;; `adjoin' applies KEY to both the new item
-                          ;; and old items in list, while `member' only
-                          ;; applies KEY to items in the list.  To be
-                          ;; consistent and apply KEY to all items, we
-                          ;; use `cl-member-if' with a custom predicate
-                          ;; instead.
-                          (let ((func-arg (gensym "adjoin-func-arg")))
-                            `(cl-member-if
-                              (lambda (,func-arg)
-                                ,(loopy--apply-function
-                                  (or test (quote #'eql))
-                                  (loopy--apply-function key func-arg)
-                                  (loopy--apply-function key value-holder)))
-                              ,var))
-                        `(cl-member ,value-holder ,var :test ,test))
-                     nil
-                   (setq ,var (nconc ,var (list ,value-holder))))))))
+              ,@(loopy--produce-adjoin-end-tracking var value-holder
+                                                    membership-test))))
          (t
           (error "Bad `:at' position: %s" cmd)))
       ,(when (and result-type (not (eq result-type 'list)))
          `(loopy--accumulation-final-updates
            (,var . (setq ,var (cl-coerce ,var
-                                           (quote ,(loopy--get-quoted-symbol
-                                                    result-type)))))))))
+                                         (quote ,(loopy--get-quoted-symbol
+                                                  result-type)))))))))
   :implicit
   (loopy--plist-bind ( :test test :key key :at (pos 'end)
                        :result-type (result-type 'list))
@@ -1723,36 +1821,18 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     (progn
                       (loopy--check-accumulation-compatibility var 'reverse-list cmd)
                       `((loopy--main-body (if ,membership-test
-                                                nil
-                                              (setq ,var (cons ,value-holder ,var))))))
-                  (let ((last-link (loopy--get-accumulation-list-end-var var)))
-                    (loopy--check-accumulation-compatibility var 'list cmd)
-                    `((loopy--accumulation-vars (,last-link nil))
-                      (loopy--main-body
-                       (cond
-                          (,membership-test nil)
-                          ;; If `last-link' is know, set it's cdr.
-                          (,last-link
-                           (setcdr ,last-link (list ,value-holder))
-                           (setq ,last-link (cdr ,last-link)))
-                          ;; If `var' was updated without `last-link',
-                          ;; reset `last-link'.
-                          (,var
-                           (setq ,last-link (last ,var))
-                           (setcdr ,last-link (list ,value-holder))
-                           (setq ,last-link (cdr ,last-link)))
-                          ;; Otherwise, set `var' and `last-link' directly.
-                          (t
-                           (setq ,var (list ,value-holder)
-                                 ,last-link ,var)))))))))))
+                                              nil
+                                            (setq ,var (cons ,value-holder ,var))))))
+                  (loopy--check-accumulation-compatibility var 'list cmd)
+                  (loopy--produce-adjoin-end-tracking var value-holder membership-test))))))
       ,(let ((reversing (and loopy--split-implied-accumulation-results
                              (member pos '(end 'end)))))
          (if (not (member result-type '(list 'list)))
              `(loopy--accumulation-final-updates
                (,var
-                  . (setq ,var (cl-coerce ,(if reversing `(nreverse ,var) var)
-                                          (quote ,(loopy--get-quoted-symbol
-                                                   result-type))))))
+                . (setq ,var (cl-coerce ,(if reversing `(nreverse ,var) var)
+                                        (quote ,(loopy--get-quoted-symbol
+                                                 result-type))))))
            (when reversing
              `(loopy--accumulation-final-updates
                (,var . (setq ,var (nreverse ,var)))))))
@@ -1766,14 +1846,15 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   (loopy--plist-bind (:at (pos 'end)) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
     `((loopy--accumulation-vars (,var nil))
-      (loopy--main-body
-       (setq ,var ,(cond
-                      ((member pos '(start beginning 'start 'beginning))
-                       `(append ,val ,var))
-                      ((member pos '(end 'end))
-                       `(nconc ,var (copy-sequence ,val)))
-                      (t
-                       (error "Bad `:at' position: %s" cmd)))))))
+      ,@(cond
+         ;; TODO: Is there a better way of appending to the beginning
+         ;;       of a list?
+         ((member pos '(start beginning 'start 'beginning))
+          ;; `append' doesn't copy the last argument.
+          `((loopy--main-body (setq ,var (append ,val ,var)))))
+         ((member pos '(end 'end))
+          (loopy--produce-multi-item-end-tracking var val))
+         (error "Bad `:at' position: %s" cmd))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     `((loopy--accumulation-vars (,var nil))
@@ -1791,21 +1872,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var)))
                   (loopy--accumulation-final-updates
                    (,var . (setq ,var (nreverse ,var))))))
-            (let ((last-link (loopy--get-accumulation-list-end-var var)))
-              (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars (,last-link nil))
-                (loopy--main-body
-                 (cond
-                    (,last-link
-                     (setcdr ,last-link (copy-sequence ,val))
-                     (setq ,last-link (last ,last-link)))
-                    (,var
-                     (setq ,last-link (last ,var))
-                     (setcdr ,last-link (copy-sequence ,val))
-                     (setq ,last-link (last ,last-link)))
-                    (t
-                     (setq ,var (copy-sequence ,val)
-                           ,last-link (last ,var)))))))))
+            (loopy--check-accumulation-compatibility var 'list cmd)
+            (loopy--produce-multi-item-end-tracking var val)))
          (t
           (error "Bad `:at' position: %s" cmd)))
       (loopy--implicit-return ,var))))
@@ -1819,19 +1887,19 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 opts
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body
-                 (setq ,var
-                         ,(cond
-                           ((member pos '(start beginning 'start 'beginning))
-                            `(cons ,val ,var))
-                           ((member pos '(end 'end))
-                            `(nconc ,var (list ,val))))))
+                ,@(cond
+                   ((member pos '(start beginning 'start 'beginning))
+                    `((loopy--main-body (setq ,var (cons ,val ,var)))))
+                   ((member pos '(end 'end))
+                    (loopy--produce-collect-end-tracking var val))
+                   (t
+                    (error "Bad `:at' position: %s" cmd)))
                 ,(unless (member result-type '(list 'list))
                    `(loopy--accumulation-final-updates
                      (,var . (setq ,var
-                                     (cl-coerce ,var (quote
-                                                      ,(loopy--get-quoted-symbol
-                                                        result-type)))))))))
+                                   (cl-coerce ,var (quote
+                                                    ,(loopy--get-quoted-symbol
+                                                      result-type)))))))))
 
   :implicit (loopy--plist-bind ( :at (pos (quote 'end))
                                  :result-type (result-type 'list))
@@ -1848,25 +1916,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                           (loopy--check-accumulation-compatibility
                            var 'reverse-list cmd)
                           `((loopy--main-body (setq ,var (cons ,val ,var)))))
-                      ;; End tracking is a bit slower than `nconc' for short
-                      ;; lists, but much faster for longer lists.
-                      (let ((last-link (loopy--get-accumulation-list-end-var var)))
-                        (loopy--check-accumulation-compatibility var 'list cmd)
-                        `((loopy--accumulation-vars (,last-link (last ,var)))
-                          (loopy--main-body
-                           (cond
-                              (,last-link
-                               (setcdr ,last-link (list ,val))
-                               (setq ,last-link (cdr ,last-link)))
-                              ;; Check if `var' was modified.  If so, reset
-                              ;; `last-link'.  If not, set `var' directly.
-                              (,var
-                               (setq ,last-link (last ,var))
-                               (setcdr ,last-link (list ,val))
-                               (setq ,last-link (cdr ,last-link)))
-                              (t
-                               (setq ,var (list ,val)
-                                     ,last-link ,var))))))))
+                      (loopy--check-accumulation-compatibility var 'list cmd)
+                      (loopy--produce-collect-end-tracking var val)))
                    (t
                     (error "Bad `:at' position: %s" cmd)))
                 ,(if (and (member pos '(end 'end))
@@ -1876,17 +1927,17 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                            (,var . (setq ,var (nreverse ,var))))
                        `(loopy--accumulation-final-updates
                          (,var . (setq ,var
-                                         (cl-coerce (nreverse ,var)
-                                                    (quote
-                                                     ,(loopy--get-quoted-symbol
-                                                       result-type)))))))
+                                       (cl-coerce (nreverse ,var)
+                                                  (quote
+                                                   ,(loopy--get-quoted-symbol
+                                                     result-type)))))))
                    (unless (member result-type '(list 'list))
                      `(loopy--accumulation-final-updates
                        (,var . (setq ,var
-                                       (cl-coerce ,var
-                                                  (quote
-                                                   ,(loopy--get-quoted-symbol
-                                                     result-type))))))))
+                                     (cl-coerce ,var
+                                                (quote
+                                                 ,(loopy--get-quoted-symbol
+                                                   result-type))))))))
                 (loopy--implicit-return ,var))))
 
 ;;;;;; Concat
@@ -2016,15 +2067,13 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :explicit (loopy--plist-bind (:at (pos 'end)) opts
               (loopy--check-accumulation-compatibility var 'list cmd)
               `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body
-                 (setq ,var
-                         ,(cond
-                           ((member pos '(start beginning 'start 'beginning))
-                            `(nconc ,val ,var))
-                           ((member pos '(end 'end))
-                            `(nconc ,var ,val))
-                           (t
-                            (error "Bad `:at' position: %s" cmd)))))))
+                ,@(cond
+                   ((member pos '(start beginning 'start 'beginning))
+                    `((loopy--main-body (setq ,var (nconc ,val ,var)))))
+                   ((member pos '(end 'end))
+                    (loopy--produce-multi-item-end-tracking var val 'destructive))
+                   (t
+                    (error "Bad `:at' position: %s" cmd)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     `((loopy--accumulation-vars (,var nil))
@@ -2040,24 +2089,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 `((loopy--main-body (setq ,var (nconc (nreverse ,val) ,var)))
                   (loopy--accumulation-final-updates
                    (,var . (setq ,var (nreverse ,var))))))
-            (let ((last-link (loopy--get-accumulation-list-end-var var)))
-              (loopy--check-accumulation-compatibility var 'list cmd)
-              `((loopy--accumulation-vars (,last-link nil))
-                (loopy--main-body
-                 (cond
-                    (,last-link
-                     ;; Since this is `nconc', don't copy
-                     ;; `val'.  `val' will be modified in
-                     ;; the next iteration.
-                     (setcdr ,last-link ,val)
-                     (setq ,last-link (last ,last-link)))
-                    (,var
-                     (setq ,last-link (last ,var))
-                     (setcdr ,last-link ,val)
-                     (setq ,last-link (last ,last-link)))
-                    (t
-                     (setq ,var ,val
-                           ,last-link (last ,var)))))))))
+            (loopy--check-accumulation-compatibility var 'list cmd)
+            (loopy--produce-multi-item-end-tracking var val 'destructive)))
          (t
           (error "Bad `:at' position: %s" cmd)))
       (loopy--implicit-return ,var))))
@@ -2076,8 +2109,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
             `((loopy--main-body
                (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
            ((member pos '(end 'end))
-            `((loopy--main-body
-               (setq ,var (nconc ,var (cl-delete-if ,test-method ,val))))))
+            (loopy--produce-union-end-tracking var val test-method 'destructive))
            (t
             (error "Bad `:at' position: %s" cmd))))))
   :implicit
@@ -2096,26 +2128,11 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                   (loopy--check-accumulation-compatibility var 'reverse-list cmd)
                   `((loopy--main-body
                      (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
-                                         ,var)))
+                                       ,var)))
                     (loopy--accumulation-final-updates
                      (var . (setq ,var (nreverse ,var))))))
-              (let ((last-link (loopy--get-accumulation-list-end-var var))
-                    (new-items (gensym "new-items")))
-                (loopy--check-accumulation-compatibility var 'list cmd)
-                `((loopy--accumulation-vars (,last-link nil))
-                  (loopy--main-body
-                   (if-let ((,new-items (cl-delete-if ,test-method ,val)))
-                         (cond
-                          (,last-link
-                           (setcdr ,last-link ,new-items)
-                           (setq ,last-link (last ,last-link)))
-                          (,var
-                           (setq ,last-link (last ,var))
-                           (setcdr ,last-link ,new-items)
-                           (setq ,last-link (last ,last-link)))
-                          (t
-                           (setq ,var ,new-items
-                                 ,last-link (last ,var))))))))))
+              (loopy--check-accumulation-compatibility var 'list cmd)
+              (loopy--produce-union-end-tracking var val test-method 'destructive)))
            (t
             (error "Bad `:at' position: %s" cmd)))))))
 
@@ -2189,18 +2206,16 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     (loopy--check-accumulation-compatibility var 'list cmd)
     `((loopy--accumulation-vars (,var nil))
-      ,(let ((test-method (loopy--get-union-test-method var key test)))
-         (cond
-          ((member pos '(start beginning 'start 'beginning))
-           `(loopy--main-body
-             (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                                 ,var))))
-          ((member pos '(end 'end))
-           `(loopy--main-body
-             (setq ,var (nconc ,var (cl-delete-if ,test-method
-                                                    (copy-sequence ,val))))))
-          (t
-           (error "Bad `:at' position: %s" cmd))))))
+      ,@(let ((test-method (loopy--get-union-test-method var key test)))
+          (cond
+           ((member pos '(start beginning 'start 'beginning))
+            `((loopy--main-body
+               (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
+                                 ,var)))))
+           ((member pos '(end 'end))
+            (loopy--produce-union-end-tracking var val test-method))
+           (t
+            (error "Bad `:at' position: %s" cmd))))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
     `((loopy--accumulation-vars (,var nil))
@@ -2211,8 +2226,8 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
             (loopy--check-accumulation-compatibility var 'list cmd)
             `((loopy--main-body
                (setq ,var
-                       (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                              ,var)))))
+                     (nconc (cl-delete-if ,test-method (copy-sequence ,val))
+                            ,var)))))
            ((member pos '(end 'end))
             (if loopy--split-implied-accumulation-results
                 (progn
@@ -2221,24 +2236,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
                      (setq ,var (nconc (reverse ,val) ,var)))
                     (loopy--accumulation-final-updates
                      (,var . (setq ,var (nreverse ,var))))))
-              (let ((last-link (loopy--get-accumulation-list-end-var var)))
-                (loopy--check-accumulation-compatibility var 'list cmd)
-                `((loopy--accumulation-vars (,last-link (last ,var)))
-                  (loopy--main-body
-                   (cond
-                      (,last-link
-                       (setcdr ,last-link (cl-delete-if ,test-method
-                                                        (copy-sequence ,val)))
-                       (setq ,last-link (last ,last-link)))
-                      (,var
-                       (setq ,last-link (last ,var))
-                       (setcdr ,last-link (cl-delete-if ,test-method
-                                                        (copy-sequence ,val)))
-                       (setq ,last-link (last ,last-link)))
-                      (t
-                       (setq ,var (cl-delete-if ,test-method
-                                                (copy-sequence ,val))
-                             ,last-link (last ,var)))))))))
+              (loopy--produce-union-end-tracking var val test-method)))
            (t
             (error "Bad `:at' position: %s" cmd)))))))
 

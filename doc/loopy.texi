@@ -518,7 +518,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgf028415
+@float Listing,orgb094664
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -1567,6 +1567,13 @@ accumulation commands.
        (finally-return coll))
 @end lisp
 
+@quotation Note
+Keep in mind that it is an error to modify accumulation variables outside of
+accumulation commands.  This restriction allows using accumulation variables
+to be much faster.
+
+@end quotation
+
 Like with other loop commands, variables created by accumulation commands
 (such as @samp{coll} in the above example) are initialized to @code{nil} unless
 stated otherwise.
@@ -1692,17 +1699,14 @@ results.
 
 @end quotation
 
-You should prefer using implied variables with accumulation commands whenever
-you can.  If you do not need access to accumulation variables while the loop
-is running, then there is no point in requesting that @code{loopy} generate code
-to allow that possibility.  Because @code{loopy} has more freedom in working with
-implied accumulation variables, their use can be much faster.
-
 By default, one must specify accumulation variables in order to accumulate
-into separate values.  As noted above, @code{loopy} will allow access to these
-variables during the loop, which requires a reduction in speed.  To have
-separate commands accumulate into separate variables while avoiding this
-reduction, one can use the @samp{split} flag (@ref{Using Flags, , Flags}).
+into separate values.  As noted above, @code{loopy} will allow other accumulation
+commands to access these variables during the loop, which requires a
+reduction in speed for some command arguments.  To have separate commands
+accumulate into separate variables while avoiding this reduction, one can use
+the @samp{split} flag (@ref{Using Flags, , Flags}).  This flag tells @code{loopy} explicitly that a variable
+will only be modified a single accumulation command while the loop is
+running.
 
 When the flag is enabled and after the loop completes, each of these split
 accumulation variables will be part of the list @code{loopy-result}, appearing in
@@ -1750,14 +1754,14 @@ accumulations (from greatest speed to least), are produced by:
 @item
 Using implied result variables with the @samp{split} flag enabled.
 @item
-Using the implied variable @code{loopy-result}, which, similar to the variables
-in (1), cannot be modified during the loop except by other accumulation
-commands.  This is the default behavior for accumulation commands that do
-not name a variable, and occurs when the @samp{split} flag is disabled.
+Using variables which can be modified only by accumulation commands by
+@itemize
 @item
-Using explicitly named result variables, which can be modified during the
-loop by arbitrary code, not just accumulation commands.  This includes the
-explicitly named variables required for destructuring.
+naming the variable explicitly, or
+@item
+using the implied variable @code{loopy-result}, which is the default behavior
+for implied variables when not using the @samp{split} flag
+@end itemize
 @end enumerate
 
 Effort has gone into making each case efficient while keeping flexibility and
@@ -1765,16 +1769,14 @@ correctness.  The difference in speed can be significant when working with
 large sequences or performing many accumulations.
 
 @lisp
-;; This is the slowest form.
-;; => (1 2 3)
-(loopy (list i '(1 2 3))
-       (collect my-collection i)
-       (finally-return my-collection))
-
-;; Accumulations with implicit variables are faster.
+;; These two forms are equivalent for looping.
 ;; => (1 2 3)
 (loopy (list i '(1 2 3))
        (collect i))
+
+(loopy (list i '(1 2 3))
+       (collect coll i)
+       (finally-return coll))
 
 ;; Accumulations with split implicit variables are fastest.
 (loopy (flag split)

@@ -556,6 +556,7 @@ information on how to use `loopy' and `loopy-iter'.
 
    ;; Make sure the order-dependent lists are in the correct order.
    (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
+         loopy--accumulation-vars (nreverse loopy--accumulation-vars)
          loopy--implicit-return (when (consp loopy--implicit-return)
                                   (if (= 1 (length loopy--implicit-return))
                                       ;; If implicit return is just a single thing,
