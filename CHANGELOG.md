@@ -10,8 +10,29 @@ This document describes the user-facing changes to Loopy.
   commands while the loop is running.  This allows the loop to be much faster
   when using named variables (required for destructuring) and simplifies the
   code.  See [#83].
+- Duplicating special macro arguments (such as using `flags` twice) now signals
+  an error.  See [#87].
+- Sub-loops using the `sub-loop` command are now full `loopy` loops.
+  - They can now take special macro arguments.
+  - Their accumulation no longer affect the surrounding loop.  You must now use
+    the `at` command.  See [#70], [#87].
 
+### Other Changes
+
+- An `at` command was added, which better controls interacting with surrounding
+  loops.  This is similar to the `in` clause from Common Lisp's Iterate package.
+  See [#70], [#87].
+- The `leave-from` command has been re-added, now that code generation is more
+  robust.  See [#87].
+- A `skip-from` command was added.
+- Add feature `loopy-lambda`.  This is like `pcase-lambda`, but uses `loopy`
+  destructuring.  See [#87].
+- List `seq.el` in the package requirements.  See [#87].
+
+
+[#70]: https://github.com/okamsn/loopy/issues/70
 [#83]: https://github.com/okamsn/loopy/issues/83
+[#87]: https://github.com/okamsn/loopy/pull/87
 
 ## 0.8.1
 

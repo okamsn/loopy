@@ -54,12 +54,9 @@
 ;;; Code:
 (require 'loopy)
 (require 'loopy-misc)
+(require 'loopy-vars)
 (require 'dash)
 (require 'cl-lib)
-
-(defvar loopy--destructuring-accumulation-parser)
-(defvar loopy--destructuring-for-with-vars-function)
-(defvar loopy--flag-settings nil)
 
 (defun loopy-dash--enable-flag-dash ()
   "Make this `loopy' loop use Dash destructuring."

@@ -27,7 +27,7 @@
 ;; along with this file.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
-;; A macro similar to and heavily inspired by Common Lisp's Iterate package.
+;; A macro similar to, and heavily inspired by, Common Lisp's Iterate package.
 ;; This package is somewhat like a translation of Iter into Loopy.
 ;;
 ;; To be able to arbitrarily nest structures, Loopy's constructs must be clearly
@@ -43,9 +43,31 @@
 
 ;;; Code:
 (require 'loopy)
+(require 'loopy-vars)
+(require 'loopy-misc)
+(require 'loopy-commands)
 (require 'cl-lib)
+(require 'seq)
+(require 'map)
+(require 'macroexp)
 
-(defvar loopy--flag-settings nil)
+;; How the Code Works:
+;;
+;; Instead of using `loopy--parse-loop-commands' and
+;; `loopy--process-instructions' directly, the list of arguments is treated as a
+;; tree of code, and is passed to `loopy-iter--replace-in-tree'.  That function
+;; recursively goes through each element in the argument list, looking for loop
+;; commands according to `loopy-iter--lax-naming'.  Found commands are
+;; processed, and their main-body instructions are substituted into the
+;; command's place in the tree.  Other instructions are handled as normal.
+;;
+;; Some code requires specific handling, which is done using helper functions
+;; like `loopy-iter--replace-in-setq-form'.  It is hoped that by using
+;; `macroexpand-all' on the elements of the argument list that any macros will
+;; be expanded into uses of special forms already handled.
+;;
+;; After the argument list is processed, `loopy--main-body' is set to that one,
+;; new tree, and expansion proceeds as normal.
 
 ;;;; Flags
 (defvar loopy-iter--lax-naming nil
@@ -68,14 +90,15 @@ name collisions becoming more likely.")
   (if loopy-iter--lax-naming
       (setq loopy-iter--lax-naming nil)))
 
-(add-to-list 'loopy--flag-settings (cons 'lax-naming #'loopy-iter--enable-flag-lax-naming))
-(add-to-list 'loopy--flag-settings (cons '+lax-naming #'loopy-iter--enable-flag-lax-naming))
-(add-to-list 'loopy--flag-settings (cons '-lax-naming #'loopy-iter--disable-flag-lax-naming))
+(dolist (flag '(lax-naming +lax-naming lax-names +lax-names))
+  (setf loopy--flag-settings
+        (map-insert loopy--flag-settings flag
+                    #'loopy-iter--enable-flag-lax-naming)))
 
-;; For convenience, add another variant `lax-names'.
-(add-to-list 'loopy--flag-settings (cons 'lax-names #'loopy-iter--enable-flag-lax-naming))
-(add-to-list 'loopy--flag-settings (cons '+lax-names #'loopy-iter--enable-flag-lax-naming))
-(add-to-list 'loopy--flag-settings (cons '-lax-names #'loopy-iter--disable-flag-lax-naming))
+(dolist (flag '(-lax-naming -lax-names))
+  (setf loopy--flag-settings
+        (map-insert loopy--flag-settings flag
+                    #'loopy-iter--disable-flag-lax-naming)))
 
 ;;;; Custom User Options
 (defgroup loopy-iter nil
@@ -112,12 +135,6 @@ list.  For example, by default, \"(for collect i)\" and
   :type '(repeat symbol))
 
 ;;;;
-(defvar loopy-iter--valid-macro-arguments
-  (remq 'let* loopy--valid-macro-arguments)
-  "List of valid keywords for `loopy-iter' macro arguments.
-
-This variable is used to signal an error instead of silently failing.")
-
 (defvar loopy-iter--let-forms '(let let*)
   "Forms to treat like `let'.
 
@@ -152,10 +169,7 @@ and `loopy-command-parsers', in that order."
 
 (defun loopy-iter--sub-loop-command-p (name)
   "Whether command named NAME is a sub-loop."
-  (let ((built-in-aliases '(loop sub-loop subloop)))
-    (or (memq name built-in-aliases)
-        (memq (map-elt loopy-command-aliases name)
-              built-in-aliases))))
+  (memq name (loopy--find-all-names '(loop sub-loop subloop))))
 
 ;;;; Replacement functions
 (defun loopy-iter--replace-in-tree (tree)
@@ -176,14 +190,17 @@ Other instructions are just pushed to their variables."
         (if (consp elem)
             ;; Depending on the structure that we're dealing with, we need to
             ;; expand differently.
-            (let ((key (cl-first elem)))
+            (let* ((key (cl-first elem))
+                   (cmd)
+                   (subtree))
+
+              (if loopy-iter--lax-naming
+                  (setq cmd key
+                        subtree (cl-rest elem))
+                (setq cmd (cl-second elem)
+                      subtree (cddr elem)))
+
               (cond
-               ;; If it's a special macro argument, just remove it from the tree.
-               ;; By this point, it's already been interpreted.
-               ((and (not loopy--in-sub-level)
-                     (loopy--special-macro-argument-p
-                      key loopy-iter--valid-macro-arguments))
-                t)
 
                ;; Check if it's a lambda form
                ((eq key 'lambda)
@@ -206,13 +223,16 @@ Other instructions are just pushed to their variables."
 
                ;; Check if it's the special `sub-loop' command before checking
                ;; if it's any other kind of loop command.
-               ((loopy-iter--sub-loop-command-p (if loopy-iter--lax-naming
-                                                    key
-                                                  (cl-second elem)))
-                (push (loopy-iter--replace-in-sub-loop-command
-                       (if loopy-iter--lax-naming
-                           (cdr elem)
-                         (cddr elem)))
+               ((loopy-iter--sub-loop-command-p cmd)
+                (push (macroexpand `(loopy-iter ,@subtree))
+                      new-tree))
+
+               ;; Handle `at' commands specially.
+               ((memq (if loopy-iter--lax-naming key (cl-second elem))
+                      (loopy--find-all-names '(at)))
+                (push (macroexp-progn
+                       (loopy-iter--replace-in-at-command (cl-first subtree)
+                                                          (cl-rest subtree)))
                       new-tree))
 
                ;; Check if it's a loop command
@@ -246,12 +266,11 @@ Other instructions are just pushed to their variables."
                   (let ((recursively-parsed-main-body
                          (loopy-iter--replace-in-tree main-body)))
                     ;; Push the main body into the tree.
-                    (push (if (= 1 (length recursively-parsed-main-body))
-                              (cl-first recursively-parsed-main-body)
-                            (cons 'progn recursively-parsed-main-body))
+                    (push (macroexp-progn recursively-parsed-main-body)
                           new-tree))
                   ;; Interpret the other instructions.
-                  (loopy-iter--process-non-main-body other-instructions)))
+                  (loopy--process-instructions
+                   other-instructions :erroring-instructions '(loopy--main-body))))
 
                ;; Otherwise, recurse.
                (t
@@ -313,151 +332,30 @@ These expressions can have loop commands in the body."
   `(lambda ,(cl-second tree)
      ,@(loopy-iter--replace-in-tree (cddr tree))))
 
-(cl-defun loopy-iter--replace-in-sub-loop-command (tree)
-  "Replace loop commands in the `sub-loop' command TREE.
+(defmacro loopy-iter--wrap-at-targets (&rest body)
+  "`let'-bind the variables in `loopy--valid-external-at-targets' for BODY."
+  `(let ,loopy--valid-external-at-targets
+     ,@body))
 
-Unlike in `loopy', this allows arbitrary expressions."
-  (let ((loopy--in-sub-level nil)
-        (loopy--main-body)
-        (loopy--latter-body)
-        (loopy--pre-conditions)
-        (loopy--post-conditions)
-        (loopy--iteration-vars)
-        (loopy--skip-used)
-        (loopy--tagbody-exit-used)
-        (loopy--loop-name (gensym "sub-loop-")))
+(defmacro loopy-iter--produce-at-instruction-from-targets ()
+  "Make an `at' instruction from targets in `loopy--valid-external-at-targets'."
+  `(list 'loopy--at-instructions
+         (cons loopy--loop-name
+               (append ,@(cl-loop for var in loopy--valid-external-at-targets
+                                  collect `(mapcar (lambda (instr)
+                                                     (list (quote ,var) instr))
+                                                   ,var))))))
 
-    (setq loopy--main-body (loopy-iter--replace-in-tree tree))
-
-    ;; Make sure lists are in the correct order.
-    (setq loopy--iteration-vars (nreverse loopy--iteration-vars))
-
-    ;; Create the sub-loop code.
-    ;; See the main macro `loopy' for a more detailed version of this.
-    (let ((result nil)
-          (result-is-one-expression nil))
-      (cl-flet ((get-result () (if result-is-one-expression
-                                   (list result)
-                                 result)))
-        (setq result loopy--main-body)
-
-        (when loopy--skip-used
-          ;; This must stay `loopy--continue-tag', as
-          ;; this name is used by `loopy--parse-skip-command'.
-          (setq result `(cl-tagbody ,@result loopy--continue-tag)
-                result-is-one-expression t))
-
-        (when loopy--latter-body
-          (setq result (append result loopy--latter-body)))
-
-        (when loopy--post-conditions
-          (setq result
-                (append result
-                        `((unless ,(cl-case (length loopy--post-conditions)
-                                     (0 t)
-                                     (1 (car loopy--post-conditions))
-                                     (t (cons 'and loopy--post-conditions)))
-                            ;; Unlike the normal loop, sub-loops don't have a
-                            ;; return value, so we can just return nil.
-                            (cl-return-from ,loopy--loop-name nil))))))
-        (setq result `(while ,(cl-case (length loopy--pre-conditions)
-                                (0 t)
-                                (1 (car loopy--pre-conditions))
-                                (t (cons 'and loopy--pre-conditions)))
-                        ;; If using a `cl-tag-body', just insert that one
-                        ;; expression, but if not, break apart into the while
-                        ;; loop's body.
-                        ,@(get-result))
-              ;; Will always be a single expression after wrapping with `while'.
-              result-is-one-expression t)
-
-        (when loopy--tagbody-exit-used
-          (setq result `(cl-tagbody
-                         ,@(get-result)
-                         ;; This must stay `loopy--non-returning-exit-tag', as
-                         ;; this name is used by `loopy--parse-leave-command'.
-                         loopy--non-returning-exit-tag)
-                result-is-one-expression t))
-
-        (setq result `(cl-block ,loopy--loop-name ,@(get-result) nil)
-              ;; Will always be a single expression after wrapping with
-              ;; `cl-block'.
-              result-is-one-expression t)
-
-        (when loopy--iteration-vars
-          (setq result `(let* ,loopy--iteration-vars
-                          ,@(get-result))
-                result-is-one-expression t))
-
-        (unless result-is-one-expression
-          (push 'progn result)))
-
-      ;; Return the wrapped loop.
-      result)))
-
-;;;; Functions for building the macro.
-
-(defun loopy-iter--process-non-main-body (instructions)
-  "Push the values of INSTRUCTIONS to the appropriate variable."
-  ;; These variables are `let'-bound by the macro `loopy-iter'.
-  (dolist (instruction instructions)
-    (let ((instruction-value (cl-second instruction)))
-      (cl-case (car instruction)
-        (loopy--generalized-vars
-         (loopy--validate-binding instruction-value)
-         (push instruction-value loopy--generalized-vars))
-        (loopy--iteration-vars
-         (loopy--validate-binding instruction-value)
-         ;; Don't want to accidentally rebind variables to `nil'.
-         (unless (loopy--bound-p (cl-first instruction-value))
-           (push instruction-value loopy--iteration-vars)))
-        (loopy--accumulation-vars
-         (loopy--validate-binding instruction-value)
-         ;; Don't want to accidentally rebind variables to `nil'.
-         (unless (loopy--bound-p (cl-first instruction-value))
-           (push instruction-value loopy--accumulation-vars)))
-        (loopy--pre-conditions
-         (push instruction-value loopy--pre-conditions))
-        ;; NOTE: We shouldn't get any of these.
-        ;; (loopy--main-body
-        ;;  (push instruction-value loopy--main-body))
-        (loopy--latter-body
-         (push instruction-value loopy--latter-body))
-        (loopy--post-conditions
-         (push instruction-value loopy--post-conditions))
-        (loopy--implicit-return
-         (unless (loopy--already-implicit-return instruction-value)
-           (push instruction-value loopy--implicit-return)))
-        (loopy--accumulation-final-updates
-         ;; These instructions are of the form `(l--a-f-u (var . update))'
-         (let* ((var-to-update (car instruction-value))
-                (update-code (cdr instruction-value)))
-           (if-let ((existing-update (map-elt loopy--accumulation-final-updates
-                                              var-to-update)))
-               (unless (equal existing-update update-code)
-                 (error "Incompatible final update for %s:\n%s\n%s"
-                        var-to-update
-                        existing-update
-                        update-code))
-             (push instruction-value loopy--accumulation-final-updates))))
-
-        ;; Code for conditionally constructing the loop body.
-        (loopy--skip-used
-         (setq loopy--skip-used t))
-        (loopy--tagbody-exit-used
-         (setq loopy--tagbody-exit-used t))
-
-        ;; Places users probably shouldn't push to, but can if they want:
-        (loopy--before-do
-         (push instruction-value loopy--before-do))
-        (loopy--after-do
-         (push instruction-value loopy--after-do))
-        (loopy--final-do
-         (push instruction-value loopy--final-do))
-        (loopy--final-return
-         (push instruction-value loopy--final-return))
-        (t
-         (error "Loopy: Unknown body instruction: %s" instruction))))))
+(defun loopy-iter--replace-in-at-command (target-loop tree)
+  "Replace loop commands in TREE with respect to TARGET-LOOP."
+  (loopy--check-target-loop-name target-loop)
+  (loopy-iter--wrap-at-targets
+   (let ((loopy--loop-name target-loop))
+     (prog1
+         (loopy-iter--replace-in-tree tree)
+       (loopy--process-instruction
+        (loopy-iter--produce-at-instruction-from-targets)
+        :erroring-instructions '(loopy--main-body))))))
 
 ;;;; The macro itself
 (defmacro loopy-iter (&rest body)
@@ -482,77 +380,83 @@ information on how to use `loopy' and `loopy-iter'.
 
    ;; There should be only one of each of these arguments.
 
-   ;; Flags
+   (let ((loop-name (seq-find #'symbolp body)))
+     (setq loopy--loop-name loop-name
+           loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
+           loopy--non-returning-exit-tag-name
+           (loopy--produce-non-returning-exit-tag-name loop-name))
+     (cl-callf2 seq-remove #'symbolp body))
 
+   ;; Flags
    ;; Process any flags passed to the macro.  In case of conflicts, the
    ;; processing order is:
    ;;
    ;; 1. Flags in `loopy-default-flags'.
-   ;; 2. Flags in the `flag' macro argument, which can
-   ;;    undo the first group.
-
-   (when-let ((loopy--all-flags
-               (append loopy-default-flags
-                       (loopy--find-special-macro-arguments '(flag flags)
-                                                            body))))
-     (dolist (flag loopy--all-flags)
-       (if-let ((func (map-elt loopy--flag-settings flag)))
-           (funcall func)
-         (error "Loopy: Flag not defined: %s" flag))))
+   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
+   (mapc #'loopy--apply-flag loopy-default-flags)
+   (loopy--process-special-marco-args '(flag flags)
+     (mapc #'loopy--apply-flag arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name))
+                body))
 
    ;; With
-   ;; Note: These values don't have to be used literally, due to
-   ;; destructuring.
-   (setq loopy--with-vars
-         (let ((result))
-           (dolist (binding (loopy--find-special-macro-arguments
-                             '(with let*) body))
-             (push (cond
-                    ((symbolp binding)
-                     (list binding nil))
-                    ((= 1 (length binding))
-                     (list (cl-first binding) nil))
-                    (t
-                     binding))
-                   result))
-           (nreverse result)))
+   ;; Note: These values don't have to be used literally, due to destructuring.
+   (loopy--process-special-marco-args '(with init)
+     (setq loopy--with-vars
+           (mapcar (lambda (binding)
+                     (cond ((symbolp binding)      (list binding nil))
+                           ((= 1 (length binding)) (list (cl-first binding)
+                                                         nil))
+                           (t                       binding)))
+                   arg-value))
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Without
-   (setq loopy--without-vars
-         (loopy--find-special-macro-arguments '(without no-init) body))
+   (loopy--process-special-marco-args '(without no-with no-init)
+     (setq loopy--without-vars arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Wrap
-   (setq loopy--wrapping-forms
-         (loopy--find-special-macro-arguments '(wrap) body))
+   (loopy--process-special-marco-args '(wrap)
+     (setq loopy--wrapping-forms arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Before do
-   (setq loopy--before-do
-         (loopy--find-special-macro-arguments '( before-do before
-                                                 initially-do initially)
-                                              body))
+   (loopy--process-special-marco-args '( before-do before
+                                         initially-do initially)
+     (setq loopy--before-do arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; After do
-   (setq loopy--after-do
-         (loopy--find-special-macro-arguments '( after-do after
-                                                 else-do else)
-                                              body))
+   (loopy--process-special-marco-args '(after-do after else-do else)
+     (setq loopy--after-do arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Finally Do
-   (setq loopy--final-do
-         (loopy--find-special-macro-arguments '(finally-do finally) body))
+   (loopy--process-special-marco-args '(finally-do finally)
+     (setq loopy--final-do arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Final Return
-   (setq loopy--final-return
-         (when-let ((return-val
-                     (loopy--find-special-macro-arguments 'finally-return
-                                                          body)))
-           (if (= 1 (length return-val))
-               (car return-val)
-             (cons 'list return-val))))
+   (loopy--process-special-marco-args '(finally-return)
+     (setq loopy--final-return (if (= 1 (length arg-value))
+                                   (cl-first arg-value)
+                                 (cons 'list arg-value)))
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Process the main body.
-   (setq loopy--main-body
-         (loopy-iter--replace-in-tree body))
+   (push loopy--loop-name loopy--known-loop-names)
+   (unwind-protect
+       (progn
+         (setq loopy--main-body (loopy-iter--replace-in-tree body))
+         (loopy--process-instructions (map-elt loopy--at-instructions
+                                               loopy--loop-name)
+                                      :erroring-instructions
+                                      '(loopy--main-body)))
+     (pop loopy--known-loop-names)
+     (cl-callf map-delete loopy--at-instructions loopy--loop-name)
+     (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
+                loopy--accumulation-list-end-vars))
 
    ;; Make sure the order-dependent lists are in the correct order.
    (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
@@ -568,6 +472,16 @@ information on how to use `loopy' and `loopy-iter'.
 
    ;; Produce the expanded code, based on the `let'-bound variables.
    (loopy--expand-to-loop)))
+
+;;;; Add `loopy-iter' to `loopy'
+(cl-defun loopy-iter--parse-loopy-iter-command ((_ &rest body))
+  "Parse the `loopy-iter' command as (loopy-iter &rest BODY).
+
+See the info node `(loopy)The loopy-iter Macro' for more."
+  `((loopy--main-body ,(macroexpand `(loopy-iter ,@body)))))
+
+(cl-callf map-insert loopy-command-parsers
+  'loopy-iter #'loopy-iter--parse-loopy-iter-command)
 
 (provide 'loopy-iter)
 ;;; loopy-iter.el ends here
