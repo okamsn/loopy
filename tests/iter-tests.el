@@ -8,6 +8,10 @@
 (require 'ert)
 (require 'cl-lib)
 
+(defmacro liq (&rest body)
+  "`loopy' quote: Quote a use of `loopy'."
+  `(eval (quote (loopy-iter ,@body))))
+
 ;; A list of special-form code walkers in Iterate. In Emacs Lisp, many of these
 ;; are macros, and so we should not need to test them, as they expand to simpler
 ;; constructs.
@@ -405,28 +409,42 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                     (accum sum important-val val)))
                                 (finally-return important-val)))))))
 
-
 (ert-deftest sub-loop ()
   (should (equal '(2 3 4 5 6)
-                 (eval (quote (loopy-iter (for list i '(1 2 3 4 5))
-                                          (for loop
-                                               (for repeat 1)
-                                               (for expr j (1+ i))
-                                               (accum collect j)))))))
+                 (liq outer
+                      (for list i '(1 2 3 4 5))
+                      (for loop
+                           (for repeat 1)
+                           (for expr j (1+ i))
+                           (for at outer
+                                (accum collect j))))))
 
   (should (equal '(2 3 4 5 6)
-                 (eval (quote (loopy-iter (for list i '(1 2 3 4 5))
-                                          (let ((j nil))
-                                            (for loop
-                                                 (for repeat 1)
-                                                 (setq j (1+ i))
-                                                 (accum collect j))))))))
+                 (liq outer
+                      (for list i '(1 2 3 4 5))
+                      (loopy-iter
+                       (for repeat 1)
+                       (for expr j (1+ i))
+                       (for at outer
+                            (accum collect j))))))
+
+  (should (equal '(2 3 4 5 6)
+                 (liq outer
+                      (for list i '(1 2 3 4 5))
+                      (let ((j nil))
+                        (for loop
+                             (for repeat 1)
+                             (setq j (1+ i))
+                             (for at outer
+                                  (accum collect j)))))))
 
   (should (equal '(1 2 3 4)
-                 (eval (quote (loopy-iter (for list i '((1 2) (3 4)))
-                                          (for loop
-                                               (for list j i)
-                                               (accum collect j))))))))
+                 (liq outer
+                      (for list i '((1 2) (3 4)))
+                      (for loop
+                           (for list j i)
+                           (for at outer
+                                (accum collect j)))))))
 
 (ert-deftest collect-coercion ()
   (should (equal [1 2 3]
@@ -438,4 +456,21 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                   (flag lax-naming)
                   (each j '(1 2 3))
                   (collect j :result-type 'vector)))))
+
+(ert-deftest loopy-iter-command ()
+  (should (equal '(11 12 13 14 15 16)
+                 (loopy outer
+                        (list i '((1 2) (3 4) (5 6)))
+                        (loopy-iter (for list j i)
+                                    (for at outer
+                                         (let ((val 10))
+                                           (accum collect (+ val j)))))))))
+
+(ert-deftest loopy-command-in-iter ()
+  (loopy-iter outer
+              (for array i [(1 2) (3 4)])
+              (for loopy
+                   (list j i)
+                   (at outer (collect j)))))
+
 ;; end

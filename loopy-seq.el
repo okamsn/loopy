@@ -46,15 +46,12 @@
 
 (require 'loopy)
 (require 'loopy-misc)
+(require 'loopy-vars)
 (require 'seq)
 (require 'pcase)
 (require 'loopy-pcase)
 (require 'macroexp)
 (require 'cl-lib)
-
-(defvar loopy--destructuring-for-with-vars-function)
-(defvar loopy--destructuring-accumulation-parser)
-(defvar loopy--flag-settings nil)
 
 (defun loopy-seq--enable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."

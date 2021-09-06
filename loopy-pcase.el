@@ -40,13 +40,10 @@
 ;;; Code:
 (require 'loopy)
 (require 'loopy-misc)
+(require 'loopy-vars)
 (require 'macroexp)
 (require 'pcase)
 (require 'cl-lib)
-
-(defvar loopy--destructuring-for-with-vars-function)
-(defvar loopy--destructuring-accumulation-parser)
-(defvar loopy--flag-settings nil)
 
 (defun loopy-pcase--enable-flag-pcase ()
   "Make this `loopy' loop use `pcase' destructuring."

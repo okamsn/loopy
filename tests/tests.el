@@ -9,6 +9,11 @@
 (require 'ert)
 (require 'loopy "./loopy.el")
 
+;; "loopy quote"
+(defmacro lq (&rest body)
+  "`loopy' quote: Quote a use of `loopy'."
+  `(eval (quote (loopy ,@body))))
+
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
   (should (cl-loop for f in (directory-files ".")
@@ -488,84 +493,124 @@
 
 ;;; Loop Commands
 ;;;; Miscellaneous
-;;;;; Sub Loop
+;;;;; At and sub-loop
+;; TODO: Test error checking for accumulations of different types in separate
+;; loops.
+
+(ert-deftest at-accum ()
+  (should (equal '(1 2 3 4 5 6)
+                 (loopy outer
+                        (list i '((1 2) (3 4) (5 6)))
+                        (sub-loop (list j i)
+                                  (at outer
+                                      (collect j)))))))
+
+(ert-deftest at-leave ()
+  (should (equal '(1 2 3)
+                 (lq outer
+                     (flags split)
+                     (list i '((1 2) (3 4) (5 6)))
+                     (sub-loop (list j i)
+                               (at outer
+                                   (if (> j 3)
+                                       (leave)
+                                     (collect j))))))))
+
+(ert-deftest at-disagreeing-accum-types ()
+  (should-error (loopy outer
+                       (list i '([1 2] [3]))
+                       (collect i)
+                       (loop (array j i)
+                             (at outer (max j)))))
+
+  (should-error (loopy outer
+                       (list i '([1 2] [3]))
+                       (collect i)
+                       (at outer (max j)))))
+
 (ert-deftest sub-loop-implicit-accum-in-loop ()
   (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (eval (quote (loopy (list i '(1 2))
-                                     (loop (list j '(4 5))
-                                           (collect (cons i j))))))))
+                 (lq outer
+                     (list i '(1 2))
+                     (loop (list j '(4 5))
+                           (at outer (collect (cons i j)))))))
+
   (should (equal "14152425"
-                 (eval (quote (loopy (list i '("1" "2"))
-                                     (loop (list j '("4" "5"))
-                                           (concat (concat i j))))))))
+                 (lq outer
+                     (list i '("1" "2"))
+                     (loop (list j '("4" "5"))
+                           (at outer (concat (concat i j)))))))
 
   (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (eval (quote (loopy (list i '(1 2))
-                                     (loop (list j '(4 5))
-                                           (collect (cons i j)))
-                                     (finally-return (cons 0 loopy-result))))))))
+                 (lq outer
+                     (list i '(1 2))
+                     (loop (list j '(4 5))
+                           (at outer (collect (cons i j))))
+                     (finally-return (cons 0 loopy-result))))))
 
 (ert-deftest sub-loop-explicit-accum-in-loop ()
   (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (eval (quote (loopy (list i '(1 2))
-                                     (loop (list j '(4 5))
-                                           (collect my-coll (cons i j)))
-                                     (finally-return (cons 0 my-coll)))))))
+                 (lq outer
+                     (list i '(1 2))
+                     (loop (list j '(4 5))
+                           (at outer (collect my-coll (cons i j))))
+                     (finally-return (cons 0 my-coll)))))
+
   (should (equal "014152425"
-                 (eval (quote (loopy (list i '("1" "2"))
-                                     (loop (list j '("4" "5"))
-                                           (concat my-str (concat i j)))
-                                     (finally-return (concat "0" my-str))))))))
-
-(ert-deftest sub-loop-implicit-accum-in-named-loop ()
-  "The sub-loop should be able to accumulate into the main loop's
-implicit variable without knowing it's name, even for named loops."
-  (should (equal '((1 . 3) (1 . 4) (2 . 3) (2 . 4))
-                 (eval (quote (loopy outer
-                                     (list i '(1 2))
-                                     (loop inner
-                                           (list j '(3 4))
-                                           (collect (cons i j)))))))))
-
+                 (lq outer
+                     (list i '("1" "2"))
+                     (loop (list j '("4" "5"))
+                           (at outer (concat my-str (concat i j))))
+                     (finally-return (concat "0" my-str))))))
+;;
 (ert-deftest sub-loop-leave-early ()
   "A `leave' in a sub-loop should not affect the outer loop."
   (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (loop (list j '(4 5 6))
-                                           (leave)
-                                           (collect j))
-                                     (collect i)))))))
+                  (lq outer
+                      (list i '(1 2 3))
+                      (loop (list j '(4 5 6))
+                            (leave)
+                            (at outer (collect j)))
+                      (collect i)))))
 
 (ert-deftest sub-loop-skip ()
   "A `skip' in a sub-loop should not affect the outer loop."
   (should (equal '(5 7 1 5 7 2 5 7 3)
-                 (eval (quote (loopy  (list i '(1 2 3))
-                                      (loop (list j '(4 5 6 7 8))
-                                            (when (cl-evenp j)
-                                              (continue))
-                                            (collect j))
-                                      (collect i)))))))
+                  (lq  outer
+                       (list i '(1 2 3))
+                       (loop (list j '(4 5 6 7 8))
+                             (when (cl-evenp j)
+                               (continue))
+                             (at outer (collect j)))
+                       (collect i)))))
 
 (ert-deftest sub-loop-return-from-outer ()
-  (should (= 3 (loopy outer
-                      (list i '(1 2 3))
-                      (loop (list j '(4 5 6 3))
-                            (when (= j i)
-                              (return-from outer j)))))))
+  (should (= 3 (lq outer
+                   (list i '(1 2 3))
+                   (loop (list j '(4 5 6 3))
+                         (when (= j i)
+                           (return-from outer j)))))))
 
 (ert-deftest sub-loop-named ()
   (should
    (equal
     '((3 5) (3 5))
-    (eval (quote
-           (loopy (repeat 2)
-                  (loop inner1
-                        (list j '(3 4))
-                        (loop (list k '(5 6 7))
-                              (if (= k 6)
-                                  ;; Return from inner1 so never reach 4.
-                                  (return-from inner1)
-                                (collect (list j k)))))))))))
+    (lq outer
+        (repeat 2)
+        (loop inner1
+              (list j '(3 4))
+              (loop (list k '(5 6 7))
+                    (if (= k 6)
+                        ;; Return from inner1 so never reach 4.
+                        (return-from inner1)
+                      (at outer (collect (list j k))))))))))
+
+(ert-deftest loopy-command ()
+  (should (equal '(1 2 3 4)
+                 (lq outer
+                     (array i [(1 2) (3 4)])
+                     (loopy (list j i)
+                            (at outer (collect j)))))))
 
 ;;;; Generic Evaluation
 ;;;;; Do
@@ -3362,9 +3407,19 @@ Not multiple of 3: 7")))
 ;;;;; Leave
 (ert-deftest leave ()
   (should (equal '(1)
-                 (eval (quote (loopy (list i '(1))
-                                     (collect i)
-                                     (leave)))))))
+                  (eval (quote (loopy (list i '(1 2))
+                                      (collect i)
+                                      (leave)))))))
+
+;;;;; Leave From
+(ert-deftest leave-from ()
+  (should (equal '([1 2 3])
+                 (eval (quote (loopy outer
+                                     (list i '([1 2 3] [4 5 6]))
+                                     (loop (array j i)
+                                           (when (= j 5)
+                                             (leave-from outer)))
+                                     (collect i)))))))
 
 ;;;;; Return
 (ert-deftest return ()
@@ -3388,10 +3443,10 @@ Not multiple of 3: 7")))
                           ;; Could use ‘sum’ command, but don’t want dependencies.
                           (with (sum 0))
                           (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
-                          (do (loopy  (list i sublist)
-                                      (do (setq sum (+ sum i)))
-                                      (when (> sum 15)
-                                        (return-from outer i))))))))))
+                          (do (loopy (list i sublist)
+                                     (do (setq sum (+ sum i)))
+                                     (when (> sum 15)
+                                       (return-from outer i))))))))))
 
 (ert-deftest return-commands-multiple-values ()
   (should
@@ -3409,6 +3464,15 @@ Not multiple of 3: 7")))
                                           (skip))
                                         (push-into my-collection i)
                                         (finally-return (nreverse my-collection))))))))
+
+(ert-deftest skip-from ()
+  (should (equal '((1 2 3) (7 8 9))
+                 (loopy outer
+                        (array i [(1 2 3) (4 5 6) (7 8 9)])
+                        (loop (list j i)
+                              (if (= 5 j)
+                                  (skip-from outer)))
+                        (collect i)))))
 
 ;;;;; While
 (ert-deftest while ()

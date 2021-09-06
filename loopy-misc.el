@@ -712,6 +712,19 @@ See `loopy--destructure-list' for normal values."
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
 
+;;;; Loop Tag Names
+(defun loopy--produce-non-returning-exit-tag-name (&optional loop-name)
+  "Produce a tag from LOOP-NAME."
+  (if loop-name
+      (intern (format "loopy--%s-non-returning-exit-tag" loop-name))
+    'loopy--non-returning-exit-tag))
+
+
+(defun loopy--produce-skip-tag-name (&optional loop-name)
+  "Produce a tag from LOOP-NAME."
+  (if loop-name
+      (intern (format "loopy-%s-skip-tag"  loop-name))
+    'loopy--skip-tag))
 
 (provide 'loopy-misc)
 ;;; loopy-misc.el ends here

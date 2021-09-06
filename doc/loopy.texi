@@ -27,9 +27,9 @@
 @code{cl-loop} (@ref{Loop Facility,,,cl,}) but uses symbolic expressions rather than
 keywords.
 
-For most use cases, @code{loopy} should a nice substitute for @code{cl-loop} and
-complementary to the features provided by the @samp{seq} (@ref{Sequence Functions,,,elisp,})
-and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and mapping features.
+For most use cases, @code{loopy} should be a nice substitute for @code{cl-loop} and
+complementary to the features provided by the @samp{seq} (@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref{Top,,,cl,}) libraries and Emacs's regular looping and
+mapping features.
 
 @end ifnottex
 
@@ -61,7 +61,7 @@ Loop Commands
 * Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
 * Boolean::                      Testing whether a condition holds true.
 * Control Flow::                 When to run loop commands.
-* Sub-loops::                    Running a loop within a loop.
+* Sub-Loops::                    Running a loop within a loop.
 
 Iteration
 
@@ -233,7 +233,7 @@ attempt to interpret it as a loop command, and throw an error if that fails.
 
 These special macro arguments are always processed before loop commands,
 regardless of the order of the arguments passed to @code{loopy}.  As they are not
-loop commands, they cannot occur in sub-loops (@ref{Sub-loops}).
+loop commands, they cannot occur in sub-loops ([BROKEN LINK: *Sub-loops]).
 
 @findex with, let*
 @table @asis
@@ -518,7 +518,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgb094664
+@float Listing,orga2e4473
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -704,7 +704,7 @@ destructuring.  They are explained more in their respective sections.
 * Accumulation::                 Accumulating values into new sequences, aggregating values, etc.
 * Boolean::                      Testing whether a condition holds true.
 * Control Flow::                 When to run loop commands.
-* Sub-loops::                    Running a loop within a loop.
+* Sub-Loops::                    Running a loop within a loop.
 @end menu
 
 @node Generic Evaluation
@@ -2547,7 +2547,7 @@ non-nil, run the following commands @samp{CMDS}.
 @findex skip, continue
 @table @asis
 @item @samp{(skip|continue)}
-Go to next loop iteration.
+Go to the next loop iteration.
 
 @lisp
 ;; => (2 4 6 8 12 14 16 18)
@@ -2557,6 +2557,23 @@ Go to next loop iteration.
        (when (cl-evenp i)
          (push-into my-collection i))
        (finally-return (nreverse my-collection)))
+@end lisp
+@end table
+
+@findex skip-from, continue-from
+@table @asis
+@item @samp{(skip-from|continue-from NAME)}
+Go to the next loop iteration of the
+loop @samp{NAME}.
+
+@lisp
+;; => ((1 2 3) (7 8 9))
+(loopy outer
+       (array i [(1 2 3) (4 5 6) (7 8 9)])
+       (loop (list j i)
+             (if (= 5 j)
+                 (skip-from outer)))
+       (collect i))
 @end lisp
 @end table
 
@@ -2571,14 +2588,14 @@ If multiple values are passed to @samp{return} or @samp{return-from}, these comm
 will return a list of those values.  If no value is given, @code{nil} is
 returned.
 
-The commands @samp{leave}, @samp{while}, and @samp{until} leave the current loop without
-forcing a returned value.  Unlike the @samp{return} commands, they do not stop
-the loop from returning implied return values, such as the collection in
-their respective examples.
+The commands @samp{leave}, @samp{leave-from}, @samp{while}, and @samp{until} leave the current
+loop without forcing a returned value.  Unlike the @samp{return} commands, they
+do not stop the loop from returning any implied return values, such as the
+collection in their respective examples.
 
 @findex leave
 @table @asis
-@item @samp{leave}
+@item @samp{(leave)}
 Leave the current loop without forcing a return value.
 
 @lisp
@@ -2587,6 +2604,24 @@ Leave the current loop without forcing a return value.
        (if (= i 5)
            (leave)
          (collect i)))
+@end lisp
+@end table
+
+@findex leave-from
+@table @asis
+@item @samp{(leave-from NAME)}
+Leave the loop @samp{NAME} without forcing a return
+value.  This command is equivalent to @samp{(at NAME (leave))} (@ref{Sub-Loops}).
+
+@lisp
+;; => ([2 4] [6 8])
+(loopy outer
+       (list i '([2 4] [6 8] [7 10]))
+       (sub-loop (array j i)
+                 (when (cl-oddp j)
+                   ;; Equivalent to `(at outer (leave))'
+                   (leave-from outer)))
+       (collect i))
 @end lisp
 @end table
 
@@ -2646,115 +2681,140 @@ return value.
 @end lisp
 @end table
 
-@node Sub-loops
-@section Sub-loops
+@node Sub-Loops
+@section Sub-Loops
+
+The following commands exist to properly handle sub-loops.  Depending on
+one's needs, passing a @code{loopy} macro call to the do command can be
+insufficient or signal an error, as the sub-loop's macro call is inserted
+into super-loop's expansion literally.  This means that it cannot affect any
+of the super-loop's generated code, such as variable declarations.  The
+following commands do not have that problem, because their expansions are
+processed during the expansion of the top-level macro.
+
+@lisp
+;; Raises an error:
+(loopy outer
+       (list i '((1 2) (3 4) (5 6)))
+       (do (loopy (list j i)
+                  (when (= j 5)
+                    (leave-from outer))))
+       (collect i))
+
+;; Works as expected:
+;; => ((1 2) (3 4))
+(loopy outer
+       (list i '((1 2) (3 4) (5 6)))
+       (sub-loop (list j i)
+                 (when (= j 5)
+                   (leave-from outer)))
+       (collect i))
+
+@end lisp
+
 
 @findex sub-loop, subloop, loop
 @table @asis
-@item @samp{(sub-loop|subloop|loop [CMDS])}
-Create a sub-loop in the same lexical
-environment as the top-level loop.
+@item @samp{(sub-loop|subloop|loop [SPECIAL-MACRO-ARGUMENTS] [CMDS])}
+Create a
+sub-loop in the same lexical environment as the top-level loop, processing
+sub-commands during the top-level loop's expansion.
+
+This command is a wrapped form of the @code{loopy} macro, and so supports all of
+its features, including special macro arguments.  When using @code{loopy-iter}
+(@ref{The @code{loopy-iter} Macro}), this command wraps the @code{loopy-iter} macro instead.
+
+@lisp
+;; => ((2 4) (6 8) (10 12))
+(loopy outer
+       (array i [(2 4) (6 8) (1 3) (10 12)])
+       (sub-loop (list j i)
+                 (when (cl-oddp j)
+                   (skip-from outer)))
+       (collect i))
+@end lisp
 @end table
 
+@findex at
+@table @asis
+@item @samp{(at LOOP-NAME [CMDS])}
+Parse some commands with respect to @samp{LOOP-NAME}.
+For example, a @samp{leave} subcommand would exit the loop @samp{LOOP-NAME}, and an
+accumulation command would create a variable in that super-loop.
 
-There are two main ways to have a sub-loop in @code{loopy}:
-
-@enumerate
-@item
-Use another @code{loopy} call in a @samp{do} command.
-@item
-Use the @samp{sub-loop} (aliases @samp{loop} and @samp{subloop}) command.
-@end enumerate
-
-@samp{sub-loop} is better for accumulating into variables, as is does not create
-its own result variable (unlike calling @code{loopy} again).  When using the
-@samp{sub-loop} command, keep in mind the following:
-
-@enumerate
-@item
-Only loop commands are valid within a sub-loop, not special macro
-arguments like @samp{with} or @samp{finally-return}.
+If you did not use @samp{at} in the below example, then the accumulation would
+be local to the sub-loop and the macro's return value would be @code{nil}.
 
 @lisp
-;; GOOD:
-;; => (8 9 10)
-(loopy (with (a 7))
-       (repeat 1)
-       (loop (list i '(1 2 3))
-             (collect (+ a i))))
-
-;; BAD:
-(loopy (repeat 1)
-       (loop (with (a 7))
-             (list i '(1 2 3))
-             (collect (+ a i))))
+;; => (4 5 10 11 16 17)
+(loopy outer
+       (array i [(1 2) (3 4) (5 6)])
+       (sub-loop (with (sum (apply #'+ i)))
+                 (list j i)
+                 (at outer (collect (+ sum j)))))
 @end lisp
+@end table
 
-@item
-Sub-loops can be named, but they do not have their own return value. The
-default loop name in @code{loopy} is @code{nil} for the top-level loop, but not for
-sub-loops.  To return from the outer loop, you can use @samp{return-from}.
+@findex loopy command
+@table @asis
+@item @samp{(loopy [SPECIAL-MACRO-ARGUMENTS] [CMDS])}
+Specifically wrap a call to
+the @code{loopy} macro.  Unlike the @samp{sub-loop} command, the behavior of this
+command never changes.
+@end table
+
+@findex loopy-iter command
+@table @asis
+@item @samp{(loopy-iter [SPECIAL-MACRO-ARGUMENTS] [BODY])}
+Specifically wrap a call
+to the @code{loopy-iter} macro (@ref{The @code{loopy-iter} Macro}).  Unlike the @samp{sub-loop} command,
+the behavior of this command never changes.
+
+This feature can only be used after first loading the library @samp{loopy-iter}.
 
 @lisp
-;; Return from inner1 so never reach 4.
-;; => ((3 5) (3 5))
-(loopy (repeat 2)
-       (loop inner1
-             (list j '(3 4))
-             (loop (list k '(5 6 7))
-                   (if (= k 6)
-                       (return-from inner1)
-                     (collect (list j k))))))
+(require 'loopy-iter)
 
-;; Can use `return-from' on `nil' to refer to the
-;; top-level loop, if un-named. Otherwise use the name.
-(loopy (list i '(1 2 3))
-       (loop (list j '(5 4 3))
-             (if (= i j)
-                 (return-from nil i)
-               (collect (cons i j)))))
+;; => '(11 12 13 14 15 16)
+(loopy outer
+       (list i '((1 2) (3 4) (5 6)))
+       (loopy-iter (for list j i)
+                   (for at outer
+                        (let ((val 10))
+                          (accum collect (+ val j))))))
 @end lisp
+@end table
 
-Because there is no return value for sub-loops, the @samp{return} and @samp{leave}
-commands behave similarly.
+Keep in mind that the effects of flags (@ref{Using Flags}) are local to the loops in
+which they are used, even when using the @samp{at} command.
 
 @lisp
-;; => ((1 .6) (2 . 6))
-(loopy (list i '(1 2))
-       (loop (list j '(6 7 8))
-             (if (= j 7)
-                 (return)
-               (collect (cons i j)))))
+;; => ((1 2 11 12)
+;;     ((2) (3) (12) (13)))
+(loopy outer
+       (flag pcase)
+       (array elem [(1 2) (11 12)])
+       (collect `(,first . ,rest) elem)
+       ;; NOTE: The sub-loop uses the default destructuring style.
+       ;;       The `pcase' style only affects the surrounding loop.
+       (sub-loop (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
+                 (leave))
+       (finally-return first rest))
 
-;; => ((1 .6) (2 . 6))
-(loopy (list i '(1 2))
-       (loop (list j '(6 7 8))
-             (if (= j 7)
-                 (leave)
-               (collect (cons i j)))))
+;; => (((1 2) (3 4))
+;;     (cat cat)
+;;     (1 dog 2 dog 3 dog 4 dog))
+(loopy outer
+       (flag split)
+       (list i '((1 2) (3 4)))
+       (collect i)
+       (collect 'cat)
+       (loop (list j i)
+             ;; NOTE: These variables not split.
+             (at outer
+                 (collect j)
+                 (collect 'dog))))
 @end lisp
-
-@item
-Variables used for iteration can be local to a sub-loop, but not
-variables used for accumulation.
-
-@lisp
-;; GOOD:
-;; => (0 1 2 3 1 2 3)
-(loopy (repeat 2)
-       (loop (list i '(1 2 3))
-             (collect my-coll i))
-       (finally-return (cons 0 my-coll)))
-
-;; BAD:
-;; Would not give (0 3 3).  Instead, signals error.
-(loopy (repeat 2)
-       (loop (list i '(1 2 3)))
-       ;; Error:  `i' doesn't exist outside the sub-loop:
-       (collect my-coll i)
-       (finally-return (cons 0 my-coll)))
-@end lisp
-@end enumerate
 
 @node Special Variables
 @chapter Special Variables
@@ -2815,6 +2875,20 @@ Use destructuring in a @code{setq} form.
 @end lisp
 @end table
 
+@findex loopy-lambda
+@table @asis
+@item @code{loopy-lambda}
+Use destructuring in a @code{lambda}'s argument list.
+
+@lisp
+;; => ((1 2 :k1 3) 110)
+(funcall (loopy-lambda ((&whole first-arg a b &key k1 (k2 4))
+                        second-arg)
+           (list first-arg (+ a b k1 k2 second-arg)))
+         (list 1 2 :k1 3) 100)
+@end lisp
+@end table
+
 @findex loopy-ref
 @table @asis
 @item @code{loopy-ref}
@@ -2852,7 +2926,8 @@ arbitrary code in a loop.  You must use @code{require} to load this feature.
 
 @quotation Warning
 @strong{This feature is still experimental.}  It might not work correctly in all
-circumstances.
+circumstances.  Please report any problems you come across on this project's
+@uref{https://github.com/okamsn/loopy/issues, issues tracker}.
 
 @end quotation
 
@@ -2954,6 +3029,21 @@ seen by @code{loopy-iter}.
                      elem))
 @end lisp
 
+In @code{loopy}, the @samp{sub-loop} command is a full @code{loopy} loop.  In @code{loopy-iter},
+it is a full @code{loopy-iter} loop.
+
+@lisp
+;; => (2 3 4 5)
+(loopy-iter outer
+            (for list i '([1 2] [3 4]))
+            (for loop
+                 ;; NOTE: `loopy-iter' style, not `loopy' style
+                 (for array j i)
+                 (for at outer
+                      (let ((val (1+ j)))
+                        (accum collect val)))))
+@end lisp
+
 @quotation Note
 Nesting arbitrary code in the loop requires knowing how to understand the
 code.  You might find cases where @code{loopy-iter} interprets code incorrectly.
@@ -2963,8 +3053,8 @@ Please report such cases on this project's @uref{https://github.com/okamsn/loopy
 @end quotation
 
 @code{loopy} (and so @code{loopy-iter}) does not currently have all of the features of
-Common Lisp's @code{iter} macro.  Think of it more as a way to use loop commands
-embedded in arbitrary code.
+Common Lisp's @code{iter} macro.  Think of it more as an alternative form of
+@code{loopy} instead of a port of @code{iter}.
 
 @node Using Flags
 @chapter Using Flags

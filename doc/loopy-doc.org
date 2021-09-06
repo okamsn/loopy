@@ -28,9 +28,10 @@ Features might not work in other formats (e.g., Info links in HTML).
 ~cl-loop~ ([[info:cl#Loop Facility]]) but uses symbolic expressions rather than
 keywords.
 
-For most use cases, ~loopy~ should a nice substitute for ~cl-loop~ and
-complementary to the features provided by the =seq= ([[info:elisp#Sequence Functions]])
-and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping features.
+For most use cases, ~loopy~ should be a nice substitute for ~cl-loop~ and
+complementary to the features provided by the =seq= ([[info:elisp#Sequence
+Functions]]) and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and
+mapping features.
 
 -----
 
@@ -53,7 +54,7 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     - [[#conditionals][Conditionals]]
     - [[#skipping-cycles][Skipping Cycles]]
     - [[#early-exit][Early Exit]]
-  - [[#sub-loops][Sub-loops]]
+  - [[#sub-loops][Sub-Loops]]
 - [[#special-variables][Special Variables]]
 - [[#destructuring-macros][Destructuring Macros]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
@@ -2354,8 +2355,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     :DESCRIPTION: Immediately beginning the next iteration.
     :END:
 
-   #+findex: skip, continue
-    - =(skip|continue)= :: Go to next loop iteration.
+    #+findex: skip, continue
+    - =(skip|continue)= :: Go to the next loop iteration.
 
       #+BEGIN_SRC emacs-lisp
         ;; => (2 4 6 8 12 14 16 18)
@@ -2366,6 +2367,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                  (push-into my-collection i))
                (finally-return (nreverse my-collection)))
       #+END_SRC
+
+    #+findex: skip-from, continue-from
+    - =(skip-from|continue-from NAME)= :: Go to the next loop iteration of the
+      loop =NAME=.
+
+      #+BEGIN_SRC emacs-lisp
+        ;; => ((1 2 3) (7 8 9))
+        (loopy outer
+               (array i [(1 2 3) (4 5 6) (7 8 9)])
+               (loop (list j i)
+                     (if (= 5 j)
+                         (skip-from outer)))
+               (collect i))
+      #+END_SRC
+
 
 *** Early Exit
     :PROPERTIES:
@@ -2381,13 +2397,13 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
     will return a list of those values.  If no value is given, ~nil~ is
     returned.
 
-    The commands =leave=, =while=, and =until= leave the current loop without
-    forcing a returned value.  Unlike the =return= commands, they do not stop
-    the loop from returning implied return values, such as the collection in
-    their respective examples.
+    The commands =leave=, =leave-from=, =while=, and =until= leave the current
+    loop without forcing a returned value.  Unlike the =return= commands, they
+    do not stop the loop from returning any implied return values, such as the
+    collection in their respective examples.
 
     #+findex: leave
-    - =leave= :: Leave the current loop without forcing a return value.
+    - =(leave)= :: Leave the current loop without forcing a return value.
 
       #+begin_src emacs-lisp
         ;; => (1 2 3 4)
@@ -2395,6 +2411,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (if (= i 5)
                    (leave)
                  (collect i)))
+      #+end_src
+
+    #+findex: leave-from
+    - =(leave-from NAME)= :: Leave the loop =NAME= without forcing a return
+      value.  This command is equivalent to =(at NAME (leave))= ([[#sub-loops]]).
+
+      #+begin_src emacs-lisp
+        ;; => ([2 4] [6 8])
+        (loopy outer
+               (list i '([2 4] [6 8] [7 10]))
+               (sub-loop (array j i)
+                         (when (cl-oddp j)
+                           ;; Equivalent to `(at outer (leave))'
+                           (leave-from outer)))
+               (collect i))
       #+end_src
 
     #+findex: return loop command
@@ -2441,105 +2472,132 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                (collect i))
       #+end_src
 
-** Sub-loops
+** Sub-Loops
    :PROPERTIES:
    :DESCRIPTION: Running a loop within a loop.
+   :CUSTOM_ID: sub-loops
    :END:
 
+   The following commands exist to properly handle sub-loops.  Depending on
+   one's needs, passing a ~loopy~ macro call to the =do= command can be
+   insufficient or signal an error, as the sub-loop's macro call is inserted
+   into super-loop's expansion literally.  This means that it cannot affect any
+   of the super-loop's generated code, such as variable declarations.  The
+   following commands do not have that problem, because their expansions are
+   processed during the expansion of the top-level macro.
+
+   #+begin_src emacs-lisp
+     ;; Raises an error:
+     (loopy outer
+            (list i '((1 2) (3 4) (5 6)))
+            (do (loopy (list j i)
+                       (when (= j 5)
+                         (leave-from outer))))
+            (collect i))
+
+     ;; Works as expected:
+     ;; => ((1 2) (3 4))
+     (loopy outer
+            (list i '((1 2) (3 4) (5 6)))
+            (sub-loop (list j i)
+                      (when (= j 5)
+                        (leave-from outer)))
+            (collect i))
+
+   #+end_src
+
+
    #+findex: sub-loop, subloop, loop
-   - =(sub-loop|subloop|loop [CMDS])= :: Create a sub-loop in the same lexical
-     environment as the top-level loop.
+   - =(sub-loop|subloop|loop [SPECIAL-MACRO-ARGUMENTS] [CMDS])= :: Create a
+     sub-loop in the same lexical environment as the top-level loop, processing
+     sub-commands during the top-level loop's expansion.
 
+     This command is a wrapped form of the ~loopy~ macro, and so supports all of
+     its features, including special macro arguments.  When using ~loopy-iter~
+     ([[#loopy-iter]]), this command wraps the ~loopy-iter~ macro instead.
 
-   There are two main ways to have a sub-loop in ~loopy~:
+     #+begin_src emacs-lisp
+       ;; => ((2 4) (6 8) (10 12))
+       (loopy outer
+              (array i [(2 4) (6 8) (1 3) (10 12)])
+              (sub-loop (list j i)
+                        (when (cl-oddp j)
+                          (skip-from outer)))
+              (collect i))
+     #+end_src
 
-   1. Use another ~loopy~ call in a =do= command.
-   2. Use the =sub-loop= (aliases =loop= and =subloop=) command.
+   #+findex: at
+   - =(at LOOP-NAME [CMDS])= :: Parse some commands with respect to =LOOP-NAME=.
+     For example, a =leave= subcommand would exit the loop =LOOP-NAME=, and an
+     accumulation command would create a variable in that super-loop.
 
-   =sub-loop= is better for accumulating into variables, as is does not create
-   its own result variable (unlike calling ~loopy~ again).  When using the
-   =sub-loop= command, keep in mind the following:
+     If you did not use =at= in the below example, then the accumulation would
+     be local to the sub-loop and the macro's return value would be ~nil~.
 
-   1. Only loop commands are valid within a sub-loop, not special macro
-      arguments like =with= or =finally-return=.
+     #+begin_src emacs-lisp
+       ;; => (4 5 10 11 16 17)
+       (loopy outer
+              (array i [(1 2) (3 4) (5 6)])
+              (sub-loop (with (sum (apply #'+ i)))
+                        (list j i)
+                        (at outer (collect (+ sum j)))))
+     #+end_src
 
-      #+begin_src emacs-lisp
-        ;; GOOD:
-        ;; => (8 9 10)
-        (loopy (with (a 7))
-               (repeat 1)
-               (loop (list i '(1 2 3))
-                     (collect (+ a i))))
+   #+findex: loopy command
+   - =(loopy [SPECIAL-MACRO-ARGUMENTS] [CMDS])= :: Specifically wrap a call to
+     the ~loopy~ macro.  Unlike the =sub-loop= command, the behavior of this
+     command never changes.
 
-        ;; BAD:
-        (loopy (repeat 1)
-               (loop (with (a 7))
-                     (list i '(1 2 3))
-                     (collect (+ a i))))
-      #+end_src
+   #+findex: loopy-iter command
+   - =(loopy-iter [SPECIAL-MACRO-ARGUMENTS] [BODY])= :: Specifically wrap a call
+     to the ~loopy-iter~ macro ([[#loopy-iter]]).  Unlike the =sub-loop= command,
+     the behavior of this command never changes.
 
-   2. Sub-loops can be named, but they do not have their own return value. The
-      default loop name in ~loopy~ is ~nil~ for the top-level loop, but not for
-      sub-loops.  To return from the outer loop, you can use =return-from=.
+     This feature can only be used after first loading the library =loopy-iter=.
 
-      #+begin_src emacs-lisp
-        ;; Return from inner1 so never reach 4.
-        ;; => ((3 5) (3 5))
-        (loopy (repeat 2)
-               (loop inner1
-                     (list j '(3 4))
-                     (loop (list k '(5 6 7))
-                           (if (= k 6)
-                               (return-from inner1)
-                             (collect (list j k))))))
+     #+begin_src elisp
+       (require 'loopy-iter)
 
-        ;; Can use `return-from' on `nil' to refer to the
-        ;; top-level loop, if un-named. Otherwise use the name.
-        (loopy (list i '(1 2 3))
-               (loop (list j '(5 4 3))
-                     (if (= i j)
-                         (return-from nil i)
-                       (collect (cons i j)))))
-      #+end_src
+       ;; => '(11 12 13 14 15 16)
+       (loopy outer
+              (list i '((1 2) (3 4) (5 6)))
+              (loopy-iter (for list j i)
+                          (for at outer
+                               (let ((val 10))
+                                 (accum collect (+ val j))))))
+     #+end_src
 
-      Because there is no return value for sub-loops, the =return= and =leave=
-      commands behave similarly.
+   Keep in mind that the effects of flags ([[#flags]]) are local to the loops in
+   which they are used, even when using the =at= command.
 
-      #+begin_src emacs-lisp
-        ;; => ((1 .6) (2 . 6))
-        (loopy (list i '(1 2))
-               (loop (list j '(6 7 8))
-                     (if (= j 7)
-                         (return)
-                       (collect (cons i j)))))
+   #+begin_src emacs-lisp
+     ;; => ((1 2 11 12)
+     ;;     ((2) (3) (12) (13)))
+     (loopy outer
+            (flag pcase)
+            (array elem [(1 2) (11 12)])
+            (collect `(,first . ,rest) elem)
+            ;; NOTE: The sub-loop uses the default destructuring style.
+            ;;       The `pcase' style only affects the surrounding loop.
+            (sub-loop (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
+                      (leave))
+            (finally-return first rest))
 
-        ;; => ((1 .6) (2 . 6))
-        (loopy (list i '(1 2))
-               (loop (list j '(6 7 8))
-                     (if (= j 7)
-                         (leave)
-                       (collect (cons i j)))))
-      #+end_src
+     ;; => (((1 2) (3 4))
+     ;;     (cat cat)
+     ;;     (1 dog 2 dog 3 dog 4 dog))
+     (loopy outer
+            (flag split)
+            (list i '((1 2) (3 4)))
+            (collect i)
+            (collect 'cat)
+            (loop (list j i)
+                  ;; NOTE: These variables not split.
+                  (at outer
+                      (collect j)
+                      (collect 'dog))))
+   #+end_src
 
-   3. Variables used for iteration can be local to a sub-loop, but not
-      variables used for accumulation.
-
-      #+begin_src emacs-lisp
-        ;; GOOD:
-        ;; => (0 1 2 3 1 2 3)
-        (loopy (repeat 2)
-               (loop (list i '(1 2 3))
-                     (collect my-coll i))
-               (finally-return (cons 0 my-coll)))
-
-        ;; BAD:
-        ;; Would not give (0 3 3).  Instead, signals error.
-        (loopy (repeat 2)
-               (loop (list i '(1 2 3)))
-               ;; Error:  `i' doesn't exist outside the sub-loop:
-               (collect my-coll i)
-               (finally-return (cons 0 my-coll)))
-      #+end_src
 
 * Special Variables
   :PROPERTIES:
@@ -2597,6 +2655,17 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
         (list a b c k1 k2 k3))
     #+end_src
 
+  #+findex: loopy-lambda
+  - ~loopy-lambda~ :: Use destructuring in a ~lambda~'s argument list.
+
+    #+begin_src emacs-lisp
+      ;; => ((1 2 :k1 3) 110)
+      (funcall (loopy-lambda ((&whole first-arg a b &key k1 (k2 4))
+                              second-arg)
+                 (list first-arg (+ a b k1 k2 second-arg)))
+               (list 1 2 :k1 3) 100)
+    #+end_src
+
   #+findex: loopy-ref
   - ~loopy-ref~ :: Create destructured references to the fields in a sequence
     via ~cl-symbol-macrolet~.  This is not to be confused with ~cl-letf~, which
@@ -2636,7 +2705,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+attr_texinfo: :tag Warning
   #+begin_quote
   *This feature is still experimental.*  It might not work correctly in all
-  circumstances.
+  circumstances.  Please report any problems you come across on this project's
+  [[https://github.com/okamsn/loopy/issues][issues tracker]].
   #+end_quote
 
   This macro is meant to be conceptually similar to the ~iterate~ or ~iter~
@@ -2737,6 +2807,21 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
                          elem))
   #+end_src
 
+  In ~loopy~, the =sub-loop= command is a full ~loopy~ loop.  In ~loopy-iter~,
+  it is a full ~loopy-iter~ loop.
+
+  #+begin_src emacs-lisp
+    ;; => (2 3 4 5)
+    (loopy-iter outer
+                (for list i '([1 2] [3 4]))
+                (for loop
+                     ;; NOTE: `loopy-iter' style, not `loopy' style
+                     (for array j i)
+                     (for at outer
+                          (let ((val (1+ j)))
+                            (accum collect val)))))
+  #+end_src
+
   #+attr_texinfo: :tag Note
   #+begin_quote
   Nesting arbitrary code in the loop requires knowing how to understand the
@@ -2746,8 +2831,8 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
   #+end_quote
 
   ~loopy~ (and so ~loopy-iter~) does not currently have all of the features of
-  Common Lisp's ~iter~ macro.  Think of it more as a way to use loop commands
-  embedded in arbitrary code.
+  Common Lisp's ~iter~ macro.  Think of it more as an alternative form of
+  ~loopy~ instead of a port of ~iter~.
 
 
 * Using Flags
@@ -4054,4 +4139,4 @@ and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and mapping fea
 # toc-org-max-depth: 20
 # End:
 
-#  LocalWords:  alists plists
+#  LocalWords:  alists plists Loopy's
