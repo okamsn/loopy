@@ -2,7 +2,9 @@
 
 This document describes the user-facing changes to Loopy.
 
-## Unreleased
+## 0.9.1
+
+Released 2021-09-06.
 
 ### Breaking Changes
 
@@ -24,7 +26,8 @@ This document describes the user-facing changes to Loopy.
   See [#70], [#87].
 - The `leave-from` command has been re-added, now that code generation is more
   robust.  See [#87].
-- A `skip-from` command was added.
+- A `skip-from` command was added.  See [#87].
+- Commands `loopy` and `loopy-iter` were added.  See [#87].
 - Add feature `loopy-lambda`.  This is like `pcase-lambda`, but uses `loopy`
   destructuring.  See [#87].
 - List `seq.el` in the package requirements.  See [#87].
