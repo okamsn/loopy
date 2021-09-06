@@ -1332,9 +1332,11 @@ is the accumulation command.
 (defun loopy--produce-collect-end-tracking (var val)
   "Produce instructions for an end-tracking accumulation of single items.
 
-This is used in accumulation commands like `collect'.
+VAR is the variable whose end is to be tracked.  VAL is the value
+to be added to the end of VAR.  This is used in accumulation
+commands like `collect'.
 
-For efficiency, accumulation command use references to track the
+For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
@@ -1359,9 +1361,12 @@ more efficient than repeatedly traversing the list."
 (defun loopy--produce-adjoin-end-tracking (var val membership-test)
   "Produce instructions for an end-tracking accumulation of single items.
 
-This is used in accumulation commands like `collect'.
+VAR is the variable whose end is to be tracked.  VAL is the value
+to be added to the end of VAR.  MEMBERSHIP-TEST determines
+whether VAL is already a member of VAR.  This is used in
+accumulation commands like `adjoin'.
 
-For efficiency, accumulation command use references to track the
+For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
@@ -1389,9 +1394,12 @@ more efficient than repeatedly traversing the list."
 (defun loopy--produce-multi-item-end-tracking (var val &optional destructive)
   "Produce instructions for an end-tracking accumulation of copy-joined lists.
 
-This is used in accumulation commands like `append' and `nconc'.
+VAR is the variable whose end is to be tracked.  VAL is the value
+to be added to the end of VAR.  DESTRUCTIVE determines whether
+VAL is added to end of VAR destructively.  This is used in
+accumulation commands like `append' and `nconc'.
 
-For efficiency, accumulation command use references to track the
+For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
@@ -1416,9 +1424,14 @@ more efficient than repeatedly traversing the list."
     (var val test-method &optional destructive)
   "Produce instructions for an end-tracking accumulation of modify-joined lists.
 
-This is used in accumulation commands like `union' and `nunion'.
+VAR is the variable whose end is to be tracked.  VAL is the value
+to be added to the end of VAR.  TEST-METHOD is a function
+returning t for any element in VAL that is already a member of
+VAR.  DESTRUCTIVE determines whether VAL is added to end of VAR
+destructively.  This is used in accumulation commands like
+`union' and `nunion'.
 
-For efficiency, accumulation command use references to track the
+For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
   ;; End tracking is a bit slower than `nconc' for short
@@ -1742,7 +1755,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           `((loopy--main-body (setq ,var (append ,val ,var)))))
          ((member pos '(end 'end))
           (loopy--produce-multi-item-end-tracking var val))
-         (error "Bad `:at' position: %s" cmd))))
+         (t
+          (error "Bad `:at' position: %s" cmd)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end)) opts
     `((loopy--accumulation-vars (,var nil))

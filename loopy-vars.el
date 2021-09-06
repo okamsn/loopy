@@ -368,7 +368,7 @@ This is done using a `progn'.")
 ;;;; Loop Commands
 ;;;;; At Commands
 (defvar loopy--at-instructions nil
-  "These sublists are the instructions that affect a loop higher up the call list.
+  "These are instructions that affect a loop higher up the call list.
 
 Mostly, these are variable declarations, as determined by
 `loopy--external-at-targets'.
