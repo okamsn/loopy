@@ -2,6 +2,12 @@
 
 This document describes the user-facing changes to Loopy.
 
+### Bugs Fixed
+
+- Fix badly formed condition case in `append` command.  This bug does not affect
+  properly written loops, just how errors are signaled.  This bug was introduced
+  in version 0.9.1.
+
 ## 0.9.1
 
 Released 2021-09-06.
