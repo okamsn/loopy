@@ -42,260 +42,258 @@ please let me know.
 
 * Introduction
 
-  The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
-  Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
+The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
+Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
 
-  #+begin_src emacs-lisp
-    ;; A simple usage of `cl-loop':
-    (cl-loop for i from 1 to 10
-             if (cl-evenp i) collect i into evens
-             else collect i into odds
-             end ; This `end' keyword is optional here.
-             finally return (list odds evens))
+#+begin_src emacs-lisp
+  ;; A simple usage of `cl-loop':
+  (cl-loop for i from 1 to 10
+           if (cl-evenp i) collect i into evens
+           else collect i into odds
+           end ; This `end' keyword is optional here.
+           finally return (list odds evens))
 
-    ;; How it could be done using `loopy':
-    (loopy (numbers i 1 10)
-           (if (cl-evenp i)
-               (collect evens i)
-             (collect odds i))
-           (finally-return odds evens))
-  #+end_src
+  ;; How it could be done using `loopy':
+  (loopy (numbers i 1 10)
+         (if (cl-evenp i)
+             (collect evens i)
+           (collect odds i))
+         (finally-return odds evens))
+#+end_src
 
-  ~loopy~ supports destructuring for iteration commands like =list= and
-  accumulation commands like =sum= or =collect=.
+~loopy~ supports destructuring for iteration commands like =list= and
+accumulation commands like =sum= or =collect=.
 
-  #+begin_src emacs-lisp
-    ;; Summing the nth elements of arrays:
-    ;; => (8 10 12 14 16 18)
-    (loopy (list (list-elem1 list-elem2)
-                 '(([1 2 3] [4 5 6])
-                   ([7 8 9] [10 11 12])))
-           (sum [sum1 sum2 sum3] list-elem1)
-           (sum [sum4 sum5 sum6] list-elem2)
-           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
+#+begin_src emacs-lisp
+  ;; Summing the nth elements of arrays:
+  ;; => (8 10 12 14 16 18)
+  (loopy (list (list-elem1 list-elem2)
+               '(([1 2 3] [4 5 6])
+                 ([7 8 9] [10 11 12])))
+         (sum [sum1 sum2 sum3] list-elem1)
+         (sum [sum4 sum5 sum6] list-elem2)
+         (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
-    ;; Or, more simply:
-    ;; => (8 10 12 14 16 18)
-    (loopy (list list-elem '(([1 2 3] [4 5 6])
-                             ([7 8 9] [10 11 12])))
-           (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
-                list-elem)
-           (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
+  ;; Or, more simply:
+  ;; => (8 10 12 14 16 18)
+  (loopy (list list-elem '(([1 2 3] [4 5 6])
+                           ([7 8 9] [10 11 12])))
+         (sum ([sum1 sum2 sum3] [sum4 sum5 sum6])
+              list-elem)
+         (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
 
-    ;; Separate the elements of sub-list:
-    ;; => ((1 3) (2 4))
-    (loopy (list i '((1 2) (3 4)))
-           (collect (elem1 elem2) i)
-           (finally-return elem1 elem2))
-  #+end_src
+  ;; Separate the elements of sub-list:
+  ;; => ((1 3) (2 4))
+  (loopy (list i '((1 2) (3 4)))
+         (collect (elem1 elem2) i)
+         (finally-return elem1 elem2))
+#+end_src
 
-  The ~loopy~ macro is configurable and extensible.  In addition to writing one's
-  own "loop commands" (such as =list= in the example below), by using "flags",
-  one can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
-  library for destructuring.
+The ~loopy~ macro is configurable and extensible.  In addition to writing one's
+own "loop commands" (such as =list= in the example below), by using "flags",
+one can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
+library for destructuring.
 
-  #+begin_src emacs-lisp
-    ;; Use `pcase' to destructure array elements:
-    ;; => ((1 2 3 4) (10 12 14) (11 13 15))
-    (loopy (flag pcase)
-           (array (or `(,car . ,cdr) digit)
-                  [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
-           (if digit
-               (collect digits digit)
-             (collect cars car)
-             (collect cdrs cdr))
-           (finally-return digits cars cdrs))
+#+begin_src emacs-lisp
+  ;; Use `pcase' to destructure array elements:
+  ;; => ((1 2 3 4) (10 12 14) (11 13 15))
+  (loopy (flag pcase)
+         (array (or `(,car . ,cdr) digit)
+                [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
+         (if digit
+             (collect digits digit)
+           (collect cars car)
+           (collect cdrs cdr))
+         (finally-return digits cars cdrs))
 
-    ;; Using the default destructuring:
-    ;; => ((1 2 3 4) (10 12 14) (11 13 15))
-    (loopy (array elem [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
-           (if (numberp elem)
-               (collect digits elem)
-             (collect (cars . cdrs) elem))
-           (finally-return digits cars cdrs))
-  #+end_src
+  ;; Using the default destructuring:
+  ;; => ((1 2 3 4) (10 12 14) (11 13 15))
+  (loopy (array elem [1 (10 . 11) 2 (12 . 13) 3 4 (14 . 15)])
+         (if (numberp elem)
+             (collect digits elem)
+           (collect (cars . cdrs) elem))
+         (finally-return digits cars cdrs))
+#+end_src
 
-  Variables like =cars=, =cdrs=, and =digits= in the example above are
-  automatically ~let~-bound so as to not affect code outside of the loop.
+Variables like =cars=, =cdrs=, and =digits= in the example above are
+automatically ~let~-bound so as to not affect code outside of the loop.
 
-  ~loopy~ has arguments for binding (or not binding) variables, executing code
-  before/after the loop, executing code only if the loop completes, and for
-  setting the macro's return value (default ~nil~).  This is in addition to the
-  looping features themselves.
+~loopy~ has arguments for binding (or not binding) variables, executing code
+before/after the loop, executing code only if the loop completes, and for
+setting the macro's return value (default ~nil~).  This is in addition to the
+looping features themselves.
 
-  All of this makes ~loopy~ a useful and convenient choice for looping and
-  iteration.
+All of this makes ~loopy~ a useful and convenient choice for looping and
+iteration.
 
 * Similar Libraries
 
-  Loopy is not the only Lisp library that uses expressions instead of keyword
-  clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from Common
-  Lisp.
+Loopy is not the only Lisp library that uses expressions instead of keyword
+clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from Common
+Lisp.
 
-  #+begin_src emacs-lisp
-    ;; Collecting 10 random numbers:
-    ;; cl-loop, iterate, for, loopy
+#+begin_src emacs-lisp
+  ;; Collecting 10 random numbers:
+  ;; cl-loop, iterate, for, loopy
 
-    (cl-loop repeat 10 collect (random 10))
+  (cl-loop repeat 10 collect (random 10))
 
-    (iterate (repeat 10) (collect (random 10)))
+  (iterate (repeat 10) (collect (random 10)))
 
-    (for:for ((i repeat 10) (randoms collecting (random 10))))
+  (for:for ((i repeat 10) (randoms collecting (random 10))))
 
-    (loopy (repeat 10) (collect (random 10)))
-  #+end_src
+  (loopy (repeat 10) (collect (random 10)))
+#+end_src
 
-  Generally, all of the packages handle basic use cases in similar ways.  One
-  large difference is that ~iterate~ can embed its looping constructs in
-  arbitrary code.  Loopy is currently experimenting with this feature using a
-  separate macro, ~loopy-iter~.
+Generally, all of the packages handle basic use cases in similar ways.  One
+large difference is that ~iterate~ can embed its looping constructs in
+arbitrary code.  Loopy is currently experimenting with this feature using a
+separate macro, ~loopy-iter~.
 
-  #+begin_src emacs-lisp
-    (require 'loopy-iter)
+#+begin_src emacs-lisp
+  (require 'loopy-iter)
 
-    (loopy-iter (for repeat 10)          ; Use `for' and `accum'
-                (let ((var (random 10))) ; to recognize looping constructs
-                  (accum collect var)))  ; `repeat' and `collect'.
-  #+end_src
+  (loopy-iter (for repeat 10)          ; Use `for' and `accum'
+              (let ((var (random 10))) ; to recognize looping constructs
+                (accum collect var)))  ; `repeat' and `collect'.
+#+end_src
 
-  Loopy is not yet feature complete.  Please request features or report problems
-  in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While basic uses are covered, some of the
-  more niche features of ~cl-loop~ and ~iterate~ are still being added.
+Loopy is not yet feature complete.  Please request features or report problems
+in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While basic uses are covered, some of the
+more niche features of ~cl-loop~ and ~iterate~ are still being added.
 
 * How to Install
 
-  Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional
-  package =loopy-dash= can be installed to enable using the Dash
-  library for destructuring (instead of other methods).
+Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional
+package =loopy-dash= can be installed to enable using the Dash
+library for destructuring (instead of other methods).
 
-  #+begin_src emacs-lisp
-    (use-package loopy)
+#+begin_src emacs-lisp
+  (use-package loopy)
 
-    ;; Optional support for destructuring with Dash.
-    (use-package loopy-dash
-      :after (loopy)
-      :demand t)
-  #+end_src
+  ;; Optional support for destructuring with Dash.
+  (use-package loopy-dash
+    :after (loopy)
+    :demand t)
+#+end_src
 
-  To load all of the alternative destructuring libraries (see section [[*Multiple Kinds of Destructuring][Multiple
-  Kinds of Destructuring]]) and the alternative macro form (see section [[*Loop Commands in Arbitrary Code][Loop
-  Commands in Arbitrary Code]]), use
+To load all of the alternative destructuring libraries (see section [[*Multiple Kinds of Destructuring][Multiple
+Kinds of Destructuring]]) and the alternative macro form (see section [[*Loop Commands in Arbitrary Code][Loop
+Commands in Arbitrary Code]]), use
 
-  #+begin_src emacs-lisp
-    (use-package loopy
-      :config
-      (require 'loopy-iter)
-      (require 'loopy-pcase)
-      (require 'loopy-seq))
+#+begin_src emacs-lisp
+  (use-package loopy
+    :config
+    (require 'loopy-iter)
+    (require 'loopy-pcase)
+    (require 'loopy-seq))
 
-    (use-package loopy-dash
-      :after (loopy)
-      :demand t)
-  #+end_src
+  (use-package loopy-dash
+    :after (loopy)
+    :demand t)
+#+end_src
 
 * Multiple Kinds of Destructuring
 
-  ~loopy~ can optionally use destructuring provided by ~pcase-let~, ~seq-let~,
-  the =dash= library, as well as its own kind.  This provides greater
-  flexibility and allows you to use destructuring patterns that you're already
-  familiar with.
+~loopy~ can optionally use destructuring provided by ~pcase-let~, ~seq-let~,
+the =dash= library, as well as its own kind.  This provides greater
+flexibility and allows you to use destructuring patterns that you're already
+familiar with.
 
-  These features can be enabled with "flags", described in the section
-  [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#using-flags][Using Flags]] in the documentation.
+These features can be enabled with "flags", described in the section
+[[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#using-flags][Using Flags]] in the documentation.
 
-  Here are a few examples that demonstrate how ~loopy~ can use destructuring
-  with accumulation commands.
+Here are a few examples that demonstrate how ~loopy~ can use destructuring
+with accumulation commands.
 
-  #+begin_src emacs-lisp
-    (require 'loopy-dash)
-    ;; => (((1 (2 3)) (4 (5 6))) ; whole
-    ;;     (1 4)                 ; i
-    ;;     (3 6))                ; k
-    (loopy (flag dash)
-           (list elem '((1 (2 3)) (4 (5 6))))
-           (collect (whole &as i (_ k)) elem)
-           (finally-return whole i k))
+#+begin_src emacs-lisp
+  (require 'loopy-dash)
+  ;; => (((1 (2 3)) (4 (5 6))) ; whole
+  ;;     (1 4)                 ; i
+  ;;     (3 6))                ; k
+  (loopy (flag dash)
+         (list elem '((1 (2 3)) (4 (5 6))))
+         (collect (whole &as i (_ k)) elem)
+         (finally-return whole i k))
 
-    ;; = > ((3 5) (4 6))
-    (loopy (flag dash)
-           (list (&plist :a a  :b b)
-                 '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
-           (collect a-vals a)
-           (collect b-vals b)
-           (finally-return a-vals b-vals))
+  ;; = > ((3 5) (4 6))
+  (loopy (flag dash)
+         (list (&plist :a a  :b b)
+               '((:a 3  :b 4 :c 7) (:g 8 :a 5 :b 6)))
+         (collect a-vals a)
+         (collect b-vals b)
+         (finally-return a-vals b-vals))
 
-    (require 'loopy-pcase)
-    ;; => ((1 4) (3 6))
-    (loopy (flag pcase)
-           (list elem '((1 (2 3)) (4 (5 6))))
-           (collect `(,a (,_ ,b)) elem)
-           (finally-return a b))
+  (require 'loopy-pcase)
+  ;; => ((1 4) (3 6))
+  (loopy (flag pcase)
+         (list elem '((1 (2 3)) (4 (5 6))))
+         (collect `(,a (,_ ,b)) elem)
+         (finally-return a b))
 
-    ;; => ((1 6) (3 8) ([4 5] [9 10]))
-    (require 'loopy-seq)
-    (loopy (flag seq)
-           (list elem '([1 2 3 4 5] [6 7 8 9 10]))
-           (collect [a _ b &rest c] elem)
-           (finally-return a b c))
-  #+end_src
+  ;; => ((1 6) (3 8) ([4 5] [9 10]))
+  (require 'loopy-seq)
+  (loopy (flag seq)
+         (list elem '([1 2 3 4 5] [6 7 8 9 10]))
+         (collect [a _ b &rest c] elem)
+         (finally-return a b c))
+#+end_src
 
-  For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
-  form.
+For more on how =dash= does destructuring, see their documentation on the [[https://github.com/magnars/dash.el#-let-varlist-rest-body][-let]]
+form.
 
 * Loop Commands in Arbitrary Code
 
-  The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
-  It requires using a keyword =for=, =accum=, or =exit= before a loop command to
-  distinguish loop commands from built-in Emacs features (though this can be
-  disabled with the flag =lax-naming=).
+The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
+It requires using a keyword =for=, =accum=, or =exit= before a loop command to
+distinguish loop commands from built-in Emacs features (though this can be
+disabled with the flag =lax-naming=).
 
-  #+begin_center
-  *NOTE: This feature is still experimental.  Please report any problems you
-   come across.*
-  #+end_center
+#+begin_center
+*NOTE: This feature is still experimental.  Please report any problems you
+come across.*
+#+end_center
 
-  #+begin_src emacs-lisp
-    (require 'loopy-iter)
+#+begin_src emacs-lisp
+  (require 'loopy-iter)
 
-    ;; => (2 4 6)
-    (loopy-iter (for list i '(1 2 3))
-                (let ((a (* 2 i)))
-                  (accum collect a)))
+  ;; => (2 4 6)
+  (loopy-iter (for list i '(1 2 3))
+              (let ((a (* 2 i)))
+                (accum collect a)))
 
-    ;; => (8 9 10 11 12)
-    (loopy-iter (let ((a (progn
-                           (for expr j 8 (1+ j))
-                           (when (> j 12)
-                             ;; Leave the loop without preventing the use of the
-                             ;; implicit return value created by `collect'.
-                             (exit leave))
-                           j)))
-                  (accum collect a)))
-  #+end_src
+  ;; => (8 9 10 11 12)
+  (loopy-iter (let ((a (progn
+                         (for expr j 8 (1+ j))
+                         (when (> j 12)
+                           ;; Leave the loop without preventing the use of the
+                           ;; implicit return value created by `collect'.
+                           (exit leave))
+                         j)))
+                (accum collect a)))
+#+end_src
 
-  For more on this, [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#the-loopy-iter-macro][see the documentation]].
+For more on this, [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#the-loopy-iter-macro][see the documentation]].
 
 * Adding Custom Commands
-  :PROPERTIES:
-  :CUSTOM_ID: adding-custom-commands
-  :END:
+:PROPERTIES:
+:CUSTOM_ID: adding-custom-commands
+:END:
 
-  It is easy to create custom commands for Loopy.  To see how, see the section
-  [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#custom-commands][Custom Commands]] in the documentation.
+It is easy to create custom commands for Loopy.  To see how, see the section
+[[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#custom-commands][Custom Commands]] in the documentation.
 
 * Comparing to =cl-loop=
-  :PROPERTIES:
-  :CUSTOM_ID: how-does-it-compare-to-other-approaches
-  :END:
+:PROPERTIES:
+:CUSTOM_ID: how-does-it-compare-to-other-approaches
+:END:
 
-  See the documentation page [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#comparing-to-cl-loop][Comparing to ~cl-loop~]].  See also the wiki page
-  [[https://github.com/okamsn/loopy/wiki/speed-comparisons][Speed Comparisons]].
+See the documentation page [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#comparing-to-cl-loop][Comparing to ~cl-loop~]].  See also the wiki page [[https://github.com/okamsn/loopy/wiki/speed-comparisons][Speed
+Comparisons]].
 
 
 * Real-World Examples
 
-  See the wiki page [[https://github.com/okamsn/loopy/wiki/Examples][Examples]].
+See the wiki page [[https://github.com/okamsn/loopy/wiki/Examples][Examples]].
 
-# Local Variables:
-# org-link-file-path-type: relative
-# End:
+# Local Variables: org-link-file-path-type: relative End:
