@@ -491,6 +491,15 @@ The function creates quoted code that should be used by a macro."
           (setq result `(prog1 ,result ,@loopy--final-do)
                 result-is-one-expression t)))
 
+      ;; Handle `final-protect'.  This surround the loop but is inside
+      ;; the variable declarations.
+      (when loopy--final-protect
+        (setq result `(unwind-protect ,(if result-is-one-expression
+                                           result
+                                         (macroexp-progn result))
+                        ,@loopy--final-protect)
+              result-is-one-expression t))
+
       ;; Bind `loopy-first-iteration'.
       (setq result `(let ((loopy-first-iteration t))
                       ,@(get-result))
@@ -809,6 +818,11 @@ see the Info node `(loopy)' distributed with this package."
      (setq loopy--final-return (if (= 1 (length arg-value))
                                    (cl-first arg-value)
                                  (cons 'list arg-value)))
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+   ;; Finally Protect
+   (loopy--process-special-marco-args '(finally-protect finally-protected)
+     (setq loopy--final-protect arg-value)
      (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
 ;;;;; Check the loop name and loop commands.

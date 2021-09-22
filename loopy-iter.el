@@ -444,6 +444,11 @@ information on how to use `loopy' and `loopy-iter'.
                                  (cons 'list arg-value)))
      (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
+   ;; Finally Protect
+   (loopy--process-special-marco-args '(finally-protect finally-protected)
+     (setq loopy--final-protect arg-value)
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
    ;; Process the main body.
    (push loopy--loop-name loopy--known-loop-names)
    (unwind-protect

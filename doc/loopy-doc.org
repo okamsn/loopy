@@ -355,6 +355,30 @@ mapping features.
              (finally-return 1 2 3))
     #+end_src
 
+  #+findex: finally-protect, finally-protected
+  - =finally-protect=, =finally-protected= :: Wrap the loop in ~unwind-protect~
+    (not to be confused with ~condition-case~).  The arguments to this special
+    macro argument (which are Lisp expressions) can access the variables used by
+    the loop.
+
+    #+begin_src emacs-lisp
+      ;; Prints out the following, then continues signalling the error:
+      ;;
+      ;; Example var is: 1
+      ;; Last used element in list is: 4
+      ;; Then current value of ‘my-collection’: (1 2 3 4)
+      (loopy (with (example-var 1))
+             (list i '(1 2 3 4 5))
+             (collect my-collection i)
+             (when (> i 3)
+               (do (signal 'some-error (list i))))
+             (finally-protect
+              (message "Example var is: %d" example-var)
+              (message "Last used element in list is: %s" i)
+              (message "Then current value of `my-collection': %s"
+                       my-collection)))
+    #+end_src
+
   #+findex: flag, flags
   - =flag=, =flags= :: Options that change the behavior of ~loopy~ ([[#flags]]).
 

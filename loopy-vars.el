@@ -458,6 +458,9 @@ These run in a `progn'.")
 (defvar loopy--final-do nil
   "A list of expressions always run (in order) after the loop finishes/exits.")
 
+(defvar loopy--final-protect nil
+  "A list of expression always run, even if an error occurs in the loop body.")
+
 (defvar loopy--final-return nil
   "What the macro finally returns.  This overrides any early return value.")
 
@@ -573,6 +576,7 @@ command) create for themselves a new, local top level.")
       loopy--before-do
       loopy--after-do
       loopy--final-do
+      loopy--final-protect
       loopy--final-return
 
       ;; -- Vars for processing loop commands --

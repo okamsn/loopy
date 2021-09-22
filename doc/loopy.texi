@@ -382,6 +382,33 @@ a list of those values.  This is convenient when used with @code{seq-let},
 @end lisp
 @end table
 
+@findex finally-protect, finally-protected
+@table @asis
+@item @samp{finally-protect}, @samp{finally-protected}
+Wrap the loop in @code{unwind-protect}
+(not to be confused with @code{condition-case}).  The arguments to this special
+macro argument (which are Lisp expressions) can access the variables used by
+the loop.
+
+@lisp
+;; Prints out the following, then continues signalling the error:
+;;
+;; Example var is: 1
+;; Last used element in list is: 4
+;; Then current value of ‘my-collection’: (1 2 3 4)
+(loopy (with (example-var 1))
+       (list i '(1 2 3 4 5))
+       (collect my-collection i)
+       (when (> i 3)
+         (do (signal 'some-error (list i))))
+       (finally-protect
+        (message "Example var is: %d" example-var)
+        (message "Last used element in list is: %s" i)
+        (message "Then current value of `my-collection': %s"
+                 my-collection)))
+@end lisp
+@end table
+
 @findex flag, flags
 @table @asis
 @item @samp{flag}, @samp{flags}
@@ -518,7 +545,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orga2e4473
+@float Listing,org670d27a
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -2685,7 +2712,7 @@ return value.
 @section Sub-Loops
 
 The following commands exist to properly handle sub-loops.  Depending on
-one's needs, passing a @code{loopy} macro call to the do command can be
+one's needs, passing a @code{loopy} macro call to the @samp{do} command can be
 insufficient or signal an error, as the sub-loop's macro call is inserted
 into super-loop's expansion literally.  This means that it cannot affect any
 of the super-loop's generated code, such as variable declarations.  The
