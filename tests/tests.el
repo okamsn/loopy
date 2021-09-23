@@ -205,6 +205,19 @@
                         (finally-protect
                          (setq test-result (list example-var i my-collection))))
                     :type '(error))
+                   test-result)))
+
+  (should (equal (list 1 4 '(1 2 3 4))
+                 (let ((test-result))
+                   (should-error
+                    (lq (with (example-var 1))
+                        (list i '(1 2 3 4 5))
+                        (collect my-collection i)
+                        (when (> i 3)
+                          (do (error "%s" (list i))))
+                        (finally-protected
+                         (setq test-result (list example-var i my-collection))))
+                    :type '(error))
                    test-result))))
 
 ;;;; Changing the order of macro arguments.

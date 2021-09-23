@@ -2,11 +2,18 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
 ### Bugs Fixed
 
 - Fix badly formed condition case in `append` command.  This bug does not affect
   properly written loops, just how errors are signaled.  This bug was introduced
   in version 0.9.1.
+
+### Other Changes
+
+- Add the special macro argument `finally-protect`, which wraps part of the loop
+  with `unwind-protect`.
 
 ## 0.9.1
 
