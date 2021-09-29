@@ -25,13 +25,13 @@ Features might not work in other formats (e.g., Info links in HTML).
 #+end_export
 
 ~loopy~ is a macro meant for iterating and looping.  It is similar in usage to
-~cl-loop~ ([[info:cl#Loop Facility]]) but uses symbolic expressions rather than
-keywords.
+~cl-loop~ ([[info:cl#Loop Facility]]) but uses parenthesized expressions rather than
+keyword clauses.
 
-For most use cases, ~loopy~ should be a nice substitute for ~cl-loop~ and
-complementary to the features provided by the =seq= ([[info:elisp#Sequence
-Functions]]) and =cl-lib= ([[info:cl]]) libraries and Emacs's regular looping and
-mapping features.
+For most cases, ~loopy~ is a featureful replacement for ~cl-loop~ and
+complementary to Emacs's built-in looping and mapping features (such as the
+libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
+
 
 -----
 
@@ -83,7 +83,7 @@ mapping features.
   :END:
 
   The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
-  Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
+  Unlike ~cl-loop~, ~loopy~ uses parenthesized expressions instead of "clauses".
 
   #+begin_src emacs-lisp
     ;; A simple usage of `cl-loop':
@@ -129,10 +129,10 @@ mapping features.
            (finally-return elem1 elem2))
   #+end_src
 
-  The ~loopy~ macro is configurable and extensible.  In addition to writing one's
-  own "loop commands" (such as =list= in the example below), by using "flags",
-  one can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
-  library for destructuring.
+  The ~loopy~ macro is configurable and extensible.  In addition to writing
+  one's own "loop commands" (such as =list= in the example below), by using
+  "flags", one can choose whether to instead use ~pcase-let~, ~seq-let~, or even
+  the Dash library for destructuring.
 
   #+begin_src emacs-lisp
     ;; Use `pcase' to destructure array elements:
@@ -155,7 +155,7 @@ mapping features.
            (finally-return digits cars cdrs))
   #+end_src
 
-  Variables like =cars=, =cdrs=, and =digits= in the example above are
+  Variables like ~cars~, ~cdrs~, and ~digits~ in the example above are
   automatically ~let~-bound so as to not affect code outside of the loop.
 
   ~loopy~ has arguments for binding (or not binding) variables, executing code
@@ -178,23 +178,24 @@ mapping features.
   :END:
 
   Except for an optional loop name, all arguments of the ~loopy~ macro are
-  symbolic expressions that create a loop, assigns variables in the lexical
-  environment that surrounds the loop, adds code that runs before/after the
-  loop, and sets the ultimate return value of the macro.
+  parenthesized expressions.  These expressions can, for example, assign
+  variables local to the loop, add code that runs before/after the loop, and/or
+  set the ultimate return value of the macro.
 
-  For convenience and clarity, symbolic expressions that generate code in the
-  loop body are called "loop commands" ([[#loop-commands][Loop Commands]]).  Symbolic
-  expressions that generate code around the loop are called "special macro
-  arguments" or just "macro arguments" as opposed to "loop commands"
-  ([[#macro-arguments][Special Macro Arguments]]).
+  For convenience and clarity, expressions that generate code in the loop body
+  are called "loop commands" ([[#loop-commands][Loop Commands]]).  Expressions that generate code
+  around the loop are called "special macro arguments" or just "macro arguments"
+  as opposed to "loop commands" ([[#macro-arguments][Special Macro Arguments]]).
 
-  "Loop commands" are the main feature of the ~loopy~ macro, such as the =list=
-  in =(list i '(1 2 3))=.  A command inserts code into the loop body, but can
-  also perform additional setup like initializing variables.  Many commands set
-  a condition for ending the loop.
+  "Loop commands" are the main feature of the ~loopy~ macro, such as the command
+  =list= in the expression =(list i '(1 2 3))=.  A command inserts code into the
+  loop body, but can also perform additional setup like initializing variables.
+  Many commands set a condition for ending the loop.  In the case of =list=, it
+  iterates through the elements of a list, the variable ~i~ to each element.
+  After iterating through all elements, the loop is forced to end.
 
   The loop ends when any condition required by a loop command evaluates to
-  false.  If no conditions are needed, the loop runs infinitely until a =return=
+  ~nil~.  If no conditions are needed, the loop runs infinitely until a =return=
   or =return-from= command is reached ([[#exiting-the-loop-early][Exiting the Loop Early]]).
 
   Except when using accumulating loop commands ([[#accumulation-commands][Accumulation Commands]]), return
@@ -215,20 +216,18 @@ mapping features.
 
   #+cindex: special macro argument
   There are only a few special macro arguments. One, an unquoted symbol, is
-  taken as the loop's name. The others, listed below, are symbolic expressions
-  that begin with a keyword or one of their aliases. You do not need to use all
-  of them.
+  taken as the loop's name. The others, listed below, are parenthesized
+  expressions that begin with a keyword or one of their aliases.
 
   If a macro argument does not match one of these special few, ~loopy~ will
-  attempt to interpret it as a loop command, and throw an error if that fails.
+  attempt to interpret it as a loop command, and signal an error if that fails.
 
   These special macro arguments are always processed before loop commands,
-  regardless of the order of the arguments passed to ~loopy~.  As they are not
-  loop commands, they cannot occur in sub-loops ([[*Sub-loops][Sub-loops]]).
+  regardless of the order of the arguments passed to ~loopy~.
 
   #+findex: with, let*
-  - =with=, =let*=, =init= :: Declare variables before the loop.  This can also
-    be used to initialize variables referenced by loop commands.
+  - =with=, =let*=, =init= :: Declare variables before the loop, in order.  This
+    can also be used to initialize variables referenced by loop commands.
 
     #+begin_src emacs-lisp
       ;; => (4 5 6)
@@ -248,8 +247,8 @@ mapping features.
 
   #+findex: without, no-init
   - =without=, =no-with=, =no-init= :: Variables that ~loopy~ should not try to
-    initialize.  ~loopy~ tries to initialize all the variables it uses in a
-    ~let~-like form, but that isn’t always desired.
+    initialize.  ~loopy~ tries to initialize all of the variables that it uses
+    in a ~let~-like form, but that isn’t always desired.
 
     #+begin_src emacs-lisp
       ;; Without `without', `loopy' would try to initialize `a' to nil, which would
@@ -270,7 +269,7 @@ mapping features.
 
   #+findex: before-do, before
   - =before-do=, =before=, =initially-do=, =initially= :: Run Lisp expressions
-    before the loop starts.
+    before the loop starts, after variables are initialized.
 
     #+begin_src emacs-lisp
       ;; = > (6 7 8)
@@ -291,7 +290,7 @@ mapping features.
   #+findex: after-do, after, else-do, else
   - =after-do=, =after=, =else-do=, =else= :: Run Lisp expressions after the
     loop successfully completes.  This is similar to Python’s ~else~ statement
-    after a ~for~ or ~while~ loop.
+    following a ~for~ or ~while~ loop.
 
     #+begin_src emacs-lisp
       ;; Messages that no odd number was found:
@@ -316,8 +315,8 @@ mapping features.
     #+end_src
 
   #+findex: finally-do, finally
-  - =finally-do=, =finally= :: Always run Lisp expressions after the loop
-    exits.
+  - =finally-do=, =finally= :: Always run Lisp expressions after the loop exits.
+    These expressions _do not_ affect the final return value of the loop.
 
     #+begin_src emacs-lisp
       (loopy (list i '(1 2 3))
@@ -325,18 +324,25 @@ mapping features.
              (after-do (message "This not messaged."))
              (finally-do (message "This always messaged.")))
 
-      (loopy (list i '(1 2 3))
-             (when (cl-oddp i) (break))
-             (after-do (message "This not messaged."))
-             (finally (message "This always messaged.")))
+      ;; Messages that the final value of `i' is 4 and returns `i':
+      ;; => 4
+      (loopy (list i '(1 2 3 4 5))
+             (when (> i 3) (return i))
+             (finally-do
+              (message "The final value of `i' is: %d" i)
+              ;; This expression does not affect the loop's return value:
+              (+ i 7)))
     #+end_src
 
   #+findex: finally-return
   - =finally-return= :: Return a value, regardless of how the loop completes.
-    Accumulation commands have an implicit return value, but this argument
-    overrides them.  Specifying multiple return values is the same as returning
-    a list of those values.  This is convenient when used with ~seq-let~,
-    ~pcase-let~, ~cl-destructuring-bind~, and the like.
+    These arguments override any explicit return values given in commands like
+    =return= and =return-from=, as well as any implicit return values that can
+    be created by accumulation commands.
+
+    Specifying multiple values is the same as returning a list of those values,
+    which is useful when using features like ~seq-let~, ~pcase-let~, and
+    ~cl-destructuring-bind~.
 
     #+begin_src emacs-lisp
       ;; => "This string always returned."
@@ -345,13 +351,12 @@ mapping features.
                (return "This return value is over-ridden."))
              (finally-return "This string always returned."))
 
-
       ;; To be clear, the below code would be better expressed as
       ;; `(loopy (return 1 2 3))'.  In the below example,
-      ;; `repeat' is used to avoid an infinite loop.
+      ;; the command `leave' is used to avoid an infinite loop.
       ;;
       ;; => (1 2 3)
-      (loopy (repeat 0)  ; Run the loop itself 0 times.
+      (loopy (leave)  ; Immediately leave the loop.
              (finally-return 1 2 3))
     #+end_src
 
@@ -360,6 +365,11 @@ mapping features.
     (not to be confused with ~condition-case~).  The arguments to this special
     macro argument (which are Lisp expressions) can access the variables used by
     the loop.
+
+    Signaling an error will prevent the loop from returning a value.  This
+    special macro argument does not prevent that error from being signaled, and
+    is only meant to help avoid lingering effects that might arise from
+    unplanned stops of the loop's execution.
 
     #+begin_src emacs-lisp
       ;; Prints out the following, then continues signalling the error:
@@ -381,6 +391,9 @@ mapping features.
 
   #+findex: flag, flags
   - =flag=, =flags= :: Options that change the behavior of ~loopy~ ([[#flags]]).
+    For example, one can opt to use a different destructuring system, such as
+    what is provided by the Dash library.  See that linked section for more
+    information.
 
     #+begin_src emacs-lisp
       ;; Use Dash for destructuring:
@@ -460,7 +473,8 @@ mapping features.
   2. Using ~cl-return~ or an early exit command ([[#exiting-the-loop-early][Early Exit]]) in the loop will
      prevent the =after-do= code from running.  For this reason, =after-do= is
      run if and only if the loop completes successfully, hence the alias
-     =else-do= and the similarity to Python's ~else~ statement for loops.
+     =else-do= and the similarity to Python's ~else~ statement when used with
+     loops.
 
   These three sections (=before-do=, =after-do=, and the ~while~-loop itself)
   are the only structures that occur within the ~cl-block~.  Using ~cl-return~
@@ -500,8 +514,8 @@ mapping features.
            (finally-return (collect coll i)))
   #+END_SRC
 
-  Trying to use loop commands where they don't belong will result in errors
-  when the code is evaluated.
+  Trying to use loop commands in places where they don't belong will result in
+  errors when the code is evaluated.
 
   You should keep in mind that commands are evaluated in order.  This means that
   attempting to do something like the below example might not do what you
@@ -518,13 +532,13 @@ mapping features.
 
   For convenience and understanding, the same command might have multiple names,
   called {{{dfn(aliases)}}}.  For example, the command =expr= has an alias
-  =set=, because =expr= is used to set a variable to the value of an expression.
-  You can add custom aliases using the function ~loopy-defalias~, which modifies
-  the user option ~loopy-command-aliases~ ([[#custom-aliases][Custom Aliases]]).
+  =set=, because =expr= is used to /set/ a variable to the value of an
+  /expression/.  You can add custom aliases using the function ~loopy-defalias~,
+  which modifies the user option ~loopy-command-aliases~ ([[#custom-aliases][Custom Aliases]]).
 
-  Some commands take optional arguments.  For example, the command =list= can
-  take a function as an optional argument, which affects how that iterates
-  through the elements in the list.
+  Some commands take optional keyword arguments.  For example, the command
+  =list= can take a function argument following the keyword =:by=, which affects
+  how that iterates through the elements in the list.
 
   For simplicity, the commands are described using the following notation:
 
@@ -548,24 +562,49 @@ mapping features.
     =[EXPRS]= is equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to
     =[CMD [CMD [...]]]=.
   - Optional keyword arguments are shown as =&key key1 key2 ...=, where =key1=,
-    =key2=, and so on are the literal keywords.  Just like in functions,
-    keywords must be prefixed by a colon (":").  For example, the iteration
-    command =nums= has a keyword argument =by=, which can be given a value using
-    =:by SOME-EXPRESSION=.
+    =key2=, and so on are the literal keywords.  Just like in normal Lisp
+    functions, keywords must be prefixed by a colon (":").  For example, the
+    iteration command =nums= has a keyword argument =by=, which can be given a
+    value using =:by SOME-EXPRESSION=.
 
 
   Generally, =VAR= is initialized to ~nil~, but not always.  This document
   tries to note when that is not the case.
 
   #+cindex: variable destructuring
-  For convenience, =VAR= can be a sequence, either a list or a vector (as a
-  stand-in for an array), of symbols instead of a single symbol.  This tells the
-  command to “de-structure” the value of =EXPR=, similar to the functions
-  ~seq-let~, ~cl-destructuring-bind~, and ~pcase-let~.  This sequence of symbols
-  can be shorter than the destructured sequence, /but not longer/.  If shorter,
-  the unassigned elements of the list are simply ignored.
+  Similar to features like ~seq-let~, ~cl-destructuring-bind~, and ~pcase-let~,
+  ~loopy~ is capable of destructuring values when assigning values to variables.
+  Unlike in ~cl-loop~, destructuring can also be used with accumulation
+  commands.
+
+  #+begin_src emacs-lisp
+    ;; => '((1 3) (2 4))
+    (loopy (list (car . cdr) '((1 . 2) (3 . 4)))
+           (collect cars car)
+           (collect cdrs cdr)
+           (finally-return cars cdrs))
+
+    ;; Using `cl-loop':
+    (cl-loop for (car . cdr) in '((1 . 2) (3 . 4))
+             collect car into cars
+             collect cdr into cdrs
+             finally return (list cars cdrs))
+
+    ;; Not possible in `cl-loop':
+    ;; => '((1 3) (2 4))
+    (loopy (list i '((1 . 2) (3 . 4)))
+           (collect (cars . cdrs) i)
+           (finally-return cars cdrs))
+  #+end_src
+
+  You can use destructured assignment by passing an unquoted sequence as the
+  =VAR= argument of a loop command.  To destructure lists, use a list.  To
+  destructure arrays (including strings and vectors), use a vector.  This
+  sequence of symbols can be shorter than the destructured sequence, /but not
+  longer/.  If shorter, the unassigned elements of the list are simply ignored.
 
   An element in the sequence =VAR= can be one of the following:
+
   - A positional variable which will be bound to the corresponding element in
     the sequence.  These variables can be recursive.
 
@@ -576,18 +615,21 @@ mapping features.
     #+end_src
 
   - =&whole=: If =&whole= is the first element in the sequence, then the second
-    element names a variable that holds the entire value of the destructured
-    value.
+    element names a variable that holds the entire value of what is
+    destructured.
 
     #+begin_src emacs-lisp
-      ;; => (((1 2 3) 1 2 3) ((4 5 6) 4 5 6))
+      ;; See that the variable `whole' holds the value of the entire
+      ;; list element:
+      ;; => (((1 2 3) 1 2 3)
+      ;;     ((4 5 6) 4 5 6))
       (loopy (list (&whole whole i j k)  '((1 2 3) (4 5 6)))
              (collect (list whole i j k)))
     #+end_src
 
   - =&rest=: A variable named after =&rest= contains the remaining elements of
-    the destructured value.  Alternatively, one can use dotted notation in
-    lists.  These variables can be recursive.
+    the destructured value.  When destructuring lists, one can alternatively use
+    dotted notation.  These variables can be recursive.
 
     #+begin_src emacs-lisp
       ;; => ((1 [2 3]) (4 [5 6]))
@@ -821,6 +863,7 @@ mapping features.
    error.
 
    #+begin_src emacs-lisp
+     ;; Signals an error:
      (loopy (list i '(1 2 3 4 5))
             (when (cl-evenp i)
               ;; Can't use `list' in a `when'.
@@ -847,7 +890,7 @@ mapping features.
     #+findex: repeat
     - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
       =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
-      1 at the end of the loop.
+      1 at the end of the loop.  If =EXPR= is 0, then the loop isn't run.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (repeat 3)
@@ -855,8 +898,12 @@ mapping features.
 
         (loopy (repeat i 3)
                (do (message "%d" i)))
-      #+END_SRC
 
+        ;; An argument of 0 stops the loop from running:
+        ;; => nil
+        (loopy (repeat 0)
+               (collect 'some-value))
+      #+END_SRC
 
 
 *** Numeric Iteration
@@ -897,8 +944,9 @@ mapping features.
                (collect i))
       #+end_src
 
-      To specify the step size, one can use the keyword =:by=.  The step size
-      argument should always be positive.
+      To specify the step size, one can use the keyword =:by=.  The value for
+      =:by= should always be positive; other keyword arguments control whether
+      the variable is incremented or decremented.
 
       #+begin_src emacs-lisp
         ;; => (1 3 5)
@@ -1003,13 +1051,13 @@ mapping features.
     ([[info:elisp#Sequences Arrays Vectors]]).
 
     #+cindex: sequence element distribution
-    Instead of just one sequence, the =array=, =list=, and =seq= commands can be
-    given multiple sequences of various sizes.  In such cases, the elements of
-    the sequences are {{{dfn(distributed)}}}, like in the distributive property
-    from mathematics.  A new sequence of distributed elements is created before
-    the loop runs, and that sequence is used for iteration instead of the source
-    sequences.  As seen in the below example, the resulting behavior is similar
-    to that of nested loops.
+    Instead of iterating through just one sequence, the =array=, =list=, and
+    =seq= commands can be given multiple sequences of various sizes.  In such
+    cases, the elements of the sequences are {{{dfn(distributed)}}}, like in the
+    distributive property from mathematics.  A new sequence of distributed
+    elements is created before the loop runs, and that sequence is used for
+    iteration instead of the source sequences.  As seen in the below example,
+    the resulting behavior is similar to that of nested loops.
 
     #+begin_src emacs-lisp
       ;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
@@ -1038,10 +1086,16 @@ mapping features.
     keywords, they also have an =index= keyword, which names the variable used
     to store the accessed index during the loop.
 
+    #+begin_src emacs-lisp
+      ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
+      (loopy (array i [10 9 8 6 7 5 4 3 2 1] :from 1 :by 2 :index ind)
+             (collect (cons ind i)))
+    #+end_src
+
     Keep in mind that if used with sequence distribution, these keywords affect
     iterating through the sequence of distributed elements.  That is, they do
     not affect how said sequence is produced.  In the example below, see that
-    ~cddr~ is applied to the sequence of distributed elements. It is /not/
+    ~cddr~ is applied to the sequence of distributed elements.  It is /not/
     applied to the source sequences.
 
     #+begin_src emacs-lisp
@@ -1071,8 +1125,8 @@ mapping features.
       command.
 
       If multiple arrays are given, then the elements of these arrays are
-      distributed into an array of lists and the above keywords apply to this
-      new resulting array.
+      distributed into an array of lists.  In that case, the above keywords
+      apply to this new, resulting array of lists.
 
       #+BEGIN_SRC emacs-lisp
         (loopy (array i [1 2 3])
@@ -1135,9 +1189,21 @@ mapping features.
       library generalizes working with association lists ("alists"), property
       lists ("plists"), hash-tables, and vectors.
 
-      In each dotted pair assigned to =VAR=, the first element is the key and
-      the second element is the value.  For vectors, the key is the index.  You
-      should not rely on the order in which the key-value pairs are found.
+      In each dotted pair assigned to =VAR=, the ~car~ is the key and the ~cdr~
+      is the value.
+
+      #+ATTR_TEXINFO: :tag Warning
+      #+begin_quote
+      Depending on how it is created, a map might repeat a key multiple times.
+      While this is not a problem for functions like ~map-elt~, that repetition
+      can be present in the return value of ~map-pairs~.
+
+      This command does not perform any special handling for the returned value
+      of the function ~map-pairs~.  Its correctness is the responsibility of
+      =map.el=, not =loopy=.
+      #+end_quote
+
+      You should not rely on the order in which the key-value pairs are found.
 
       These pairs are created before the loop begins.  In other words, the map
       =EXPR= is not processed progressively, but all at once.  Therefore, this
@@ -1181,8 +1247,10 @@ mapping features.
 
 
     #+findex: seq, sequence, elements
-    - =(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)= :: Loop
-      through the sequence =EXPR=, binding =VAR= to the elements of the sequence.
+    - =(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
+      sequence =EXPR=, binding =VAR= to the elements of the sequence.  This is a
+      more generic form of the commands =list= and =array=, though it is
+      somewhat less efficient.
 
       =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
       =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
@@ -1227,19 +1295,24 @@ mapping features.
     :DESCRIPTION: Iterating through indices without accessing values.
     :END:
 
-    This command is for iterating the a sequence's indices without accessing the
-    actual values of that sequence.  This is helpful if you know ahead of time
-    that you are only interested in a small subset of the sequence's elements.
+    This command is for iterating through a sequence's indices without accessing
+    the actual values of that sequence.  This is helpful if you know ahead of
+    time that you are only interested in a small subset of the sequence's
+    elements.
 
     As with the =array= and =seq= commands, the =seq-index= command can use the
     same keywords as the =nums= command ([[#numeric-iteration]]) for working with
     the index and choosing a range of the sequence elements through which to
-    iterate.  In addition to those keywords, it also has an =index= keyword,
-    which names the variable used to store the accessed index during the loop.
+    iterate.
 
     #+findex: seq-index, seqi, array-index, arrayi, list-index, listi, string-index, stringi
-    - =(seq-index|array-index|list-index|string-index VAR VAL &key KEYS)= :: Iterate
-      through the indices of =VAL=.
+    - =(seq-index VAR EXPR &key KEYS)= :: Iterate through the indices of =EXPR=.
+
+      There is only one implementation of this command; there are no
+      type-specific versions.  For clarity and convenience, this command has the
+      aliases =array-index=, =list-index=, and =string-index=.  In keeping with
+      aliases like =seqf= for the =seq-ref= command, this command also has the
+      aliases =seqi=, =arrayi=, =listi=, and =stringi=.
 
       =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
       =downto=, =above=, =below=, and =by=.  For their meaning, see the =nums=
@@ -1259,10 +1332,6 @@ mapping features.
                (nums idx :from 0 :below (length my-string))
                (collect (aref my-string idx)))
       #+end_src
-
-      For convenience, this command also has the aliases =seqi=, =arrayi=,
-      =listi=, and =stringi=, analogous to the command aliases =seqf=, =arrayf=,
-      =listf=, and =stringf=.
 
       This command does not support destructuring.
 
@@ -1309,10 +1378,10 @@ mapping features.
         my-array)
     #+end_src
 
-    Like other commands, field/reference commands can also use destructuring, in
-    which case the fields/places of the sequence are destructured into
-    "sub-fields", like the ~cdr~ of the second array element in the example
-    above.
+    Like other commands, "field" or "reference" commands can also use
+    destructuring, in which case the fields/places of the sequence are
+    destructured into "sub-fields", like the ~cdr~ of the second array element
+    in the example above.
 
     #+attr_texinfo: :tag Caution
     #+begin_quote
@@ -1369,7 +1438,7 @@ mapping features.
     #+findex: list-ref, listf, in-ref
     - =(list-ref|listf|in-ref VAR EXPR &key by)= :: Loop through the elements of
       the list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update
-      the list via function =by= instead of =cdr=.
+      the list via function =by= instead of ~cdr~.
 
       #+BEGIN_SRC emacs-lisp
         ;; => (7 7 7)
@@ -1406,8 +1475,8 @@ mapping features.
       place referred to by =VAR=.  This is similar to the =index= keyword
       parameter of other commands.
 
-      Similar to =map=, the keys of the map are generated before the loop is
-      run, which can be expensive for large maps.
+      Similar to the command =map=, the keys of the map are generated before the
+      loop is run, which can be expensive for large maps.
 
       Unlike =map=, any duplicate keys are ignored regardless of the type of
       map used.
@@ -1496,8 +1565,8 @@ mapping features.
    #+attr_texinfo: :tag Note
    #+begin_quote
    Keep in mind that it is an error to modify accumulation variables outside of
-   accumulation commands.  This restriction allows using accumulation variables
-   to be much faster.
+   accumulation commands.  This restriction allows accumulations to be much
+   faster.
    #+end_quote
 
    Like with other loop commands, variables created by accumulation commands
@@ -1600,9 +1669,9 @@ mapping features.
    accumulate into the same implied variable (that is, into ~loopy-result~).  An
    error will be signaled if the accumulation commands are not compatible.  For
    example, you should not try to accumulate =collect= results and =sum= results
-   into ~loopy-result~, as trying to use a list as a number will cause an error.
-   If you want to collect into separate variables, just specify a variable name
-   like you normally would.
+   into the same variable, as trying to use a list as a number will cause an
+   error.  If you want to collect into separate variables, just specify a
+   variable name like you normally would.
 
    #+begin_src emacs-lisp
      ;; => (3 2 1 11 12 13)
@@ -1631,15 +1700,15 @@ mapping features.
    reduction in speed for some command arguments.  To have separate commands
    accumulate into separate variables while avoiding this reduction, one can use
    the =split= flag ([[#flags][Flags]]).  This flag tells ~loopy~ explicitly that a variable
-   will only be modified a single accumulation command while the loop is
+   will only be modified by a single accumulation command while the loop is
    running.
 
-   When the flag is enabled and after the loop completes, each of these split
-   accumulation variables will be part of the list ~loopy-result~, appearing in
-   the same order as their respective commands in the macro's arguments.  In the
-   example below, note that the result of ~(collect i)~ is the first element of
-   ~loopy-result~, even though the collection happens /after/ the first
-   summation when the loop runs.
+   When the =split= flag is enabled and after the loop completes, each of these
+   split accumulation variables will be part of the list ~loopy-result~,
+   appearing in the same order as their respective commands in the macro's
+   arguments.  In the example below, note that the result of ~(collect i)~ is
+   the first element of ~loopy-result~, even though the collection happens
+   /after/ the first summation when the loop runs.
 
    #+begin_src emacs-lisp
      ;; => ((2 4) 15)
@@ -1653,8 +1722,8 @@ mapping features.
             (finally-return loopy-result))
    #+end_src
 
-   Using this behavior can produce results much faster than destructuring
-   accumulation commands.
+   Using this behavior can currently produce results much faster than using
+   destructuring accumulation commands.
 
    #+begin_src emacs-lisp
      ;; Both of these example give the same result, but the latter can
@@ -1675,7 +1744,7 @@ mapping features.
 
    To be clear, the more guarantees that can be made about the accumulation
    variables, the more ~loopy~ can optimize the accumulations.  The fastest
-   accumulations (from greatest speed to least), are produced by:
+   accumulations (from greatest speed to least), are currently produced by:
    1. Using implied result variables with the =split= flag enabled.
    2. Using variables which can be modified only by accumulation commands by
       - naming the variable explicitly, or
@@ -1711,6 +1780,7 @@ mapping features.
    - =at= :: Where to place a value.  One of =end=, =start=, or =beginning=
      (equivalent to =start=).  If ungiven, defaults to =end=.  These positions
      need not be quoted.
+
    #+cindex: accumulation keyword into
    - =into= :: An alternative way to specify the variable into which to
      accumulate values.  One would normally just give =VAR= as the first
@@ -1719,21 +1789,25 @@ mapping features.
 
      As all accumulation commands support this keyword, it is not listed in
      any command definition.
+
    #+cindex: accumulation keyword test
    - =test= :: A function of two arguments, usually used to test for equality.
      Most tests default to ~eql~, as in Common Lisp and the =cl-lib= library.
+
    #+cindex: accumulation keyword key
    - =key= :: A function of one argument, used to transform the inputs of
      =test=.
+
    #+cindex: accumulation keyword init
    - =init= :: The initial value of =VAR=.  For explicitly named variables, one
      can use this argument or the =with= special macro argument.  When using the
      =split= flag, this argument is the only way to specify a non-default
      initial value.
+
    #+cindex: accumulation keyword result-type
    - =result-type= :: A sequence type into which =VAR= is converted /after the
      loop is over/.  These types need not be quoted.  For example, ='vector= and
-     =vector= are both valid ways to specify the data type vector.
+     =vector= are both valid ways to specify the vector data type.
 
      This argument can be more convenient than writing out a call to ~cl-coerce~
      or ~seq-into~.
@@ -1749,8 +1823,9 @@ mapping features.
 
    For example, instead of "min" or "minimize", you can use "minning" or
    "minimizing".  Instead of "sum" and "append", you can use "summing" and
-   "appending".  This helps to avoid name collisions when using the ~loopy-iter~
-   macro with the =lax-naming= flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
+   "appending".  This is similar to the behavior of ~cl-loop~, and helps to
+   avoid name collisions when using the ~loopy-iter~ macro with the =lax-naming=
+   flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
    #+end_quote
 
 
@@ -1761,10 +1836,8 @@ mapping features.
      result of applying function =FUNC= to =EXPR= and =VAR=.  =EXPR= and =VAR=
      are used as the first and second arguments to =FUNC=, respectively.
 
-     This is a generic command in case the others don't meet your needs.
-
-     This command is similar to the =expr= command, except that this command
-     will not create variables local to loops made by the =sub-loop= command.
+     This is a generic accumulation command in case the others don't meet your
+     needs.  It is similar in effect to using the command =expr=.
 
      #+begin_src emacs-lisp
        ;; Call `(cons i my-accum)'
@@ -1851,14 +1924,13 @@ mapping features.
 
        ;; => (4 5 6 1 2 3)
        (loopy (list i '((1 2 3) (4 5 6)))
-              (append coll i :at start)
-              (finally-return coll))
+              (append i :at start))
      #+END_SRC
 
    #+findex: collect
    - =(collect|collecting VAR EXPR &key result-type at)= :: Collect the value of
-     =EXPR= into the list =VAR=.  By default, elements are added to the end of the
-     list.
+     =EXPR= into the list =VAR=.  By default, elements are added to the end of
+     the list.
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3)
@@ -1888,12 +1960,13 @@ mapping features.
 
    #+findex: concat
    - =(concat|concating VAR EXPR &key at)= :: Repeatedly ~concat~ the value of
-     =EXPR= onto =VAR=, as a string.  See the =vconcat= command for
-     concatenating values into a vector.
+     =EXPR= onto =VAR=, as a string.  For concatenating values onto a vector, see
+     the command =vconcat=.
 
-     Unlike when using the =:result-type= keyword argument for some other
-     commands, =VAR= is a string throughout the loop, not just after the loop
-     ends.
+     =VAR= is a string throughout the loop.  This differs from the behavior of
+     commands with the keyword argument =result-type=, which coerces the
+     resulting sequence of accumulated values into a new type /after/ the loop
+     completes.
 
      #+BEGIN_SRC emacs-lisp
        ;; => "abc"
@@ -1966,7 +2039,7 @@ mapping features.
 
    #+findex: max, maximize
    - =(max|maxing|maximize|maximizing VAR EXPR)= :: Repeatedly set =VAR= to the
-     greater of =VAR= and the value of =EXPR=.  =VAR= starts at =-1.0e+INF=, so
+     greater of the values =VAR= and =EXPR=.  =VAR= starts at =-1.0e+INF=, so
      that any other value should be greater that it.
 
      #+BEGIN_SRC emacs-lisp
@@ -1978,8 +2051,8 @@ mapping features.
 
    #+findex: min, minimize
    - =(min|minning|minimize|minimizing VAR EXPR)= :: Repeatedly set =VAR= to the
-     lesser of =VAR= and the value of =EXPR=.  =VAR= starts at =1.0e+INF=, so
-     that any other value should be less than it.
+     lesser of the values =VAR= and =EXPR=.  =VAR= starts at =1.0e+INF=, so that
+     any other value should be less than it.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 0
@@ -1990,7 +2063,7 @@ mapping features.
 
    #+findex: multiply, multiplying
    - =(multiply|multiplying VAR EXPR)= :: Repeatedly set =VAR= to the product of
-     the values of =EXPR=.  =VAR= starts at 1.
+     the values =EXPR= and =VAR=.  =VAR= starts at 1.
 
      #+BEGIN_SRC emacs-lisp
        ;; => 120
@@ -2099,8 +2172,7 @@ mapping features.
 
      =VAR= is initialized to =INIT=, if provided, or ~nil~.
 
-     This command is similar to the =expr= command, except that this command
-     will not create variables local to loops made by the =sub-loop= command.
+     This command is similar in effect to the =expr= command.
 
      #+begin_src emacs-lisp
        ;; = > 6
@@ -2147,8 +2219,9 @@ mapping features.
      #+END_SRC
 
    #+findex: union
-   + =(union|unioning VAR EXPR &key test key at)= :: Repeatedly insert into =VAR=
-     the elements of the list =EXPR= which are not already present in =VAR=.
+   + =(union|unioning VAR EXPR &key test key at)= :: Repeatedly insert into
+     =VAR= the elements of the list =EXPR= which are not already present in
+     =VAR=.
 
      #+begin_src emacs-lisp
        ;; => (4 1 2 3)
@@ -2180,11 +2253,13 @@ mapping features.
 
    #+findex: vconcat
    - =(vconcat|vconcating VAR EXPR)= :: Repeatedly concatenate the value of
-     =EXPR= onto =VAR= via the function ~vconcat~.
+     =EXPR= onto =VAR= via the function ~vconcat~.  For concatenating values
+     onto a string, see the command =concat=.
 
-     Unlike when using the =:result-type= keyword argument for some other
-     commands, =VAR= is a vector throughout the loop, not just after the loop
-     ends.
+     =VAR= is a vector throughout the loop.  This differs from the behavior of
+     commands with the keyword argument =result-type=, which coerces the
+     resulting sequence of accumulated values into a new type /after/ the loop
+     completes.
 
      #+BEGIN_SRC emacs-lisp
        ;; => [1 2 3 4 5 6]
@@ -2197,7 +2272,6 @@ mapping features.
               (vconcat i :at 'start))
      #+END_SRC
 
-     To concatenate values as strings, see the command =concat= above.
 
 ** Boolean
    :PROPERTIES:
@@ -2336,9 +2410,7 @@ mapping features.
         ;; => '((2 4 6) (8 10 12) (16 18 20))
         (loopy (list i '((2 4 6) (8 10 12) (13 14 15) (16 18 20)))
                (when (loopy (list j i)
-                            (when (cl-oddp j)
-                              (return nil))
-                            (else-do (cl-return t)))
+                            (always (cl-evenp j)))
                  (collect only-evens i))
                (finally-return only-evens))
       #+END_SRC
@@ -2348,20 +2420,18 @@ mapping features.
       Otherwise, run the remaining commands.
 
       #+BEGIN_SRC emacs-lisp
-        ;; => '((7 5 3 1) (6 4 2) (3 3 3))
+        ;; => '((1 3 5 7) (2 4 6) (3 3 3))
         (loopy (seq i [1 2 3 4 5 6 7])
                (if (cl-oddp i)
-                   (push-into reversed-odds i)
-                 (push-into reversed-evens i)
-                 (push-into some-threes 3))
-               (finally-return reversed-odds
-                               reversed-evens
-                               some-threes))
+                   (collect odds i)
+                 (collect evens i)
+                 (collect some-threes 3))
+               (finally-return odds evens some-threes))
       #+END_SRC
 
     #+findex: cond
-    - =(cond [(EXPR CMDS) [...]])= :: For the first =EXPR= to evaluate to
-      non-nil, run the following commands =CMDS=.
+    - =(cond [(EXPR CMDS) [...]])= :: Run the commands =CMDS= following the
+      first non-nil condition =EXPR=.
 
       #+BEGIN_SRC emacs-lisp
         ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
@@ -2414,17 +2484,17 @@ mapping features.
     :END:
 
     The loop is contained in a ~cl-block~, which can be exited by the function
-    ~cl-return-from~.  Indeed, the =return= and =return-from= commands just are
+    ~cl-return-from~.  Indeed, the =return= and =return-from= commands are just
     wrappers around that function.
 
-    If multiple values are passed to =return= or =return-from=, these commands
-    will return a list of those values.  If no value is given, ~nil~ is
-    returned.
+    As with the =finally-return= special macro argument, passing multiple return
+    values to those commands will return a list of those values.  If no value is
+    given, ~nil~ is returned.
 
     The commands =leave=, =leave-from=, =while=, and =until= leave the current
     loop without forcing a returned value.  Unlike the =return= commands, they
     do not stop the loop from returning any implied return values, such as the
-    collection in their respective examples.
+    collections in their respective examples.
 
     #+findex: leave
     - =(leave)= :: Leave the current loop without forcing a return value.
@@ -2456,10 +2526,11 @@ mapping features.
     - =(return [EXPRS])= :: Leave the current loop, returning =[EXPRS]=.
 
       #+BEGIN_SRC emacs-lisp
+        ;; => 6
         (loopy (with  (j 0))
                (do (cl-incf j))
                (when (> j 5)
-                 (return j))) ; => 6
+                 (return j)))
       #+END_SRC
 
     #+findex: return-from
@@ -2469,14 +2540,14 @@ mapping features.
         ;; => 'bad-val?
         (loopy outer-loop
                (list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
-               (do (loopy (list i inner-list)
-                          (when (eq i 'bad-val?)
-                            (return-from outer-loop 'bad-val?)))))
+               (sub-loop (list i inner-list)
+                         (when (eq i 'bad-val?)
+                           (return-from outer-loop 'bad-val?))))
       #+END_SRC
 
     #+findex: while
     - =(while COND)= :: Leave the loop once =COND= is false, without forcing a
-      return value.
+      return value.  =(while COND)= is the same as =(until (not COND))=.
 
       #+begin_src emacs-lisp
         ;; => (1 2 3 4)
@@ -2487,7 +2558,7 @@ mapping features.
 
     #+findex: until
     - =(until COND)= :: Leave the loop once =COND= is true, without forcing a
-      return value.
+      return value.  =(until COND)= is the same as =(while (not COND))=.
 
       #+begin_src emacs-lisp
         ;; => (1 2 3 4)
@@ -2503,10 +2574,11 @@ mapping features.
    :END:
 
    The following commands exist to properly handle sub-loops.  Depending on
-   one's needs, passing a ~loopy~ macro call to the =do= command can be
-   insufficient or signal an error, as the sub-loop's macro call is inserted
-   into super-loop's expansion literally.  This means that it cannot affect any
-   of the super-loop's generated code, such as variable declarations.  The
+   one's needs, trying to use a ~loopy~ macro call inside the =do= command could
+   signal an error.  This is because arguments of the =do= command are inserted
+   literally (i.e., without interpretation or modification) into the expanded
+   code.  This means that using ~loopy~ inside the =do= command cannot affect
+   any of the super-loop's generated code, such as variable declarations.  The
    following commands do not have that problem, because their expansions are
    processed during the expansion of the top-level macro.
 
@@ -2527,7 +2599,6 @@ mapping features.
                       (when (= j 5)
                         (leave-from outer)))
             (collect i))
-
    #+end_src
 
 
@@ -2555,7 +2626,7 @@ mapping features.
      For example, a =leave= subcommand would exit the loop =LOOP-NAME=, and an
      accumulation command would create a variable in that super-loop.
 
-     If you did not use =at= in the below example, then the accumulation would
+     If one did not use =at= in the below example, then the accumulation would
      be local to the sub-loop and the macro's return value would be ~nil~.
 
      #+begin_src emacs-lisp
@@ -2571,6 +2642,23 @@ mapping features.
    - =(loopy [SPECIAL-MACRO-ARGUMENTS] [CMDS])= :: Specifically wrap a call to
      the ~loopy~ macro.  Unlike the =sub-loop= command, the behavior of this
      command never changes.
+
+     Don't confuse using this command with using calls to the macro ~loopy~.
+     For example, the =EXPR= parameter to loop commands is used literally, and
+     is not able to affect macro expansion.  Therefore, the warning at the start
+     of this section applies to =EXPR= parameters as well.  This is demonstrated
+     in the example below.
+
+     #+begin_src emacs-lisp
+       (loopy outer
+              (list i '(1 2 3))
+              ;; This is the macro `loopy', not the loop command.
+              ;; Therefore, the warning about macro expansion applies,
+              ;; and this signals an error.
+              (when (loopy (at outer (collect i))
+                           (leave))
+                (do nil)))
+     #+end_src
 
    #+findex: loopy-iter command
    - =(loopy-iter [SPECIAL-MACRO-ARGUMENTS] [BODY])= :: Specifically wrap a call
@@ -2590,6 +2678,7 @@ mapping features.
                                (let ((val 10))
                                  (accum collect (+ val j))))))
      #+end_src
+
 
    Keep in mind that the effects of flags ([[#flags]]) are local to the loops in
    which they are used, even when using the =at= command.
@@ -2648,10 +2737,10 @@ mapping features.
   :DESCRIPTION: Destructuring outside of the loop.
   :END:
 
-  Loopy's built-in destructuring functionality can also be used via the macros
-  ~loopy-let*~, ~loopy-setq~, and ~loopy-ref~.  These macros are /not/ affected
-  by flags which configure destructuring ([[#flags]]), as equivalent macros are
-  already provided by those libraries.
+  Loopy's built-in destructuring functionality can also be used via the listed
+  macros below.  These macros are /not/ affected by flags which configure
+  destructuring ([[#flags]]), as equivalent features are already provided by those
+  libraries.
 
   These macros can be used anywhere, not just inside calls to ~loopy~.
 
@@ -2723,8 +2812,9 @@ mapping features.
   #+cindex: loopy-iter
   #+findex: loopy-iter
   ~loopy-iter~ is a macro that allows for the embedding of loop commands inside
-  arbitrary code, instead of trying to use the =do= loop command to embed
-  arbitrary code in a loop.  You must use ~require~ to load this feature.
+  arbitrary code.  This is different from the =do= loop command, with which one
+  can embed arbitrary code in a loop.  You must use ~require~ to load this
+  feature.
 
   #+attr_texinfo: :tag Warning
   #+begin_quote
@@ -2748,12 +2838,13 @@ mapping features.
 
   #+cindex: loopy-iter keywords
   #+vindex: loopy-iter-command-keywords
-  To clearly distinguish between loop commands and Emacs features (such as the
-  loop command =list= and the function ~list~), a loop command must be preceded
-  by one of the keywords =for=, =accum=, or =exit=.  These keywords do not share
-  a name with any built-in Emacs feature and are similar to the keywords used by
-  other packages.  For example, =(list VAR LIST)= would be =(for list VAR LIST)=
-  or =(for in VAR LIST)=.
+  To clearly distinguish between loop commands and Emacs features (such as
+  between the loop command =list= and the function ~list~), a loop command must
+  be preceded by one of the keywords listed in ~loopy-iter-command-keywords~.
+  By default, this is one of =for=, =accum=, or =exit=.  These keywords do not
+  share a name with any built-in Emacs feature and are similar to the keywords
+  used by other packages.  For example, =(list VAR LIST)= would be =(for list
+  VAR LIST)= or =(for in VAR LIST)=.
 
   Any keyword in the user option ~loopy-iter-command-keywords~ can be used to
   identify any loop command.  For example, =(accum collect a)= and
@@ -2771,7 +2862,7 @@ mapping features.
 
   Special macro arguments, already having clearly distinguishable names, do not
   need to be preceded by one of the above keywords.  However, some aliases (such
-  as =let*= for =with=) will not work in ~loopy-iter~.
+  as =let*= for =with=) have been disabled.
 
   #+begin_src emacs-lisp
     ;; => ((1 8) (2 9) (3 10))
@@ -2799,18 +2890,18 @@ mapping features.
     (loopy-iter (let ((a (progn
                            ;; NOTE: No restriction on placement of `expr'.
                            (for expr j 8 (1+ j))
-                           (when (> j 12)
-                             ;; Leave loop but don't force return value,
-                             ;; allowing implicit result to be returned.
-                             (exit leave))
+                           ;; Leave loop but don't force return value,
+                           ;; allowing the implicit result to be returned.
+                           (exit until (> j 12))
                            j)))
                   (accum collect a)))
   #+end_src
 
-  You should not rely on the values of the code into which loop commands
-  translate.  For example, the above usage of =expr= might become a ~setq~ form,
-  but that is an implementation detail and subject to change.  Best practice is
-  to instead use a variable as the last expression in a ~progn~ form.
+  #+attr_texinfo: :tag Caution
+  #+begin_quote
+  You should not reply on the value of a loop command's expanded code.  Such
+  expanded code is an implementation detail and subject to change.
+  #+end_quote
 
   For convenience, ~loopy-iter~ will not attempt to interpret loop commands in
   quoted code, except in sharp-quoted ~lambda~ forms.  This is because the
@@ -2831,8 +2922,8 @@ mapping features.
                          elem))
   #+end_src
 
-  In ~loopy~, the =sub-loop= command is a full ~loopy~ loop.  In ~loopy-iter~,
-  it is a full ~loopy-iter~ loop.
+  In ~loopy~, the =sub-loop= command is a full ~loopy~ loop ([[#sub-loops]]).  In
+  ~loopy-iter~, it is a full ~loopy-iter~ loop.
 
   #+begin_src emacs-lisp
     ;; => (2 3 4 5)
@@ -2845,6 +2936,9 @@ mapping features.
                           (let ((val (1+ j)))
                             (accum collect val)))))
   #+end_src
+
+  If you do not want this, you can specifically use a full ~loopy~ loop using
+  the loop command ~loopy~ instead, as in =(for loopy)=.
 
   #+attr_texinfo: :tag Note
   #+begin_quote
@@ -2867,13 +2961,13 @@ mapping features.
 
   #+cindex: flag
   A "flag" is a symbol passed to the =flag= or =flags= special macro argument,
-  and changes the macro's behavior.  Currently, flags affect what ~loopy~ uses
-  to perform destructuring (~pcase-let~, ~seq-let~, =dash=, or the default
-  method) and whether accumulation commands that don't specify a variable (such
-  as =(collect collect-value)=) accumulate into one or several variables.
+  changing the macro's behavior.  Currently, flags affect what method ~loopy~
+  uses to perform destructuring (=pcase=, =seq=, =dash=, or the default) and
+  whether accumulation commands that don't specify a variable (such as =(collect
+  collect-value)=) accumulate into one or several variables.
 
-  Flags are applied in order, so if you specify =(flags seq pcase)= ~loopy~ will
-  use ~pcase-let~ for destructuring, not ~seq-let~.
+  Flags are applied in order.  If you specify =(flags seq pcase)=, then ~loopy~
+  will use ~pcase-let~ for destructuring, not ~seq-let~.
 
   #+vindex: loopy-default-flags
   If you wish to always use a flag, you can add that flag to the list
@@ -2892,7 +2986,7 @@ mapping features.
    ([[info:dash#-let]]).
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
-    separate variables which are then collected into ~loopy-result~.
+    separate variables, which are then collected into ~loopy-result~.
   #+cindex: lax-naming flag
   - =lax-naming= :: In ~loopy-iter~, don't require keywords when using loop
     commands ([[#loopy-iter][The ~loopy-iter~ Macro]]).
@@ -3051,8 +3145,8 @@ mapping features.
   alias.
 
   Special macro arguments ([[#macro-arguments][Special Macro Arguments]]) can also be aliased.  Using
-  an alias does not change that the special macro arguments are parsed before
-  loop commands.
+  an alias does not change the fact that the special macro arguments are parsed
+  before loop commands.
 
   #+begin_src emacs-lisp
     (loopy-defalias as with)
@@ -3086,16 +3180,17 @@ mapping features.
    inserted into/around a template of a ~while~-loop.
 
    Some examples of instructions are:
-   - Declaring a given variable in a let form to make sure it's locally
+   - Declaring a given variable in a ~let~-like form to make sure it's locally
      scoped.
-   - Declaring a generated variable in a let form to contain a given value.
+   - Declaring a generated variable in a ~let~-like form to contain a given
+     value.
    - Adding a condition for continuing/exiting the loop.
    - Adding code to be run during the main processing section of the
      ~while~-loop.  This location is referred to as the {{{dfn(main body)}}} of
      the loop.
    - Adding code to be run after the main processing section, such as for
-     updating variables.  This location is referred to as the {{{dfn(latter
-     body)}}} of the loop.
+     updating variables.  This location is referred to as the
+     {{{dfn(latter body)}}} of the loop.
 
    For example, parsing the command =(list i '(1 2 3))= produces the following
    list of instructions.  Some commands require the creation of unique temporary
@@ -3110,10 +3205,10 @@ mapping features.
    #+END_SRC
 
    The first element of an instruction describes where to insert code into the
-   template.  The second element of an instruction is said code to insert.  You
+   template.  The second element of an instruction is the inserted code.  You
    can see that not all of the code to be inserted is a valid Lisp form.  For
-   example, the above instruction referencing ~loopy--iteration-vars~ inserts
-   a binding for the variable =list-211= into a ~let~-like form.
+   example, the above instruction referencing ~loopy--iteration-vars~ inserts a
+   binding for the variable =list-211= into a ~let~-like form.
 
    | Place                   | Code                             |
    |-------------------------+----------------------------------|
@@ -3214,7 +3309,7 @@ mapping features.
    The hardest part of this exchange is making sure that the inserted code ends
    up in the correct order.
 
-   A loop body command has 7 main places to put code:
+   A loop command has 7 main places to put code:
 
    #+vindex: loopy--generalized-vars
    - =loopy--generalized-vars= :: Lists of a symbol and a macro
@@ -3289,6 +3384,52 @@ mapping features.
      command and then coerced into a new type according to the needs of another.
      Commands acting on the same accumulation variable must require the same
      final update, if they require any final update.
+
+
+   Loopy will attempt to produce efficient code, and will not attempt to set up
+   features which are not used.  Therefore, the expanded code depends on the
+   kinds of instructions that are returned by the parsing functions.  For the
+   most part, the instructions affect the expansion of the loop that contains
+   their respective command.  However, there are cases where a command must send
+   instructions to a surrounding loop, not just the loop which immediately
+   contains it.  Consider using an accumulation command within the =at= command,
+   as in the below example.  The accumulation variable must be declared for the
+   loop =outer=, but the accumulation itself must still occur within the loop
+   =inner=.
+
+   #+begin_src emacs-lisp
+     ;; => (1 2 3 4)
+     (loopy outer
+            (array i [(1 2) (3 4)])
+            (sub-loop inner
+                      (list j i)
+                      (at outer (collect coll j)))
+            (finally-return coll))
+   #+end_src
+
+   To communicate these instructions, use ~loopy--at-instructions~.  For
+   example, the output of parsing =(at outer (collect j :at start))= would be a
+   list of instructions similar to those below.  While all of these
+   sub-instructions are produced by parsing the =collect= command, not all are
+   sent to the loop =outer=.
+
+   #+begin_src emacs-lisp
+     ((loopy--at-instructions
+       (outer (loopy--accumulation-vars (loopy-result nil))
+              (loopy--implicit-return loopy-result)))
+      (loopy--main-body (setq loopy-result (cons j loopy-result))))
+   #+end_src
+
+   #+vindex: loopy--at-instructions
+   - =loopy--at-instructions= :: Instructions that should be interpreted by a
+     surrounding loop.  For example, this kind of instruction is used by the
+     =at=, =skip-from=, and =leave-from= commands.  The instruction's value is a
+     list of a loop name followed by sub-instructions.
+
+     This variable works as a something like a combination of a stack and a map.
+     This means that then when multiple surrounding loops share the same name,
+     the instructions affect the innermost surrounding loop of that name.
+
 
    There are 4 more variables a loop command can push to, but they are derived
    from the macro's arguments.  Adding to them after using a macro argument
@@ -3625,8 +3766,8 @@ mapping features.
     start the next iteration.  Of course, a similar effect could be achieved
     using the =when= or =unless= commands.
 
-  ~loopy~ is not always one-to-one replacement for ~cl-loop~, but it is easy to
-  use and extend, and performs well in the cases that it already handles.
+  ~loopy~ is not always a one-to-one replacement for ~cl-loop~, but it is easy
+  to use and extend, and performs well in the cases that it already handles.
 
   Below is a simple example of ~loopy~ vs ~cl-loop~.
 

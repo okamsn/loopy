@@ -14,6 +14,7 @@ This document describes the user-facing changes to Loopy.
 
 - Add the special macro argument `finally-protect`, which wraps part of the loop
   with `unwind-protect`.
+- Clean up the Org documentation.
 
 ## 0.9.1
 
