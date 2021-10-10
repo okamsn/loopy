@@ -90,6 +90,8 @@
 (require 'subr-x)
 
 (declare-function loopy--bound-p "loopy")
+(declare-function loopy--process-instructions "loopy")
+(declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Aliases
@@ -144,6 +146,8 @@ expansion, we generally only want the actual symbol."
       (lambda function-form)
       (t (error "This function form is unrecognized: %s" function-form)))))
 
+(defalias 'loopy--normalize-symbol #'loopy--get-quoted-symbol
+  "Make QUOTED-FORM normally quoted instead of maybe doubly quoted.")
 (defun loopy--get-quoted-symbol (quoted-form)
   "Return the actual symbol of QUOTED-FORM.
 
@@ -1253,28 +1257,73 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
         (loopy--iteration-vars (,value-holder ,val))
         (loopy--iteration-vars
          (,index-holder ,(or starting-index (if going-down
-                                                  `(1- (length ,value-holder))
-                                                0))))
+                                                `(1- (length ,value-holder))
+                                              0))))
         (loopy--iteration-vars
          (,end-index-holder ,(or ending-index (if going-down
-                                                    -1
-                                                  `(length ,value-holder)))))
+                                                  -1
+                                                `(length ,value-holder)))))
         (loopy--latter-body (setq ,index-holder (,(if going-down '- '+)
-                                                   ,index-holder
-                                                   ,increment-holder)))
+                                                 ,index-holder
+                                                 ,increment-holder)))
         ,@(loopy--destructure-for-generalized-command
            var `(elt ,value-holder ,index-holder))
         (loopy--pre-conditions (,(if (or (null ending-index)
-                                           (not inclusive))
-                                       (if going-down '> '<)
-                                     (if going-down '>= '<=))
-                                  ,index-holder
-                                  ,end-index-holder))))))
+                                         (not inclusive))
+                                     (if going-down '> '<)
+                                   (if going-down '>= '<=))
+                                ,index-holder
+                                ,end-index-holder))))))
 
 ;;;;; Accumulation
-(defvar loopy--accumulation-list-end-vars)
-(defvar loopy--accumulation-variable-info)
+;;;;;; Compatibility
+(defvar loopy--known-accumulation-categories
+  '(list reverse-list string reverse-string vector
+         reverse-vector number generic)
+  "Known accumulation categories.
 
+Used for error checking with `loopy--check-accumulation-compatibility.'")
+
+(defun loopy--check-accumulation-compatibility
+    (loop-name variable category command)
+  "Check accumulation command compatibility.
+
+Known accumulation commands are listed in
+`loopy--accumulation-variable-info'.
+
+LOOP-NAME is the name of the loop in which VARIABLE accumulates.
+VARIABLE is the accumulation variable.  CATEGORY is one of
+`list', `reverse-list', `string', `reverse-string', `vector',
+`reverse-vector', `number', and `generic'.  It describes how the
+accumulation is being built and its return type, ignoring special
+circumstances like the `:result-type' keyword argument of
+commands like `collect'.  COMMAND is the accumulation command.
+
+- Strings are only made by `concat'.
+- Vectors are only made by `vconcat'.
+- Lists are made by commands like `append', `collect', and `union'.
+- Reverse-lists are made by commands which construct lists in
+  reverse for efficiency, whose normal result is a list.  This
+  excludes commands like `concat' and `vconcat', and is
+  unaffected by commands which coerce the type of result after
+  the loop, such as `collect'."
+  (unless (memq category loopy--known-accumulation-categories)
+    (error "Bad accumulation description: %s" category))
+
+  (let ((key (cons loop-name variable)))
+    (if-let ((existing-description
+              (alist-get key loopy--accumulation-variable-info
+                         nil nil #'equal)))
+        (seq-let (existing-category existing-command)
+            existing-description
+          (unless (eq category existing-category)
+            (error "Loopy: Incompatible accumulation commands:\n%s\n%s"
+                   existing-command
+                   command)))
+      (push (cons key (list category command))
+            loopy--accumulation-variable-info))))
+
+;;;;;; End Tracking
 (defun loopy--get-accumulation-list-end-var (loop var)
   "Return a variable for referring to the last link in VAR in LOOP.
 
@@ -1292,42 +1341,6 @@ end-tracking variables."
           (push (cons key tracking-var)
                 loopy--accumulation-list-end-vars)
           tracking-var))))
-
-(defun loopy--check-accumulation-compatibility
-    (loop-name variable category command)
-  "Check accumulation command compatibility.
-
-Known accumulation commands are listed in
-`loopy--accumulation-variable-info'.
-
-LOOP-NAME is the name of the loop in which VARIABLE accumulates.
-VARIABLE is the accumulation variable.  CATEGORY is one of
-`list', `string', `vector', `value', and `reverse-list'.  COMMAND
-is the accumulation command.
-
-- Strings are only made by `concat'.
-- Vectors are only made by `vconcat'.
-- Lists are made by commands like `append', `collect', and `union'.
-- Reverse-lists are made by commands which construct lists in
-  reverse for efficiency, whose normal result is a list.  This
-  excludes commands like `concat' and `vconcat', and is
-  unaffected by commands which coerce the type of result after
-  the loop, such as `collect'."
-  (unless (memq category '(list string vector value reverse-list))
-    (error "Bad accumulation description: %s" category))
-
-  (let ((key (cons loop-name variable)))
-    (if-let ((existing-description
-              (alist-get key loopy--accumulation-variable-info
-                         nil nil #'equal)))
-        (seq-let (existing-category existing-command)
-            existing-description
-          (unless (eq category existing-category)
-            (error "Loopy: Incompatible accumulation commands:\n%s\n%s"
-                   existing-command
-                   command)))
-      (push (cons key (list category command))
-            loopy--accumulation-variable-info))))
 
 (defun loopy--produce-collect-end-tracking (var val)
   "Produce instructions for an end-tracking accumulation of single items.
@@ -1454,6 +1467,83 @@ more efficient than repeatedly traversing the list."
              (setq ,var ,new-items
                    ,last-link (last ,var)))))))))
 
+;;;;;; Test Methods
+(defun loopy--get-union-test-method (var &optional key test)
+  "Get a function testing for values in VAR in `union' and `nunion'.
+
+This function is fed to `cl-remove-if' or `cl-delete-if'.  See
+the definitions of those commands for more context.
+
+TEST is use to check for equality (default `eql').  KEY modifies
+the inputs to test."
+  ;;  KEY applies to the value being tested as well as the elements in the list.
+  (let ((function-arg (gensym "union-function-arg")))
+    `(lambda (,function-arg)
+       ,(if key
+            (let ((test-val (gensym "union-test-val"))
+                  (test-var (gensym "union-test-var")))
+              ;; Can't rely on lexical variables around a `lambda' in
+              ;; `cl-member-if', so we perform this part more manually.
+              `(cl-loop with ,test-val = ,(loopy--apply-function key
+                                                                 function-arg)
+                        for ,test-var in ,var
+                        thereis ,(loopy--apply-function
+                                  (or test (quote #'eql))
+                                  (loopy--apply-function key test-var)
+                                  test-val)))
+          `(cl-member ,function-arg ,var :test ,test)))))
+
+;;;;;; Optimized Accumulations
+(defun loopy--get-optimized-accum (plist)
+  "Produce accumulation expansion.  Non-main-body instructions are processed.
+
+PLIST is a list with at least the keys `:cmd' and `:loop'.  Then
+entire plist is passed to the constructor found in
+`loopy--accumulation-constructors'."
+  (loopy--plist-bind (:name name :loop loop)
+      plist
+    (seq-let (main-body other-instrs)
+        (if-let ((func (map-elt loopy--accumulation-constructors name)))
+            (loopy--extract-main-body (funcall func plist))
+          (error "No accumulation constructor: %s" name))
+      (loopy--process-instructions
+       `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
+      (macroexp-progn main-body))))
+
+(defun loopy--accum-code-expansion (form)
+  "Aggressively search for uses of the symbol `loopy--optimized-accum' in FORM.
+
+This symbol is used like a function to mark places where it
+should be replaced by optimized accumulation code.  It is assumed
+that such places are the only possible use of the symbol."
+  (cond
+   ((atom form)
+    form)
+   ((eq (cl-first form) 'loopy--optimized-accum)
+    (loopy--get-optimized-accum (cl-second form)))
+   (t
+    (cons (cl-first form)
+          (mapcar #'loopy--accum-code-expansion (cl-rest form))))))
+
+(cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
+  "Keep track of where things are being placed.
+
+LOOP is the current loop.  VAR is the accumulation variable.
+PLACE is one of `start' or `end'.  VALUE is the integer by which
+to increment the count (default 1)."
+  (unless (memq loop loopy--known-loop-names)
+    (error "Unknown loop name: %s" loop))
+  (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
+    (unless (map-elt loop-map var)
+      (setf (map-elt loop-map var)
+            (list (cons 'start 0) (cons 'end 0))))
+    (setq place (loopy--normalize-symbol place))
+    (when (eq place 'beginning) (setq place 'start))
+    (unless (memq place '(start end beginning))
+      (error "Bad place: %s" place))
+    (cl-incf (map-elt (map-elt loop-map var) place) value)))
+
+;;;;;; Commands
 (cl-defmacro loopy--defaccumulation (name
                                      doc-string
                                      &key
@@ -1588,49 +1678,88 @@ you can use in the instructions:
               (t
                (error "Wrong number of arguments or wrong keywords: %s" cmd))))))))
 
-(defun loopy--get-union-test-method (var &optional key test)
-  "Get a function testing for values in VAR in `union' and `nunion'.
 
-This function is fed to `cl-remove-if' or `cl-delete-if'.  See
-the definitions of those commands for more context.
-
-TEST is use to check for equality (default `eql').  KEY modifies
-the inputs to test."
-  ;;  KEY applies to the value being tested as well as the elements in the list.
-  (let ((function-arg (gensym "union-function-arg")))
-    `(lambda (,function-arg)
-       ,(if key
-            (let ((test-val (gensym "union-test-val"))
-                  (test-var (gensym "union-test-var")))
-              ;; Can't rely on lexical variables around a `lambda' in
-              ;; `cl-member-if', so we perform this part more manually.
-              `(cl-loop with ,test-val = ,(loopy--apply-function key
-                                                                 function-arg)
-                        for ,test-var in ,var
-                        thereis ,(loopy--apply-function
-                                  (or test (quote #'eql))
-                                  (loopy--apply-function key test-var)
-                                  test-val)))
-          `(cl-member ,function-arg ,var :test ,test)))))
-
-;;;;;; Accumulate
+;;;;;;; Accumulate
 (loopy--defaccumulation accumulate
   "Parse the `accumulate command' as (accumulate VAR VAL FUNC &key init)."
   :keywords (init)
   :num-args 3
   :explicit (loopy--plist-bind (:init init) opts
-              (loopy--check-accumulation-compatibility loopy--loop-name var 'value cmd)
+              (loopy--check-accumulation-compatibility loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
                  (setq ,var ,(loopy--apply-function (cl-third args) val var)))))
   :implicit (loopy--plist-bind (:init init) opts
-              (loopy--check-accumulation-compatibility loopy--loop-name var 'value cmd)
+              (loopy--check-accumulation-compatibility loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
                  (setq ,var ,(loopy--apply-function (cl-second args) val var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Adjoin
+;;;;;;; Adjoin
+(defun loopy--construct-accum-adjoin (plist)
+  "Construct optimized accumulation for `adjoin' from PLIST."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :test test :key key :at pos
+                       :result-type (result-type 'list))
+      plist
+    (map-let (('start start)
+              ('end end))
+        (map-nested-elt loopy--accumulation-places (list loop var))
+      (let* ((val-is-expression (not (symbolp val)))
+             (value-holder (if val-is-expression
+                               (gensym "adjoin-value")
+                             val))
+             (membership-test
+              ;; `adjoin' applies KEY to both the new item and old items in
+              ;; list, while `member' only applies KEY to items in the list.
+              ;; To be consistent and apply KEY to all items, we use
+              ;; `cl-member-if' with a custom predicate instead.
+              (if key
+                  (let ((func-arg (gensym "adjoin-func-arg")))
+                    `(cl-member-if
+                      (lambda (,func-arg)
+                        ,(loopy--apply-function
+                          (or test (quote #'eql))
+                          (loopy--apply-function key func-arg)
+                          (loopy--apply-function key value-holder)))
+                      ,var))
+                `(cl-member ,value-holder ,var :test ,test))))
+
+        `((loopy--accumulation-vars (,var nil))
+          ;; If the tested value is not already a variable, then we need to
+          ;; store so that we can check for its presence and then add it to the
+          ;; list.
+          ,@(when val-is-expression
+              `((loopy--accumulation-vars (,value-holder nil))
+                (loopy--main-body (setq ,value-holder ,val))))
+          ,@(if (>= start end)
+                ;; Create list in normal order.
+                (progn
+                  (loopy--check-accumulation-compatibility loop var 'list cmd)
+                  `(,@(if (eq pos 'start)
+                          `((loopy--main-body
+                             (setq ,var (cl-adjoin ,value-holder ,var :test ,test :key ,key))))
+                        (loopy--produce-adjoin-end-tracking var value-holder
+                                                            membership-test))
+                    ,(unless (eq 'list result-type)
+                       `(loopy--accumulation-final-updates
+                         (,var . (setq ,var (cl-coerce ,var (quote ,result-type))))))))
+
+              ;; Create list in reverse order.
+              (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
+              `(,@(if (eq pos 'start)
+                      (loopy--produce-adjoin-end-tracking var value-holder
+                                                          membership-test)
+                    `((loopy--main-body (if ,membership-test
+                                            nil
+                                          (setq ,var (cons ,value-holder ,var))))))
+                (loopy--accumulation-final-updates
+                 (,var . (setq ,var  ,(if (eq 'list result-type)
+                                          `(nreverse ,var)
+                                        `(cl-coerce (nreverse ,var)
+                                                    (quote ,result-type)))))))))))))
+
 (loopy--defaccumulation adjoin
   "Parse the `adjoin' command as (adjoin VAR VAL &key test key result-type at)
 
@@ -1641,263 +1770,327 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   (loopy--plist-bind ( :test test :key key :at (pos 'end)
                        :result-type (result-type 'list))
       opts
-    (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-    `((loopy--accumulation-vars (,var nil))
-      ,@(cond
-         ((member pos '(start beginning 'start 'beginning))
+    (setq pos (loopy--normalize-symbol pos)
+          result-type (loopy--normalize-symbol result-type))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+
+    (if (memq var loopy--optimized-accum-vars)
+        (progn
+          (loopy--update-accum-place-count loopy--loop-name var pos)
           `((loopy--main-body
-             (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
-         ((member pos '(end nil 'end))
-          (let* ((val-is-expression (not (symbolp val)))
-                 (value-holder (if val-is-expression
-                                   (gensym "adjoin-value")
-                                 val))
-                 (membership-test
-                  ;; `adjoin' applies KEY to both the new item and old items in
-                  ;; list, while `member' only applies KEY to items in the list.
-                  ;; To be consistent and apply KEY to all items, we use
-                  ;; `cl-member-if' with a custom predicate instead.
-                  (if key
-                      (let ((func-arg (gensym "adjoin-func-arg")))
-                        `(cl-member-if
-                          (lambda (,func-arg)
-                            ,(loopy--apply-function
-                              (or test (quote #'eql))
-                              (loopy--apply-function key func-arg)
-                              (loopy--apply-function key value-holder)))
-                          ,var))
-                    `(cl-member ,value-holder ,var :test ,test))))
-            `(,@(when val-is-expression
-                  `((loopy--accumulation-vars (,value-holder nil))
-                    (loopy--main-body (setq ,value-holder ,val))))
-              ,@(loopy--produce-adjoin-end-tracking var value-holder
-                                                    membership-test))))
-         (t
-          (error "Bad `:at' position: %s" cmd)))
-      ,(when (and result-type (not (eq result-type 'list)))
-         `(loopy--accumulation-final-updates
-           (,var . (setq ,var (cl-coerce ,var
-                                         (quote ,(loopy--get-quoted-symbol
-                                                  result-type)))))))))
+             (loopy--optimized-accum ( :cmd ,cmd :name ,name
+                                       :var ,var :val ,val
+                                       :test ,test :key ,key :at ,pos
+                                       :result-type ,result-type)))))
+
+      (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
+      `((loopy--accumulation-vars (,var nil))
+        ,@(cond
+           ((member pos '(start beginning 'start 'beginning))
+            `((loopy--main-body
+               (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
+           ((member pos '(end nil 'end))
+            (let* ((val-is-expression (not (symbolp val)))
+                   (value-holder (if val-is-expression
+                                     (gensym "adjoin-value")
+                                   val))
+                   (membership-test
+                    ;; `adjoin' applies KEY to both the new item and old items in
+                    ;; list, while `member' only applies KEY to items in the list.
+                    ;; To be consistent and apply KEY to all items, we use
+                    ;; `cl-member-if' with a custom predicate instead.
+                    (if key
+                        (let ((func-arg (gensym "adjoin-func-arg")))
+                          `(cl-member-if
+                            (lambda (,func-arg)
+                              ,(loopy--apply-function
+                                (or test (quote #'eql))
+                                (loopy--apply-function key func-arg)
+                                (loopy--apply-function key value-holder)))
+                            ,var))
+                      `(cl-member ,value-holder ,var :test ,test))))
+              `(,@(when val-is-expression
+                    `((loopy--accumulation-vars (,value-holder nil))
+                      (loopy--main-body (setq ,value-holder ,val))))
+                ,@(loopy--produce-adjoin-end-tracking var value-holder
+                                                      membership-test))))
+           (t
+            (error "Bad `:at' position: %s" cmd)))
+        ,(when (and result-type (not (eq result-type 'list)))
+           `(loopy--accumulation-final-updates
+             (,var . (setq ,var (cl-coerce ,var
+                                           (quote ,(loopy--get-quoted-symbol
+                                                    result-type))))))))))
   :implicit
   (loopy--plist-bind ( :test test :key key :at (pos 'end)
                        :result-type (result-type 'list))
       opts
-    `((loopy--accumulation-vars (,var nil))
-      ,@(cond
-         ((member pos '(start beginning 'start 'beginning))
-          (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-          `((loopy--main-body
-             (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
-         ((member pos '(end 'end))
-          (let* ((val-is-expression (not (symbolp val)))
-                 (value-holder (if val-is-expression
-                                   (gensym "adjoin-value")
-                                 val))
-                 (membership-test
-                  (if key
-                      ;; `adjoin' applies KEY to both the new item
-                      ;; and old items in list, while `member' only
-                      ;; applies KEY to items in the list.  To be
-                      ;; consistent and apply KEY to all items, we
-                      ;; use `cl-member-if' with a custom predicate
-                      ;; instead.
-                      (let ((func-arg (gensym "adjoin-func-arg")))
-                        `(cl-member-if
-                          (lambda (,func-arg)
-                            ,(loopy--apply-function
-                              (or test (quote #'eql))
-                              (loopy--apply-function key func-arg)
-                              (loopy--apply-function key value-holder)))
-                          ,var))
-                    `(cl-member ,value-holder ,var :test ,test))))
-
-            `(,@(when val-is-expression
-                  `((loopy--accumulation-vars (,value-holder nil))
-                    (loopy--main-body (setq ,value-holder ,val))))
-              ,@(if loopy--split-implied-accumulation-results
-                    (progn
-                      (loopy--check-accumulation-compatibility
-                       loopy--loop-name var 'reverse-list cmd)
-                      `((loopy--main-body (if ,membership-test
-                                              nil
-                                            (setq ,var (cons ,value-holder ,var))))))
-                  (loopy--check-accumulation-compatibility
-                   loopy--loop-name var 'list cmd)
-                  (loopy--produce-adjoin-end-tracking
-                   var value-holder membership-test))))))
-      ,(let ((reversing (and loopy--split-implied-accumulation-results
-                             (member pos '(end 'end)))))
-         (if (not (member result-type '(list 'list)))
-             `(loopy--accumulation-final-updates
-               (,var
-                . (setq ,var (cl-coerce ,(if reversing `(nreverse ,var) var)
-                                        (quote ,(loopy--get-quoted-symbol
-                                                 result-type))))))
-           (when reversing
-             `(loopy--accumulation-final-updates
-               (,var . (setq ,var (nreverse ,var)))))))
+    (setq pos (loopy--normalize-symbol pos)
+          result-type (loopy--normalize-symbol result-type))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (loopy--update-accum-place-count loopy--loop-name var pos)
+    `((loopy--main-body
+       (loopy--optimized-accum ( :cmd ,cmd :name ,name
+                                 :var ,var :val ,val
+                                 :test ,test :key ,key :at ,pos
+                                 :result-type ,result-type)))
       (loopy--implicit-return ,var))))
 
-;;;;;; Append
+;;;;;;; Append
+(defun loopy--construct-accum-append (plist)
+  "Produce accumulation code for `append' from PLIST."
+  (loopy--plist-bind ( :cmd cmd :loop loop
+                       :var var :val val
+                       :at (pos 'end))
+      plist
+    (setq pos (loopy--get-quoted-symbol pos))
+    (map-let (('start start)
+              ('end end))
+        (map-nested-elt loopy--accumulation-places (list loop var))
+      (if (>= start end)
+          ;; Create list in normal order.
+          (progn
+            (loopy--check-accumulation-compatibility loop var 'list cmd)
+            (if (eq pos 'start)
+                ;; TODO: Is there a better way of appending to the beginning
+                ;;       of a list?
+                ;; `append' doesn't copy the last argument.
+                `((loopy--main-body (setq ,var (append ,val ,var))))
+              (loopy--produce-multi-item-end-tracking var val)))
+
+        ;; Create list in reverse order.
+        (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
+        `(,@(if (eq pos 'end)
+                `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var))))
+              (loopy--produce-multi-item-end-tracking var val))
+          (loopy--accumulation-final-updates
+           (,var . (setq ,var (nreverse ,var)))))))))
+
 (loopy--defaccumulation append
   "Parse the `append' command as (append VAR VAL &key at)."
   :keywords (at)
   :explicit
-  (loopy--plist-bind (:at (pos 'end)) opts
-    (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-    `((loopy--accumulation-vars (,var nil))
-      ,@(cond
-         ;; TODO: Is there a better way of appending to the beginning
-         ;;       of a list?
-         ((member pos '(start beginning 'start 'beginning))
-          ;; `append' doesn't copy the last argument.
-          `((loopy--main-body (setq ,var (append ,val ,var)))))
-         ((member pos '(end 'end))
-          (loopy--produce-multi-item-end-tracking var val))
-         (t
-          (error "Bad `:at' position: %s" cmd)))))
+  (loopy--plist-bind (:at (pos 'end))
+      opts
+    (setq pos (loopy--normalize-symbol pos))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (if (memq var loopy--optimized-accum-vars)
+        (progn
+          (loopy--update-accum-place-count loopy--loop-name var pos)
+          `((loopy--accumulation-vars (,var nil))
+            (loopy--main-body
+             (loopy--optimized-accum ( :loop ,loopy--loop-name
+                                       :var ,var :val ,val
+                                       :cmd ,cmd :name ,name :at ,pos)))))
+      (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
+      `((loopy--accumulation-vars (,var nil))
+        ,@(cond
+           ;; TODO: Is there a better way of appending to the beginning
+           ;;       of a list?
+           ((member pos '(start beginning 'start 'beginning))
+            ;; `append' doesn't copy the last argument.
+            `((loopy--main-body (setq ,var (append ,val ,var)))))
+           ((member pos '(end 'end))
+            (loopy--produce-multi-item-end-tracking var val))
+           (t
+            (error "Bad `:at' position: %s" cmd))))))
   :implicit
-  (loopy--plist-bind (:at (pos 'end)) opts
+  (loopy--plist-bind (:at (pos 'end))
+      opts
+    (setq pos (loopy--normalize-symbol pos))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
-      ,@(cond
-         ;; TODO: Is there a better way of appending to the beginning
-         ;;       of a list?
-         ((member pos '(start beginning 'start 'beginning))
-          (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-          ;; `append' doesn't copy the last argument.
-          `((loopy--main-body (setq ,var (append ,val ,var)))))
-         ((member pos '(end 'end))
-          (if loopy--split-implied-accumulation-results
-              (progn
-                (loopy--check-accumulation-compatibility
-                 loopy--loop-name var 'reverse-list cmd)
-                `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var)))
-                  (loopy--accumulation-final-updates
-                   (,var . (setq ,var (nreverse ,var))))))
-            (loopy--check-accumulation-compatibility
-             loopy--loop-name var 'list cmd)
-            (loopy--produce-multi-item-end-tracking var val)))
-         (t
-          (error "Bad `:at' position: %s" cmd)))
+      (loopy--main-body
+       (loopy--optimized-accum ( :loop ,loopy--loop-name :var ,var :val ,val
+                                 :cmd ,cmd :name ,name :at ,pos)))
       (loopy--implicit-return ,var))))
 
-;;;;;; Collect
+;;;;;;; Collect
+(defun loopy--construct-accum-collect (plist)
+  "Construct an optimized `collect' accumulation from PLIST."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end)
+                       :result-type (result-type 'list))
+      plist
+    (setq pos (loopy--get-quoted-symbol pos))
+    `((loopy--accumulation-vars (,var nil))
+      ,@(map-let (('start start)
+                  ('end end))
+            (map-nested-elt loopy--accumulation-places (list loop var))
+          (if (>= start end)
+              ;; Create list in normal order.
+              (progn
+                (loopy--check-accumulation-compatibility loop var 'list cmd)
+                `(,@(if (eq pos 'start)
+                        `((loopy--main-body (setq ,var (cons ,val ,var))))
+                      (loopy--produce-collect-end-tracking var val))
+                  ,(unless (eq result-type 'list)
+                     `(loopy--accumulation-final-updates
+                       (,var
+                        . (setq ,var
+                                (cl-coerce ,var
+                                           (quote ,(loopy--get-quoted-symbol
+                                                    result-type)))))))))
+
+            ;; Create list in reverse order.
+            (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
+            `(,@(if (eq pos 'end)
+                    `((loopy--main-body (setq ,var (cons ,val ,var))))
+                  (loopy--produce-collect-end-tracking var val))
+              (loopy--accumulation-final-updates
+               (,var . (setq ,var
+                             ,(if (eq result-type 'list)
+                                  `(nreverse ,var)
+                                `(cl-coerce
+                                  (nreverse ,var)
+                                  (quote ,(loopy--get-quoted-symbol result-type)))))))))))))
+
 (loopy--defaccumulation collect
   "Parse the `collect' command as (collect VAR VAL &key result-type at)."
   :keywords (result-type at)
   :explicit (loopy--plist-bind ( :at (pos (quote 'end))
                                  :result-type (result-type 'list))
                 opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                ,@(cond
-                   ((member pos '(start beginning 'start 'beginning))
-                    `((loopy--main-body (setq ,var (cons ,val ,var)))))
-                   ((member pos '(end 'end))
-                    (loopy--produce-collect-end-tracking var val))
-                   (t
-                    (error "Bad `:at' position: %s" cmd)))
-                ,(unless (member result-type '(list 'list))
-                   `(loopy--accumulation-final-updates
-                     (,var . (setq ,var
-                                   (cl-coerce ,var (quote
-                                                    ,(loopy--get-quoted-symbol
-                                                      result-type)))))))))
-
-  :implicit (loopy--plist-bind ( :at (pos (quote 'end))
-                                 :result-type (result-type 'list))
-                opts
-              `((loopy--accumulation-vars (,var nil))
-                ,@(cond
-                   ((member pos '(start beginning 'start 'beginning))
-                    (loopy--check-accumulation-compatibility
-                     loopy--loop-name var 'list cmd)
-                    `((loopy--main-body (setq ,var (cons ,val ,var)))))
-                   ((member pos '(end 'end))
-                    (if loopy--split-implied-accumulation-results
-                        ;; If we can, construct the list in reverse.
-                        (progn
-                          (loopy--check-accumulation-compatibility
-                           loopy--loop-name var 'reverse-list cmd)
-                          `((loopy--main-body (setq ,var (cons ,val ,var)))))
-                      (loopy--check-accumulation-compatibility
-                       loopy--loop-name var 'list cmd)
-                      (loopy--produce-collect-end-tracking var val)))
-                   (t
-                    (error "Bad `:at' position: %s" cmd)))
-                ,(if (and (member pos '(end 'end))
-                          loopy--split-implied-accumulation-results)
-                     (if (member result-type '(list 'list))
-                         `(loopy--accumulation-final-updates
-                           (,var . (setq ,var (nreverse ,var))))
-                       `(loopy--accumulation-final-updates
-                         (,var . (setq ,var
-                                       (cl-coerce (nreverse ,var)
-                                                  (quote
-                                                   ,(loopy--get-quoted-symbol
-                                                     result-type)))))))
-                   (unless (member result-type '(list 'list))
+              (setq pos (loopy--normalize-symbol pos)
+                    result-type (loopy--normalize-symbol result-type))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (if (memq var loopy--optimized-accum-vars)
+                  (progn
+                    (loopy--update-accum-place-count loopy--loop-name var pos)
+                    `((loopy--main-body
+                       (loopy--optimized-accum
+                        ( :loop ,loopy--loop-name :var ,var :val ,val
+                          :cmd ,cmd :name ,name :at ,pos
+                          :result-type ,result-type)))))
+                (loopy--check-accumulation-compatibility
+                 loopy--loop-name var 'list cmd)
+                `((loopy--accumulation-vars (,var nil))
+                  ,@(cond
+                     ((member pos '(start beginning 'start 'beginning))
+                      `((loopy--main-body (setq ,var (cons ,val ,var)))))
+                     ((member pos '(end 'end))
+                      (loopy--produce-collect-end-tracking var val))
+                     (t
+                      (error "Bad `:at' position: %s" cmd)))
+                  ,(unless (member result-type '(list 'list))
                      `(loopy--accumulation-final-updates
                        (,var . (setq ,var
-                                     (cl-coerce ,var
-                                                (quote
-                                                 ,(loopy--get-quoted-symbol
-                                                   result-type))))))))
+                                     (cl-coerce ,var (quote
+                                                      ,(loopy--get-quoted-symbol
+                                                        result-type))))))))))
+
+  :implicit (loopy--plist-bind ( :at (pos 'end)
+                                 :result-type (result-type 'list))
+                opts
+              (setq pos (loopy--normalize-symbol pos)
+                    result-type (loopy--normalize-symbol result-type))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              `((loopy--main-body
+                 (loopy--optimized-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos
+                    :result-type ,result-type)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Concat
+;;;;;;; Concat
+(defun loopy--construct-accum-concat (plist)
+  "Create accumulation code for `concat' from PLIST.
+
+This function is called by `loopy--get-optimized-accum'."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end))
+      plist
+    (map-let (('start start)
+              ('end end))
+        (map-nested-elt loopy--accumulation-places (list loop var))
+      ;; Forward list order.
+      (if (>= start end)
+          (progn
+            (loopy--check-accumulation-compatibility loop var 'string cmd)
+            `(,@(if (eq pos 'start)
+                    `((loopy--main-body (setq ,var (cons ,val ,var))))
+                  (loopy--produce-collect-end-tracking var val))
+              (loopy--accumulation-final-updates
+               (,var . (setq ,var (apply #'concat ,var))))))
+        ;; Reverse list order.
+        (loopy--check-accumulation-compatibility loop var 'reverse-string cmd)
+        `(,@(if (eq pos 'start)
+                (loopy--produce-collect-end-tracking var val)
+              `((loopy--main-body (setq ,var (cons ,val ,var)))))
+          (loopy--accumulation-final-updates
+           (,var . (setq ,var (apply #'concat (nreverse ,var))))))))))
+
 (loopy--defaccumulation concat
   "Parse the `concat' command as (concat VAR VAL &key at)."
   :keywords (at)
-  :explicit (loopy--plist-bind (:at (pos 'end)) opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'string cmd)
+  :explicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (if (memq var loopy--optimized-accum-vars)
+                  (progn
+                    (loopy--update-accum-place-count loopy--loop-name var pos)
+                    `((loopy--accumulation-vars (,var nil))
+                      (loopy--main-body
+                       (loopy--optimized-accum
+                        ( :loop ,loopy--loop-name :var ,var :val ,val
+                          :cmd ,cmd :name ,name :at ,pos)))
+                      (loopy--implicit-return ,var)))
+                (loopy--check-accumulation-compatibility
+                 loopy--loop-name var 'string cmd)
+                `((loopy--accumulation-vars (,var nil))
+                  (loopy--main-body
+                   (setq ,var
+                         ,(cond
+                           ((member pos '(start beginning 'start 'beginning))
+                            `(concat ,val ,var))
+                           ((member pos '(end 'end))
+                            `(concat ,var ,val))
+                           (t
+                            (error "Bad `:at' position: %s" cmd))))))))
+  :implicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 (setq ,var
-                       ,(cond
-                         ((member pos '(start beginning 'start 'beginning))
-                          `(concat ,val ,var))
-                         ((member pos '(end 'end))
-                          `(concat ,var ,val))
-                         (t
-                          (error "Bad `:at' position: %s" cmd)))))))
-  :implicit (loopy--plist-bind (:at (pos 'end)) opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'string cmd)
-              `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body (setq ,var (cons ,val ,var)))
-                (loopy--accumulation-final-updates
-                 (,var . (setq ,var
-                               ,(cond
-                                 ((member pos '( start beginning
-                                                 'start 'beginning))
-                                  `(apply #'concat ,var))
-                                 ((member pos '(end 'end))
-                                  `(apply #'concat (reverse ,var)))
-                                 (t
-                                  (error "Bad `:at' position: %s" cmd))))))
+                 (loopy--optimized-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Count
+;;;;;;; Count
 (loopy--defaccumulation count
   "Parse the `count' command as (count VAR VAL)."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 0))
                 (loopy--main-body (if ,val (setq ,var (1+ ,var))))))
   :implicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 0))
                 (loopy--main-body (if ,val (setq ,var (1+ ,var))))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Find
+;;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
   :num-args 3
@@ -1937,134 +2130,193 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                      (,var . (if ,var nil (setq ,var ,on-failure)))))
                 (loopy--implicit-return   ,var))))
 
-;;;;;; Max
+;;;;;;; Max
 (loopy--defaccumulation max
   "Parse the `max' command as (max VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var -1.0e+INF))
                 (loopy--main-body (setq ,var (max ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var -1.0e+INF))
                 (loopy--main-body (setq ,var (max ,val ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Min
+;;;;;;; Min
 (loopy--defaccumulation min
   "Parse the `min' command as (min VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var +1.0e+INF))
                 (loopy--main-body (setq ,var (min ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var +1.0e+INF))
                 (loopy--main-body (setq ,var (min ,val ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Multiply
+;;;;;;; Multiply
 (loopy--defaccumulation multiply
   "Parse the `multiply' command as (multiply VAR VAL)."
   :explicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 1))
                 (loopy--main-body (setq ,var (* ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 1))
                 (loopy--main-body (setq ,var (* ,val ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Nconc
+;;;;;;; Nconc
+(defun loopy--construct-accum-nconc (plist)
+  "Create accumulation code for PLIST."
+  (loopy--plist-bind (:cmd cmd :loop loop :var var :val val :at (pos 'end))
+      plist
+    (map-let (('start start)
+              ('end end))
+        (or (map-nested-elt loopy--accumulation-places (list loop var))
+            (error "Failed to set up counters: nconc"))
+      ;; Forward list order.
+      (if (>= start end)
+          (progn
+            (loopy--check-accumulation-compatibility loop var 'list cmd)
+            (if (eq pos 'start)
+                `((loopy--main-body (setq ,var (nconc ,val ,var))))
+              (loopy--produce-multi-item-end-tracking var val 'destructive)))
+        ;; Reverse list order.
+        (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
+        `(,@(if (eq pos 'start)
+                (loopy--produce-multi-item-end-tracking var val 'destructive)
+              `((loopy--main-body (setq ,var (nconc (nreverse  ,val) ,var)))))
+          (loopy--accumulation-final-updates
+           (,var . (setq ,var (nreverse ,var)))))))))
+
 (loopy--defaccumulation nconc
   "Parse the `nconc' command as (nconc VAR VAL &key at)."
   :keywords (at)
-  :explicit (loopy--plist-bind (:at (pos 'end)) opts
+  :explicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (if (memq var loopy--optimized-accum-vars)
+                  (progn
+                    (loopy--update-accum-place-count loopy--loop-name var pos)
+                    `((loopy--accumulation-vars (,var nil))
+                      (loopy--main-body (loopy--optimized-accum
+                                         ( :loop ,loopy--loop-name :var ,var
+                                           :val ,val :cmd ,cmd :name ,name :at ,pos)))
+                      (loopy--implicit-return ,var)))
+                (loopy--check-accumulation-compatibility
+                 loopy--loop-name var 'list cmd)
+                `((loopy--accumulation-vars (,var nil))
+                  ,@(cond
+                     ((member pos '(start beginning 'start 'beginning))
+                      `((loopy--main-body (setq ,var (nconc ,val ,var)))))
+                     ((member pos '(end 'end))
+                      (loopy--produce-multi-item-end-tracking var val 'destructive))
+                     (t
+                      (error "Bad `:at' position: %s" cmd))))))
+  :implicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              `((loopy--accumulation-vars (,var nil))
+                (loopy--main-body (loopy--optimized-accum
+                                   ( :loop ,loopy--loop-name :var ,var
+                                     :val ,val :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
+
+;;;;;;; Nunion
+(defun loopy--construct-accum-nunion (plist)
+  "Create accumulation code for `nunion' from PLIST.
+
+This function is used by `loopy--get-optimized-accum'."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
+                       :key key :test test)
+      plist
+    (let ((test-method (loopy--get-union-test-method var key test)))
+      (map-let (('start start)
+                ('end end))
+          (or (map-nested-elt loopy--accumulation-places (list loop var))
+              (error "Failed to set up counters: nconc"))
+        ;; Forward list order.
+        (if (>= start end)
+            (progn
               (loopy--check-accumulation-compatibility
                loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                ,@(cond
-                   ((member pos '(start beginning 'start 'beginning))
-                    `((loopy--main-body (setq ,var (nconc ,val ,var)))))
-                   ((member pos '(end 'end))
-                    (loopy--produce-multi-item-end-tracking var val 'destructive))
-                   (t
-                    (error "Bad `:at' position: %s" cmd)))))
-  :implicit
-  (loopy--plist-bind (:at (pos 'end)) opts
-    `((loopy--accumulation-vars (,var nil))
-      ,@(cond
-         ((member pos '(start beginning 'start 'beginning))
+              (if (eq pos 'start)
+                  `((loopy--main-body
+                     (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var))))
+                (loopy--produce-union-end-tracking var val test-method 'destructive)))
+          ;; Reverse list order.
           (loopy--check-accumulation-compatibility
-           loopy--loop-name var 'list cmd)
-          `((loopy--main-body (setq ,var (nconc ,val ,var)))))
-         ((member pos '(end 'end))
-          (if loopy--split-implied-accumulation-results
-              (progn
-                (loopy--check-accumulation-compatibility
-                 loopy--loop-name var 'reverse-list cmd)
-                `((loopy--main-body (setq ,var (nconc (nreverse ,val) ,var)))
-                  (loopy--accumulation-final-updates
-                   (,var . (setq ,var (nreverse ,var))))))
-            (loopy--check-accumulation-compatibility
-             loopy--loop-name var 'list cmd)
-            (loopy--produce-multi-item-end-tracking var val 'destructive)))
-         (t
-          (error "Bad `:at' position: %s" cmd)))
-      (loopy--implicit-return ,var))))
+           loopy--loop-name var 'reverse-list cmd)
+          `(,@(if (eq pos 'start)
+                  (loopy--produce-union-end-tracking var val test-method 'destructive)
+                `((loopy--main-body
+                   (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
+                                     ,var)))))
+            (loopy--accumulation-final-updates
+             (,var . (setq ,var (nreverse ,var))))))))))
 
-;;;;;; Nunion
 (loopy--defaccumulation nunion
   "Parse the `nunion' command as (nunion VAR VAL &key test key at)."
   :keywords (test key at)
   :explicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
-    (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-    `((loopy--accumulation-vars (,var nil))
-      ,@(let ((test-method (loopy--get-union-test-method var key test)))
-          (cond
-           ((member pos '(start beginning 'start 'beginning))
-            `((loopy--main-body
-               (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
-           ((member pos '(end 'end))
-            (loopy--produce-union-end-tracking var val test-method 'destructive))
-           (t
-            (error "Bad `:at' position: %s" cmd))))))
+  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+      opts
+    (setq pos (loopy--normalize-symbol pos))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (if (memq var loopy--optimized-accum-vars)
+        (progn
+          (loopy--update-accum-place-count loopy--loop-name var pos)
+          `((loopy--accumulation-vars (,var nil))
+            (loopy--main-body
+             (loopy--optimized-accum ( :loop ,loopy--loop-name :var ,var
+                                       :val ,val :cmd ,cmd :name ,name :at ,pos
+                                       :key ,key :test ,test)))))
+      (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
+      `((loopy--accumulation-vars (,var nil))
+        ,@(let ((test-method (loopy--get-union-test-method var key test)))
+            (cond
+             ((member pos '(start beginning 'start 'beginning))
+              `((loopy--main-body
+                 (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
+             ((member pos '(end 'end))
+              (loopy--produce-union-end-tracking var val test-method 'destructive))
+             (t
+              (error "Bad `:at' position: %s" cmd)))))))
   :implicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
+  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+      opts
+    (setq pos (loopy--normalize-symbol pos))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
-      ,@(let ((test-method (loopy--get-union-test-method var key test)))
-          (cond
-           ((member pos '(start beginning 'start 'beginning))
-            (loopy--check-accumulation-compatibility
-             loopy--loop-name var 'list cmd)
-            `((loopy--main-body
-               (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
-           ((member pos '(end 'end))
-            (if loopy--split-implied-accumulation-results
-                (progn
-                  (loopy--check-accumulation-compatibility
-                   loopy--loop-name var 'reverse-list cmd)
-                  `((loopy--main-body
-                     (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
-                                       ,var)))
-                    (loopy--accumulation-final-updates
-                     (var . (setq ,var (nreverse ,var))))))
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              (loopy--produce-union-end-tracking var val test-method 'destructive)))
-           (t
-            (error "Bad `:at' position: %s" cmd)))))))
+      (loopy--main-body
+       (loopy--optimized-accum ( :loop ,loopy--loop-name :var ,var
+                                 :val ,val :cmd ,cmd :name ,name :at ,pos
+                                 :key ,key :test ,test))))))
 
-;;;;;; Prepend
+;;;;;;; Prepend
 (loopy--defaccumulation prepend
   "Parse the `prepend' command as (prepend VAR VAL)."
   :explicit (progn
@@ -2082,7 +2334,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                                     ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Push Into
+;;;;;;; Push Into
 (loopy--defaccumulation push-into
   "Parse the `push' command as (push VAR VAL)."
   :explicit (progn
@@ -2097,7 +2349,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 (loopy--main-body (setq ,var (cons ,val  ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Reduce
+;;;;;;; Reduce
 (loopy--defaccumulation reduce
   "Parse the `reduce' command as (reduce VAR VAL FUNC &key init).
 
@@ -2106,110 +2358,181 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :keywords (init)
   :implicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
                  (setq ,var ,(loopy--apply-function (cl-second args) var val)))
                 (loopy--implicit-return ,var)))
   :explicit (loopy--plist-bind (:init init) opts
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var ,init))
                 (loopy--main-body
                  (setq ,var ,(loopy--apply-function (cl-third args) var val))))))
 
-;;;;;; Sum
+;;;;;;; Sum
 (loopy--defaccumulation sum
   "Parse the `sum' command as (sum VAR VAL)."
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 0))
                 (loopy--main-body (setq ,var (+ ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'value cmd)
+               loopy--loop-name var 'number cmd)
               `((loopy--accumulation-vars (,var 0))
                 (loopy--main-body (setq ,var (+ ,val ,var)))
                 (loopy--implicit-return ,var))))
 
-;;;;;; Union
+;;;;;;; Union
+(defun loopy--construct-accum-union (plist)
+  "Create accumulation code for `nunion' from PLIST.
+
+This function is used by `loopy--get-optimized-accum'."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
+                       :key key :test test)
+      plist
+    (let ((test-method (loopy--get-union-test-method var key test)))
+      (map-let (('start start)
+                ('end end))
+          (or (map-nested-elt loopy--accumulation-places (list loop var))
+              (error "Failed to set up counters: nconc"))
+        ;; Forward list order.
+        (if (>= start end)
+            (progn
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'list cmd)
+              (if (eq pos 'start)
+                  `((loopy--main-body
+                     (setq ,var
+                           (nconc (cl-delete-if ,test-method (copy-sequence ,val))
+                                  ,var))))
+                (loopy--produce-union-end-tracking var val test-method)))
+          ;; Reverse list order.
+          (loopy--check-accumulation-compatibility
+           loopy--loop-name var 'reverse-list cmd)
+          `(,@(if (eq pos 'start)
+                  (loopy--produce-union-end-tracking var val test-method)
+                `((loopy--main-body
+                   (setq ,var (nconc (nreverse (cl-delete-if ,test-method
+                                                             (copy-sequence ,val)))
+                                     ,var)))))
+            (loopy--accumulation-final-updates
+             (,var . (setq ,var (nreverse ,var))))))))))
+
 (loopy--defaccumulation union
   "Parse the `union' command as (union VAR VAL &key test key at)."
   :keywords (test key at)
   :explicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
-    (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
-    `((loopy--accumulation-vars (,var nil))
-      ,@(let ((test-method (loopy--get-union-test-method var key test)))
-          (cond
-           ((member pos '(start beginning 'start 'beginning))
-            `((loopy--main-body
-               (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                                 ,var)))))
-           ((member pos '(end 'end))
-            (loopy--produce-union-end-tracking var val test-method))
-           (t
-            (error "Bad `:at' position: %s" cmd))))))
+  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+      opts
+    (if (memq var loopy--optimized-accum-vars)
+        (progn
+          (loopy--update-accum-place-count loopy--loop-name var pos)
+          `((loopy--accumulation-vars (,var nil))
+            (loopy--main-body
+             (loopy--optimized-accum ( :loop ,loopy--loop-name :var ,var
+                                       :val ,val :cmd ,cmd :name ,name :at ,pos
+                                       :key ,key :test ,test)))))
+      (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
+      `((loopy--accumulation-vars (,var nil))
+        ,@(let ((test-method (loopy--get-union-test-method var key test)))
+            (cond
+             ((member pos '(start beginning 'start 'beginning))
+              `((loopy--main-body
+                 (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
+                                   ,var)))))
+             ((member pos '(end 'end))
+              (loopy--produce-union-end-tracking var val test-method))
+             (t
+              (error "Bad `:at' position: %s" cmd)))))))
   :implicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test) opts
+  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+      opts
+    (setq pos (loopy--normalize-symbol pos))
+    (when (eq pos 'beginning) (setq pos 'start))
+    (unless (memq pos '(start beginning end))
+      (error "Bad `:at' position: %s" cmd))
+    (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
-      ,@(let ((test-method (loopy--get-union-test-method var key test)))
-          (cond
-           ((member pos '(start beginning 'start 'beginning))
-            (loopy--check-accumulation-compatibility
-             loopy--loop-name var 'list cmd)
-            `((loopy--main-body
-               (setq ,var
-                     (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                            ,var)))))
-           ((member pos '(end 'end))
-            (if loopy--split-implied-accumulation-results
-                (progn
-                  (loopy--check-accumulation-compatibility
-                   loopy--loop-name var 'reverse-list cmd)
-                  `((loopy--main-body
-                     (setq ,var (nconc (reverse ,val) ,var)))
-                    (loopy--accumulation-final-updates
-                     (,var . (setq ,var (nreverse ,var))))))
-              (loopy--produce-union-end-tracking var val test-method)))
-           (t
-            (error "Bad `:at' position: %s" cmd)))))))
+      (loopy--main-body
+       (loopy--optimized-accum ( :loop ,loopy--loop-name :var ,var
+                                 :val ,val :cmd ,cmd :name ,name :at ,pos
+                                 :key ,key :test ,test))))))
 
-;;;;;; Vconcat
+;;;;;;; Vconcat
+(defun loopy--construct-accum-vconcat (plist)
+  "Create accumulation code for `vconcat' from PLIST.
+
+This function is called by `loopy--get-optimized-accum'."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end))
+      plist
+    (map-let (('start start)
+              ('end end))
+        (map-nested-elt loopy--accumulation-places (list loop var))
+      ;; Forward list order.
+      (if (>= start end)
+          (progn
+            (loopy--check-accumulation-compatibility loop var 'vector cmd)
+            `(,@(if (eq pos 'start)
+                    `((loopy--main-body (setq ,var (cons ,val ,var))))
+                  (loopy--produce-collect-end-tracking var val))
+              (loopy--accumulation-final-updates
+               (,var . (setq ,var (apply #'vconcat ,var))))))
+        ;; Reverse list order.
+        (loopy--check-accumulation-compatibility loop var 'reverse-vector cmd)
+        `(,@(if (eq pos 'start)
+                (loopy--produce-collect-end-tracking var val)
+              `((loopy--main-body (setq ,var (cons ,val ,var)))))
+          (loopy--accumulation-final-updates
+           (,var . (setq ,var (apply #'vconcat (nreverse ,var))))))))))
+
 (loopy--defaccumulation vconcat
   "Parse the `vconcat' command as (vconcat VAR VAL &key at)."
   :keywords (at)
-  :explicit (loopy--plist-bind (:at (pos 'end)) opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'vector cmd)
+  :explicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (if (memq var loopy--optimized-accum-vars)
+                  (progn
+                    (loopy--update-accum-place-count loopy--loop-name var pos)
+                    `((loopy--accumulation-vars (,var nil))
+                      (loopy--main-body
+                       (loopy--optimized-accum
+                        ( :loop ,loopy--loop-name :var ,var :val ,val
+                          :cmd ,cmd :name ,name :at ,pos)))))
+                (loopy--check-accumulation-compatibility
+                 loopy--loop-name var 'vector cmd)
+                `((loopy--accumulation-vars (,var nil))
+                  (loopy--main-body
+                   (setq ,var
+                         ,(cond
+                           ((member pos '(start beginning 'start 'beginning))
+                            `(vconcat ,val ,var))
+                           ((member pos '(end 'end))
+                            `(vconcat ,var ,val))
+                           (t
+                            (error "Bad `:at' position: %s" cmd))))))))
+  :implicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 (setq ,var
-                       ,(cond
-                         ((member pos '(start beginning 'start 'beginning))
-                          `(vconcat ,val ,var))
-                         ((member pos '(end 'end))
-                          `(vconcat ,var ,val))
-                         (t
-                          (error "Bad `:at' position: %s" cmd)))))))
-  :implicit
-  (loopy--plist-bind (:at (pos 'end)) opts
-    (loopy--check-accumulation-compatibility loopy--loop-name var 'vector cmd)
-    `((loopy--accumulation-vars (,var nil))
-      (loopy--main-body (setq ,var (cons ,val ,var)))
-      (loopy--accumulation-final-updates
-       (,var . (setq ,var ,(cond
-                            ((member pos '( start beginning 'start 'beginning))
-                             `(apply #'vconcat ,var))
-                            ((member pos '(end 'end))
-                             `(apply #'vconcat (reverse ,var)))
-                            (t
-                             (error "Bad `:at' position: %s" cmd))))))
-      (loopy--implicit-return ,var))))
-
+                 (loopy--optimized-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
 
 ;;;;; Boolean Commands
 ;;;;;; Always

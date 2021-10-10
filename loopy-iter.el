@@ -172,6 +172,18 @@ and `loopy-command-parsers', in that order."
   (memq name (loopy--find-all-names '(loop sub-loop subloop))))
 
 ;;;; Replacement functions
+;; (defvar loopy-iter--unexpanded-macros '(cl-block cl-return-from)
+;;   "Macros to not expand.
+;;
+;; Some macro expansions interact, like `cl-block' with
+;; `cl-return-from'.  Therefore, we must prevent some expansions
+;; before walking the tree in `loopy-iter--replace-in-tree'.  Such
+;; macros are expanded later by Emacs after `loopy-iter' is itself
+;; expanded.
+;;
+;; We do this because we wrap the loop body in `cl-block' /after/
+;; expanding the tree.")
+
 (defun loopy-iter--replace-in-tree (tree)
   "Replace loop commands in TREE in-place with their main-body code.
 
@@ -185,7 +197,15 @@ Other instructions are just pushed to their variables."
       ;; the fundamental building blocks of source code, and macros would expand
       ;; to usages of these blocks.  Should this be `macroexpand-all'?
       (dolist (elem (if (not loopy--in-sub-level)
-                        (macroexpand-all tree)
+                        (macroexpand-all tree
+                                         ;; (mapcar (lambda (x)
+                                         ;;           (cons x
+                                         ;;                 `(lambda (&rest args)
+                                         ;;                    (cons 'loopy--unexpand
+                                         ;;                          (cons (quote ,x)
+                                         ;;                                args)))))
+                                         ;;         loopy-iter--unexpanded-macros)
+                                         )
                       tree))
         (if (consp elem)
             ;; Depending on the structure that we're dealing with, we need to
@@ -201,6 +221,22 @@ Other instructions are just pushed to their variables."
                       subtree (cddr elem)))
 
               (cond
+               ;; We pass the command expression to the optimizer for better
+               ;; error signaling, so we need to check for this to avoid
+               ;; infinite recursion.
+               ((eq key 'loopy--optimized-accum)
+                (push `(,key
+                        ,(apply #'append
+                                (map-apply (lambda (key val)
+                                             `(,key
+                                               ,(if (eq key :cmd)
+                                                    val
+                                                  (loopy-iter--replace-in-tree val))))
+                                           (cl-second elem))))
+                      new-tree))
+
+               ;; ((eq key 'loopy--unexpand)
+               ;;  (push (cdr elem) new-tree))
 
                ;; Check if it's a lambda form
                ((eq key 'lambda)
@@ -451,14 +487,23 @@ information on how to use `loopy' and `loopy-iter'.
 
    ;; Process the main body.
    (push loopy--loop-name loopy--known-loop-names)
+   (push (list loopy--loop-name) loopy--accumulation-places)
    (unwind-protect
        (progn
          (setq loopy--main-body (loopy-iter--replace-in-tree body))
+
+         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+         ;; using the function `loopy--get-optimized-accum'.
+         ;;
+         ;; TODO: What are the limitations of this?
+         (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+
          (loopy--process-instructions (map-elt loopy--at-instructions
                                                loopy--loop-name)
                                       :erroring-instructions
                                       '(loopy--main-body)))
      (pop loopy--known-loop-names)
+     (pop loopy--accumulation-places)
      (cl-callf map-delete loopy--at-instructions loopy--loop-name)
      (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
                 loopy--accumulation-list-end-vars))

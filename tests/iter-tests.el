@@ -452,10 +452,14 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                              (accum collect v j :result-type 'vector)
                              (finally-return v))))
   (should (equal [1 2 3]
+                 (loopy-iter (for list j '(1 2 3))
+                             (accum collect j :result-type 'vector))))
+
+  (should (equal [1 2 3]
                  (loopy-iter
                   (flag lax-naming)
                   (each j '(1 2 3))
-                  (collect j :result-type 'vector)))))
+                  (collect j :result-type vector)))))
 
 (ert-deftest loopy-iter-command ()
   (should (equal '(11 12 13 14 15 16)
@@ -472,5 +476,21 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
               (for loopy
                    (list j i)
                    (at outer (collect j)))))
+
+(ert-deftest loopy-iter-sub-loop-named ()
+  (should
+   (equal
+    '((3 5) (3 5))
+    (liq
+     outer
+     (for repeat 2)
+     (for loop inner1
+          (for list j '(3 4))
+          (for loop
+               (for list k '(5 6 7))
+               (if (= k 6)
+                   ;; Return from inner1 so never reach 4.
+                   (exit return-from inner1)
+                 (for at outer (accum collect (list j k))))))))))
 
 ;; end

@@ -72,6 +72,11 @@ Iteration
 * Sequence Index Iteration::     Iterating through indices without accessing values.
 * Sequence Reference Iteration:: Iterating through places/fields in sequences.
 
+Accumulation
+
+* Accumulation Commands::
+* Optimizing Accumulations::     Producing efficient accumulation
+
 Control Flow
 
 * Conditionals::                 Choosing if commands should run.
@@ -456,6 +461,14 @@ information.
 @end lisp
 @end table
 
+@findex accum-opt
+@table @asis
+@item @samp{accum-opt}, @samp{opt-accum}
+Accumulation variables whose use should be
+optimized (@ref{Optimizing Accumulations}).  @code{loopy} produces efficient code without too
+many assumptions, but this special macro argument allows for more control.
+@end table
+
 @findex wrap
 @table @asis
 @item @samp{wrap}
@@ -560,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org7b05a05
+@float Listing,org4a6150f
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -1825,62 +1838,13 @@ the first element of @code{loopy-result}, even though the collection happens
        (finally-return loopy-result))
 @end lisp
 
-Using this behavior can currently produce results much faster than using
-destructuring accumulation commands.
+@menu
+* Accumulation Commands::
+* Optimizing Accumulations::     Producing efficient accumulation
+@end menu
 
-@lisp
-;; Both of these example give the same result, but the latter can
-;; expand into more efficient code.
-
-;; => ((1 4) (2 5) (3 6))
-(loopy (list elem '((1 2 3) (4 5 6)))
-       (collect (i j k) elem)
-       (finally-return i j k))
-
-;; => ((1 4) (2 5) (3 6))
-(loopy (flag split)
-       (list (i j k) '((1 2 3) (4 5 6)))
-       (collect i)   ; Without the `split' flag,
-       (collect j)   ; this would just produce
-       (collect k))  ; (1 2 3 4 5 6).
-@end lisp
-
-To be clear, the more guarantees that can be made about the accumulation
-variables, the more @code{loopy} can optimize the accumulations.  The fastest
-accumulations (from greatest speed to least), are currently produced by:
-@enumerate
-@item
-Using implied result variables with the @samp{split} flag enabled.
-@item
-Using variables which can be modified only by accumulation commands by
-@itemize
-@item
-naming the variable explicitly, or
-@item
-using the implied variable @code{loopy-result}, which is the default behavior
-for implied variables when not using the @samp{split} flag
-@end itemize
-@end enumerate
-
-Effort has gone into making each case efficient while keeping flexibility and
-correctness.  The difference in speed can be significant when working with
-large sequences or performing many accumulations.
-
-@lisp
-;; These two forms are equivalent for looping.
-;; => (1 2 3)
-(loopy (list i '(1 2 3))
-       (collect i))
-
-(loopy (list i '(1 2 3))
-       (collect coll i)
-       (finally-return coll))
-
-;; Accumulations with split implicit variables are fastest.
-(loopy (flag split)
-       (list i '(1 2 3))
-       (collect i))
-@end lisp
+@node Accumulation Commands
+@subsection Accumulation Commands
 
 @cindex accumulation keyword arguments
 Some accumulation commands have optional keyword parameters, which are listed
@@ -2454,6 +2418,152 @@ completes.
        (vconcat i :at 'start))
 @end lisp
 @end table
+
+@node Optimizing Accumulations
+@subsection Optimizing Accumulations
+
+@cindex optimizing accumulations
+Named accumulation variables (excluding the automatically named @code{loopy-result})
+are accessible during the loop, and their values are always correct during
+execution.  For example, lists are always in the correct order, even when
+constructing the linked lists in reverse would be more efficient.
+
+@lisp
+;; Note how `coll' is always in the correct order:
+;; => ((1) (1 2) (1 2 3))
+(loopy (array i [1 2 3])
+       (collect coll i)
+       (collect loopy-result (copy-sequence coll))
+       (finally-return loopy-result))
+@end lisp
+
+Implied accumulation variables do not have the requirement of always being in
+the correct order, so commands using such variables (by default) produce more
+efficient code.
+
+@lisp
+;; Similar in efficiency to the below:
+;; => (2 3 4 5 6 7 8 9 10 11 12 13 ...)
+(loopy (list i (number-sequence 1 1000))
+       (collect (1+ i)))
+
+;; => (2 3 4 5 6 7 8 9 10 11 12 13 ...)
+(let (result)
+  (dolist (i (number-sequence 1 1000))
+    (push (1+ i) result))
+  (nreverse result))
+@end lisp
+
+The situation becomes more complex when commands place values at both ends of a
+sequence.  In that case, @code{loopy} must keep track of both the beginning @emph{and} the
+end of the sequence.  @code{loopy} does @emph{not} merely append to the end of the
+resulting list, since that would be much slower for large lists.
+
+@lisp
+;; `loopy' can be much faster than the below `dolist' approach:
+;; => (3 2 1 7 14 21)
+(loopy (list i '(1 2 3))
+       (collect i :at start)
+       (collect (* i 7) :at end))
+
+;; For large accumulations, this is /much/ slower than the above:
+;; => (3 2 1 7 14 21)
+(let (result)
+  (dolist (i '(1 2 3))
+    (setq result (cons i result)
+          result (append result (list (* i 7)))))
+  result)
+@end lisp
+
+In such cases, @code{loopy} naively favors facilitating placements at whichever
+location is used more, defaulting to the end of the sequence.  In the example
+below, note that even though the commands to insert values at the front of the
+list are never actually run, @code{loopy} will still optimize for frontal insertions.
+It is simply a matter of 2 commands saying that they will place values at the
+front of the list versus 1 command saying that it will place values at the end.
+
+@lisp
+;; This code optimizes for insertions at the front of the list:
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i :at end)
+       (when nil
+         (collect i :at start)
+         (collect i :at start)))
+@end lisp
+
+Again, these optimizations only work because the accumulation variables are not
+accessed during the loop.  One can optionally optimize named variables,
+requiring the same restrictions, using the special macro argument @samp{accum-opt}
+(@ref{Special Macro Arguments}).  In the below example, accumulations are optimized for
+insertions into the end of explicitly named accumulation variable @code{coll}.
+However, to rely on @code{coll} being sorted correctly during the loop would result
+in errors.
+
+@lisp
+;; => (1 2 3)
+(loopy (accum-opt coll)
+       (list i '(1 2 3))
+       (collect coll i)
+       (finally-return coll))
+
+;; => ((1) (2 1) (3 2 1))
+(loopy (accum-opt coll)
+       (list i '(1 2 3))
+       (collect coll i)
+       (collect loopy-result (copy-sequence coll))
+       (finally-return loopy-result))
+@end lisp
+
+The arguments to @samp{accum-opt} can be either variable names or lists of a variable
+name and a preferred placement position.  For example, unlike the similar
+example above, the below accumulations are correctly optimized for placement at
+the end of the list.
+
+@lisp
+;; This code optimizes for insertions at the front of the list:
+;; => (1 2 3)
+(loopy (accum-opt (loopy-result end))
+       (list i '(1 2 3))
+       (collect i :at end)
+       (when nil
+         (collect i :at start)
+         (collect i :at start)))
+
+;; => (1 2 3)
+(loopy (accum-opt (coll end))
+       (list i '(1 2 3))
+       (collect coll i :at end)
+       (when nil
+         (collect coll i :at start)
+         (collect coll i :at start))
+       (finally-return coll))
+@end lisp
+
+@cindex accum-opt vs. split
+As demonstrated elsewhere, destructuring requires naming variables to hold the
+parts of the destructured value.  Because of this, the @samp{accum-opt} special macro
+argument is one option for efficient accumulation and destructuring.  The other
+option, though not exactly the same, is to destructure in iteration commands and
+use the @samp{split} flag with accumulations (@ref{Using Flags}).  Both options remove the
+sorting requirements on the accumulations variables.
+
+@lisp
+;; The following two loops are approximately equivalent.
+
+;; => ((1 4 7) (2 5 8) (3 6 9))
+(loopy (accum-opt i j k)
+       (array elem [(1 2 3) (4 5 6) (7 8 9)])
+       (collect (i j k) elem)
+       (finally-return i j k))
+
+;; => ((1 4 7) (2 5 8) (3 6 9))
+(loopy (flag split)
+       (array (i j k) [(1 2 3) (4 5 6) (7 8 9)])
+       (collect i)
+       (collect j)
+       (collect k))
+@end lisp
 
 @node Boolean
 @section Boolean

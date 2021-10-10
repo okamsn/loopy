@@ -567,6 +567,44 @@ Certain commands (e.g., `list' or `array') can only occur in the
 top level of a loop.  Sub-loops (those created by the `sub-loop'
 command) create for themselves a new, local top level.")
 
+;;;;; Optimized Accumulations
+(defvar loopy--accumulation-places nil
+  "Where some accumulation commands are placing values.
+
+This variable keeps track some of the accumulation variables in a
+loop and how there being used.  This allows for optimizing some
+kinds accumulations.
+
+Generally, this is used with commands that produce lists, such as
+`collect' and `append'.")
+
+(defvar loopy--accumulation-constructors
+  '((adjoin .  loopy--construct-accum-adjoin)
+    (adjoining .  loopy--construct-accum-adjoin)
+    (append .  loopy--construct-accum-append)
+    (appending .  loopy--construct-accum-append)
+    (collect . loopy--construct-accum-collect)
+    (collecting . loopy--construct-accum-collect)
+    (concat . loopy--construct-accum-concat)
+    (concating . loopy--construct-accum-concat)
+    (nconc . loopy--construct-accum-nconc)
+    (nconcing . loopy--construct-accum-nconc)
+    (nunion . loopy--construct-accum-nunion)
+    (nunioning . loopy--construct-accum-nunion)
+    (union . loopy--construct-accum-union)
+    (unioning . loopy--construct-accum-union)
+    (vconcat . loopy--construct-accum-vconcat)
+    (vconcating . loopy--construct-accum-vconcat))
+  "Functions that produce the code of an optimized accumulation.
+
+This is used by the function `loopy--get-optimized-accum'.")
+
+(defvar loopy--optimized-accum-vars nil
+  "Explicit accumulations variables to optimize.
+
+Arguments to the `accum-opt' special macro argument are symbols
+or list of a symbol and a position.")
+
 ;;;; All variables
 (eval-and-compile
   (defvar loopy--variables
@@ -583,6 +621,7 @@ command) create for themselves a new, local top level.")
       ;; NOTE: `loopy--at-instructions' cannot be local to each loop:
       ;; loopy--at-instructions
       loopy--iteration-vars
+      loopy--optimized-accum-vars
       loopy--accumulation-vars
       loopy--generalized-vars
       loopy--pre-conditions

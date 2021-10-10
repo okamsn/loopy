@@ -15,6 +15,16 @@ This document describes the user-facing changes to Loopy.
 - Add the special macro argument `finally-protect`, which wraps part of the loop
   with `unwind-protect`.
 - Clean up the Org documentation.
+- Accumulations using implicit accumulation variables are now automatically
+  optimized, without the need of the `split` flag.  Note that the `split` flag
+  is still needed to prevent such commands accumulating into the same variable
+  (`loopy-result`).  See [#89], [#96].
+- Named accumulation variables can now be optimized using the `accum-opt`
+  special macro argument, at the cost of not being correct during the loop.
+  These are the same optimizations made for the implicit variables.
+
+[#89]: https://github.com/okamsn/loopy/issues/89
+[#96]: https://github.com/okamsn/loopy/pull/96
 
 ## 0.9.1
 

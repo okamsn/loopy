@@ -122,6 +122,7 @@
 (require 'cl-lib)
 (require 'gv)
 (require 'map)
+(require 'pcase)
 (require 'seq)
 (require 'subr-x)
 (require 'loopy-misc)
@@ -750,7 +751,6 @@ see the Info node `(loopy)' distributed with this package."
   ;; Bind variables in `loopy--variables' around code to build the expanded
   ;; loop.
   (loopy--wrap-variables-around-body
-
 ;;;;; Process the special macro arguments.
    ;; TODO: What is the best way to handle `nil' occurring in `body'?
    (let ((loop-name (seq-find #'symbolp body)))
@@ -759,6 +759,10 @@ see the Info node `(loopy)' distributed with this package."
            loopy--non-returning-exit-tag-name
            (loopy--produce-non-returning-exit-tag-name loop-name))
      (cl-callf2 seq-remove #'symbolp body))
+
+   ;; Set up the stack-maps.
+   (push loopy--loop-name loopy--known-loop-names)
+   (push (list loopy--loop-name) loopy--accumulation-places)
 
    ;; There should be only one of each of these arguments.
 
@@ -791,11 +795,18 @@ see the Info node `(loopy)' distributed with this package."
      (setq loopy--without-vars arg-value)
      (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
+   ;; Accum-Opt
+   (loopy--process-special-marco-args '(accum-opt opt-accum)
+     (pcase-dolist ((or `(,var ,pos) var) arg-value)
+       (push var loopy--optimized-accum-vars)
+       (when pos
+         (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF)))
+     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
    ;; Wrap
    (loopy--process-special-marco-args '(wrap)
      (setq loopy--wrapping-forms arg-value)
      (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
 
    ;; Before do
    (loopy--process-special-marco-args '( before-do before
@@ -830,14 +841,21 @@ see the Info node `(loopy)' distributed with this package."
    ;; Body forms have the most variety.
    ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
    ;; Things added are expanded in place.
-   (push loopy--loop-name loopy--known-loop-names)
    (unwind-protect
        (progn
          (loopy--process-instructions (loopy--parse-loop-commands body))
+
+         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+         ;; using the function `loopy--get-optimized-accum'.
+         ;;
+         ;; TODO: What are the limitations of this?
+         (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+
          ;; Process any `at' instructions from loops lower in the call list.
          (loopy--process-instructions (map-elt loopy--at-instructions
                                                loopy--loop-name)))
      (pop loopy--known-loop-names)
+     (pop loopy--accumulation-places)
      (cl-callf map-delete loopy--at-instructions loopy--loop-name)
      (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
                 loopy--accumulation-list-end-vars)
