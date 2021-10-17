@@ -334,22 +334,20 @@ The function creates quoted code that should be used by a macro."
   ;;        (let* ,loopy--iteration-vars
   ;;          (let ((loopy--early-return-capture
   ;;                 (cl-block ,loopy--loop-name
-  ;;                   (cl-tagbody
   ;;                    ,@loopy--before-do
-  ;;                    (while ,(cl-case (length loopy--pre-conditions)
-  ;;                              (0 t)
-  ;;                              (1 (car loopy--pre-conditions))
-  ;;                              (t (cons 'and loopy--pre-conditions)))
-  ;;                      (cl-tagbody
-  ;;                       ,@loopy--main-body
-  ;;                       loopy--continue-tag
-  ;;                       ,@loopy--latter-body
-  ;;                       (unless ,loopy--post-conditions
-  ;;                         (cl-return-from ,loopy--loop-name
-  ;;                           ,loopy--implicit-return))))
-  ;;                    ,@loopy--after-do
-  ;;                    loopy--non-returning-exit-tag
-  ;;                    ,loopy--accumulation-final-updates))
+  ;;                    (catch loopy--non-returning-exit-tag-name
+  ;;                      (while ,(cl-case (length loopy--pre-conditions)
+  ;;                                (0 t)
+  ;;                                (1 (car loopy--pre-conditions))
+  ;;                                (t (cons 'and loopy--pre-conditions)))
+  ;;                         (catch loopy--skip-tag-name
+  ;;                          ,@loopy--main-body)
+  ;;                         ,@loopy--latter-body
+  ;;                         (unless ,loopy--post-conditions
+  ;;                           (cl-return-from ,loopy--loop-name
+  ;;                             ,loopy--implicit-return)))
+  ;;                      ,loopy--accumulation-final-updates
+  ;;                      ,@loopy--after-do))
   ;;                 ,loopy--implicit-return))
   ;;            ,@loopy--final-do
   ;;            ,(if loopy--final-return
@@ -368,16 +366,19 @@ The function creates quoted code that should be used by a macro."
                                  (list result)
                                result)))
 
-      (setq result loopy--main-body)
+      (setq result loopy--main-body
+            result-is-one-expression (zerop (length result)))
 
       (when (eq loopy--skip-used loopy--skip-tag-name)
-        (setq result `(cl-tagbody ,@result ,loopy--skip-tag-name)
+        (setq result `(catch (quote ,loopy--skip-tag-name) ,@result)
               result-is-one-expression t))
 
       (when loopy--latter-body
-        (setq result (append result loopy--latter-body)))
+        (setq result `(,@(get-result) ,@loopy--latter-body)
+              result-is-one-expression nil))
 
-      (setq result (append result (list '(setq loopy-first-iteration nil))))
+      (setq result `(,@(get-result) (setq loopy-first-iteration nil))
+            result-is-one-expression nil)
 
       (when loopy--post-conditions
         (setq result
@@ -398,23 +399,14 @@ The function creates quoted code that should be used by a macro."
                               (0 t)
                               (1 (car loopy--pre-conditions))
                               (t (cons 'and loopy--pre-conditions)))
-                      ;; If using a `cl-tag-body', just insert that one
-                      ;; expression, but if not, break apart into the while
-                      ;; loop's body.
                       ,@(get-result))
-            ;; Will always be a single expression after wrapping with `while'.
             result-is-one-expression t)
 
       ;; Make sure that the implicit accumulation variable is correctly
       ;; updated after the loop, if need be.
       (when loopy--accumulation-final-updates
-        (setq result
-              (if loopy--non-returning-exit-used
-                  `(,@(get-result)
-                    ,@(mapcar #'cdr loopy--accumulation-final-updates)
-                    (setq loopy--accumulations-updated t))
-                `(,@(get-result)
-                  ,@(mapcar #'cdr loopy--accumulation-final-updates)))
+        (setq result `(,@(get-result)
+                       ,@(mapcar #'cdr loopy--accumulation-final-updates))
               result-is-one-expression nil))
 
       ;; Try to apply wrapping forms so that they're not disturbed by variable
@@ -427,32 +419,30 @@ The function creates quoted code that should be used by a macro."
                          `(,form ,@(get-result)))
                 result-is-one-expression t)))
 
-      ;; Now ensure return value is nil and add the code to run before and
-      ;; after the `while' loop.
-      (cond
-       ((and loopy--before-do loopy--after-do)
-        (setq result `(,@loopy--before-do ,@(get-result) ,@loopy--after-do)
+      ;; Now add the code to run after the `while' loop.
+      (when loopy--after-do
+        (setq result `(,@(get-result) ,@loopy--after-do)
               result-is-one-expression nil))
-       (loopy--before-do
+
+      ;; Add the wrapper for the non-returning exit tag.
+      (when loopy--non-returning-exit-used
+        (setq result `(catch (quote ,loopy--non-returning-exit-tag-name)
+                        ,@(get-result)
+                        nil)
+              result-is-one-expression t)
+        ;; If there are final updates, then we need to make sure that they run
+        ;; even if a non-returning exit tag is used.
+        (if loopy--accumulation-final-updates
+            (setq result `(if ,@(get-result)
+                              ,(macroexp-progn
+                                (mapcar #'cdr
+                                        loopy--accumulation-final-updates)))
+                  result-is-one-expression t)))
+
+      ;; Now add the code to run before the `while' loop.
+      (when loopy--before-do
         (setq result `(,@loopy--before-do ,@(get-result))
               result-is-one-expression nil))
-       (loopy--after-do
-        (setq result `(,@(get-result) ,@loopy--after-do)
-              result-is-one-expression nil)))
-
-      (when (eq loopy--non-returning-exit-used
-                loopy--non-returning-exit-tag-name)
-        (setq result (if loopy--accumulation-final-updates
-                         `(cl-tagbody
-                           ,@(get-result)
-                           ,loopy--non-returning-exit-tag-name
-                           (if loopy--accumulations-updated
-                               nil
-                             ,@(mapcar #'cdr loopy--accumulation-final-updates)))
-                       `(cl-tagbody
-                         ,@(get-result)
-                         ,loopy--non-returning-exit-tag-name))
-              result-is-one-expression t))
 
       ;; Always wrap in `cl-block', as any arbitrary Lisp code could call
       ;; `cl-return-from'.  For example, it's possible that a user is using a

@@ -573,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orge27adc9
+@float Listing,org8856d49
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -3919,22 +3919,20 @@ will work similar to the below example.
        (let* ,loopy--iteration-vars
          (let ((loopy--early-return-capture
                 (cl-block ,loopy--loop-name
-                  (cl-tagbody
-                   ,@@loopy--before-do
-                   (while ,(cl-case (length loopy--pre-conditions)
-                             (0 t)
-                             (1 (car loopy--pre-conditions))
-                             (t (cons 'and loopy--pre-conditions)))
-                     (cl-tagbody
-                      ,@@loopy--main-body
-                      loopy--continue-tag
+                  ,@@loopy--before-do
+                  (catch loopy--non-returning-exit-tag-name
+                    (while ,(cl-case (length loopy--pre-conditions)
+                              (0 t)
+                              (1 (car loopy--pre-conditions))
+                              (t (cons 'and loopy--pre-conditions)))
+                      (catch loopy--skip-tag-name
+                        ,@@loopy--main-body)
                       ,@@loopy--latter-body
                       (unless ,loopy--post-conditions
                         (cl-return-from ,loopy--loop-name
-                          ,loopy--implicit-return))))
-                   ,@@loopy--after-do
-                   loopy--non-returning-exit-tag
-                   ,loopy--accumulation-final-updates))
+                          ,loopy--implicit-return)))
+                    ,loopy--accumulation-final-updates
+                    ,@@loopy--after-do))
                 ,loopy--implicit-return))
            ,@@loopy--final-do
            ,(if loopy--final-return

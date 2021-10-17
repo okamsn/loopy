@@ -2119,7 +2119,7 @@ This function is called by `loopy--get-optimized-accum'."
                 (loopy--accumulation-vars (,var nil))
                 (loopy--main-body (when ,test-form
                                     (setq ,var ,val)
-                                    (go ,tag-name)))
+                                    (throw (quote ,tag-name) t)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
                    `(loopy--accumulation-final-updates
@@ -2135,7 +2135,7 @@ This function is called by `loopy--get-optimized-accum'."
                 (loopy--accumulation-vars (,var nil))
                 (loopy--main-body (when ,test-form
                                     (setq ,var ,val)
-                                    (go ,tag-name)))
+                                    (throw (quote ,tag-name) t)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
                    `(loopy--accumulation-final-updates
@@ -2617,7 +2617,7 @@ returned."
   "Parse the `leave' command."
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name)))
     `((loopy--non-returning-exit-used ,tag-name)
-      (loopy--main-body (go ,tag-name)))))
+      (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-leave-from-command ((_ target-loop))
   "Parse the `leave-from' command."
@@ -2625,7 +2625,7 @@ returned."
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
                                (loopy--non-returning-exit-used ,tag-name)))
-      (loopy--main-body (go ,tag-name)))))
+      (loopy--main-body (throw (quote ,tag-name) t)))))
 
 ;;;;;; Return
 (cl-defun loopy--parse-return-command ((_ &rest values))
@@ -2652,7 +2652,7 @@ returned."
   "Parse the `skip' loop command."
   (let ((tag-name (loopy--produce-skip-tag-name loopy--loop-name)))
     `((loopy--skip-used ,tag-name)
-      (loopy--main-body (go ,tag-name)))))
+      (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-skip-from-command ((_ target-loop))
   "Parse the `skip-from' loop command as (skip-from LOOP-NAME)."
@@ -2660,7 +2660,7 @@ returned."
   (let ((tag-name (loopy--produce-skip-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
                                (loopy--skip-used ,tag-name)))
-      (loopy--main-body (go ,tag-name)))))
+      (loopy--main-body (throw (quote ,tag-name) t)))))
 
 ;;;;;; While Until
 (cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
@@ -2675,8 +2675,8 @@ CONDITIONS is the remaining optional conditions."
     `((loopy--non-returning-exit-used ,tag-name)
       (loopy--main-body (if ,condition
                             ,@(cl-ecase name
-                                (until `((go ,tag-name)))
-                                (while `(nil (go ,tag-name)))))))))
+                                (until `((throw (quote ,tag-name) t)))
+                                (while `(nil (throw (quote ,tag-name) t)))))))))
 
 ;;;; Destructuring
 
