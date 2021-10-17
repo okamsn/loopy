@@ -1474,7 +1474,7 @@ more efficient than repeatedly traversing the list."
 This function is fed to `cl-remove-if' or `cl-delete-if'.  See
 the definitions of those commands for more context.
 
-TEST is use to check for equality (default `eql').  KEY modifies
+TEST is use to check for equality (default `equal').  KEY modifies
 the inputs to test."
   ;;  KEY applies to the value being tested as well as the elements in the list.
   (let ((function-arg (gensym "union-function-arg")))
@@ -1488,7 +1488,7 @@ the inputs to test."
                                                                  function-arg)
                         for ,test-var in ,var
                         thereis ,(loopy--apply-function
-                                  (or test (quote #'eql))
+                                  (or test (quote #'equal))
                                   (loopy--apply-function key test-var)
                                   test-val)))
           `(cl-member ,function-arg ,var :test ,test)))))
@@ -1720,7 +1720,7 @@ you can use in the instructions:
                     `(cl-member-if
                       (lambda (,func-arg)
                         ,(loopy--apply-function
-                          (or test (quote #'eql))
+                          (or test (quote #'equal))
                           (loopy--apply-function key func-arg)
                           (loopy--apply-function key value-holder)))
                       ,var))
@@ -1767,7 +1767,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
   :keywords (test key result-type at)
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit
-  (loopy--plist-bind ( :test test :key key :at (pos 'end)
+  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end)
                        :result-type (result-type 'list))
       opts
     (setq pos (loopy--normalize-symbol pos)
@@ -1806,7 +1806,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                           `(cl-member-if
                             (lambda (,func-arg)
                               ,(loopy--apply-function
-                                (or test (quote #'eql))
+                                (or test (quote #'equal))
                                 (loopy--apply-function key func-arg)
                                 (loopy--apply-function key value-holder)))
                             ,var))
@@ -1824,7 +1824,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                            (quote ,(loopy--get-quoted-symbol
                                                     result-type))))))))))
   :implicit
-  (loopy--plist-bind ( :test test :key key :at (pos 'end)
+  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end)
                        :result-type (result-type 'list))
       opts
     (setq pos (loopy--normalize-symbol pos)
@@ -2276,7 +2276,7 @@ This function is used by `loopy--get-optimized-accum'."
   "Parse the `nunion' command as (nunion VAR VAL &key test key at)."
   :keywords (test key at)
   :explicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+  (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
@@ -2302,7 +2302,7 @@ This function is used by `loopy--get-optimized-accum'."
              (t
               (error "Bad `:at' position: %s" cmd)))))))
   :implicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+  (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
@@ -2426,7 +2426,7 @@ This function is used by `loopy--get-optimized-accum'."
   "Parse the `union' command as (union VAR VAL &key test key at)."
   :keywords (test key at)
   :explicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+  (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
     (if (memq var loopy--optimized-accum-vars)
         (progn
@@ -2449,7 +2449,7 @@ This function is used by `loopy--get-optimized-accum'."
              (t
               (error "Bad `:at' position: %s" cmd)))))))
   :implicit
-  (loopy--plist-bind (:at (pos 'end) :key key :test test)
+  (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))

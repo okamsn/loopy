@@ -1753,7 +1753,8 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
    #+cindex: accumulation keyword test
    - =test= :: A function of two arguments, usually used to test for equality.
-     Most tests default to ~eql~, as in Common Lisp and the =cl-lib= library.
+     Most tests default to ~equal~, like in other Emacs Lisp libraries.  This is
+     different from ~cl-lib~, which mimics Common Lisp and prefers using ~eql~.
 
    #+cindex: accumulation keyword key
    - =key= :: A function of one argument, used to transform the inputs of

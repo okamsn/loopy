@@ -10,6 +10,12 @@ This document describes the user-facing changes to Loopy.
   properly written loops, just how errors are signaled.  This bug was introduced
   in version 0.9.1.
 
+### Breaking Changes
+- The default test function for commands like `adjoin` and `union` is now
+  `equal`.  Previously, `loopy` copied `cl-loop` and used `eql`, but it makes
+  more sense to copy the behavior of other Emacs Lisp libraries (like `seq.el`)
+  than to copy the behavior of Common Lisp.
+
 ### Other Changes
 
 - Add the special macro argument `finally-protect`, which wraps part of the loop

@@ -2173,15 +2173,20 @@
 
 ;;;;; Adjoin
 (ert-deftest adjoin ()
-  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
-                                               (1 . 2) (2 . 3)))
+  (should (equal '((1 . 1) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
                                      (adjoin a i)
                                      (finally-return a))))))
 
   (should (equal '((1 . 1) (1 . 2) (2 . 3))
                  (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
                                      (adjoin a i :test #'equal)
+                                     (finally-return a))))))
+
+  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
+                                               (1 . 2) (2 . 3)))
+                                     (adjoin a i :test #'eql)
                                      (finally-return a))))))
 
   (should (equal '((1 . 1) (2 . 3))
@@ -2242,14 +2247,18 @@
                                      (finally-return a1 a2)))))))
 
 (ert-deftest adjoin-implicit ()
-  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
-                                               (1 . 2) (2 . 3)))
+  (should (equal '((1 . 1) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
                                      (adjoin i))))))
 
   (should (equal '((1 . 1) (1 . 2) (2 . 3))
                  (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
                                      (adjoin i :test #'equal))))))
+
+  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
+                                               (1 . 2) (2 . 3)))
+                                     (adjoin i :test #'eql))))))
 
   (should (equal '((1 . 1) (2 . 3))
                  (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
