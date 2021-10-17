@@ -1061,7 +1061,7 @@ This is for decreasing indices.
                                       :by ,by))))
 
 ;;;;;; Repeat
-(cl-defun loopy--parse-repeat-command ((_ var-or-count &optional count))
+(cl-defun loopy--parse-cycle-command ((_ var-or-count &optional count))
   "Parse the `repeat' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is

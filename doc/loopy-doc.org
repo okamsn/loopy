@@ -562,7 +562,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     Really, we are concerned with the value of the expression, not the
     expression itself.
   - =CMD= is a loop command, as opposed to a normal Lisp expression.
-    =(list i '(1 2 3))=, =(repeat 5)=, and =(return-from outer-loop 7)=
+    =(list i '(1 2 3))=, =(cycle 5)=, and =(return-from outer-loop 7)=
     are examples of loop commands.  =CMDS= means multiple commands.
   - Optional arguments are surround by brackets.  =[EXPR]= is an optional
     expression, and =[CMD]= is an optional command.  By extension,
@@ -760,13 +760,13 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3 3 3)
-       (loopy (repeat 5)
+       (loopy (cycle 5)
               (expr i 1 2 3)
               (collect coll i)
               (finally-return coll))
 
        ;; => '(0 1 2 3 4)
-       (loopy (repeat 5)
+       (loopy (cycle 5)
               (expr i 0 (1+ i))
               (collect coll i)
               (finally-return coll))
@@ -775,7 +775,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
        ;; the middle of the first cycle of the loop.
        ;;
        ;; => ((0 1 2) (1 2 3))
-       (loopy (repeat 3)
+       (loopy (cycle 3)
               (collect befores i)
               (expr i 1 (1+ i) :init 0)
               (collect afters i)
@@ -784,7 +784,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
        ;; Note that using `with' has a similar effect.
        ;; => (0 1 2)
        (loopy (with (i 0))
-              (repeat 3)
+              (cycle 3)
               (collect i)
               (expr i 1 (1+ i)))
      #+END_SRC
@@ -894,13 +894,14 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
    :DESCRIPTION: Looping a certain number of times.
    :END:
 
-    #+findex: repeat
-    - =(repeat [VAR] EXPR)= :: Add a condition that the loop should stop after
-      =EXPR= iterations.  If specified, =VAR= starts at 0, and is incremented by
-      1 at the end of the loop.  If =EXPR= is 0, then the loop isn't run.
+    #+findex: cycle, repeat
+    - =(cycle|repeat [VAR] EXPR)= :: Add a condition that the loop should stop
+      after =EXPR= iterations.  If specified, =VAR= starts at 0, and is
+      incremented by 1 at the end of the loop.  If =EXPR= is 0, then the loop
+      isn't run.
 
       #+BEGIN_SRC emacs-lisp
-        (loopy (repeat 3)
+        (loopy (cycle 3)
                (do (message "Messaged three times.")))
 
         (loopy (repeat i 3)
@@ -908,7 +909,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
         ;; An argument of 0 stops the loop from running:
         ;; => nil
-        (loopy (repeat 0)
+        (loopy (cycle 0)
                (collect 'some-value))
       #+END_SRC
 
@@ -946,7 +947,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
       #+begin_src emacs-lisp
         ;; => (7 8 9 10 11 12 13 14 15 16)
-        (loopy (repeat 10)
+        (loopy (cycle 10)
                (nums i 7)
                (collect i))
       #+end_src
@@ -961,7 +962,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
                (collect i))
 
         ;; => (7 9 11 13 15 17 19 21 23 25)
-        (loopy (repeat 10)
+        (loopy (cycle 10)
                (nums i 7 :by 2)
                (collect i))
 
@@ -977,7 +978,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
       #+begin_src emacs-lisp
         ;; => (3 2 1)
-        (loopy (repeat 3)
+        (loopy (cycle 3)
                (nums i :downfrom 3)
                (collect i))
 
@@ -2463,7 +2464,7 @@ sorting requirements on the accumulations variables.
        ;; This example taken from the documentation of CL's Iterate package.
        ;;
        ;; => 2, not t
-       (loopy (repeat 2)
+       (loopy (cycle 2)
               (always 2)
               (never nil))
      #+end_src

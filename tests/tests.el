@@ -1673,17 +1673,27 @@
                                      (collect i)))))))
 
 ;;;;; Repeat
-(ert-deftest repeat-no-var ()
+(ert-deftest repeat-cycle-no-var ()
   (should (= 3 (length (eval (quote (loopy  (repeat 3)
+                                            (list i (number-sequence 1 10))
+                                            (collect coll i)
+                                            (finally-return coll)))))))
+
+  (should (= 3 (length (eval (quote (loopy  (cycle 3)
                                             (list i (number-sequence 1 10))
                                             (collect coll i)
                                             (finally-return coll))))))))
 
-(ert-deftest repeat-var ()
+(ert-deftest repeat-cycle-var ()
   "Need to test order of execution and functionality."
   (should (equal '(0 1 2)
                  (eval (quote (loopy (collect coll i)
                                      (repeat i 3)
+                                     (finally-return coll))))))
+
+  (should (equal '(0 1 2)
+                 (eval (quote (loopy (collect coll i)
+                                     (cycle i 3)
                                      (finally-return coll)))))))
 
 ;;;;; Seq
@@ -3980,6 +3990,4 @@ This assumes that you're on guix."
                                        (collect (cons i j)))))))))
 
 ;; Local Variables:
-;; flycheck-disabled-checkers: (emacs-lisp-checkdoc)
-;; flycheck-emacs-lisp-load-path: ("./.")
 ;; End:

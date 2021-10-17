@@ -22,6 +22,9 @@ This document describes the user-facing changes to Loopy.
 - Named accumulation variables can now be optimized using the `accum-opt`
   special macro argument, at the cost of not being correct during the loop.
   These are the same optimizations made for the implicit variables.
+- The `repeat` command was renamed to `cycle`, with `repeat` as an alias.  This
+  is a more accurate name, as an argument of 1 *cycles* the loop once but
+  *repeats* the loop zero times.
 
 [#89]: https://github.com/okamsn/loopy/issues/89
 [#96]: https://github.com/okamsn/loopy/pull/96
