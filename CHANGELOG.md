@@ -9,6 +9,10 @@ This document describes the user-facing changes to Loopy.
 - Fix badly formed condition case in `append` command.  This bug does not affect
   properly written loops, just how errors are signaled.  This bug was introduced
   in version 0.9.1.
+- Better check final updates (such as from `:result-type`) when no final update
+  requested.  For example using both `(collect i)` and `(collect i :result-type
+  vector)` in the same loop would previously convert `loopy-result` to a vector,
+  but now raises an error to note the discrepancy.
 
 ### Breaking Changes
 - The default test function for commands like `adjoin` and `union` is now

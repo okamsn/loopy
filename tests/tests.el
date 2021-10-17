@@ -1953,7 +1953,11 @@
 (ert-deftest accumulation-conflicting-final-updates ()
   (should-error (eval (quote (loopy (list i '((1) (2) (3)))
                                     (append i)
-                                    (vconcat i))))))
+                                    (vconcat i)))))
+
+  (should-error (eval (quote (loopy (list i '((1) (2) (3)))
+                                    (collect i)
+                                    (collect (1+ i) :result-type vector))))))
 
 ;;;;; Into Argument
 (ert-deftest accumulation-into-argument ()

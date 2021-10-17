@@ -622,16 +622,14 @@ macro `loopy' itself."
          (push instruction-value loopy--implicit-return)))
       (loopy--accumulation-final-updates
        ;; These instructions are of the form `(l--a-f-u (var . update))'
-       (let* ((var-to-update (car instruction-value))
-              (update-code (cdr instruction-value)))
-         (if-let ((existing-update
-                   (map-elt loopy--accumulation-final-updates
-                            var-to-update)))
-             (unless (equal existing-update update-code)
-               (error "Incompatible final update for %s:\n%s\n%s"
-                      var-to-update
-                      existing-update
-                      update-code))
+       (let ((var-to-update (car instruction-value))
+             (update-code (cdr instruction-value)))
+         (if (map-contains-key loopy--accumulation-final-updates var-to-update)
+             (let ((existing-update (map-elt loopy--accumulation-final-updates
+                                             var-to-update)))
+               (unless (equal existing-update update-code)
+                 (error "Incompatible final update for %s:\n\t%s\n\t%s"
+                        var-to-update existing-update update-code)))
            (push instruction-value
                  loopy--accumulation-final-updates))))
 
