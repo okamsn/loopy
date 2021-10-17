@@ -1192,7 +1192,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
       #+END_SRC
 
     #+findex: map, map-pairs
-    - =(map|map-pairs VAR EXPR)= :: Iterate through the dotted key-value pairs
+    - =(map|map-pairs VAR EXPR &key unique)= :: Iterate through the dotted key-value pairs
       of =EXPR=, using the function ~map-pairs~ from the =map.el= library.  This
       library generalizes working with association lists ("alists"), property
       lists ("plists"), hash-tables, and vectors.
@@ -1200,16 +1200,8 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
       In each dotted pair assigned to =VAR=, the ~car~ is the key and the ~cdr~
       is the value.
 
-      #+ATTR_TEXINFO: :tag Warning
-      #+begin_quote
-      Depending on how it is created, a map might repeat a key multiple times.
-      While this is not a problem for functions like ~map-elt~, that repetition
-      can be present in the return value of ~map-pairs~.
-
-      This command does not perform any special handling for the returned value
-      of the function ~map-pairs~.  Its correctness is the responsibility of
-      =map.el=, not =loopy=.
-      #+end_quote
+      By default, only the unique keys are used.  To disable this deduplication,
+      pass ~nil~ to the =unique= keyword argument.
 
       You should not rely on the order in which the key-value pairs are found.
 
@@ -1253,6 +1245,39 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
                  (finally-return keys values)))
       #+end_src
 
+      Depending on how a map is created, a map might repeat a key multiple
+      times.  Currently, the function ~map-pairs~ returns such keys.  By
+      default, the command =map-pairs= ignores such duplicate keys.  This is for
+      two reasons:
+      1. This is more consistent with the command =map-ref=, for which such
+         duplicates are more likely to cause errors.
+      2. For maps that can have duplicate keys (alists, plists, etc.), there are
+         already other iteration commands (=list=, =cons=, etc.) that explicitly
+         include the duplicates.
+
+      Again, this can be disabled by setting =unique= to nil.
+
+      #+begin_src emacs-lisp
+        ;; A comparison of setting the `unique' key to nil:
+        ;;
+        ;; => ((a 1) (a 2) (b 3))
+        (loopy (map (key . val) '((a . 1) (a . 2) (b . 3)) :unique nil)
+               (collect (list key val)))
+
+        ;; In this case, `list' has the same result:
+        ;; => ((a 1) (a 2) (b 3))
+        (loopy (list (key . val) '((a . 1) (a . 2) (b . 3)))
+               (collect (list key val)))
+
+        ;; => ((:a 1) (:a 2) (:b 3))
+        (loopy (map (key . val) '(:a 1 :a 2 :b 3) :unique nil)
+               (collect (list key val)))
+
+        ;; In this case, `cons' has the same result:
+        ;; => ((:a 1) (:a 2) (:b 3))
+        (loopy (cons (key val) '(:a 1 :a 2 :b 3) :by #'cddr)
+               (collect (list key val)))
+      #+end_src
 
     #+findex: seq, sequence, elements
     - =(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
@@ -1475,22 +1500,25 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
       #+END_SRC
 
     #+findex: map-ref, mapf
-    - =(map-ref|mapf VAR EXPR &key key)= :: Loop through the values of map
-      =EXPR=, binding =VAR= as a ~setf~-able place.  Like the command =map=,
+    - =(map-ref|mapf VAR EXPR &key key unique)= :: Loop through the values of
+      map =EXPR=, binding =VAR= as a ~setf~-able place.  Like the command =map=,
       this command uses the =map.el= library.
 
       =key= is a variable in which to store the current key for the ~setf~-able
       place referred to by =VAR=.  This is similar to the =index= keyword
       parameter of other commands.
 
-      Similar to the command =map=, the keys of the map are generated before the
+      Like in the command =map=, the keys of the map are generated before the
       loop is run, which can be expensive for large maps.
 
-      Unlike =map=, any duplicate keys are ignored regardless of the type of
-      map used.
+      Similar to =map=, any duplicate keys are ignored by default.  This can be
+      disabled by setting the =unique= keyword argument to nil, though note that
+      using such duplicate keys will still refer to the value of the first
+      occurence.  There is no way to use a duplicate key to refer to the
+      duplicate's value.
 
       #+begin_src emacs-lisp
-        ;; Duplicate keys are ignored.
+        ;; Duplicate keys are ignored by default.
         ;;
         ;; => (:a 8 :a 'ignored :b 10)
         (loopy (with (map (list :a 1 :a 'ignored :b 3)))
@@ -1498,14 +1526,16 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
                (do (cl-incf i 7))
                (finally-return map))
 
-        ;; Works the same as the above:
-        ;; => (:a 8 :a ignored :b 10)
+        ;; If duplicates are not ignored:
+        ;;
+        ;; => (:a 15 :a ignored :b 10)
         (loopy (with (map (list :a 1 :a 'ignored :b 3)))
-               (list (key . _) (cl-remove-duplicates (map-pairs map)
-                                                     :key #'car))
-               (do (cl-incf (map-elt map key) 7))
+               (map-ref i map :unique nil)
+               (do (cl-incf i 7))
                (finally-return map))
 
+        ;; Getting the key using `key':
+        ;;
         ;; => (((cat . 7)       ; The map itself
         ;;      (dog . 7)
         ;;      (zebra . 7))

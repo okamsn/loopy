@@ -931,7 +931,7 @@ BY is the function to use to move through the list (default `cdr')."
       (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
-(cl-defun loopy--parse-map-command ((_ var val))
+(cl-defun loopy--parse-map-command ((_ var val &key (unique t)))
   "Parse the `map' loop command.
 
 Iterates through an alist of (key . value) dotted pairs,
@@ -948,13 +948,16 @@ vector using the library `map.el'."
            var))
 
   (let ((value-holder (gensym "map-")))
-    `((loopy--iteration-vars (,value-holder (map-pairs ,val)))
+    `((loopy--iteration-vars
+       (,value-holder ,(if unique
+                           `(seq-uniq (map-pairs ,val) #'loopy--car-equal-car)
+                         `(map-pairs ,val))))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
       (loopy--pre-conditions (consp ,value-holder))
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
 ;;;;;; Map-Ref
-(cl-defun loopy--parse-map-ref-command ((_ var val &key key))
+(cl-defun loopy--parse-map-ref-command ((_ var val &key key (unique t)))
   "Parse the `map-ref' command as (map-ref VAR VAL).
 
 KEY is a variable name in which to store the current key.
@@ -964,7 +967,9 @@ map's keys.  Duplicate keys are ignored."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter 'map-ref))
   (let ((key-list (gensym "map-ref-keys")))
-    `((loopy--iteration-vars (,key-list (seq-uniq (map-keys ,val))))
+    `((loopy--iteration-vars (,key-list ,(if unique
+                                             `(seq-uniq (map-keys ,val))
+                                           `(map-keys ,val))))
       ,@(when key
           `((loopy--iteration-vars (,key nil))
             (loopy--main-body (setq ,key (car ,key-list)))))

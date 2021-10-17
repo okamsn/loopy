@@ -1495,6 +1495,33 @@
                                        (collect coll pair)
                                        (finally-return coll))))))))
 
+(ert-deftest map-unique ()
+  (should (equal '((a . 1) (b . 2) (c . 3))
+                 (eval (quote (loopy (map-pairs pair '((a . 1)
+                                                       (a . 27)
+                                                       (b . 2)
+                                                       (c . 3)))
+                                     (collect coll pair)
+                                     (finally-return coll))))))
+
+  (should (equal '((a . 1) (b . 2) (c . 3))
+                 (eval (quote (loopy (map-pairs pair '((a . 1)
+                                                       (a . 27)
+                                                       (b . 2)
+                                                       (c . 3))
+                                                :unique t)
+                                     (collect coll pair)
+                                     (finally-return coll))))))
+
+  (should (equal '((a . 1) (a . 27) (b . 2) (c . 3))
+                 (eval (quote (loopy (map-pairs pair '((a . 1)
+                                                       (a . 27)
+                                                       (b . 2)
+                                                       (c . 3))
+                                                :unique nil)
+                                     (collect coll pair)
+                                     (finally-return coll)))))))
+
 (ert-deftest map-destructuring ()
   (should (equal '((a b) (1 2))
                  (eval (quote (loopy (map (key . val) '((a . 1) (b . 2)))
@@ -1519,13 +1546,6 @@
 ;;;;; Map Ref
 
 (ert-deftest map-ref ()
-  ;; Test that no keys duplicated.
-  (should (equal '(:a 8 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (eval (quote (loopy (map-ref i map)
-                                       (do (cl-incf i 7))
-                                       (finally-return map)))))))
-
   (should (equal [17 18 19 20 21]
                  (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
                                      (mapf i map)
@@ -1538,6 +1558,25 @@
                                      (do (cl-incf i 7))
                                      (collect my-key)
                                      (finally-return map loopy-result)))))))
+
+(ert-deftest map-ref-unique ()
+  (should (equal '(:a 8 :a ignored :b 10)
+                 (let ((map (list :a 1 :a 'ignored :b 3)))
+                   (eval (quote (loopy (map-ref i map)
+                                       (do (cl-incf i 7))
+                                       (finally-return map)))))))
+
+  (should (equal '(:a 8 :a ignored :b 10)
+                 (let ((map (list :a 1 :a 'ignored :b 3)))
+                   (eval (quote (loopy (map-ref i map :unique t)
+                                       (do (cl-incf i 7))
+                                       (finally-return map)))))))
+
+  (should (equal '(:a 15 :a ignored :b 10)
+                 (let ((map (list :a 1 :a 'ignored :b 3)))
+                   (eval (quote (loopy (map-ref i map :unique nil)
+                                       (do (cl-incf i 7))
+                                       (finally-return map))))))))
 
 (ert-deftest map-ref-destructuring ()
   (should (equal [[7 8] [7 8]]
