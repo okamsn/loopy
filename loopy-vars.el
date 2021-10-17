@@ -613,6 +613,7 @@ or list of a symbol and a position.")
       loopy--with-vars
       loopy--without-vars
       loopy--before-do
+      loopy--wrapping-forms
       loopy--after-do
       loopy--final-do
       loopy--final-protect

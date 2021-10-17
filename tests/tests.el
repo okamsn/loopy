@@ -161,8 +161,15 @@
                                          (let ((b (1+ a)))))
                                    (return (+ a b)))))))
 
-  ;; TODO: Test `lambda' forms.
-  )
+  ;; Ensure wrapping effects don't linger.
+  (should-not
+   (save-match-data
+     (let ((original-data (set-match-data nil)))
+       (equal original-data
+              (eval (quote (loopy (cycle 1)
+                                  (do (string-match (make-string 100 ?a)
+                                                    (make-string 100 ?a)))
+                                  (finally-return (match-data))))))))))
 
 ;;;; Final Instructions
 (ert-deftest finally-do ()
