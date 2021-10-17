@@ -573,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org4a6150f
+@float Listing,orge27adc9
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -615,7 +615,7 @@ Really, we are concerned with the value of the expression, not the
 expression itself.
 @item
 @samp{CMD} is a loop command, as opposed to a normal Lisp expression.
-@samp{(list i '(1 2 3))}, @samp{(repeat 5)}, and @samp{(return-from outer-loop 7)}
+@samp{(list i '(1 2 3))}, @samp{(cycle 5)}, and @samp{(return-from outer-loop 7)}
 are examples of loop commands.  @samp{CMDS} means multiple commands.
 @item
 Optional arguments are surround by brackets.  @samp{[EXPR]} is an optional
@@ -838,13 +838,13 @@ variables outside of the loop in the same way that using @samp{(do (setq VAR
 
 @lisp
 ;; => '(1 2 3 3 3)
-(loopy (repeat 5)
+(loopy (cycle 5)
        (expr i 1 2 3)
        (collect coll i)
        (finally-return coll))
 
 ;; => '(0 1 2 3 4)
-(loopy (repeat 5)
+(loopy (cycle 5)
        (expr i 0 (1+ i))
        (collect coll i)
        (finally-return coll))
@@ -853,7 +853,7 @@ variables outside of the loop in the same way that using @samp{(do (setq VAR
 ;; the middle of the first cycle of the loop.
 ;;
 ;; => ((0 1 2) (1 2 3))
-(loopy (repeat 3)
+(loopy (cycle 3)
        (collect befores i)
        (expr i 1 (1+ i) :init 0)
        (collect afters i)
@@ -862,7 +862,7 @@ variables outside of the loop in the same way that using @samp{(do (setq VAR
 ;; Note that using `with' has a similar effect.
 ;; => (0 1 2)
 (loopy (with (i 0))
-       (repeat 3)
+       (cycle 3)
        (collect i)
        (expr i 1 (1+ i)))
 @end lisp
@@ -980,15 +980,16 @@ translate @samp{for VAR in LIST} from @code{cl-loop}, one can use either
 @node Generic Iteration
 @subsection Generic Iteration
 
-@findex repeat
+@findex cycle, repeat
 @table @asis
-@item @samp{(repeat [VAR] EXPR)}
-Add a condition that the loop should stop after
-@samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is incremented by
-1 at the end of the loop.  If @samp{EXPR} is 0, then the loop isn't run.
+@item @samp{(cycle|repeat [VAR] EXPR)}
+Add a condition that the loop should stop
+after @samp{EXPR} iterations.  If specified, @samp{VAR} starts at 0, and is
+incremented by 1 at the end of the loop.  If @samp{EXPR} is 0, then the loop
+isn't run.
 
 @lisp
-(loopy (repeat 3)
+(loopy (cycle 3)
        (do (message "Messaged three times.")))
 
 (loopy (repeat i 3)
@@ -996,7 +997,7 @@ Add a condition that the loop should stop after
 
 ;; An argument of 0 stops the loop from running:
 ;; => nil
-(loopy (repeat 0)
+(loopy (cycle 0)
        (collect 'some-value))
 @end lisp
 @end table
@@ -1033,7 +1034,7 @@ without end.
 
 @lisp
 ;; => (7 8 9 10 11 12 13 14 15 16)
-(loopy (repeat 10)
+(loopy (cycle 10)
        (nums i 7)
        (collect i))
 @end lisp
@@ -1048,7 +1049,7 @@ the variable is incremented or decremented.
        (collect i))
 
 ;; => (7 9 11 13 15 17 19 21 23 25)
-(loopy (repeat 10)
+(loopy (cycle 10)
        (nums i 7 :by 2)
        (collect i))
 
@@ -1064,7 +1065,7 @@ keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, and @samp{:upto}.  Th
 
 @lisp
 ;; => (3 2 1)
-(loopy (repeat 3)
+(loopy (cycle 3)
        (nums i :downfrom 3)
        (collect i))
 
@@ -1289,7 +1290,7 @@ of the command.
 
 @findex map, map-pairs
 @table @asis
-@item @samp{(map|map-pairs VAR EXPR)}
+@item @samp{(map|map-pairs VAR EXPR &key unique)}
 Iterate through the dotted key-value pairs
 of @samp{EXPR}, using the function @code{map-pairs} from the @samp{map.el} library.  This
 library generalizes working with association lists (``alists''), property
@@ -1298,16 +1299,8 @@ lists (``plists''), hash-tables, and vectors.
 In each dotted pair assigned to @samp{VAR}, the @code{car} is the key and the @code{cdr}
 is the value.
 
-@quotation Warning
-Depending on how it is created, a map might repeat a key multiple times.
-While this is not a problem for functions like @code{map-elt}, that repetition
-can be present in the return value of @code{map-pairs}.
-
-This command does not perform any special handling for the returned value
-of the function @code{map-pairs}.  Its correctness is the responsibility of
-@samp{map.el}, not @samp{loopy}.
-
-@end quotation
+By default, only the unique keys are used.  To disable this deduplication,
+pass @code{nil} to the @samp{unique} keyword argument.
 
 You should not rely on the order in which the key-value pairs are found.
 
@@ -1350,8 +1343,45 @@ maps.
          (collect values value)
          (finally-return keys values)))
 @end lisp
-@end table
 
+Depending on how a map is created, a map might repeat a key multiple
+times.  Currently, the function @code{map-pairs} returns such keys.  By
+default, the command @samp{map-pairs} ignores such duplicate keys.  This is for
+two reasons:
+@enumerate
+@item
+This is more consistent with the command @samp{map-ref}, for which such
+duplicates are more likely to cause errors.
+@item
+For maps that can have duplicate keys (alists, plists, etc.), there are
+already other iteration commands (@samp{list}, @samp{cons}, etc.) that explicitly
+include the duplicates.
+@end enumerate
+
+Again, this can be disabled by setting @samp{unique} to nil.
+
+@lisp
+;; A comparison of setting the `unique' key to nil:
+;;
+;; => ((a 1) (a 2) (b 3))
+(loopy (map (key . val) '((a . 1) (a . 2) (b . 3)) :unique nil)
+       (collect (list key val)))
+
+;; In this case, `list' has the same result:
+;; => ((a 1) (a 2) (b 3))
+(loopy (list (key . val) '((a . 1) (a . 2) (b . 3)))
+       (collect (list key val)))
+
+;; => ((:a 1) (:a 2) (:b 3))
+(loopy (map (key . val) '(:a 1 :a 2 :b 3) :unique nil)
+       (collect (list key val)))
+
+;; In this case, `cons' has the same result:
+;; => ((:a 1) (:a 2) (:b 3))
+(loopy (cons (key val) '(:a 1 :a 2 :b 3) :by #'cddr)
+       (collect (list key val)))
+@end lisp
+@end table
 
 @findex seq, sequence, elements
 @table @asis
@@ -1581,23 +1611,26 @@ the list via function @samp{by} instead of @code{cdr}.
 
 @findex map-ref, mapf
 @table @asis
-@item @samp{(map-ref|mapf VAR EXPR &key key)}
-Loop through the values of map
-@samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Like the command @samp{map},
+@item @samp{(map-ref|mapf VAR EXPR &key key unique)}
+Loop through the values of
+map @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Like the command @samp{map},
 this command uses the @samp{map.el} library.
 
 @samp{key} is a variable in which to store the current key for the @code{setf}-able
 place referred to by @samp{VAR}.  This is similar to the @samp{index} keyword
 parameter of other commands.
 
-Similar to the command @samp{map}, the keys of the map are generated before the
+Like in the command @samp{map}, the keys of the map are generated before the
 loop is run, which can be expensive for large maps.
 
-Unlike @samp{map}, any duplicate keys are ignored regardless of the type of
-map used.
+Similar to @samp{map}, any duplicate keys are ignored by default.  This can be
+disabled by setting the @samp{unique} keyword argument to nil, though note that
+using such duplicate keys will still refer to the value of the first
+occurence.  There is no way to use a duplicate key to refer to the
+duplicate's value.
 
 @lisp
-;; Duplicate keys are ignored.
+;; Duplicate keys are ignored by default.
 ;;
 ;; => (:a 8 :a 'ignored :b 10)
 (loopy (with (map (list :a 1 :a 'ignored :b 3)))
@@ -1605,14 +1638,16 @@ map used.
        (do (cl-incf i 7))
        (finally-return map))
 
-;; Works the same as the above:
-;; => (:a 8 :a ignored :b 10)
+;; If duplicates are not ignored:
+;;
+;; => (:a 15 :a ignored :b 10)
 (loopy (with (map (list :a 1 :a 'ignored :b 3)))
-       (list (key . _) (cl-remove-duplicates (map-pairs map)
-                                             :key #'car))
-       (do (cl-incf (map-elt map key) 7))
+       (map-ref i map :unique nil)
+       (do (cl-incf i 7))
        (finally-return map))
 
+;; Getting the key using `key':
+;;
 ;; => (((cat . 7)       ; The map itself
 ;;      (dog . 7)
 ;;      (zebra . 7))
@@ -1875,7 +1910,8 @@ any command definition.
 @table @asis
 @item @samp{test}
 A function of two arguments, usually used to test for equality.
-Most tests default to @code{eql}, as in Common Lisp and the @samp{cl-lib} library.
+Most tests default to @code{equal}, like in other Emacs Lisp libraries.  This is
+different from @code{cl-lib}, which mimics Common Lisp and prefers using @code{eql}.
 @end table
 
 @cindex accumulation keyword key
@@ -2648,7 +2684,7 @@ non-nil.  Otherwise, the loop returns @code{t}.
 ;; This example taken from the documentation of CL's Iterate package.
 ;;
 ;; => 2, not t
-(loopy (repeat 2)
+(loopy (cycle 2)
        (always 2)
        (never nil))
 @end lisp
