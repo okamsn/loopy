@@ -1618,6 +1618,14 @@
 
   (should (equal '(1 2 3 4 5)
                  (eval (quote (loopy (number i 1 5)
+                                     (collect i))))))
+
+  (should (equal '(1 3 5)
+                 (eval (quote (loopy (nums i 1 5 2)
+                                     (collect i))))))
+
+  (should (equal '(5 3 1)
+                 (eval (quote (loopy (nums i 5 1 -2)
                                      (collect i)))))))
 
 (ert-deftest nums-keywords ()
@@ -1697,6 +1705,10 @@
                                      (collect i))))))
 
   (should (equal '(10 8 6 4 2)
+                 (eval (quote (loopy (nums-down i 10 1 2)
+                                     (collect i))))))
+
+  (should (equal '(10 8 6 4 2)
                  (eval (quote (loopy (numsdown i 10 1 :by 2)
                                      (collect i))))))
 
@@ -1708,6 +1720,10 @@
 (ert-deftest nums-up ()
   (should (equal '(1 3 5 7 9)
                  (eval (quote (loopy (nums-up i 1 10 :by 2)
+                                     (collect i))))))
+
+  (should (equal '(1 3 5 7 9)
+                 (eval (quote (loopy (nums-up i 1 10 2)
                                      (collect i))))))
 
   (should (equal '(1 3 5 7 9)

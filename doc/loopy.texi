@@ -573,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org8856d49
+@float Listing,org7581377
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -1010,18 +1010,18 @@ variants @samp{nums-up} and @samp{nums-down}.
 
 @findex num, nums, number, numbers
 @table @asis
-@item @samp{(nums|num|number|numbers VAR [START [END]] &key KEYS)}
-Iterate through
-numbers.  @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to},
-@samp{upto}, @samp{downto}, @samp{above}, @samp{below}, and @samp{by}.
+@item @samp{(nums|num|number|numbers VAR [START [END] [STEP]] &key KEYS)}
+Iterate
+through numbers.  @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom},
+@samp{to}, @samp{upto}, @samp{downto}, @samp{above}, @samp{below}, and @samp{by}.
 
-The command @samp{nums} is used to iterate through numbers.  For example, @samp{(nums
-      i 1 10)} is similar to @samp{(list i (number-sequence 1 10))}, and @samp{(nums i 3)}
-is similar to @samp{(expr i 3 (1+ i))}.
+The command @samp{nums} is used to iterate through numbers.  For example, @samp{(nums i
+  1 10)} is similar to @samp{(list i (number-sequence 1 10))}, and @samp{(nums i 3)} is
+similar to @samp{(expr i 3 (1+ i))}.
 
-To balance convenience and similarity to other commands, @samp{nums} has a
-flexible argument list.  In its most basic form, it uses no keywords and
-takes a starting value and an ending value.  The ending value is inclusive.
+To balance convenience and similarity to other commands, @samp{nums} has a flexible
+argument list.  In its most basic form, it uses no keywords and takes a
+starting value and an ending value.  The ending value is inclusive.
 
 @lisp
 ;; => (1 2 3 4 5)
@@ -1029,8 +1029,8 @@ takes a starting value and an ending value.  The ending value is inclusive.
        (collect i))
 @end lisp
 
-If the ending value is not given, then the value is incremented by 1
-without end.
+If the ending value is not given, then the value is incremented by 1 without
+end.
 
 @lisp
 ;; => (7 8 9 10 11 12 13 14 15 16)
@@ -1039,11 +1039,17 @@ without end.
        (collect i))
 @end lisp
 
-To specify the step size, one can use the keyword @samp{:by}.  The value for
-@samp{:by} should always be positive; other keyword arguments control whether
-the variable is incremented or decremented.
+To specify the step size, one can use an optional third argument (like in
+Python's @code{range}) or the keyword @samp{:by} (like in @code{cl-loop}). The value of the
+optional third argument can be positive or negative. @emph{However}, in keeping
+with @code{cl-loop}, the value for @samp{:by} should always be positive; other keyword
+arguments then control whether the variable is incremented or decremented.
 
 @lisp
+;; => (1 3 5)
+(loopy (nums i 1 5 2)
+       (collect i))
+
 ;; => (1 3 5)
 (loopy (nums i 1 5 :by 2)
        (collect i))
@@ -1058,10 +1064,11 @@ the variable is incremented or decremented.
        (collect i))
 @end lisp
 
-By default, the variable's value starts at 0 and increases by 1.  To
-specify that the value should be increasing or decreasing, one can use the
-keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, and @samp{:upto}.  The keywords
-@samp{:from} and @samp{:to} don't by themselves specify a direction.
+By default, the variable's value starts at 0 and increases by 1.  To specify
+that the value should be increasing or decreasing when using the @samp{:by}
+keyword, one can use the keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, and
+@samp{:upto}.  The keywords @samp{:from} and @samp{:to} don't by themselves specify a
+direction.
 
 @lisp
 ;; => (3 2 1)
@@ -1079,6 +1086,11 @@ keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, and @samp{:upto}.  Th
 
 ;; => (10 8 6 4 2)
 (loopy (nums i :from 10 :downto 2 :by 2)
+       (collect i))
+
+;; Produced code is not as efficient as above:
+;; => (10 8 6 4 2)
+(loopy (nums i 10 2 -2)
        (collect i))
 
 ;; => (1 2 3 4 5 6 7)
@@ -1107,17 +1119,23 @@ increasing values and @samp{:above} for decreasing values.
 (loopy (nums i :above -3)
        (collect i))
 @end lisp
+
+@quotation Note
+Because the @code{loopy} macro can't test the value of the step size ahead of time,
+being more explicit by using the keyword parameters produces faster code.
+
+@end quotation
 @end table
 
 
-If you prefer using positional arguments to keyword arguments, you can use
-the commands @samp{nums-up} and @samp{nums-down} to specify directions.  These
-commands are simple wrappers of the above @samp{nums} command.
+If you prefer using positional arguments to keyword arguments, you can use the
+commands @samp{nums-up} and @samp{nums-down} to specify directions.  These commands are
+simple wrappers of the above @samp{nums} command.
 
 @table @asis
 @item @samp{(nums-down|numsdown|numbers-down VAR START [END] &key by)}
-Equivalent
-to @samp{(nums VAR START [:downto END] &key by)}.  This command exists only for
+Equivalent to
+@samp{(nums VAR START [:downto END] &key by)}.  This command exists only for
 convenience.
 
 @lisp
@@ -1129,9 +1147,8 @@ convenience.
 
 @table @asis
 @item @samp{(nums-up|numsup|numbers-up VAR START [END] &key by)}
-Equivalent to
-@samp{(nums VAR START [END] &key by)}.  This command exists only for
-convenience.
+Equivalent to @samp{(nums
+  VAR START [END] &key by)}.  This command exists only for convenience.
 
 @lisp
 ;; => (1 3 5 7 9)

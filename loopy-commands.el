@@ -980,10 +980,11 @@ map's keys.  Duplicate keys are ignored."
 
 ;;;;;; Nums
 (loopy--defiteration nums
-  "Parse the `nums' command as (nums VAR [START [END]] &key KEYS).
+  "Parse the `nums' command as (nums VAR [START [END [STEP]]] &key KEYS).
 
 - START is the starting index, if given.
 - END is the ending index (inclusive), if given.
+- STEP is a positive or negative step size, if given.
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 `:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
@@ -996,60 +997,85 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 `:downto' and `:downfrom' make the index decrease instead of increase."
   :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below)
   :required-vals 0
-  :other-vals (0 1 2)
+  :other-vals (0 1 2 3)
   :instructions
   ;; TODO: `cl-destructuring-bind' signals error here.  Why?
-  (seq-let (explicit-start explicit-end) other-vals
-
-    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+  (seq-let (explicit-start explicit-end explicit-by)
+      other-vals
+    (loopy--plist-bind ( :start key-start :end key-end :by key-by
                          :decreasing decreasing :inclusive inclusive)
-
         (loopy--find-start-by-end-dir-vals opts)
 
       ;; Check that nothing conflicts.
       (when (or (and explicit-start key-start)
-                (and explicit-end key-end))
-        (error "Conflicting commands given: %s" cmd))
+                (and explicit-end key-end)
+                (and explicit-by key-by))
+
+        (error "Conflicting command options given: %s" cmd))
 
       (let ((increment-val-holder (gensym "nums-increment"))
             (end (or explicit-end key-end))
             (end-val-holder (gensym "nums-end"))
-            (start (or explicit-start key-start 0)))
+            (start (or explicit-start key-start 0))
+            (by (or explicit-by key-by 1)))
 
         `((loopy--iteration-vars (,var ,start))
-          (loopy--iteration-vars (,increment-val-holder ,by))
-          ,@(when end
-              `((loopy--iteration-vars (,end-val-holder ,end))
-                (loopy--pre-conditions (,(if inclusive
-                                               (if decreasing #'>= #'<=)
-                                             (if decreasing #'> #'<))
-                                          ,var ,end-val-holder))))
-          (loopy--latter-body (setq ,var ,(cond
-                                             (by   `(,(if decreasing #'- #'+)
-                                                     ,var ,increment-val-holder))
-                                             (decreasing `(1- ,var))
-                                             (t    `(1+ ,var))))))))))
+          ,@(if end
+                `((loopy--iteration-vars (,end-val-holder ,end))
+                  (loopy--pre-conditions ,(if explicit-by
+                                              `(if (cl-plusp ,increment-val-holder)
+                                                   (<= ,var ,end-val-holder)
+                                                 (>= ,var ,end-val-holder))
+                                            `(,(if inclusive
+                                                   (if decreasing #'>= #'<=)
+                                                 (if decreasing #'> #'<))
+                                              ,var ,end-val-holder)))
+                  (loopy--iteration-vars
+                   (,increment-val-holder
+                    ,(cond
+                      (explicit-by `(let ((temp ,by))
+                                      (if (or (and (cl-minusp temp)
+                                                   (< ,var ,end-val-holder))
+                                              (and (cl-plusp temp)
+                                                   (> ,var ,end-val-holder)))
+                                          (error "Infinite loop: %s" (quote ,cmd))
+                                        temp)))
+                      (key-by       `(let ((temp ,by))
+                                       (if (cl-minusp temp)
+                                           (error "Wrong value for `by': %s"
+                                                  (quote ,cmd))
+                                         temp)))
+                      (t            by)))))
+              `((loopy--iteration-vars (,increment-val-holder ,by))))
+          (loopy--latter-body
+           (setq ,var ,(cond (explicit-by `(+ ,var ,increment-val-holder))
+                             (key-by      `(,(if decreasing #'- #'+)
+                                            ,var ,increment-val-holder))
+                             (decreasing  `(1- ,var))
+                             (t           `(1+ ,var))))))))))
 
 ;;;;;; Nums Up
 (loopy--defiteration nums-up
-  "Parse the `nums-up' command as (nums-up START [END] &key by).
+  "Parse the `nums-up' command as (nums-up START [END [STEP]] &key by).
 
 This is for increasing indices.
 
 - START is the starting index.
 - END is the ending index (inclusive), if given.
 - BY is the step size."
-  :other-vals (0 1)
+  :other-vals (0 1 2)
   :keywords (:by)
   :instructions
   (loopy--plist-bind (:by by) opts
+    (when (and by (cl-second other-vals))
+      (error "Conflicting command options given: %s" cmd))
     (loopy--parse-loop-command `(nums ,var ,val
-                                      :upto ,(car other-vals)
-                                      :by ,by))))
+                                      :upto ,(cl-first other-vals)
+                                      :by ,(or by (cl-second other-vals))))))
 
 ;;;;;; Nums Down
 (loopy--defiteration nums-down
-  "Parse the `nums-down' command as (nums-up START [END] &key by).
+  "Parse the `nums-down' command as (nums-up START [END [STEP]] &key by).
 
 This is for decreasing indices.
 
@@ -1057,13 +1083,15 @@ This is for decreasing indices.
 - END is the ending index (inclusive), if given.
 - BY is the step size.  Even though the index value is decreasing,
   this should still be a positive value."
-  :other-vals (0 1)
+  :other-vals (0 1 2)
   :keywords (:by)
   :instructions
   (loopy--plist-bind (:by by) opts
+    (when (and by (cl-second other-vals))
+      (error "Conflicting command options given: %s" cmd))
     (loopy--parse-loop-command `(nums ,var ,val
-                                      :downto ,(car other-vals)
-                                      :by ,by))))
+                                      :downto ,(cl-first other-vals)
+                                      :by ,(or by (cl-second other-vals))))))
 
 ;;;;;; Repeat
 (cl-defun loopy--parse-cycle-command ((_ var-or-count &optional count))
