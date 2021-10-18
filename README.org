@@ -30,14 +30,14 @@ please let me know.
 -----
 
  _Recent breaking changes:_
- - Unreleased
+ - Unreleased:
    - The default test function for commands like =adjoin= and =union= is now
      ~equal~.  Previously, ~loopy~ copied ~cl-loop~ and used ~eql~, but it makes
-     more sense to copy the behavior of other Emacs Lisp libraries (like =seq.el=)
-     than to copy the behavior of Common Lisp.
-   - The =map= command now filters out duplicate keys by default.  =map-ref= already 
-     did this. The behavior is now optional in both commands using the =unique= 
-     keyword argument.
+     more sense to copy the behavior of other Emacs Lisp libraries (like
+     =seq.el=) than to copy the behavior of Common Lisp.
+   - The =map= command now filters out duplicate keys by default.  =map-ref=
+     already did this.  The behavior is now optional in both commands using the
+     =unique= keyword argument.
  - Version 0.9.1 (2021-09-06):
    - Accumulation variables can no longer be modified outside of accumulation
      commands.  The speed penalty was too great and discouraged destructuring
@@ -107,8 +107,8 @@ accumulation commands like =sum= or =collect=.
 #+end_src
 
 The ~loopy~ macro is configurable and extensible.  In addition to writing one's
-own "loop commands" (such as =list= in the example below), by using "flags",
-one can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
+own "loop commands" (such as =list= in the example below), by using "flags", one
+can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
 library for destructuring.
 
 #+begin_src emacs-lisp
@@ -146,8 +146,7 @@ iteration.
 * Similar Libraries
 
 Loopy is not the only Lisp library that uses expressions instead of keyword
-clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from Common
-Lisp.
+clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from Common Lisp.
 
 #+begin_src emacs-lisp
   ;; Collecting 10 random numbers:
@@ -163,9 +162,9 @@ Lisp.
 #+end_src
 
 Generally, all of the packages handle basic use cases in similar ways.  One
-large difference is that ~iterate~ can embed its looping constructs in
-arbitrary code.  Loopy is currently experimenting with this feature using a
-separate macro, ~loopy-iter~.
+large difference is that ~iterate~ can embed its looping constructs in arbitrary
+code.  Loopy is currently experimenting with this feature using a separate
+macro, ~loopy-iter~.
 
 #+begin_src emacs-lisp
   (require 'loopy-iter)
@@ -181,9 +180,9 @@ more niche features of ~cl-loop~ and ~iterate~ are still being added.
 
 * How to Install
 
-Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional
-package =loopy-dash= can be installed to enable using the Dash
-library for destructuring (instead of other methods).
+Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional package
+=loopy-dash= can be installed to enable using the Dash library for destructuring
+(instead of other methods).
 
 #+begin_src emacs-lisp
   (use-package loopy)
@@ -212,16 +211,15 @@ Commands in Arbitrary Code]]), use
 
 * Multiple Kinds of Destructuring
 
-~loopy~ can optionally use destructuring provided by ~pcase-let~, ~seq-let~,
-the =dash= library, as well as its own kind.  This provides greater
-flexibility and allows you to use destructuring patterns that you're already
-familiar with.
+~loopy~ can optionally use destructuring provided by ~pcase-let~, ~seq-let~, the
+=dash= library, as well as its own kind.  This provides greater flexibility and
+allows you to use destructuring patterns that you're already familiar with.
 
-These features can be enabled with "flags", described in the section
-[[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#using-flags][Using Flags]] in the documentation.
+These features can be enabled with "flags", described in the section [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#using-flags][Using Flags]]
+in the documentation.
 
-Here are a few examples that demonstrate how ~loopy~ can use destructuring
-with accumulation commands.
+Here are a few examples that demonstrate how ~loopy~ can use destructuring with
+accumulation commands.
 
 #+begin_src emacs-lisp
   (require 'loopy-dash)
@@ -261,8 +259,8 @@ form.
 
 * Loop Commands in Arbitrary Code
 
-The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
-It requires using a keyword =for=, =accum=, or =exit= before a loop command to
+The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.  It
+requires using a keyword =for=, =accum=, or =exit= before a loop command to
 distinguish loop commands from built-in Emacs features (though this can be
 disabled with the flag =lax-naming=).
 
@@ -315,4 +313,5 @@ See the wiki page [[https://github.com/okamsn/loopy/wiki/Examples][Examples]].
 
 # Local Variables:
 # org-link-file-path-type: relative
+# org-adapt-indentation: nil
 # End:
