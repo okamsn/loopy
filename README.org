@@ -313,4 +313,6 @@ Comparisons]].
 
 See the wiki page [[https://github.com/okamsn/loopy/wiki/Examples][Examples]].
 
-# Local Variables: org-link-file-path-type: relative End:
+# Local Variables:
+# org-link-file-path-type: relative
+# End:
