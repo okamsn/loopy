@@ -14,7 +14,7 @@
 ~loopy~ is a macro meant for iterating and looping.  It is similar in usage to
 [[https://www.gnu.org/software/emacs/manual/html_node/cl/Loop-Facility.html#Loop-Facility][~cl-loop~]] but uses symbolic expressions rather than keywords.
 
-For most use cases, ~loopy~ should a nice substitute for ~cl-loop~ and
+For most use cases, ~loopy~ should be a nice substitute for ~cl-loop~ and
 complementary to the features provided by the [[https://www.gnu.org/software/emacs/manual/html_node/elisp/Sequences-Arrays-Vectors.html][Seq]] and [[https://www.gnu.org/software/emacs/manual/html_node/cl/index.html][CL]] libraries and Emacs's
 regular looping and mapping features.
 
@@ -30,6 +30,14 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased
+   - The default test function for commands like =adjoin= and =union= is now
+     ~equal~.  Previously, ~loopy~ copied ~cl-loop~ and used ~eql~, but it makes
+     more sense to copy the behavior of other Emacs Lisp libraries (like =seq.el=)
+     than to copy the behavior of Common Lisp.
+   - The =map= command now filters out duplicate keys by default.  =map-ref= already 
+     did this. The behavior is now optional in both commands using the =unique= 
+     keyword argument.
  - Version 0.9.1 (2021-09-06):
    - Accumulation variables can no longer be modified outside of accumulation
      commands.  The speed penalty was too great and discouraged destructuring
