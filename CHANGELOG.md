@@ -19,6 +19,9 @@ This document describes the user-facing changes to Loopy.
   `equal`.  Previously, `loopy` copied `cl-loop` and used `eql`, but it makes
   more sense to copy the behavior of other Emacs Lisp libraries (like `seq.el`)
   than to copy the behavior of Common Lisp.
+- The `map`command now filters out duplicate keys by default.  `map-ref` already 
+  did this. The behavior is now optional in both commands using the `unique` 
+  keyword argument.
 
 ### Other Changes
 
