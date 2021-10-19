@@ -573,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org7581377
+@float Listing,orgdd0bae9
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -1122,7 +1122,7 @@ increasing values and @samp{:above} for decreasing values.
 
 @quotation Note
 Because the @code{loopy} macro can't test the value of the step size ahead of time,
-being more explicit by using the keyword parameters produces faster code.
+being more explicit by using the keyword parameters can produce faster code.
 
 @end quotation
 @end table
@@ -1142,6 +1142,10 @@ convenience.
 ;; => (10 8 6 4 2)
 (loopy (nums-down i 10 1 :by 2)
        (collect i))
+
+;; => (10 8 6 4 2)
+(loopy (nums-down i 10 1 2)
+       (collect i))
 @end lisp
 @end table
 
@@ -1153,6 +1157,10 @@ Equivalent to @samp{(nums
 @lisp
 ;; => (1 3 5 7 9)
 (loopy (nums-up i 1 10 :by 2)
+       (collect i))
+
+;; => (1 3 5 7 9)
+(loopy (nums-up i 1 10 2)
        (collect i))
 @end lisp
 @end table
@@ -4212,24 +4220,99 @@ built-in loop commands.  You can easily find this file using
 @node Comparing to @code{cl-loop}
 @chapter Comparing to @code{cl-loop}
 
-@code{loopy} should be comparable with @code{cl-loop} for most things, keeping in
-mind the following:
+@code{loopy} should be comparable with @code{cl-loop} for most things, keeping in mind the
+following:
 @itemize
 @item
-It is more flexible than @code{cl-loop}, at the cost of being slightly slower
-depending on the features used.
+@code{loopy} should be as fast or faster than @code{cl-loop}, though some optimizations
+are more explicit.
+@lisp
+;; Compare efficiency of accumulations using
+;; M-x pp-macroexpand-last-sexp:
+(cl-loop for i in (number-sequence 1 10)
+         if (cl-evenp i) collect i into evens
+         else collect i into odds
+         finally return (list odds evens))
+
+(loopy (accum-opt odds evens)
+       (list i (number-sequence 1 10))
+       (if (cl-evenp i)
+           (collect evens i)
+         (collect odds i))
+       (finally-return odds evens))
+@end lisp
+
+@item
+Loop commands are always evaluated in order.
+
+@item
+@code{loopy} has a more flexible set of looping features:
+@itemize
+@item
+Several accumulation commands can accumulate onto the beginning or end of
+the resulting sequence, as in Common Lisp's Iterate.
+@lisp
+;; => (3 2 1 8 9 10)
+(loopy (array i [1 2 3])
+       (collect i :at start)
+       (collect (+ i 7) :at end))
+@end lisp
+
 @item
 It has more flexible control-flow commands, under which you can easily group
 sub-commands, including assignments.
-@item
-It has more flexible accumulation commands.
-@item
-It has more flexible iteration commands.
+@lisp
+;; => ((2 4)
+;;     ((1 8) (2 9)))
+(loopy (list i '(1 2 3 4))
+       (if (cl-evenp i)
+           (collect evens i)
+         (set var1 (1+ var1) :init 0)
+         (set var2 (+ 7 var1))
+         (collect vars (list var1 var2)))
+       (finally-return evens vars))((2 4) )
+@end lisp
+
 @item
 It has a @samp{skip} command to skip the rest of the loop body and immediately
 start the next iteration.  Of course, a similar effect could be achieved
 using the @samp{when} or @samp{unless} commands.
+@lisp
+;; => (1 3)
+(loopy (list i '(1 2 3))
+       (when (= i 2) (skip))
+       (collect i))
+@end lisp
 @end itemize
+
+@item
+@code{loopy} has more featureful destructuring, which is supported by both
+iteration and accumulation commands.
+@lisp
+;; => ((1 4) (2 6) (3 5))
+(loopy (array (&whole elem _ &rest rest) [(1 :a 2 :b 3)
+                                          (4 :b 5 :a 6)])
+       (collect (first) elem)
+       (collect (&key a b) rest)
+       (finally-return first a b))
+@end lisp
+
+@itemize
+@item
+Such destructuring is configurable.
+@lisp
+;; => ((1 3) (2 4))
+(loopy (flag pcase)
+       (array elem [(1 2) (3 4)])
+       (collect `(,a ,b) elem)
+       (finally-return a b))
+@end lisp
+@end itemize
+
+@item
+The macro is extensible.
+@end itemize
+
 
 @code{loopy} is not always a one-to-one replacement for @code{cl-loop}, but it is easy
 to use and extend, and performs well in the cases that it already handles.

@@ -3913,134 +3913,201 @@ sorting requirements on the accumulations variables.
    {{{kbd(M-x find-library loopy-commands RET)}}}.
 
 * Comparing to ~cl-loop~
-  :PROPERTIES:
-  :CUSTOM_ID: comparing-to-cl-loop
-  :DESCRIPTION: Why `loopy' instead of `cl-loop'.
-  :END:
+:PROPERTIES:
+:CUSTOM_ID: comparing-to-cl-loop
+:DESCRIPTION: Why `loopy' instead of `cl-loop'.
+:END:
 
-  ~loopy~ should be comparable with ~cl-loop~ for most things, keeping in
-  mind the following:
-  - It is more flexible than ~cl-loop~, at the cost of being slightly slower
-    depending on the features used.
+~loopy~ should be comparable with ~cl-loop~ for most things, keeping in mind the
+following:
+- ~loopy~ should be as fast or faster than ~cl-loop~, though some optimizations
+  are more explicit.
+  #+begin_src emacs-lisp
+    ;; Compare efficiency of accumulations using
+    ;; M-x pp-macroexpand-last-sexp:
+    (cl-loop for i in (number-sequence 1 10)
+             if (cl-evenp i) collect i into evens
+             else collect i into odds
+             finally return (list odds evens))
+
+    (loopy (accum-opt odds evens)
+           (list i (number-sequence 1 10))
+           (if (cl-evenp i)
+               (collect evens i)
+             (collect odds i))
+           (finally-return odds evens))
+  #+end_src
+
+- Loop commands are always evaluated in order.
+
+- ~loopy~ has a more flexible set of looping features:
+  - Several accumulation commands can accumulate onto the beginning or end of
+    the resulting sequence, as in Common Lisp's Iterate.
+    #+begin_src emacs-lisp
+      ;; => (3 2 1 8 9 10)
+      (loopy (array i [1 2 3])
+             (collect i :at start)
+             (collect (+ i 7) :at end))
+    #+end_src
+
   - It has more flexible control-flow commands, under which you can easily group
     sub-commands, including assignments.
-  - It has more flexible accumulation commands.
-  - It has more flexible iteration commands.
+    #+begin_src emacs-lisp
+      ;; => ((2 4)
+      ;;     ((1 8) (2 9)))
+      (loopy (list i '(1 2 3 4))
+             (if (cl-evenp i)
+                 (collect evens i)
+               (set var1 (1+ var1) :init 0)
+               (set var2 (+ 7 var1))
+               (collect vars (list var1 var2)))
+             (finally-return evens vars))((2 4) )
+    #+end_src
+
   - It has a =skip= command to skip the rest of the loop body and immediately
     start the next iteration.  Of course, a similar effect could be achieved
     using the =when= or =unless= commands.
+    #+begin_src emacs-lisp
+      ;; => (1 3)
+      (loopy (list i '(1 2 3))
+             (when (= i 2) (skip))
+             (collect i))
+    #+end_src
 
-  ~loopy~ is not always a one-to-one replacement for ~cl-loop~, but it is easy
-  to use and extend, and performs well in the cases that it already handles.
+- ~loopy~ has more featureful destructuring, which is supported by both
+  iteration and accumulation commands.
+  #+begin_src emacs-lisp
+    ;; => ((1 4) (2 6) (3 5))
+    (loopy (array (&whole elem _ &rest rest) [(1 :a 2 :b 3)
+                                              (4 :b 5 :a 6)])
+           (collect (first) elem)
+           (collect (&key a b) rest)
+           (finally-return first a b))
+  #+end_src
 
-  Below is a simple example of ~loopy~ vs ~cl-loop~.
+  - Such destructuring is configurable.
+    #+begin_src emacs-lisp
+      ;; => ((1 3) (2 4))
+      (loopy (flag pcase)
+             (array elem [(1 2) (3 4)])
+             (collect `(,a ,b) elem)
+             (finally-return a b))
+    #+end_src
 
-  #+BEGIN_SRC emacs-lisp
-    (require 'cl-lib)
-    (cl-loop with some-thing = 5
-             for i from 1 to 100
-             do (message "I is %s" i)
-             when (> (+ i 5) 20)
-             return (format "Done: %d" i))
+- The macro is extensible.
 
-    (require 'loopy)
-    (loopy (with (some-thing 5))
-           (nums i 1 100)
-           (do (message "I is %s" i))
-           (when (> (+ i 5) 20)
-             (return (format "Done: %d" i))))
-  #+END_SRC
 
-  The main benefit (I believe) of Loopy is clearer grouping of commands under
-  conditionals while still using a clean syntax, such as in the below example.
+~loopy~ is not always a one-to-one replacement for ~cl-loop~, but it is easy
+to use and extend, and performs well in the cases that it already handles.
 
-  #+BEGIN_SRC emacs-lisp
-    ;; => '((2 4) (4 8) (6 12) (8 16) (10 20))
-    (loopy (nums i 1 10)
-           (when (cl-evenp i)
-             (expr once i)
-             (expr twice (* 2 i))
-             (collect doubles (list once twice)))
-           (finally-return doubles))
-  #+END_SRC
+Below is a simple example of ~loopy~ vs ~cl-loop~.
 
-  In my experience, ~cl-loop~ does not allow the easy grouping of assignment
-  statements under a =when= condition.  For example, below is something I would
-  like to try to do with ~cl-loop~.
+#+BEGIN_SRC emacs-lisp
+  (require 'cl-lib)
+  (cl-loop with some-thing = 5
+           for i from 1 to 100
+           do (message "I is %s" i)
+           when (> (+ i 5) 20)
+           return (format "Done: %d" i))
 
-  I am aware that in this example the =for= statements aren't necessary and that
-  the =collect= statements would be sufficient, but (when I come across things
-  like this in my work) I would like to use them to declare variables for
-  readability purposes.
+  (require 'loopy)
+  (loopy (with (some-thing 5))
+         (nums i 1 100)
+         (do (message "I is %s" i))
+         (when (> (+ i 5) 20)
+           (return (format "Done: %d" i))))
+#+END_SRC
 
-  #+BEGIN_SRC emacs-lisp
-    (require 'cl-lib)
-    (save-match-data
-      (cl-loop with pattern = "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)"
-               for line in (split-string "Line1-Data1\nBad\nLine2-Data2")
-               when (string-match pattern line)
-               for line-num = (concat "L" (match-string 1 line))
-               and for data-num = (concat "D" (match-string 2 line))
+The main benefit (I believe) of Loopy is clearer grouping of commands under
+conditionals while still using a clean syntax, such as in the below example.
 
-               ;; … Further processing now that data is named …
+#+BEGIN_SRC emacs-lisp
+  ;; => '((2 4) (4 8) (6 12) (8 16) (10 20))
+  (loopy (nums i 1 10)
+         (when (cl-evenp i)
+           (expr once i)
+           (expr twice (* 2 i))
+           (collect doubles (list once twice)))
+         (finally-return doubles))
+#+END_SRC
 
-               and collect line-num into line-nums
-               and collect data-num into data-nums
-               finally return (list line-nums data-nums)))
+In my experience, ~cl-loop~ does not allow the easy grouping of assignment
+statements under a =when= condition.  For example, below is something I would
+like to try to do with ~cl-loop~.
 
-    ;; Normal Elisp:
-    (save-match-data
-      (let ((pattern "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)")
-            (line-nums)
-            (data-nums))
-        (dolist (line (split-string "Line1-Data1\nBad\nLine2-Data2"))
-          (when (string-match pattern line)
-            (let ((line-num (concat "L" (match-string 1 line)))
-                  (datum-num (concat "D" (match-string 2 line))))
+I am aware that in this example the =for= statements aren't necessary and that
+the =collect= statements would be sufficient, but (when I come across things
+like this in my work) I would like to use them to declare variables for
+readability purposes.
 
-              ;; … Further processing now that data is named …
+#+BEGIN_SRC emacs-lisp
+  (require 'cl-lib)
+  (save-match-data
+    (cl-loop with pattern = "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)"
+             for line in (split-string "Line1-Data1\nBad\nLine2-Data2")
+             when (string-match pattern line)
+             for line-num = (concat "L" (match-string 1 line))
+             and for data-num = (concat "D" (match-string 2 line))
 
-              (push line-num line-nums)
-              (push datum-num data-nums))))
-        (list (nreverse line-nums) (nreverse data-nums))))
-  #+END_SRC
+             ;; … Further processing now that data is named …
 
-  Here is how one could currently do it with ~loopy~:
+             and collect line-num into line-nums
+             and collect data-num into data-nums
+             finally return (list line-nums data-nums)))
 
-  #+BEGIN_SRC emacs-lisp
-    (require 'loopy)
-    (save-match-data
-      (loopy (with (pattern "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)"))
-             (list line (split-string "Line1-Data1\nBad\nLine2-Data2"))
-             (when (string-match pattern line)
-               (expr line-num (concat "L" (match-string 1 line)))
-               (expr datum-num (concat "D" (match-string 2 line)))
+  ;; Normal Elisp:
+  (save-match-data
+    (let ((pattern "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)")
+          (line-nums)
+          (data-nums))
+      (dolist (line (split-string "Line1-Data1\nBad\nLine2-Data2"))
+        (when (string-match pattern line)
+          (let ((line-num (concat "L" (match-string 1 line)))
+                (datum-num (concat "D" (match-string 2 line))))
 
-               ;; … Further processing now that data is named …
+            ;; … Further processing now that data is named …
 
-               (collect line-nums line-num)
-               (collect data-nums datum-num))
-             (finally-return line-nums data-nums)))
-  #+END_SRC
+            (push line-num line-nums)
+            (push datum-num data-nums))))
+      (list (nreverse line-nums) (nreverse data-nums))))
+#+END_SRC
 
-  I believe that the value of the macro increases for longer loop bodies with
-  several conditional commands.
+Here is how one could currently do it with ~loopy~:
 
-  Another nice ability, one that I'm not sure ~cl-loop~ has, is a specific
-  command for skipping/continuing a loop iteration.  Of course, one could also
-  re-organize code under a conditional command like =when= to achieve the same
-  effect.
+#+BEGIN_SRC emacs-lisp
+  (require 'loopy)
+  (save-match-data
+    (loopy (with (pattern "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)"))
+           (list line (split-string "Line1-Data1\nBad\nLine2-Data2"))
+           (when (string-match pattern line)
+             (expr line-num (concat "L" (match-string 1 line)))
+             (expr datum-num (concat "D" (match-string 2 line)))
 
-  #+BEGIN_SRC emacs-lisp
-    ;; Returns even numbers that aren't multiples of 10.
-    ;;
-    ;; => (2 4 6 8 12 14 16 18)
-    (loopy (nums i 1 20)
-           (when (zerop (mod i 10))
-             (skip))
-           (when (cl-evenp i)
-             (collect i)))
-  #+END_SRC
+             ;; … Further processing now that data is named …
+
+             (collect line-nums line-num)
+             (collect data-nums datum-num))
+           (finally-return line-nums data-nums)))
+#+END_SRC
+
+I believe that the value of the macro increases for longer loop bodies with
+several conditional commands.
+
+Another nice ability, one that I'm not sure ~cl-loop~ has, is a specific
+command for skipping/continuing a loop iteration.  Of course, one could also
+re-organize code under a conditional command like =when= to achieve the same
+effect.
+
+#+BEGIN_SRC emacs-lisp
+  ;; Returns even numbers that aren't multiples of 10.
+  ;;
+  ;; => (2 4 6 8 12 14 16 18)
+  (loopy (nums i 1 20)
+         (when (zerop (mod i 10))
+           (skip))
+         (when (cl-evenp i)
+           (collect i)))
+#+END_SRC
 
 * Translating to and from =cl-loop=
   :PROPERTIES:
