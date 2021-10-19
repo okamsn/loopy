@@ -13,6 +13,9 @@ This document describes the user-facing changes to Loopy.
   requested.  For example using both `(collect i)` and `(collect i :result-type
   vector)` in the same loop would previously convert `loopy-result` to a vector,
   but now raises an error to note the discrepancy.
+- In `loopy-dash.el`, fix using quoted symbols as keys for destructuring
+  accumulations ([#101], [#102]).  The new approach should be more reliable,
+  though might create more variables than strictly needed.
 
 ### Breaking Changes
 - The default test function for commands like `adjoin` and `union` is now
@@ -40,6 +43,8 @@ This document describes the user-facing changes to Loopy.
   *repeats* the loop zero times.
 
 [#89]: https://github.com/okamsn/loopy/issues/89
+[#101]: https://github.com/okamsn/loopy/issues/101
+[#102]: https://github.com/okamsn/loopy/pull/102
 [#96]: https://github.com/okamsn/loopy/pull/96
 
 ## 0.9.1

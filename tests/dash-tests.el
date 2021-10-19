@@ -7,7 +7,7 @@
 
 (require 'cl-lib)
 (require 'ert)
-(require 'dash "./dependecy-links/dash.el")
+(require 'dash "./dependecy-links/dash.el" 'no-error)
 (require 'loopy "./loopy.el")
 (require 'loopy-dash "./loopy-dash.el")
 
@@ -37,20 +37,6 @@
   (should (equal '((1 2) (3 4))
                  (eval (quote (loopy (flag dash)
                                      (list (i . j) '((1 . 2) (3 . 4)))
-                                     (collect (list i j)))))))
-
-  (should (equal '((1 2) (4 3))
-                 (eval (quote (loopy (flag dash)
-                                     (list (&plist :k1 i :k2 j) '((:k1 1 :k2 2)
-                                                                  (:k2 3 :k1 4)))
-                                     (collect (list i j)))))))
-
-  (should (equal '((1 2) (4 3))
-                 (eval (quote (loopy (flag dash)
-                                     (array (&alist :k1 i :k2 j) [((:k1 . 1)
-                                                                   (:k2 . 2))
-                                                                  ((:k2 . 3)
-                                                                   (:k1 . 4))])
                                      (collect (list i j))))))))
 
 (ert-deftest dash-flag-array-destructuring ()
@@ -94,3 +80,148 @@
   (should-not loopy--destructuring-for-with-vars-function)
   (should-not loopy--destructuring-for-iteration-function)
   (should-not loopy--destructuring-accumulation-parser))
+
+(ert-deftest dash-alist-iteration-destructuring ()
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&alist 'a avar 'b bvar)
+                                           '(((a . 1) (b . 2))
+                                             ((a . 3) (b . 4))))
+                                     (collect avar)
+                                     (collect bvar))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&alist 'a 'b)
+                                           '(((a . 1) (b . 2))
+                                             ((a . 3) (b . 4))))
+                                     (collect a)
+                                     (collect b))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&alist :a :b)
+                                           '(((:a . 1) (:b . 2))
+                                             ((:a . 3) (:b . 4))))
+                                     (collect a)
+                                     (collect b))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&alist "a" "b")
+                                           '((("a" . 1) ("b" . 2))
+                                             (("a" . 3) ("b" . 4))))
+                                     (collect a)
+                                     (collect b)))))))
+
+(ert-deftest dash-alist-accumulation-destructuring ()
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem
+                                           '(((a . 1) (b . 2))
+                                             ((a . 3) (b . 4))))
+                                     (collect (&alist 'a avar 'b bvar) elem)
+                                     (finally-return avar bvar))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem
+                                           '(((a . 1) (b . 2))
+                                             ((a . 3) (b . 4))))
+                                     (collect (&alist 'a 'b) elem)
+                                     (finally-return a b))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem
+                                           '(((:a . 1) (:b . 2))
+                                             ((:a . 3) (:b . 4))))
+                                     (collect (&alist :a :b) elem)
+                                     (finally-return a b))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem
+                                           '((("a" . 1) ("b" . 2))
+                                             (("a" . 3) ("b" . 4))))
+                                     (collect (&alist "a" "b") elem)
+                                     (finally-return a b)))))))
+
+(ert-deftest dash-plist-iteration-destructuring ()
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&plist 'a avar 'b bvar)
+                                           '((a 1 b 2) (a 3 b 4)))
+                                     (collect avar)
+                                     (collect bvar))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&plist 'a 'b)
+                                           '((a 1 b 2) (a 3 b 4)))
+                                     (collect a)
+                                     (collect b))))))
+
+  (should (equal '(1 2 3 4)
+                 (eval (quote (loopy (flag dash)
+                                     (list (&plist :a :b)
+                                           '((:a 1 :b 2) (:a 3 :b 4)))
+                                     (collect a)
+                                     (collect b))))))
+
+  ;; NOTE: This test won't work, since `plist-get' uses `eq', which fails for
+  ;;       lists.
+  ;;
+  ;; (should (equal '((1 3) (2 4))
+  ;;                (eval (quote (loopy (flag dash)
+  ;;                                    (accum-opt a b)
+  ;;                                    (list elem '(("a" 1 "b" 2) ("a" 3 "b" 4)))
+  ;;                                    (collect (&plist "a" "b") elem)
+  ;;                                    (finally-return a b))))))
+  )
+
+(ert-deftest dash-plist-accumulation-destructuring ()
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem '((a 1 b 2) (a 3 b 4)))
+                                     (collect (&plist 'a avar 'b bvar) elem)
+                                     (finally-return avar bvar))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem '((a 1 b 2) (a 3 b 4)))
+                                     (collect (&plist 'a 'b) elem)
+                                     (finally-return a b))))))
+
+  (should (equal '((1 3) (2 4))
+                 (eval (quote (loopy (flag dash)
+                                     (list elem '((:a 1 :b 2) (:a 3 :b 4)))
+                                     (collect (&plist :a :b) elem)
+                                     (finally-return a b))))))
+
+  ;; NOTE: This test won't work, since `plist-get' uses `eq', which fails for
+  ;;       lists.
+  ;;
+  ;; (should (equal '((1 3) (2 4))
+  ;;                (eval (quote (loopy (flag dash)
+  ;;                                    (accum-opt a b)
+  ;;                                    (list elem '(("a" 1 "b" 2) ("a" 3 "b" 4)))
+  ;;                                    (collect (&plist "a" "b") elem)
+  ;;                                    (finally-return a b))))))
+  )
+
+;; Just trying things.
+(ert-deftest dash-random-destructurings ()
+  (should (equal '((1 6) (2 7) (3 8) (4 10) (5 9))
+                 (loopy (flag dash)
+                        (array elem [(1 2 3 :k1 4 :k2 5)
+                                     (6 7 8 :k2 9 :k1 10)])
+                        (collect (a b c &plist :k1 :k2) elem)
+                        (finally-return a b c k1 k2))))
+
+  (should (equal '((1 6) (3 8) (4 10) (5 9))
+                 (loopy (flag dash)
+                        (array elem [(1 2 3 (:k1 . 4) (:k2 . 5))
+                                     (6 7 8 (:k2 . 9) (:k1 . 10))])
+                        (collect (a _ c &alist :k1 :k2) elem)
+                        (finally-return a c k1 k2)))))

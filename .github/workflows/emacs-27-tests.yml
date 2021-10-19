@@ -37,4 +37,11 @@ jobs:
         run: emacs27 -batch -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
       - name: Iter tests
         run: emacs27 -batch -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
+      - run: echo "Now doing Dash tests."
+      - name: Create the folder
+        run: mkdir dependecy-links
+      - name: Download Dash
+        run: wget --output-document="dependecy-links/dash.el" "https://raw.githubusercontent.com/magnars/dash.el/master/dash.el"
+      - name: Dash tests
+        run: emacs27 -batch -l ert -l tests/dash-tests.el -f ert-run-tests-batch-and-exit
       - run: echo "🍏 This job's status is ${{ job.status }}."
