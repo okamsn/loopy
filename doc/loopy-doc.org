@@ -1706,6 +1706,12 @@ simple wrappers of the above =nums= command.
      (loopy (list i '(1 2 3))
             (collect i))
 
+     ;; Note that only the first collection is part of the implicit
+     ;; return value of the macro.  Named variables, such as
+     ;; `my-other-collection', `a', and `b' in the example below,
+     ;; must be explicitly returned (otherwise they are ignored when
+     ;; the macro returns a value).
+     ;;
      ;; => (1 2 3)
      (loopy (list i '(1 2 3))
             (collect i)
@@ -1728,19 +1734,36 @@ simple wrappers of the above =nums= command.
                             a b))
    #+end_src
 
-   Like in ~cl-loop~, all accumulation commands using implied variables will
-   accumulate into the same implied variable (that is, into ~loopy-result~).  An
-   error will be signaled if the accumulation commands are not compatible.  For
-   example, you should not try to accumulate =collect= results and =sum= results
-   into the same variable, as trying to use a list as a number will cause an
-   error.  If you want to collect into separate variables, just specify a
-   variable name like you normally would.
+   When using implied variables, multiple accumulation commands will use the
+   same variable (that is, they will all accumulate into ~loopy-result~).  You
+   should ensure that such accumulations are actually compatible, otherwise
+   ~loopy~ will raise an error.  For example, you should not try to accumulate
+   =collect= results and =sum= results into the same variable, as you cannot use
+   a list as a number.  On the other hand, =sum= and =multiply= are compatible,
+   since they both act on numbers.
 
    #+begin_src emacs-lisp
      ;; => (3 2 1 11 12 13)
      (loopy (nums i 1 3)
             (collect i :at start)
             (collect (+ i 10) :at end))
+
+     ;; Algebraic style: ((((0 + 1) * 1) + 2) * 2 + 3) * 3 = 27
+     ;; RPN style: 0 1 + 1 * 2 + 2 * 3 + 3 *
+     ;; => 27
+     (loopy (nums i 1 3)
+            (sum i)
+            (multiply i))
+
+     ;; As an aside, note the difference between summing first and multiplying
+     ;; first.  Besides the order of operations, variables that are summed first
+     ;; are initialized to 0, while variables that are multiplied first
+     ;; are initialized to 1.
+     ;;
+     ;; => 21
+     (loopy (nums i 1 3)
+            (multiply i)
+            (sum i))
    #+end_src
 
    #+attr_texinfo: :tag Warning
@@ -1758,13 +1781,13 @@ simple wrappers of the above =nums= command.
    #+end_quote
 
    By default, one must specify accumulation variables in order to accumulate
-   into separate values.  As noted above, ~loopy~ will allow other accumulation
-   commands to access these variables during the loop, which requires a
-   reduction in speed for some command arguments.  To have separate commands
-   accumulate into separate variables while avoiding this reduction, one can use
-   the =split= flag ([[#flags][Flags]]).  This flag tells ~loopy~ explicitly that a variable
-   will only be modified by a single accumulation command while the loop is
-   running.
+   into separate values.  If, for some reason, you wish to always used implied
+   variables during a loop, you can enable the =split= flag ([[#flags]]).
+   Effectively, this flag tells ~loopy~ explicitly that a variable will only be
+   modified by a single accumulation command while the loop is running.  This
+   can result in a speed boost, though this prevents you from using
+   destructuring in the loop.  Note that there are better ways to improve
+   performance ([[#optimized-accums]]).
 
    When the =split= flag is enabled and after the loop completes, each of these
    split accumulation variables will be part of the list ~loopy-result~,
@@ -1780,7 +1803,7 @@ simple wrappers of the above =nums= command.
             (when (cl-evenp i)
               (collect i))
             (sum i)
-            ;; This `finally-return' isn't needed, as `loopy-result'
+            ;; NOTE: This `finally-return' isn't needed, as `loopy-result'
             ;; is already the implied return value.
             (finally-return loopy-result))
    #+end_src
