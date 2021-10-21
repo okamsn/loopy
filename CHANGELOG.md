@@ -121,6 +121,8 @@ Released 2021-08-28.
 
 ## 0.7.2
 
+Released 2021-06-30.
+
 ### Bugs Fixed
 
 - Fix understanding the arguments in `find` when using the `:into` keyword
@@ -132,6 +134,8 @@ Released 2021-08-28.
 - Small corrections to Org/Info documentation.
 
 ## 0.7.1
+
+Released 2021-06-28.
 
 ### Breaking Changes
 
@@ -187,13 +191,18 @@ Released 2021-08-28.
   - `loopy-custom-command-aliases` is now an alias of `loopy-command-aliases`.
   - `loopy-custom-command-parsers` is now an alias of `loopy-command-parsers`.
   - User aliases can now be recursive (i.e., an alias of an alias).
+- Add the special macro argument `wrap`, which can wrap parts of the loop
+  ([#68]).
 
 [#43]: https://github.com/okamsn/loopy/issues/43
 [#45]: https://github.com/okamsn/loopy/issues/45
 [#49]: https://github.com/okamsn/loopy/issues/49
+[#68]: https://github.com/okamsn/loopy/pull/68
 [#78]: https://github.com/okamsn/loopy/pull/78
 
 ## 0.6.1
+
+Released 2021-06-09.
 
 ### Breaking Changes
 
