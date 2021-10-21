@@ -1673,45 +1673,53 @@ simple wrappers of the above =nums= command.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3)
-     (cl-assert (equal (loopy (list i '(1 2 3))
-                              (collect i)
-                              (after-do (cl-return loopy-result)))
+     (loopy (list i '(1 2 3))
+            (collect i)
+            (after-do (cl-return loopy-result)))
 
-                       (loopy (list i '(1 2 3))
-                              (collect i)
-                              (finally-return loopy-result))))
+     ;; => (1 2 3)
+     (loopy (list i '(1 2 3))
+            (collect i)
+            (finally-return loopy-result))
 
      ;; => (0 1 2 3)
-     (cl-assert (equal (loopy (list i '(1 2 3))
-                              (collect i)
-                              (else-do (push 0 loopy-result)
-                                       (cl-return loopy-result)))
-                       (loopy (list i '(1 2 3))
-                              (collect i)
-                              (finally-do (push 0 loopy-result))
-                              (finally-return loopy-result))))
+     (loopy (list i '(1 2 3))
+            (collect i)
+            (else-do (push 0 loopy-result)
+                     (cl-return loopy-result)))
+
+     ;; => (0 1 2 3)
+     (loopy (list i '(1 2 3))
+            (collect i)
+            (finally-do (push 0 loopy-result))
+            (finally-return loopy-result))
    #+end_src
 
    #+cindex: implied/implicit return values
    Using an accumulation command without naming a variable implies a return
    value for the macro, which you can override using the =return= and
-   =return-from= loop commands or the =finally-return= macro argument.  Be aware
-   that that explicitly named accumulation variables do not affect this implied
-   return value.  This limitation is needed for more consistently handling the
-   complexity that comes from allowing the use of Pcase's arbitrary
-   destructuring macros, and may change in the future.
+   =return-from= loop commands or the =finally-return= macro argument.
 
    #+begin_src emacs-lisp
      ;; => (1 2 3)
      (loopy (list i '(1 2 3))
             (collect i))
 
-     ;; Note that only the first collection is part of the implicit
-     ;; return value of the macro.  Named variables, such as
-     ;; `my-other-collection', `a', and `b' in the example below,
-     ;; must be explicitly returned (otherwise they are ignored when
-     ;; the macro returns a value).
-     ;;
+     ;; => overridden
+     (loopy (list i '(1 2 3))
+            (collect i)
+            (finally-return 'overridden))
+   #+end_src
+
+
+   Be aware that explicitly named accumulation variables do not affect this
+   implied return value.  Such values must be returned explicitly, or they will
+   be ignored when the macro returns a values.  This limitation is needed for
+   more consistently handling the complexity that comes from allowing unknown
+   kinds of destructuring via the alternative destructuring systems.  This may
+   change in the future.
+
+   #+begin_src emacs-lisp
      ;; => (1 2 3)
      (loopy (list i '(1 2 3))
             (collect i)
@@ -1783,11 +1791,8 @@ simple wrappers of the above =nums= command.
    By default, one must specify accumulation variables in order to accumulate
    into separate values.  If, for some reason, you wish to always used implied
    variables during a loop, you can enable the =split= flag ([[#flags]]).
-   Effectively, this flag tells ~loopy~ explicitly that a variable will only be
-   modified by a single accumulation command while the loop is running.  This
-   can result in a speed boost, though this prevents you from using
-   destructuring in the loop.  Note that there are better ways to improve
-   performance ([[#optimized-accums]]).
+   This flag makes ~loopy~ generate a unique implied variable for each
+   accumulation command.
 
    When the =split= flag is enabled and after the loop completes, each of these
    split accumulation variables will be part of the list ~loopy-result~,
@@ -2316,27 +2321,29 @@ simple wrappers of the above =nums= command.
 ***  Optimizing Accumulations
 :PROPERTIES:
 :CUSTOM_ID: optimized-accums
-:DESCRIPTION: Producing efficient accumulation
+:DESCRIPTION: Producing efficient accumulations
 :END:
 
 #+cindex: optimizing accumulations
-Named accumulation variables (excluding the automatically named ~loopy-result~)
-are accessible during the loop, and their values are always correct during
-execution.  For example, lists are always in the correct order, even when
-constructing the linked lists in reverse would be more efficient.
+By default, named accumulation variables (excluding the automatically named
+~loopy-result~) are accessible during the loop, and their values are always
+correct during execution.  For example, lists are always in the correct order,
+even when constructing linked lists in the reverse order would be more
+efficient.
 
 #+begin_src elisp
   ;; Note how `coll' is always in the correct order:
-  ;; => ((1) (1 2) (1 2 3))
+  ;; => ((1 2 3)
+  ;;     ((1) (1 2) (1 2 3)))
   (loopy (array i [1 2 3])
          (collect coll i)
-         (collect loopy-result (copy-sequence coll))
-         (finally-return loopy-result))
+         (collect intermediate-values (copy-sequence coll))
+         (finally-return coll intermediate-values))
 #+end_src
 
 Implied accumulation variables do not have the requirement of always being in
-the correct order, so commands using such variables (by default) produce more
-efficient code.
+the correct order, so commands using such variables can produce more efficient
+code.
 
 #+begin_src emacs-lisp
   ;; Similar in efficiency to the below:
@@ -2351,33 +2358,33 @@ efficient code.
     (nreverse result))
 #+end_src
 
-The situation becomes more complex when commands place values at both ends of a
-sequence.  In that case, ~loopy~ must keep track of both the beginning /and/ the
-end of the sequence.  ~loopy~ does /not/ merely append to the end of the
-resulting list, since that would be much slower for large lists.
+The situation becomes more complex when commands place values at both sides of a
+sequence.  In that case, ~loopy~ keeps track of the beginning /and/ the end
+of the sequence.  ~loopy~ does /not/ merely append to the end of the resulting
+list, since that would be much slower for large lists.
 
 #+begin_src emacs-lisp
-  ;; `loopy' can be much faster than the below `dolist' approach:
+  ;; `loopy' can be faster than the below `dolist' approach:
   ;; => (3 2 1 7 14 21)
   (loopy (list i '(1 2 3))
          (collect i :at start)
          (collect (* i 7) :at end))
 
-  ;; For large accumulations, this is /much/ slower than the above:
+  ;; For large accumulations, this is slower than the above:
   ;; => (3 2 1 7 14 21)
   (let (result)
     (dolist (i '(1 2 3))
       (setq result (cons i result)
-            result (append result (list (* i 7)))))
+            result (nconc result (list (* i 7)))))
     result)
 #+end_src
 
-In such cases, ~loopy~ naively favors facilitating placements at whichever
-location is used more, defaulting to the end of the sequence.  In the example
-below, note that even though the commands to insert values at the front of the
-list are never actually run, ~loopy~ will still optimize for frontal insertions.
-It is simply a matter of 2 commands saying that they will place values at the
-front of the list versus 1 command saying that it will place values at the end.
+In such cases, ~loopy~ will naively optimize placing values at whichever side
+appears to be the most used.  In the example below, note that even though the
+commands to insert values at the front of the list are never actually run,
+~loopy~ will still optimize for frontal insertions.  Here, ~loopy~ simply counts
+that 2 commands seem to place values at the front of the list while only 1
+command seems to place values at the end.
 
 #+begin_src emacs-lisp
   ;; This code optimizes for insertions at the front of the list:
@@ -2389,61 +2396,57 @@ front of the list versus 1 command saying that it will place values at the end.
            (collect i :at start)))
 #+end_src
 
-Again, these optimizations only work because the accumulation variables are not
-accessed during the loop.  One can optionally optimize named variables,
-requiring the same restrictions, using the special macro argument =accum-opt=
-([[#macro-arguments]]).  In the below example, accumulations are optimized for
-insertions into the end of explicitly named accumulation variable ~coll~.
-However, to rely on ~coll~ being sorted correctly during the loop would result
-in errors.
+The special macro argument =accum-opt= can be used to better control these
+optimizations ([[#macro-arguments]]).  With it, you can (1) treat an explicit
+variable as if it were implicit and optionally (2) specify which side of a
+sequence you expect to use more.  The arguments passed to =accum-opt= are either
+symbols (such as ~loopy-result~) or lists of a symbol and a position.  To be
+clear, use of the variable ~loopy-result~ is always at least naively optimized
+in the manner described above.
+
+In the example below, see that
+1. Accumulation into the named variable ~coll~ has been specifically optimized
+   for using the end of the sequence, despite there being more commands that use
+   the beginning of the sequence.
+2. Because accumulation into ~coll~ has been optimized, the order of values in
+   ~coll~ need not be correct during the loop.
 
 #+begin_src emacs-lisp
-  ;; => (1 2 3)
-  (loopy (accum-opt coll)
-         (list i '(1 2 3))
-         (collect coll i)
-         (finally-return coll))
-
-  ;; => ((1) (2 1) (3 2 1))
-  (loopy (accum-opt coll)
-         (list i '(1 2 3))
-         (collect coll i)
-         (collect loopy-result (copy-sequence coll))
-         (finally-return loopy-result))
-#+end_src
-
-The arguments to =accum-opt= can be either variable names or lists of a variable
-name and a preferred placement position.  For example, unlike the similar
-example above, the below accumulations are correctly optimized for placement at
-the end of the list.
-
-#+begin_src emacs-lisp
-  ;; This code optimizes for insertions at the front of the list:
-  ;; => (1 2 3)
-  (loopy (accum-opt (loopy-result end))
-         (list i '(1 2 3))
-         (collect i :at end)
-         (when nil
-           (collect i :at start)
-           (collect i :at start)))
-
-  ;; => (1 2 3)
+  ;; This code optimizes for insertions at the end of `coll':
+  ;; => ((23 13 22 12 21 11 1 2 3)
+  ;;     ((1 11 21) (2 1 11 21 12 22) (3 2 1 11 21 12 22 13 23)))
   (loopy (accum-opt (coll end))
          (list i '(1 2 3))
          (collect coll i :at end)
-         (when nil
-           (collect coll i :at start)
-           (collect coll i :at start))
-         (finally-return coll))
+         (collect coll (+ 10 i) :at start)
+         (collect coll (+ 20 i) :at start)
+         (collect intermediate-values (copy-sequence coll))
+         (finally-return coll intermediate-values))
 #+end_src
 
+
 #+cindex: accum-opt vs. split
-As demonstrated elsewhere, destructuring requires naming variables to hold the
-parts of the destructured value.  Because of this, the =accum-opt= special macro
-argument is one option for efficient accumulation and destructuring.  The other
-option, though not exactly the same, is to destructure in iteration commands and
-use the =split= flag with accumulations ([[#flags]]).  Both options remove the
-sorting requirements on the accumulations variables.
+The =accump-opt= special macro argument can also be used with destructuring.
+Because destructuring requires using named variables, such variables are by
+default required to ordered correctly during the loop.  If you do not require
+that, you are recommended to use =accum-opt= on those variables.
+
+#+begin_src emacs-lisp
+  ;; => ((1 3)
+  ;;     (2 4)
+  ;;     ((1) (3 1))
+  ;;     ((2) (4 2)))
+  (loopy (accum-opt a b)
+         (array elem [(1 2) (3 4)])
+         (collect (a b) elem)
+         (collect intermediate-a (copy-sequence a))
+         (collect intermediate-b (copy-sequence b))
+         (finally-return a b intermediate-a intermediate-b))
+#+end_src
+
+The other option, though not exactly the same, is to destructure in iteration
+commands and use the =split= flag with accumulations ([[#flags]]).  Both options
+remove the sorting requirements on the accumulations variables.
 
 #+begin_src emacs-lisp
   ;; The following two loops are approximately equivalent.
