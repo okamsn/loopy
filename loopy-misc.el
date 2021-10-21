@@ -36,6 +36,7 @@
 
 ;;; Code:
 
+;; NOTE: This file can't require any of the other `loopy' files.
 (require 'cl-lib)
 (require 'gv)
 (require 'pcase)

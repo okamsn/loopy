@@ -121,6 +121,19 @@ loop command, but this user option can be used to help avoid
 errors when that fails."
   :type '(repeat symbol))
 
+(define-obsolete-variable-alias 'loopy-iter-ignored-commands
+  'loopy-iter-ignored-names "2020-10")
+(defcustom loopy-iter-ignored-names '(let*)
+  "Names of commands, special macro arguments, and their aliases to be ignored.
+
+Some aliases and command names can cause conflicts, such as `let*' as
+an alias of the special macro argument `with'.
+
+This option always applies to special macro arguments.  This
+option is used with commands when the `lax-naming' flag is
+enabled."
+  :type '(repeat symbol))
+
 (defcustom loopy-iter-command-keywords '(accum for exit)
   "Keywords that `loopy-iter' can use to recognize loop commands.
 
@@ -156,10 +169,12 @@ still evaluated.")
 (defun loopy-iter--valid-loop-command (name)
   "Check if NAME is a known command.
 
-This checks for NAME as a key in `loopy-command-aliases'
+This checks for NAME as a key in `loopy-aliases'
 and `loopy-command-parsers', in that order."
-  (or (map-elt loopy-command-aliases name)
-      (map-elt loopy-command-parsers name)))
+  (if (and loopy-iter--lax-naming
+           (memq name loopy-iter-ignored-names))
+      nil
+    (map-elt loopy-command-parsers (loopy--get-true-name name))))
 
 (defun loopy-iter--literal-form-p (form)
   "Whether FORM is a literal form that should not be interpreted."
@@ -169,7 +184,9 @@ and `loopy-command-parsers', in that order."
 
 (defun loopy-iter--sub-loop-command-p (name)
   "Whether command named NAME is a sub-loop."
-  (memq name (loopy--find-all-names '(loop sub-loop subloop))))
+  (memq name (loopy--get-all-names 'sub-loop
+                                   :from-true t
+                                   :ignored loopy-iter-ignored-names)))
 
 ;;;; Replacement functions
 ;; (defvar loopy-iter--unexpanded-macros '(cl-block cl-return-from)
@@ -265,7 +282,11 @@ Other instructions are just pushed to their variables."
 
                ;; Handle `at' commands specially.
                ((memq (if loopy-iter--lax-naming key (cl-second elem))
-                      (loopy--find-all-names '(at)))
+                      (loopy--get-all-names
+                       'at
+                       :from-true t
+                       :ignored (and loopy-iter--lax-naming
+                                     loopy-iter-ignored-names)))
                 (push (macroexp-progn
                        (loopy-iter--replace-in-at-command (cl-first subtree)
                                                           (cl-rest subtree)))
@@ -284,10 +305,9 @@ Other instructions are just pushed to their variables."
                     (and (not (or (functionp key)
                                   (macrop key)
                                   (special-form-p key)))
-                         (loopy-iter--valid-loop-command (cl-first elem))
-                         (not (memq key loopy-iter-ignored-commands)))
+                         (loopy-iter--valid-loop-command cmd))
                   (and (memq key loopy-iter-command-keywords)
-                       (loopy-iter--valid-loop-command (cl-second elem))))
+                       (loopy-iter--valid-loop-command cmd)))
 
                 (seq-let (main-body other-instructions)
                     (loopy--extract-main-body
@@ -411,79 +431,102 @@ information on how to use `loopy' and `loopy-iter'.
 
   (loopy--wrap-variables-around-body
 
-   ;; Process the special macro arguments.
-   ;; For now, allow aliases, but don't allow `let*' for `with'.
-
-   ;; There should be only one of each of these arguments.
-
-   (let ((loop-name (seq-find #'symbolp body)))
-     (setq loopy--loop-name loop-name
-           loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
-           loopy--non-returning-exit-tag-name
-           (loopy--produce-non-returning-exit-tag-name loop-name))
-     (cl-callf2 seq-remove #'symbolp body))
-
-   ;; Flags
-   ;; Process any flags passed to the macro.  In case of conflicts, the
-   ;; processing order is:
-   ;;
-   ;; 1. Flags in `loopy-default-flags'.
-   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
    (mapc #'loopy--apply-flag loopy-default-flags)
-   (loopy--process-special-marco-args '(flag flags)
-     (mapc #'loopy--apply-flag arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name))
-                body))
+   (setq body (loopy--process-special-arg-loop-name body))
+   (setq body (loopy--process-special-arg-flag
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-with
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-without
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-accum-opt
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-wrap
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-before-do
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-after-do
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-finally-do
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-finally-return
+               body loopy-iter-ignored-names))
+   (setq body (loopy--process-special-arg-finally-protect
+               body loopy-iter-ignored-names))
 
-   ;; With
-   ;; Note: These values don't have to be used literally, due to destructuring.
-   (loopy--process-special-marco-args '(with init)
-     (setq loopy--with-vars
-           (mapcar (lambda (binding)
-                     (cond ((symbolp binding)      (list binding nil))
-                           ((= 1 (length binding)) (list (cl-first binding)
-                                                         nil))
-                           (t                       binding)))
-                   arg-value))
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Without
-   (loopy--process-special-marco-args '(without no-with no-init)
-     (setq loopy--without-vars arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Wrap
-   (loopy--process-special-marco-args '(wrap)
-     (setq loopy--wrapping-forms arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Before do
-   (loopy--process-special-marco-args '( before-do before
-                                         initially-do initially)
-     (setq loopy--before-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; After do
-   (loopy--process-special-marco-args '(after-do after else-do else)
-     (setq loopy--after-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Finally Do
-   (loopy--process-special-marco-args '(finally-do finally)
-     (setq loopy--final-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Final Return
-   (loopy--process-special-marco-args '(finally-return)
-     (setq loopy--final-return (if (= 1 (length arg-value))
-                                   (cl-first arg-value)
-                                 (cons 'list arg-value)))
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Finally Protect
-   (loopy--process-special-marco-args '(finally-protect finally-protected)
-     (setq loopy--final-protect arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;; ;; Process the special macro arguments.
+   ;; ;; For now, allow aliases, but don't allow `let*' for `with'.
+   ;;
+   ;; ;; There should be only one of each of these arguments.
+   ;;
+   ;; (let ((loop-name (seq-find #'symbolp body)))
+   ;;   (setq loopy--loop-name loop-name
+   ;;         loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
+   ;;         loopy--non-returning-exit-tag-name
+   ;;         (loopy--produce-non-returning-exit-tag-name loop-name))
+   ;;   (cl-callf2 seq-remove #'symbolp body))
+   ;;
+   ;; ;; Flags
+   ;; ;; Process any flags passed to the macro.  In case of conflicts, the
+   ;; ;; processing order is:
+   ;; ;;
+   ;; ;; 1. Flags in `loopy-default-flags'.
+   ;; ;; 2. Flags in the `flag' macro argument, which can undo the first group.
+   ;; (mapc #'loopy--apply-flag loopy-default-flags)
+   ;; (loopy--process-special-marco-args '(flag flags)
+   ;;   (mapc #'loopy--apply-flag arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name))
+   ;;              body))
+   ;;
+   ;; ;; With
+   ;; ;; Note: These values don't have to be used literally, due to destructuring.
+   ;; (loopy--process-special-marco-args '(with init)
+   ;;   (setq loopy--with-vars
+   ;;         (mapcar (lambda (binding)
+   ;;                   (cond ((symbolp binding)      (list binding nil))
+   ;;                         ((= 1 (length binding)) (list (cl-first binding)
+   ;;                                                       nil))
+   ;;                         (t                       binding)))
+   ;;                 arg-value))
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Without
+   ;; (loopy--process-special-marco-args '(without no-with no-init)
+   ;;   (setq loopy--without-vars arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Wrap
+   ;; (loopy--process-special-marco-args '(wrap)
+   ;;   (setq loopy--wrapping-forms arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Before do
+   ;; (loopy--process-special-marco-args '( before-do before
+   ;;                                       initially-do initially)
+   ;;   (setq loopy--before-do arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; After do
+   ;; (loopy--process-special-marco-args '(after-do after else-do else)
+   ;;   (setq loopy--after-do arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Finally Do
+   ;; (loopy--process-special-marco-args '(finally-do finally)
+   ;;   (setq loopy--final-do arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Final Return
+   ;; (loopy--process-special-marco-args '(finally-return)
+   ;;   (setq loopy--final-return (if (= 1 (length arg-value))
+   ;;                                 (cl-first arg-value)
+   ;;                               (cons 'list arg-value)))
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   ;;
+   ;; ;; Finally Protect
+   ;; (loopy--process-special-marco-args '(finally-protect finally-protected)
+   ;;   (setq loopy--final-protect arg-value)
+   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
    ;; Process the main body.
    (push loopy--loop-name loopy--known-loop-names)

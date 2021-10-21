@@ -7,6 +7,7 @@
 (require 'cl-lib)
 (require 'map)
 (require 'ert)
+(require 'map "./dependecy-links/map.el" 'no-error)
 (require 'loopy "./loopy.el")
 
 ;; "loopy quote"
@@ -3997,8 +3998,8 @@ This assumes that you're on guix."
 
 ;;; Custom Aliases
 (ert-deftest custom-alias-flag ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'f 'flag)))
+  (let ((loopy-aliases (map-copy loopy-aliases)))
+    (loopy-defalias f flag)
     (should (equal '((1) (2))
                    (eval (quote (loopy (f split)
                                        (list i '(1))
@@ -4006,15 +4007,15 @@ This assumes that you're on guix."
                                        (collect (1+ i)))))))))
 
 (ert-deftest custom-aliases-with ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'as 'with)))
+  (let ((loopy-aliases ))
+    (loopy-defalias as with)
     (should (= 1
                (eval (quote (loopy (as (a 1))
                                    (return a))))))))
 
 (ert-deftest custom-aliases-without ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'ignore 'without)))
+  (let ((loopy-aliases (map-copy loopy-aliases)))
+    (loopy-defalias 'ignore 'without)
     (should (= 5 (let ((a 1)
                        (b 2))
                    (eval (quote (loopy (ignore a b)
@@ -4024,23 +4025,23 @@ This assumes that you're on guix."
                    (+ a b))))))
 
 (ert-deftest custom-aliases-before-do ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'precode 'before-do)))
+  (let ((loopy-aliases (map-copy loopy-aliases)))
+    (loopy-defalias 'precode 'before-do)
     (should (= 7 (eval (quote (loopy (with (i 2))
                                      (precode (setq i 7))
                                      (return i))))))))
 
 (ert-deftest custom-aliases-after-do ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'postcode 'after-do)))
+  (let ((loopy-aliases (map-copy loopy-aliases)))
+    (loopy-defalias postcode after-do)
     (should (eval (quote (loopy (with (my-ret nil))
                                 (list i '(1 2 3 4))
                                 (postcode (setq my-ret t))
                                 (finally-return my-ret)))))))
 
 (ert-deftest custom-aliases-finally-do ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'fd 'finally-do)))
+  (let ((loopy-aliases (map-copy loopy-aliases)))
+    (loopy-defalias 'fd finally-do)
     (should
      (= 10
         (let (my-var)
@@ -4049,14 +4050,14 @@ This assumes that you're on guix."
           my-var)))))
 
 (ert-deftest custom-aliases-finally-return ()
-  (let ((loopy-command-aliases (map-insert loopy-command-aliases
-                                           'fr 'finally-return)))
+  (let ((loopy-aliases  (map-copy loopy-aliases)))
+    (loopy-defalias fr 'finally-return)
     (should (= 10
                (eval (quote (loopy (list i (number-sequence 1 10))
                                    (fr i))))))))
 
 (ert-deftest custom-aliases-list ()
-  (let ((loopy-command-aliases nil))
+  (let ((loopy-aliases nil))
     (should (loopy-defalias l list))
     (should (loopy-defalias a 'array))
     (should (equal '((1 . 4) (2 . 5) (3 . 6))

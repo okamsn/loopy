@@ -573,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,orgd3b62fa
+@float Listing,orgf681273
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -586,8 +586,8 @@ expect, as @samp{i} is assigned a value from the list after collecting @samp{i} 
 For convenience and understanding, the same command might have multiple names,
 called @dfn{aliases}.  For example, the command @samp{expr} has an alias
 @samp{set}, because @samp{expr} is used to @emph{set} a variable to the value of an
-@emph{expression}.  You can add custom aliases using the function @code{loopy-defalias},
-which modifies the user option @code{loopy-command-aliases} (@ref{Custom Aliases}).
+@emph{expression}.  You can define custom aliases using the macro @code{loopy-defalias}
+(@ref{Custom Aliases}).
 
 Some commands take optional keyword arguments.  For example, the command
 @samp{list} can take a function argument following the keyword @samp{:by}, which affects
@@ -3271,7 +3271,7 @@ be preceded by one of the keywords listed in @code{loopy-iter-command-keywords}.
 By default, this is one of @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not
 share a name with any built-in Emacs feature and are similar to the keywords
 used by other packages.  For example, @samp{(list VAR LIST)} would be @samp{(for list
-  VAR LIST)} or @samp{(for in VAR LIST)}.
+VAR LIST)} or @samp{(for in VAR LIST)}.
 
 Any keyword in the user option @code{loopy-iter-command-keywords} can be used to
 identify any loop command.  For example, @samp{(accum collect a)} and
@@ -3283,13 +3283,18 @@ using @samp{lax-naming}, @code{loopy-iter} will always prefer built-in features 
 commands.  For example, ``list'' will always be understood as referring to the
 function @code{list} and not the loop command @samp{list}.
 
-@vindex loopy-iter-ignored-commands
-If for some reason you wish for @code{loopy-iter} to ignore a loop command while
-using @samp{lax-naming}, you can add that symbol to @code{loopy-iter-ignored-commands}.
-
 Special macro arguments, already having clearly distinguishable names, do not
-need to be preceded by one of the above keywords.  However, some aliases (such
-as @samp{let*} for @samp{with}) have been disabled.
+need to be preceded by one of the above keywords.
+
+@cindex Ignoring names in loopy-iter
+@vindex loopy-iter-ignored-names
+That being said, the names of some @code{loopy} features @emph{can} cause conflicts, such
+as the alias @samp{let*} for the special macro argument @samp{with}.  To ignore these
+names, list them in the user option @code{loopy-iter-ignored-names}.  The symbol
+@samp{let*} is included by default.
+
+This user option always applies to special macro arguments.  It only applies to
+loop commands when @samp{lax-naming} is enabled.
 
 @lisp
 ;; => ((1 8) (2 9) (3 10))
@@ -3556,35 +3561,86 @@ Below is an example of the @samp{split} flag.
 @chapter Custom Aliases
 
 @cindex custom aliases
-An @dfn{alias} is another name for a command.  @code{loopy} comes with several
-built-in aliases, such as @samp{set} for the command @samp{expr}.
+An @dfn{alias} is another name for a command or special macro argument.
+@code{loopy} comes with several built-in aliases, such as @samp{string} for the command
+@samp{array} or @samp{else} for the special macro argument @samp{after-do}.
 
-@vindex loopy-command-aliases
-@findex loopy-defalias
-Custom aliases can be added to the user option @code{loopy-command-aliases}, which
-associates aliases with their true names.  For convenience, the macro
-@code{loopy-defalias} is provided, which will correctly add an association to
-this variable.
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem Command or Special Macro Argument
+@tab Built-In Aliases
+@item @samp{array}
+@tab @samp{string}
+@item @samp{seq-ref}
+@tab @samp{sequence-ref}, @samp{seqf}
+@item @samp{after-do}
+@tab @samp{after}, @samp{else}, @samp{else-do}
+@end multitable
+
+
+An alias works the same as the original command or special macro argument.
+They are provided for clarity and convenience.
 
 @lisp
-;; You don't need to quote either argument,
-;; but you can if you prefer.
-(loopy-defalias l list)
-(loopy-defalias a 'array)
+;; => ("a" "b" "c" "d")
+(loopy (array i "abcd")
+       (collect (char-to-string i)))
 
-;; => ((1 . 4) (2 . 5) (3 . 6))
-(loopy (l i '(1 2 3))
-       (a j [4 5 6])
-       (collect (cons i j)))
-
-;; => ((a . array) (l . list))
-loopy-command-aliases
+;; => ("a" "b" "c" "d")
+(loopy (string i "abcd")
+       (collect (char-to-string i)))
 @end lisp
 
-When looking for a command parser, @samp{loopy} will always check whether a given
-name is an alias before checking whether it is a command.  Additionally,
-aliases can be recursive.  That is, you can create a new alias for an existing
-alias.
+
+@findex loopy-defalias
+Users can define custom aliases using the macro @code{loopy-defalias}, which takes an
+alias and a definition as arguments.  These arguments can be quoted or
+unquoted.
+
+@lisp
+(loopy-defalias items array)
+
+;; => (1 2 3)
+(loopy (items i [1 2 3])
+       (collect i))
+@end lisp
+
+The definition must exist for the alias to be defined correctly.  Definitions
+can themselves be aliases, so long as they are already defined.  In other words,
+when aliasing custom commands, you should define the alias @emph{after} defining the
+command (@ref{Custom Commands}).
+
+@lisp
+;; Define an alias for the `items' alias from above:
+(loopy-defalias items2 items)
+
+;; => (1 2 3)
+(loopy (items2 i [1 2 3])
+       (collect i))
+@end lisp
+
+When looking for how to parse a command, @code{loopy} will check aliases before
+checking the true names of commands.  Effectively, this means that commands can
+be overridden by aliases, though this is discouraged.  Such commands can still
+be accessed via their other names.
+
+@lisp
+;; Define `cons' as an alias of `array':
+(loopy-defalias cons array)
+
+;; => (1 2 3)
+(loopy (cons i [1 2 3])
+       (collect i))
+
+;; ERROR: Can no longer use the original definition:
+(loopy (cons i '(1 2 3))
+       (collect i))
+
+;; Other names still work:
+;; => ((1 2 3) (2 3) (3))
+(loopy (conses i '(1 2 3))
+       (collect i))
+@end lisp
+
 
 Special macro arguments (@ref{Special Macro Arguments}) can also be aliased.  Using
 an alias does not change the fact that the special macro arguments are parsed
@@ -3598,6 +3654,13 @@ before loop commands.
        (list i '(1 2 3))
        (collect (+ i 7)))
 @end lisp
+
+
+@vindex loopy-aliases
+The macro @code{loopy-defalias} modifies the user option @code{loopy-aliases}.  However,
+while @code{loopy} is still changing, it is recommended to avoid modifying this
+variable directly, as its structure may change in the future.  @code{loopy-defalias}
+is the forward-compatible way of creating aliases.
 
 @node Custom Commands
 @chapter Custom Commands
@@ -3677,7 +3740,7 @@ binding for the variable @samp{list-211} into a @code{let}-like form.
 Commands are parsed by @code{loopy--parse-loop-command}, which receives a command
 call, such as @samp{(list i '(1 2 3))}, and returns a list of instructions.  It
 does this by searching for an appropriate command-specific parsing function
-in @code{loopy-command-aliases} and ultimately in @code{loopy-command-parsers}.  For
+in @code{loopy-aliases} and ultimately in @code{loopy-command-parsers}.  For
 parsing multiple commands in order, there is @code{loopy--parse-loop-commands},
 which wraps the single-command version.
 

@@ -25,6 +25,21 @@ This document describes the user-facing changes to Loopy.
 - The `map`command now filters out duplicate keys by default.  `map-ref` already 
   did this. The behavior is now optional in both commands using the `unique` 
   keyword argument.
+- __The way to add aliases has changed.__ ([#100], [#105])
+  - `loopy-command-aliases` was renamed to `loopy-aliases`.  The old name is
+    obsolete.
+  - The structure of `loopy-aliases` changed.  For forward compatibility,
+    aliases should only be defined using `loopy-defalias`.
+  - Recursive definitions are now resolved at definition.  This avoids needing
+    to slowly search for many names for each expression passed to the macro,
+    which was doubling the expansion time and complicating code.
+- Add `loopy-iter-ignored-names`, which replaces `loopy-iter-ignored-commands`
+  ([#100], [#105]).  This new variable also includes the aliases of special
+  macro arguments, such as `let*` for `with`.  The name of the old variable is
+  now an obsolete alias of the new variable, though note that the use is now
+  more general.
+- The variable names `loopy-custom-command-aliases` and
+  `loopy-custom-command-parsers` are now obsolete.
 
 ### Other Changes
 
@@ -43,9 +58,11 @@ This document describes the user-facing changes to Loopy.
   *repeats* the loop zero times.
 
 [#89]: https://github.com/okamsn/loopy/issues/89
+[#96]: https://github.com/okamsn/loopy/pull/96
+[#100]: https://github.com/okamsn/loopy/issues/100
 [#101]: https://github.com/okamsn/loopy/issues/101
 [#102]: https://github.com/okamsn/loopy/pull/102
-[#96]: https://github.com/okamsn/loopy/pull/96
+[#105]: https://github.com/okamsn/loopy/pull/105
 
 ## 0.9.1
 

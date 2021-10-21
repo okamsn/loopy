@@ -94,18 +94,6 @@
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
-;;;; Aliases
-(defmacro loopy-defalias (alias definition)
-  "Add alias ALIAS for loop command DEFINITION.
-
-Neither argument need be quoted."
-  `(setf (map-elt loopy-command-aliases ,(if (eq (car-safe alias) 'quote)
-                                             alias
-                                           `(quote ,alias)))
-         ,(if (eq (car-safe definition) 'quote)
-              definition
-            `(quote ,definition))))
-
 ;;;; Errors
 (define-error 'loopy-error
   "Error in `loopy' macro")
@@ -1474,13 +1462,14 @@ entire plist is passed to the constructor found in
 `loopy--accumulation-constructors'."
   (loopy--plist-bind (:name name :loop loop)
       plist
-    (seq-let (main-body other-instrs)
-        (if-let ((func (map-elt loopy--accumulation-constructors name)))
-            (loopy--extract-main-body (funcall func plist))
-          (error "No accumulation constructor: %s" name))
-      (loopy--process-instructions
-       `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
-      (macroexp-progn main-body))))
+    (let ((true-name (loopy--get-true-name name)))
+      (seq-let (main-body other-instrs)
+          (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
+              (loopy--extract-main-body (funcall func plist))
+            (error "No accumulation constructor for command or alias: %s" name))
+        (loopy--process-instructions
+         `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
+        (macroexp-progn main-body)))))
 
 (defun loopy--accum-code-expansion (form)
   "Aggressively search for uses of the symbol `loopy--optimized-accum' in FORM.
@@ -2851,14 +2840,13 @@ COMMAND-LIST."
 
 The following variables are checked:
 
-1. `loopy-command-aliases'
+1. `loopy-aliases'
 2. `loopy-command-parsers'
 
 Failing that, an error is signaled."
-  (if-let ((alias-def (map-elt loopy-command-aliases command-name)))
-      ;; Allow for recursive aliases.
-      (loopy--get-command-parser alias-def)
-    (or (map-elt loopy-command-parsers command-name)
+
+  (let ((true-name (loopy--get-true-name command-name)))
+    (or (map-elt loopy-command-parsers true-name)
         (signal 'loopy-unknown-command command-name))))
 
 (provide 'loopy-commands)

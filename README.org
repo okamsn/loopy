@@ -38,6 +38,11 @@ please let me know.
    - The =map= command now filters out duplicate keys by default.  =map-ref=
      already did this.  The behavior is now optional in both commands using the
      =unique= keyword argument.
+   - Aliases now work differently.  The gist is that they should now only be
+     defined with ~loopy-defalias~ (for forward compatibility) and that
+     recursive definitions are now resolved at definition time instead of when
+     expanding the macro.  See the change log and updated Org/Info documentation
+     for more.
  - Version 0.9.1 (2021-09-06):
    - Accumulation variables can no longer be modified outside of accumulation
      commands.  The speed penalty was too great and discouraged destructuring

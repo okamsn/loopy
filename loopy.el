@@ -302,8 +302,8 @@ Returns a list of two elements:
 
 NAMES can be either a single quoted name or a list of quoted names.
 
-Aliases can be found in `loopy-command-aliases'."
-  (let ((aliases (map-pairs loopy-command-aliases)))
+Aliases can be found in `loopy-aliases'."
+  (let ((aliases (map-pairs loopy-aliases)))
     (dolist (keyword
              (if (listp names)
                  (append names
@@ -557,7 +557,7 @@ Variables available:
 - `arg-value' is the value of the arg if there is only one match
 - `arg-name' the name of the arg found if there is only one match"
   (declare (indent 1))
-  `(let* ((all-names (loopy--find-all-names ,names))
+  `(let* ((all-names (loopy--get-all-names ,names))
           (such-args (map-filter (lambda (arg-name _)
                                    (memq arg-name all-names))
                                  body)))
@@ -569,6 +569,129 @@ Variables available:
             ,@body))
        (t (error "Conflicting arguments: %s" such-args)))))
 
+;;;; Create special arg processors
+(defmacro loopy--def-special-processor (name &rest body)
+  "Create a processor for the special macro argument NAME and its aliases.
+
+BODY is the arguments to the macro `loopy' or `loopy-iter'.
+Each processor should set a special variable (such as those
+in `loopy--variables') and return a new BODY with its
+own argument removed.
+
+Variables available:
+- `all-names' is all of the names found
+- `matching-args' are all arguments that match elements in
+  `all-names'
+- `arg-value' is the value of the arg if there is only one match
+- `arg-name' the name of the arg found if there is only one match"
+  (declare (indent defun))
+  `(defun ,(intern (format "loopy--process-special-arg-%s" name))
+       (body &optional ignored)
+     ,(format "Process the special macro argument `%s' and its aliases.
+
+Returns BODY without the `%s' argument."
+              name name)
+     (let* ((all-names (loopy--get-all-names (quote ,name)
+                                             :from-true t
+                                             :ignored ignored))
+            (matching-args (seq-filter (lambda (x) (memq (car-safe x) all-names))
+                                       body)))
+       (cl-case (length matching-args)
+         (0 body)
+         (1 (let ((arg-name  (caar matching-args))
+                  (arg-value (cdar matching-args)))
+              (ignore arg-value)
+              ,@body))
+         (t (error "Conflicting arguments: %s" matching-args))))))
+
+(defun loopy--process-special-arg-loop-name (body)
+  "Process BODY and the loop name listed therein."
+  (let ((symbols (seq-filter #'symbolp body)))
+    (if (> (length symbols) 1)
+        (error "Conflicting loop names: %s" symbols)
+      (let ((loop-name (cl-first symbols))) ; Symbol or `nil'.
+        (setq loopy--loop-name loop-name
+              loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
+              loopy--non-returning-exit-tag-name
+              (loopy--produce-non-returning-exit-tag-name loop-name))
+        ;; Set up the stack-maps.
+        (push loopy--loop-name loopy--known-loop-names)
+        (push (list loopy--loop-name) loopy--accumulation-places)
+        (seq-remove #'symbolp body)))))
+
+(loopy--def-special-processor flag
+  ;; Process any flags passed to the macro.  In case of conflicts, the
+  ;; processing order is:
+  ;;
+  ;; 1. Flags in `loopy-default-flags'.
+  ;; 2. Flags in the `flag' macro argument, which can undo the first group.
+  ;; (mapc #'loopy--apply-flag loopy-default-flags)
+  (mapc #'loopy--apply-flag arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor with
+  (setq loopy--with-vars
+        ;; Note: These values don't have to be used literally, due to
+        ;;       destructuring.
+        (mapcar (lambda (binding)
+                  (cond ((symbolp binding)      (list binding nil))
+                        ((= 1 (length binding)) (list (cl-first binding)
+                                                      nil))
+                        (t                       binding)))
+                arg-value))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor without
+  (setq loopy--without-vars arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor accum-opt
+  (pcase-dolist ((or `(,var ,pos) var) arg-value)
+    (push var loopy--optimized-accum-vars)
+    (when pos
+      (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF)))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor wrap
+  (setq loopy--wrapping-forms arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor before-do
+  (setq loopy--before-do arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor after-do
+  (setq loopy--after-do arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor finally-do
+  (setq loopy--final-do arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor finally-return
+  (setq loopy--final-return (if (= 1 (length arg-value))
+                                (cl-first arg-value)
+                              (cons 'list arg-value)))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor finally-protect
+  (setq loopy--final-protect arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(defun loopy--clean-up-stack-vars ()
+  "Clean up the special stack variables.
+
+Some variables can't simply be `let'-bound around the expansion
+code and must instead be cleaned up manually."
+  (pop loopy--known-loop-names)
+  (pop loopy--accumulation-places)
+  (cl-callf map-delete loopy--at-instructions loopy--loop-name)
+  (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
+             loopy--accumulation-list-end-vars)
+  (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
+             loopy--accumulation-variable-info))
+
+;;;;; Process Instructions
 (cl-defun loopy--process-instruction (instruction &key erroring-instructions)
   "Process INSTRUCTION, assigning values to the variables in `loopy--variables'.
 
@@ -740,89 +863,18 @@ see the Info node `(loopy)' distributed with this package."
   ;; loop.
   (loopy--wrap-variables-around-body
 ;;;;; Process the special macro arguments.
-   ;; TODO: What is the best way to handle `nil' occurring in `body'?
-   (let ((loop-name (seq-find #'symbolp body)))
-     (setq loopy--loop-name loop-name
-           loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
-           loopy--non-returning-exit-tag-name
-           (loopy--produce-non-returning-exit-tag-name loop-name))
-     (cl-callf2 seq-remove #'symbolp body))
-
-   ;; Set up the stack-maps.
-   (push loopy--loop-name loopy--known-loop-names)
-   (push (list loopy--loop-name) loopy--accumulation-places)
-
-   ;; There should be only one of each of these arguments.
-
-   ;; Flags
-   ;; Process any flags passed to the macro.  In case of conflicts, the
-   ;; processing order is:
-   ;;
-   ;; 1. Flags in `loopy-default-flags'.
-   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
    (mapc #'loopy--apply-flag loopy-default-flags)
-   (loopy--process-special-marco-args '(flag flags)
-     (mapc #'loopy--apply-flag arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name))
-                body))
-
-   ;; With
-   ;; Note: These values don't have to be used literally, due to destructuring.
-   (loopy--process-special-marco-args '(with let* init)
-     (setq loopy--with-vars
-           (mapcar (lambda (binding)
-                     (cond ((symbolp binding)      (list binding nil))
-                           ((= 1 (length binding)) (list (cl-first binding)
-                                                         nil))
-                           (t                       binding)))
-                   arg-value))
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Without
-   (loopy--process-special-marco-args '(without no-with no-init)
-     (setq loopy--without-vars arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Accum-Opt
-   (loopy--process-special-marco-args '(accum-opt opt-accum)
-     (pcase-dolist ((or `(,var ,pos) var) arg-value)
-       (push var loopy--optimized-accum-vars)
-       (when pos
-         (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF)))
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Wrap
-   (loopy--process-special-marco-args '(wrap)
-     (setq loopy--wrapping-forms arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Before do
-   (loopy--process-special-marco-args '( before-do before
-                                         initially-do initially)
-     (setq loopy--before-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; After do
-   (loopy--process-special-marco-args '(after-do after else-do else)
-     (setq loopy--after-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Finally Do
-   (loopy--process-special-marco-args '(finally-do finally)
-     (setq loopy--final-do arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Final Return
-   (loopy--process-special-marco-args '(finally-return)
-     (setq loopy--final-return (if (= 1 (length arg-value))
-                                   (cl-first arg-value)
-                                 (cons 'list arg-value)))
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
-   ;; Finally Protect
-   (loopy--process-special-marco-args '(finally-protect finally-protected)
-     (setq loopy--final-protect arg-value)
-     (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
+   (setq body (loopy--process-special-arg-loop-name body))
+   (setq body (loopy--process-special-arg-flag body))
+   (setq body (loopy--process-special-arg-with body))
+   (setq body (loopy--process-special-arg-without body))
+   (setq body (loopy--process-special-arg-accum-opt body))
+   (setq body (loopy--process-special-arg-wrap body))
+   (setq body (loopy--process-special-arg-before-do body))
+   (setq body (loopy--process-special-arg-after-do body))
+   (setq body (loopy--process-special-arg-finally-do body))
+   (setq body (loopy--process-special-arg-finally-return body))
+   (setq body (loopy--process-special-arg-finally-protect body))
 
 ;;;;; Check the loop name and loop commands.
 
@@ -842,13 +894,7 @@ see the Info node `(loopy)' distributed with this package."
          ;; Process any `at' instructions from loops lower in the call list.
          (loopy--process-instructions (map-elt loopy--at-instructions
                                                loopy--loop-name)))
-     (pop loopy--known-loop-names)
-     (pop loopy--accumulation-places)
-     (cl-callf map-delete loopy--at-instructions loopy--loop-name)
-     (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
-                loopy--accumulation-list-end-vars)
-     (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
-                loopy--accumulation-variable-info))
+     (loopy--clean-up-stack-vars))
 
    ;; Now that instructions processed, make sure the order-dependent lists are
    ;; in the correct order.
