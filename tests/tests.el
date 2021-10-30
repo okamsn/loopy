@@ -933,6 +933,11 @@
         (equal '(0 1 1 1)
                (eval (quote (loopy (repeat 4)
                                    (collect i)
+                                   (set i 1 :init 0)))))
+
+        (equal '(0 1 1 1)
+               (eval (quote (loopy (repeat 4)
+                                   (collect i)
                                    (expr i 1 :init 0))))))))
 
 (ert-deftest expr-two-values ()
@@ -1019,6 +1024,16 @@
 
 ;;;;; Prev-Expr
 (ert-deftest prev-expr ()
+  (should (equal '(nil 1 2 3 4)
+                 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (set-prev j i)
+                                     (collect j))))))
+
+  (should (equal '(nil 1 2 3 4)
+                 (eval (quote (loopy (list i '(1 2 3 4 5))
+                                     (prev-set j i)
+                                     (collect j))))))
+
   (should (equal '(nil 1 2 3 4)
                  (eval (quote (loopy (list i '(1 2 3 4 5))
                                      (prev-expr j i)

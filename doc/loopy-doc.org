@@ -260,7 +260,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
         (loopy (without a)        ; Don't initialize `a'.
                (until (zerop a))  ; Leave loop when `a' equals 0.
                (collect a)        ; Collect the value of `a' into a list.
-               (expr a (1- a))))  ; Set `a' to the value of `(1- a)'.
+               (set a (1- a))))   ; Set `a' to the value of `(1- a)'.
 
       (let ((a 5))
         (loopy (no-init a)
@@ -538,9 +538,11 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   #+END_SRC
 
   For convenience and understanding, the same command might have multiple names,
-  called {{{dfn(aliases)}}}.  For example, the command =expr= has an alias
-  =set=, because =expr= is used to /set/ a variable to the value of an
-  /expression/.  You can define custom aliases using the macro ~loopy-defalias~
+  called {{{dfn(aliases)}}}.  For example, the command =set= has an alias
+  =expr=, because =set= is used to /set/ a variable to the value of an
+  /expression/.  Similary, the =array= command has the alias =string=, because
+  the =array= command can be used to iterate through the elements of an array or
+  string[fn:1].  You can define custom aliases using the macro ~loopy-defalias~
   ([[#custom-aliases][Custom Aliases]]).
 
   Some commands take optional keyword arguments.  For example, the command
@@ -550,7 +552,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   For simplicity, the commands are described using the following notation:
 
   - If a command has multiple names, the names are separated by a vertical
-    bar, such as in =expr|set=.
+    bar, such as in =set|expr=.
   - =VAR= is an unquoted symbol that will be used as a variable name, such as
     =i= in =(list i my-list)=.
   - =FUNC= is a quoted Lisp function name, such as ~#'my-func~ or ~'my-func~, a
@@ -732,8 +734,8 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
               (do (message "%d" i)))
      #+END_SRC
 
-   #+findex: expr, exprs, set
-   - =(expr|exprs|set VAR [EXPRS] &key init)= :: Bind =VAR= to each =EXPR= in
+   #+findex: set, expr, exprs
+   - =(set|expr|exprs VAR [EXPRS] &key init)= :: Bind =VAR= to each =EXPR= in
      order.  Once the last =EXPR= is reached, it is used repeatedly for the rest
      of the loop.  With no =EXPR=, =VAR= is repeatedly bound to ~nil~.
 
@@ -744,16 +746,16 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 
      #+ATTR_TEXINFO: :tag Note
      #+begin_quote
-     =expr= does /not/ behave the same as ~setq~ in all situations.
+     =set= does /not/ behave the same as ~setq~ in all situations.
 
-     While =expr= can take multiple arguments, it only assigns the value of one
+     While =set= can take multiple arguments, it only assigns the value of one
      expression to one variable during each iteration of the loop (unless using
      destructuring).  It cannot take pairs of variables and values in the same
      way that ~setq~ does.
 
-     Furthermore, variables assigned by =expr= (and other commands) are by
+     Furthermore, variables assigned by =set= (and other commands) are by
      default ~let~-bound around the loop and generally initialized to ~nil~.
-     This means that doing =(expr VAR EXPR)= will not, by default, affect
+     This means that doing =(set VAR EXPR)= will not, by default, affect
      variables outside of the loop in the same way that using =(do (setq VAR
      EXPR))= would.
      #+end_quote
@@ -761,13 +763,13 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
      #+BEGIN_SRC emacs-lisp
        ;; => '(1 2 3 3 3)
        (loopy (cycle 5)
-              (expr i 1 2 3)
+              (set i 1 2 3)
               (collect coll i)
               (finally-return coll))
 
        ;; => '(0 1 2 3 4)
        (loopy (cycle 5)
-              (expr i 0 (1+ i))
+              (set i 0 (1+ i))
               (collect coll i)
               (finally-return coll))
 
@@ -777,7 +779,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
        ;; => ((0 1 2) (1 2 3))
        (loopy (cycle 3)
               (collect befores i)
-              (expr i 1 (1+ i) :init 0)
+              (set i 1 (1+ i) :init 0)
               (collect afters i)
               (finally-return befores afters))
 
@@ -786,7 +788,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
        (loopy (with (i 0))
               (cycle 3)
               (collect i)
-              (expr i 1 (1+ i)))
+              (set i 1 (1+ i)))
      #+END_SRC
 
    #+findex: group
@@ -818,28 +820,29 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
                 (sum i)))
      #+end_src
 
-   #+findex: prev-expr, prev
-   - =(prev-expr|prev VAR VAL &key init back)= :: Bind =VAR= to a value =VAL=
-     from a previous cycle in the loop.  =VAR= is initialized to =INIT= or nil.
-     With =BACK=, use the value from that many cycles previous.
+   #+findex: set-prev, prev-set, prev-expr, prev
+   - =(set-prev|prev-set|prev-expr|prev VAR VAL &key init back)= :: Bind =VAR=
+     to a value =VAL= from a previous cycle in the loop.  =VAR= is initialized
+     to =INIT= or nil.  With =BACK=, use the value from that many cycles
+     previous.
 
-     As in =expr=, when using destructuring, each variable is initialized to
+     As in =set=, when using destructuring, each variable is initialized to
      =INIT=, not a destructured part of =INIT=.
 
      #+begin_src emacs-lisp
        ;; => (nil 1 2 3 4)
        (loopy (list i '(1 2 3 4 5))
-              (prev-expr j i)
+              (set-prev j i)
               (collect j))
 
        ;; (nil nil nil 1 2)
        (loopy (list i '(1 2 3 4 5))
-              (prev-expr j i :back 3)
+              (set-prev j i :back 3)
               (collect j))
 
        ;; => ((7 7 1 3) (7 7 2 4))
        (loopy (list i '((1 2) (3 4) (5 6) (7 8)))
-              (prev-expr (a b) i :back 2 :init 7)
+              (set-prev (a b) i :back 2 :init 7)
               (collect c1 a)
               (collect c2 b)
               (finally-return c1 c2))
@@ -850,7 +853,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
        ;; => (first-val first-val 2 2 4 4 6 6 8 8)
        (loopy (numbers i 1 10)
               (when (cl-oddp i)
-                (prev-expr j i :init 'first-val))
+                (set-prev j i :init 'first-val))
               (collect j))
      #+end_src
 
@@ -930,7 +933,7 @@ variants =nums-up= and =nums-down=.
 
   The command =nums= is used to iterate through numbers.  For example, =(nums i
   1 10)= is similar to =(list i (number-sequence 1 10))=, and =(nums i 3)= is
-  similar to =(expr i 3 (1+ i))=.
+  similar to =(set i 3 (1+ i))=.
 
   To balance convenience and similarity to other commands, =nums= has a flexible
   argument list.  In its most basic form, it uses no keywords and takes a
@@ -1020,7 +1023,7 @@ variants =nums-up= and =nums-down=.
            (collect i))
 
     ;; Same as
-    (loopy (expr i 1 (1+ i))
+    (loopy (set i 1 (1+ i))
            (while (< i 10))
            (collect i))
 
@@ -1654,9 +1657,9 @@ simple wrappers of the above =nums= command.
 
      ;; Returns the same values as above.
      (loopy (list elem '((1 2 3) (4 5 6)))
-            (expr sum1 (cl-first elem)  (+ sum1 (cl-first elem)))
-            (expr sum2 (cl-second elem) (+ sum2 (cl-second elem)))
-            (expr sum3 (cl-third elem)  (+ sum3 (cl-third elem)))
+            (set sum1 (cl-first elem)  (+ sum1 (cl-first elem)))
+            (set sum2 (cl-second elem) (+ sum2 (cl-second elem)))
+            (set sum3 (cl-third elem)  (+ sum3 (cl-third elem)))
             (finally-return sum1 sum2 sum3))
    #+end_src
 
@@ -1894,7 +1897,7 @@ simple wrappers of the above =nums= command.
 
        ;; Works mostly the same as the above:
        (loopy (list i '(1 2))
-              (expr my-accum (cons i my-accum))
+              (set my-accum (cons i my-accum))
               (finally-return my-accum))
 
        ;; => ((3 1) (4 2))
@@ -2227,7 +2230,7 @@ simple wrappers of the above =nums= command.
 
        ;; Works similarly to above:
        (loopy (list i '(1 2 3))
-              (expr my-reduction (+ i my-reduction) :init 0)
+              (set my-reduction (+ i my-reduction) :init 0)
               (finally-return my-reduction))
 
        ;; => 24
@@ -2622,7 +2625,7 @@ remove the sorting requirements on the accumulations variables.
       #+END_SRC
 
     #+findex: cond
-    - =(cond [(EXPR CMDS) [...]])= :: Run the commands =CMDS= following the
+    - =(cond [(SET CMDS) [...]])= :: Run the commands =CMDS= following the
       first non-nil condition =EXPR=.
 
       #+BEGIN_SRC emacs-lisp
@@ -3484,15 +3487,15 @@ is the forward-compatible way of creating aliases.
    #+begin_src emacs-lisp
      ;; => ((loopy--iteration-vars (i nil))
      ;;     (loopy--main-body (setq i 1)))
-     (loopy--parse-loop-command '(expr i 1))
+     (loopy--parse-loop-command '(set i 1))
 
      ;; => ((loopy--iteration-vars (i nil))
      ;;     (loopy--main-body (if (my-condition)
      ;;                           (setq i 1)
      ;;                         (setq i 2))))
      (loopy--parse-if-command '(if (my-condition)
-                                   (expr i 1)
-                                 (expr i 2)))
+                                   (set i 1)
+                                 (set i 2)))
    #+end_src
 
    For the purpose of this example, below is a version of the parsing function
@@ -4109,8 +4112,8 @@ conditionals while still using a clean syntax, such as in the below example.
   ;; => '((2 4) (4 8) (6 12) (8 16) (10 20))
   (loopy (nums i 1 10)
          (when (cl-evenp i)
-           (expr once i)
-           (expr twice (* 2 i))
+           (set once i)
+           (set twice (* 2 i))
            (collect doubles (list once twice)))
          (finally-return doubles))
 #+END_SRC
@@ -4164,8 +4167,8 @@ Here is how one could currently do it with ~loopy~:
     (loopy (with (pattern "^Line\\([[:digit:]]\\)-Data\\([[:digit:]]\\)"))
            (list line (split-string "Line1-Data1\nBad\nLine2-Data2"))
            (when (string-match pattern line)
-             (expr line-num (concat "L" (match-string 1 line)))
-             (expr datum-num (concat "D" (match-string 2 line)))
+             (set line-num (concat "L" (match-string 1 line)))
+             (set datum-num (concat "D" (match-string 2 line)))
 
              ;; … Further processing now that data is named …
 
@@ -4242,7 +4245,7 @@ effect.
    | =for VAR being the frames=                    | =(list VAR (frame-list))=                   |
    | =for VAR being the windows [of FRAME]=        | =(list VAR (window-list FRAME))=            |
    | =for VAR being the buffers=                   | =(list VAR (buffer-list))=                  |
-   | =for VAR = EXPR1 then EXPR2=                  | =(expr VAR EXPR1 EXPR2)=                    |
+   | =for VAR = EXPR1 then EXPR2=                  | =(set VAR EXPR1 EXPR2)=                    |
 
 ** Iteration Clauses
    :PROPERTIES:
@@ -4387,7 +4390,7 @@ effect.
                                             (length buffer-text-lines))))
                                   "d: ")))
      (list line-text buffer-text-lines)
-     (expr line-num (line-number-at-pos (point-min) t)
+     (set line-num (line-number-at-pos (point-min) t)
            (1+ line-num))
      (unless (string-empty-p line-text)
        (push-into formatted-candidates
@@ -4399,11 +4402,11 @@ effect.
        ;; There are a few different ways that you could express
        ;; this.
        (when (null default-candidate)
-         (expr prev-dist +1.0e+INF dist-to-default-cand)
-         (expr dist-to-default-cand (abs (- current-line-number
+         (set prev-dist +1.0e+INF dist-to-default-cand)
+         (set dist-to-default-cand (abs (- current-line-number
                                             line-num)))
          (when (> dist-to-default-cand prev-dist)
-           (expr default-candidate (cl-second formatted-candidates)))))
+           (set default-candidate (cl-second formatted-candidates)))))
      (finally-return default-candidate (nreverse formatted-candidates)))
     ;; ...
   #+end_src
@@ -4527,12 +4530,12 @@ effect.
                     (number-to-string
                      (length (number-to-string (length buffer-lines))))
                     "d: ")))
-     (expr line-number 1 (1+ line-number))
+     (set line-number 1 (1+ line-number))
      (list text-line buffer-lines)
      (when (string-match heading-regexp text-line)
-       (expr heading-text
+       (set heading-text
              (match-string-no-properties 2 text-line))
-       (expr heading-level
+       (set heading-level
              (length (match-string-no-properties 1 text-line)))
 
        ;; Decide whether to update the prefix list and the previous
@@ -4544,24 +4547,24 @@ effect.
         ((> heading-level (or prev-heading-level heading-level))
 
          (push-into backwards-prefix-list prev-heading-text)
-         (expr prev-heading-level heading-level))
+         (set prev-heading-level heading-level))
         ;; Otherwise, if we've moved to a lower level (higher up the
         ;; tree), and need to remove the most recently added prefix
         ;; from the list (i.e., go from '(c b a) back to '(b a)).
         ((< heading-level (or prev-heading-level heading-level))
-         (expr backwards-prefix-list (last backwards-prefix-list
+         (set backwards-prefix-list (last backwards-prefix-list
                                            heading-level))
-         (expr prev-heading-level heading-level)))
+         (set prev-heading-level heading-level)))
 
        ;; Regardless of what happens, update the previous heading
        ;; text.
-       (expr prev-heading-text heading-text)
+       (set prev-heading-text heading-text)
 
        ;; Decide whether the previous formatted heading was the
        ;; default.
        (when (and (null default-heading)
                   (> line-number current-line-number))
-         (expr default-heading (car formatted-headings)))
+         (set default-heading (car formatted-headings)))
 
        ;; Finally, add to list of formatted headings.
        ;; Create heading of form "L#: a/b/c" as:
@@ -4608,13 +4611,15 @@ effect.
 
 * Footnotes
 
-[fn:sel-wiki]
-[[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
+[fn:1] Strings being a kind of array.  See [[info:elisp#Sequences Arrays Vectors]]
+for more.
 
 [fn:iter] https://common-lisp.net/project/iterate/
 
 [fn:repo] [[https://github.com/okamsn/loopy]]
 
+[fn:sel-wiki]
+[[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
 # Local Variables:
 # toc-org-max-depth: 20
 # sentence-end-double-space: t

@@ -223,9 +223,9 @@ handled by `loopy-iter'."
   `((loopy--main-body ,(macroexpand `(loopy ,@body)))))
 
 ;;;;; Genereric Evaluation
-;;;;;; Expr
-(cl-defun loopy--parse-expr-command ((_ var &rest vals))
-  "Parse the `expr' command.
+;;;;;; Set
+(cl-defun loopy--parse-set-command ((_ var &rest vals))
+  "Parse the `set' command.
 
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
@@ -287,8 +287,8 @@ handled by `loopy-iter'."
           needed-instructions)))))
 
 ;;;;;; Prev Expr
-(cl-defun loopy--parse-prev-expr-command ((_ var val &key init back))
-  "Parse the `prev-expr' command as (prev-expr VAR VAL &key init back).
+(cl-defun loopy--parse-set-prev-command ((_ var val &key init back))
+  "Parse the `set-prev' command as (set-prev VAR VAL &key init back).
 
 VAR is set to a version of VAL in a past loop cycle.  With INIT,
 initialize VAR to INIT.  With BACK, wait that many cycle before
@@ -296,9 +296,9 @@ beginning to update VAR.
 
 This command does not wait for VAL to change before updating VAR."
   (let ((holding-vars (cl-loop for i from 1 to (or back 1)
-                               collect (gensym "prev-expr-hold")))
-        (init-value-holder (gensym "prev-expr-init"))
-        (init-destr-value-holder (gensym "prev-expr-destr-init"))
+                               collect (gensym "set-prev-hold")))
+        (init-value-holder (gensym "set-prev-init"))
+        (init-destr-value-holder (gensym "set-prev-destr-init"))
         (using-destructuring (sequencep var)))
     ;; TODO: This feels more complicated than it needs to be, but the resulting
     ;;       code is pretty simple.

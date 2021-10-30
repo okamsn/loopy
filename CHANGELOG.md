@@ -56,6 +56,10 @@ This document describes the user-facing changes to Loopy.
 - The `repeat` command was renamed to `cycle`, with `repeat` as an alias.  This
   is a more accurate name, as an argument of 1 *cycles* the loop once but
   *repeats* the loop zero times.
+- `set` is now the preferred name of the command named `expr`.  The name `expr`
+  is now an alias of `set`, instead of the other way around.  For consistency,
+  the preferred name of `prev-expr` is no `set-prev`.  `prev-expr` is now an
+  alias of `set-prev`, which also gained the alias `prev-set`.
 
 [#89]: https://github.com/okamsn/loopy/issues/89
 [#96]: https://github.com/okamsn/loopy/pull/96
