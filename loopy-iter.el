@@ -106,21 +106,6 @@ name collisions becoming more likely.")
   :group 'loopy
   :prefix "loopy-iter-")
 
-(defcustom loopy-iter-ignored-commands '()
-  "Commands and aliases that `loopy-iter' should ignore.
-
-This option is used only when the `lax-naming' flag is enabled.
-
-For example, `loopy' provides a loop command `if', but in
-`loopy-iter', one would probably prefer to use the special form
-`if' provided by Emacs instead.
-
-`loopy-iter' automatically checks whether an expression is a
-function, macro, or special form before checking whether it is a
-loop command, but this user option can be used to help avoid
-errors when that fails."
-  :type '(repeat symbol))
-
 (define-obsolete-variable-alias 'loopy-iter-ignored-commands
   'loopy-iter-ignored-names "2020-10")
 (defcustom loopy-iter-ignored-names '(let*)

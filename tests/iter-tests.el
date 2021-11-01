@@ -493,4 +493,24 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                    (exit return-from inner1)
                  (for at outer (accum collect (list j k))))))))))
 
+
+(ert-deftest loopy-iter-ignore-let* ()
+  (should
+   (equal '(("git" "show" "diff" "log"))
+           (eval (quote
+                  (let ((test-eshell-visual-subcommands))
+                    (loopy-iter
+                     (for list (cmd &rest subcmds) '(("git" "log" "diff" "show")))
+                     (for loop
+                          (for list subcmd subcmds)
+                          (push subcmd (alist-get cmd test-eshell-visual-subcommands
+                                                  nil nil #'equal))))
+                    test-eshell-visual-subcommands)))))
+
+  (should (equal '(13 12 11)
+                  (let ((target))
+                    (loopy-iter (for list i '(1 2 3))
+                                (let* ((j (+ i 10)))
+                                  (push j target)))
+                    target))))
 ;; end
