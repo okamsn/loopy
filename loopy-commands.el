@@ -1230,11 +1230,27 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 ;;;;; Accumulation
 ;;;;;; Compatibility
 (defvar loopy--known-accumulation-categories
-  '(list reverse-list string reverse-string vector
-         reverse-vector number generic)
+  '( list reverse-list string reverse-string vector
+     reverse-vector number generic sequence)
   "Known accumulation categories.
 
 Used for error checking with `loopy--check-accumulation-compatibility.'")
+
+(defun loopy--known-accumulation-category-p (category)
+  "Check whether CATEGORY is a known accumulation category."
+  (memq category loopy--known-accumulation-categories))
+
+(defvar loopy--known-sequence-accumulation-categories
+  '(list reverse-list string reverse-string vector reverse-vector)
+  "Known sequence accumulation categories.
+
+This is a subset of `loopy--known-accumulation-categories', and
+is used for commands that generically act on sequences, such as
+`drop' and `take'.")
+
+(defun loopy--known-seq-accumulation-category-p (category)
+  "Check whether CATEGORY is a known sequence accumulation category."
+  (memq category loopy--known-sequence-accumulation-categories))
 
 (defun loopy--check-accumulation-compatibility
     (loop-name variable category command)
@@ -1253,13 +1269,16 @@ commands like `collect'.  COMMAND is the accumulation command.
 
 - Strings are only made by `concat'.
 - Vectors are only made by `vconcat'.
+- `number' is made by commands like `sum' and `max'.
 - Lists are made by commands like `append', `collect', and `union'.
 - Reverse-lists are made by commands which construct lists in
   reverse for efficiency, whose normal result is a list.  This
   excludes commands like `concat' and `vconcat', and is
   unaffected by commands which coerce the type of result after
-  the loop, such as `collect'."
-  (unless (memq category loopy--known-accumulation-categories)
+  the loop, such as `collect'.
+- `generic' works with any other type.
+- `sequence' works with strings, lists, and vectors."
+  (unless (loopy--known-accumulation-category-p category)
     (error "Bad accumulation description: %s" category))
 
   (let ((key (cons loop-name variable)))
@@ -1268,10 +1287,21 @@ commands like `collect'.  COMMAND is the accumulation command.
                          nil nil #'equal)))
         (seq-let (existing-category existing-command)
             existing-description
-          (unless (eq category existing-category)
+          (cond
+           ((or (eq category existing-category)
+                (eq category 'generic)
+                (and (eq category 'sequence)
+                     (loopy--known-seq-accumulation-category-p existing-category)))
+            nil)
+           ((or (eq existing-category 'generic)
+                (and (eq existing-category 'sequence)
+                     (loopy--known-seq-accumulation-category-p category)))
+            (push (cons key (list category command))
+                  loopy--accumulation-variable-info))
+           (t
             (error "Loopy: Incompatible accumulation commands:\n%s\n%s"
                    existing-command
-                   command)))
+                   command))))
       (push (cons key (list category command))
             loopy--accumulation-variable-info))))
 
