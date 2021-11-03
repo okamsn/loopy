@@ -1329,7 +1329,7 @@ end-tracking variables."
 
 VAR is the variable whose end is to be tracked.  VAL is the value
 to be added to the end of VAR.  This is used in accumulation
-commands like `collect'.
+commands like `collect', `concat', and `vconcat'.
 
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
