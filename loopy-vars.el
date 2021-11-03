@@ -568,7 +568,7 @@ single way.")
 (defvar loopy--accumulation-variable-info nil
   "Information about accumulation variables to ensure command compatibility.
 
-Information is of the form (VARIABLE-NAME CATEGORY COMMAND).
+Information is of the form ((LOOP-NAME VARIABLE-NAME) . CATEGORY COMMAND).
 Current categories are `list', `string', `vector', `value', and
 `reverse-list'.
 
