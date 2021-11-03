@@ -176,6 +176,7 @@ true names and lists of aliases.
     (count        . loopy--parse-count-command)
     (cycle        . loopy--parse-cycle-command)
     (do           . loopy--parse-do-command)
+    (drop         . loopy--parse-drop-command)
     (find         . loopy--parse-find-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)

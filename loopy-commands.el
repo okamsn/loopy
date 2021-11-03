@@ -2080,6 +2080,123 @@ This function is called by `loopy--get-optimized-accum'."
                 (loopy--main-body (if ,val (setq ,var (1+ ,var))))
                 (loopy--implicit-return ,var))))
 
+;;;;;;; Drop
+(loopy--defaccumulation drop
+  "Parse a command of the form `(drop VAR N :at POS)'."
+  :keywords (:at)
+  :explicit (loopy--plist-bind (:at (pos 'end))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              (if (memq var loopy--optimized-accum-vars)
+                  nil
+                `((loopy--accumulation-vars (,var nil))
+                  ,@(if (eq pos 'end)
+                        (loopy--produce-drop-end-tracking var val)
+                      `((loopy--main-body
+                         (setq ,var (seq-subseq ,var ,val)))))))))
+
+
+(defun loopy--get-accumulation-category (loop-name variable)
+  "Get the accumulation category from `loopy--accumulation-variable-info'.
+
+LOOP-NAME is the loop name.  VARIABLE is the variable."
+
+  (let ((key (cons loop-name variable)))
+    (seq-let (category _)
+        (alist-get key loopy--accumulation-variable-info nil nil #'equal)
+      category)))
+
+(defvar loopy--known-list-accumulation-categories '(list reverse-list)
+  "Known accumulation categories for lists.
+
+This is a subset of `loopy--known-sequence-accumulation-categories' and so
+of `loopy--known-accumulation-categories'.")
+
+(defun loopy--known-list-accumulation-category-p (category)
+  "Whether category is a member of `loopy--known-list-accumulation-categories'."
+  (memq category loopy--known-list-accumulation-categories))
+
+(defun loopy--construct-stack-accum-drop (plist)
+  "Construct an optimized `drop' stack accumulation from `plist'."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end)
+                       :result-type (result-type 'list))
+      plist
+    ;; TODO: To do this right, we need to go through all of the other commands,
+    ;;       then come back and get their accumulation type.
+    (setq pos (loopy--get-quoted-symbol pos))
+    (let ((category (loopy--get-accumulation-category loop var)))
+      `((loopy--accumulation-vars (,var nil))
+        ,@(cl-ecase category
+            (list
+             (if (eq pos 'start)
+                 `((loopy--main-body (setq ,var (nthcdr ,val ,var))))
+               (let ((last-link (loopy--get-accumulation-list-end-var
+                                 loop var)))
+                 `((loopy--accumulation-vars (,last-link (last ,var)))
+                   (loopy--main-body (setq ,var (butlast ,var ,val)
+                                           ,last-link (last ,val)))))))
+            (reverse-list
+             (if (eq pos 'start)
+                 (let ((last-link (loopy--get-accumulation-list-end-var
+                                   loop var)))
+                   `((loopy--accumulation-vars (,last-link (last ,var)))
+                     (loopy--main-body (setq ,var (butlast ,var ,val)
+                                             ,last-link (last ,val)))))
+               `((loopy--main-body (setq ,var (nthcdr ,val ,var))))))
+            ((reverse-vector reverse-concat)
+             ;; Reverse-vectors and reverse-strings are reversed lists of
+             ;; sequences that will be passed to `vconcat' or `concat' after
+             ;; being righted.
+             (let ((val-holder (gensym))
+                   (len-holder (gensym))
+                   (var-holder (gensym)))
+               (if (eq pos 'end)
+                   `((let ((,val-holder ,val)
+                           (,len-holder (length (car ,var))))
+                       (while (> ,len-holder ,val-holder)
+                         (setq ,var (cdr ,var)
+                               ,val-holder (- ,val-holder ,len-holder)
+                               ,len-holder (length (car ,var))))
+                       (setcar ,var (butlast (car ,var) ,val-holder))))
+                 ;; TODO: Unsure of the efficiency of this.
+                 `((let ((,val-holder ,val)
+                         (,var-holder (reverse ,var)))
+                     (let ((,len-holder (length (car ,var-holder))))
+                       (while (> ,len-holder ,val-holder)
+                         (setq ,var-holder (cdr ,var-holder)
+                               ,val-holder (- ,val-holder ,len-holder)
+                               ,len-holder (length (car ,var-holder)))))
+                     (setcar ,var-holder (butlast (car ,var-holder) ,val-holder))
+                     (setq ,var ,var-holder))))
+               )
+
+             ))
+        ))))
+
+(defun loopy--produce-drop-end-tracking (var val)
+  "Produce instructions for an end-tracking accumulation of single items.
+
+VAR is the variable whose end is to be tracked.  VAL is the
+number of items to drop.  This is used in accumulation commands
+like `drop'."
+
+  (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
+    `((loopy--accumulation-vars (,last-link (last ,var)))
+      (loopy--main-body (setq ,var (seq-subseq ,var 0 (- ,val))))
+      ;; Most of the variables are lists, so we would prefer to not needlessly
+      ;; check.  TODO: This can probably be done in the same way accumulation
+      ;; optimizations are done, but always.
+      ,(if (and (memq var loopy--optimized-accum-vars)
+                (loopy--known-list-accumulation-category-p
+                 (loopy--get-accumulation-category loopy--loop-name var)))
+           `(loopy--main-body (setq ,last-link (last ,var)))
+         `(loopy--main-body (if (listp ,var) (setq ,last-link (last ,var))))))))
 ;;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
