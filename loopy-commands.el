@@ -2151,8 +2151,10 @@ of `loopy--known-accumulation-categories'.")
                (let ((last-link (loopy--get-accumulation-list-end-var
                                  loop var)))
                  `((loopy--accumulation-vars (,last-link (last ,var)))
-                   (loopy--main-body (setq ,var (butlast ,var ,val)
-                                           ,last-link (last ,val)))))))
+                   (loopy--main-body (setq ,last-link
+                                           (nthcdr (- (1- (length ,var)) ,val)
+                                                   ,var)))
+                   (loopy--main-body (setcdr ,last-link nil))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'reverse-vector 'reverse-string 'vector 'string)
