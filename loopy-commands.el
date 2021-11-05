@@ -2122,62 +2122,67 @@ of `loopy--known-accumulation-categories'.")
   (memq category loopy--known-list-accumulation-categories))
 
 (defun loopy--construct-stack-accum-drop (plist)
-  "Construct an optimized `drop' stack accumulation from `plist'."
+  "Construct an optimized `drop' stack accumulation from PLIST."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
-                       :at (pos 'end)
-                       :result-type (result-type 'list))
+                       :at (pos 'end))
       plist
     ;; TODO: To do this right, we need to go through all of the other commands,
     ;;       then come back and get their accumulation type.
     (setq pos (loopy--get-quoted-symbol pos))
     (let ((category (loopy--get-accumulation-category loop var)))
       `((loopy--accumulation-vars (,var nil))
-        ,@(cl-ecase category
-            (list
-             (if (eq pos 'start)
+        ,@(pcase category
+            ;; If `var' is a generic sequence (meaning no other command gave it
+            ;; an explicit type) or an array (meaning there is no end tracking)
+            ;; then we play it safe and use the `seq-*' commands.
+            ((or 'generic 'sequence
+                 (and (or 'string 'vector)
+                      (guard (not (memq var loopy--optimized-accum-vars)))))
+             `((loopy--main-body (setq ,var ,(if (eq pos 'start)
+                                                 `(seq-drop ,var ,val)
+                                               `(seq-subseq ,var 0 (- ,val)))))))
+            ;; If `var' is a list, then we can use `nthcdr' or `butlast'.
+            ((or 'list 'reverse-list)
+             (if (or (and (eq category 'list)
+                          (eq pos 'start))
+                     (and (eq category 'reverse-list)
+                          (eq pos 'end)))
                  `((loopy--main-body (setq ,var (nthcdr ,val ,var))))
                (let ((last-link (loopy--get-accumulation-list-end-var
                                  loop var)))
                  `((loopy--accumulation-vars (,last-link (last ,var)))
                    (loopy--main-body (setq ,var (butlast ,var ,val)
                                            ,last-link (last ,val)))))))
-            (reverse-list
-             (if (eq pos 'start)
-                 (let ((last-link (loopy--get-accumulation-list-end-var
-                                   loop var)))
-                   `((loopy--accumulation-vars (,last-link (last ,var)))
-                     (loopy--main-body (setq ,var (butlast ,var ,val)
-                                             ,last-link (last ,val)))))
-               `((loopy--main-body (setq ,var (nthcdr ,val ,var))))))
-            ((reverse-vector reverse-concat)
-             ;; Reverse-vectors and reverse-strings are reversed lists of
-             ;; sequences that will be passed to `vconcat' or `concat' after
-             ;; being righted.
+            ;; These are all optimized forms that are lists that will be passed
+            ;; to `concat' or `vconcat'.
+            ((or 'reverse-vector 'reverse-string 'vector 'string)
              (let ((val-holder (gensym))
                    (len-holder (gensym))
                    (var-holder (gensym)))
-               (if (eq pos 'end)
-                   `((let ((,val-holder ,val)
-                           (,len-holder (length (car ,var))))
-                       (while (> ,len-holder ,val-holder)
-                         (setq ,var (cdr ,var)
-                               ,val-holder (- ,val-holder ,len-holder)
-                               ,len-holder (length (car ,var))))
-                       (setcar ,var (butlast (car ,var) ,val-holder))))
-                 ;; TODO: Unsure of the efficiency of this.
-                 `((let ((,val-holder ,val)
-                         (,var-holder (reverse ,var)))
-                     (let ((,len-holder (length (car ,var-holder))))
-                       (while (> ,len-holder ,val-holder)
-                         (setq ,var-holder (cdr ,var-holder)
-                               ,val-holder (- ,val-holder ,len-holder)
-                               ,len-holder (length (car ,var-holder)))))
-                     (setcar ,var-holder (butlast (car ,var-holder) ,val-holder))
-                     (setq ,var ,var-holder))))
-               )
-
-             ))
-        ))))
+               `((loopy--main-body
+                  ,(if (or (and (memq category '(reverse-vector reverse-string))
+                                (eq pos 'end))
+                           (and (memq category '(vector string))
+                                (eq pos 'start)))
+                       `(let ((,val-holder ,val)
+                              (,len-holder (length (car ,var))))
+                          (while (> ,len-holder ,val-holder)
+                            (setq ,var (cdr ,var)
+                                  ,val-holder (- ,val-holder ,len-holder)
+                                  ,len-holder (length (car ,var))))
+                          (setcar ,var (butlast (car ,var) ,val-holder)))
+                     ;; TODO: Unsure of the efficiency of using `reverse' like this.
+                     `(let ((,val-holder ,val)
+                            (,var-holder (reverse ,var)))
+                        (let ((,len-holder (length (car ,var-holder))))
+                          (while (> ,len-holder ,val-holder)
+                            (setq ,var-holder (cdr ,var-holder)
+                                  ,val-holder (- ,val-holder ,len-holder)
+                                  ,len-holder (length (car ,var-holder)))))
+                        (setcar ,var-holder (butlast (car ,var-holder) ,val-holder))
+                        (setq ,var ,var-holder)))))))
+            (_
+             (error "Bad thing: %s" cmd)))))))
 
 (defun loopy--produce-drop-end-tracking (var val)
   "Produce instructions for an end-tracking accumulation of single items.
