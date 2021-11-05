@@ -613,6 +613,13 @@ Generally, this is used with commands that produce lists, such as
 
 This is used by the function `loopy--get-optimized-accum'.")
 
+(defvar loopy--stack-accumulation-constructors
+  '((drop . loopy--construct-stack-accum-drop))
+  "Functions that produce code for optimized stack-like accumulations.
+
+For efficiency, commands like `drop' and `take' are always optimized
+when possible.")
+
 (defvar loopy--optimized-accum-vars nil
   "Explicit accumulations variables to optimize.
 

@@ -1493,8 +1493,26 @@ entire plist is passed to the constructor found in
          `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
         (macroexp-progn main-body)))))
 
+(defun loopy--get-optimized-stack-accum (plist)
+  "Produce accumulation expansion.  Non-main-body instructions are processed.
+
+PLIST is a list with at least the keys `:cmd' and `:loop'.  Then
+entire plist is passed to the constructor found in
+`loopy--accumulation-constructors'."
+  (loopy--plist-bind (:name name :loop loop)
+      plist
+    (let ((true-name (loopy--get-true-name name)))
+      (seq-let (main-body other-instrs)
+          (if-let ((func (map-elt loopy--stack-accumulation-constructors true-name)))
+              (loopy--extract-main-body (funcall func plist))
+            (error "No stack accumulation constructor for command or alias: %s"
+                   name))
+        (loopy--process-instructions
+         `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
+        (macroexp-progn main-body)))))
+
 (defun loopy--accum-code-expansion (form)
-  "Aggressively search for uses of the symbol `loopy--optimized-accum' in FORM.
+  "Aggressively search for usages of the symbol `loopy--optimized-accum' in FORM.
 
 This symbol is used like a function to mark places where it
 should be replaced by optimized accumulation code.  It is assumed
@@ -1507,6 +1525,21 @@ that such places are the only possible use of the symbol."
    (t
     (cons (cl-first form)
           (mapcar #'loopy--accum-code-expansion (cl-rest form))))))
+
+(defun loopy--stack-accum-code-expansion (form)
+  "Aggressively search for the symbol `loopy--optimized-stack-accum' in FORM.
+
+This symbol is used like a function to mark places where it
+should be replaced by optimized accumulation code.  It is assumed
+that such places are the only possible use of the symbol."
+  (cond
+   ((atom form)
+    form)
+   ((eq (cl-first form) 'loopy--optimized-stack-accum)
+    (loopy--get-optimized-stack-accum (cl-second form)))
+   (t
+    (cons (cl-first form)
+          (mapcar #'loopy--stack-accum-code-expansion (cl-rest form))))))
 
 (cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
   "Keep track of where things are being placed.
@@ -2084,21 +2117,42 @@ This function is called by `loopy--get-optimized-accum'."
 (loopy--defaccumulation drop
   "Parse a command of the form `(drop VAR N :at POS)'."
   :keywords (:at)
-  :explicit (loopy--plist-bind (:at (pos 'end))
+  :explicit (loopy--plist-bind (:at (pos 'start))
                 opts
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
                 (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
               (loopy--check-accumulation-compatibility
                loopy--loop-name var 'sequence cmd)
-              (if (memq var loopy--optimized-accum-vars)
-                  nil
-                `((loopy--accumulation-vars (,var nil))
-                  ,@(if (eq pos 'end)
-                        (loopy--produce-drop-end-tracking var val)
-                      `((loopy--main-body
-                         (setq ,var (seq-subseq ,var ,val)))))))))
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos))))
+              ;; (if (memq var loopy--optimized-accum-vars)
+              ;;     nil
+              ;;   `((loopy--accumulation-vars (,var nil))
+              ;;     ,@(if (eq pos 'end)
+              ;;           (loopy--produce-drop-end-tracking var val)
+              ;;         `((loopy--main-body
+              ;;            (setq ,var (seq-subseq ,var ,val))))))
+              ;;   )
+              )
+  :implicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
 
 
 (defun loopy--get-accumulation-category (loop-name variable)
@@ -2118,8 +2172,9 @@ This is a subset of `loopy--known-sequence-accumulation-categories' and so
 of `loopy--known-accumulation-categories'.")
 
 (defun loopy--known-list-accumulation-category-p (category)
-  "Whether category is a member of `loopy--known-list-accumulation-categories'."
+  "Whether CATEGORY is a member of `loopy--known-list-accumulation-categories'."
   (memq category loopy--known-list-accumulation-categories))
+
 
 (defun loopy--construct-stack-accum-drop (plist)
   "Construct an optimized `drop' stack accumulation from PLIST."
@@ -2168,6 +2223,7 @@ of `loopy--known-accumulation-categories'.")
                                 (eq pos 'start)))
                        `(let ((,val-holder ,val)
                               (,len-holder (length (car ,var))))
+                          ;; FIXME: Infinite loop.
                           (while (> ,len-holder ,val-holder)
                             (setq ,var (cdr ,var)
                                   ,val-holder (- ,val-holder ,len-holder)
