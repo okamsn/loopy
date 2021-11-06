@@ -2241,7 +2241,6 @@ of `loopy--known-accumulation-categories'.")
             (_
              (error "Bad thing: %s" cmd)))))))
 
-
 ;;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."

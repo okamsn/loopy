@@ -2332,11 +2332,12 @@ These commands technically don't accumulate values, but are purposefully made to
 be able to efficiently edit the accumulation variables.  These commands are
 always optimized given the settings of the other accumulation commands used.
 
-#+findex: drop
-- =(drop VAR NUMBER &key pos)= :: Remove the first or last =NUMBER= items from
-  =VAR=, depending on the value of =POS=.  This command is similar to the
-  function ~seq-drop~, but can work on the beginning or end of the variable.
-  Like that function, it defaults to operating on the front of the variable.
+#+findex: drop, pop
+- =(drop|pop VAR NUMBER &key pos)= :: Remove the first or last =NUMBER= items
+  from =VAR=, depending on the value of =POS=.  This command is similar to the
+  functions ~seq-drop~ or ~pop~, but can work on the beginning or end of the
+  variable.  Like those functions, it defaults to operating on the front of the
+  variable.
 
   As with other accumulation commands, the value =NUMBER= can be a variable
   whose value changes during the loop.
@@ -2360,7 +2361,7 @@ always optimized given the settings of the other accumulation commands used.
            (set count (1+ count) :init 0)
            (vconcat coll i :at start)
            (when (eq count 2)
-             (drop coll 3 :at end))
+             (pop coll 3 :at end))
            (finally-return coll))
   #+end_src
 

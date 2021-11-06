@@ -106,6 +106,7 @@ Definition must exist.  Neither argument need be quoted."
     (cons            . (conses on))
     (count           . (counting))
     (cycle           . (repeat))
+    (drop            . (pop))
     (finally-do      . (finally))
     (finally-protect . (finally-protected))
     (find            . (finding))
