@@ -2241,24 +2241,7 @@ of `loopy--known-accumulation-categories'.")
             (_
              (error "Bad thing: %s" cmd)))))))
 
-(defun loopy--produce-drop-end-tracking (var val)
-  "Produce instructions for an end-tracking accumulation of single items.
 
-VAR is the variable whose end is to be tracked.  VAL is the
-number of items to drop.  This is used in accumulation commands
-like `drop'."
-
-  (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
-    `((loopy--accumulation-vars (,last-link (last ,var)))
-      (loopy--main-body (setq ,var (seq-subseq ,var 0 (- ,val))))
-      ;; Most of the variables are lists, so we would prefer to not needlessly
-      ;; check.  TODO: This can probably be done in the same way accumulation
-      ;; optimizations are done, but always.
-      ,(if (and (memq var loopy--optimized-accum-vars)
-                (loopy--known-list-accumulation-category-p
-                 (loopy--get-accumulation-category loopy--loop-name var)))
-           `(loopy--main-body (setq ,last-link (last ,var)))
-         `(loopy--main-body (if (listp ,var) (setq ,last-link (last ,var))))))))
 ;;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
