@@ -1305,6 +1305,15 @@ commands like `collect'.  COMMAND is the accumulation command.
       (push (cons key (list category command))
             loopy--accumulation-variable-info))))
 
+(defun loopy--get-accumulation-category (loop-name variable)
+  "Get the accumulation category from `loopy--accumulation-variable-info'.
+
+LOOP-NAME is the loop name.  VARIABLE is the variable."
+  ;; TODO: Replace with `map-elt' using `equal' from newer version of library.
+  ;; Values is (category command).
+  (cl-first (alist-get (cons loop-name variable)
+                       loopy--accumulation-variable-info nil nil #'equal)))
+
 ;;;;;; End Tracking
 (defun loopy--get-accumulation-list-end-var (loop var)
   "Return a variable for referring to the last link in VAR in LOOP.
@@ -2198,16 +2207,7 @@ This function is called by `loopy--get-optimized-accum'."
               `((loopy--main-body
                  (loopy--optimized-stack-accum
                   ( :loop ,loopy--loop-name :var ,var :val ,val
-                    :cmd ,cmd :name ,name :at ,pos))))
-              ;; (if (memq var loopy--optimized-accum-vars)
-              ;;     nil
-              ;;   `((loopy--accumulation-vars (,var nil))
-              ;;     ,@(if (eq pos 'end)
-              ;;           (loopy--produce-drop-end-tracking var val)
-              ;;         `((loopy--main-body
-              ;;            (setq ,var (seq-subseq ,var ,val))))))
-              ;;   )
-              )
+                    :cmd ,cmd :name ,name :at ,pos)))))
   :implicit (loopy--plist-bind (:at (pos 'start))
                 opts
               (setq pos (loopy--normalize-symbol pos))
@@ -2223,16 +2223,6 @@ This function is called by `loopy--get-optimized-accum'."
                     :cmd ,cmd :name ,name :at ,pos)))
                 (loopy--implicit-return ,var))))
 
-
-(defun loopy--get-accumulation-category (loop-name variable)
-  "Get the accumulation category from `loopy--accumulation-variable-info'.
-
-LOOP-NAME is the loop name.  VARIABLE is the variable."
-
-  (let ((key (cons loop-name variable)))
-    (seq-let (category _)
-        (alist-get key loopy--accumulation-variable-info nil nil #'equal)
-      category)))
 
 ;;;;;;; Find
 (loopy--defaccumulation find
