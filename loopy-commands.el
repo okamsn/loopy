@@ -2114,68 +2114,6 @@ This function is called by `loopy--get-optimized-accum'."
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Drop
-(loopy--defaccumulation drop
-  "Parse a command of the form `(drop VAR N :at POS)'."
-  :keywords (:at)
-  :explicit (loopy--plist-bind (:at (pos 'start))
-                opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
-              (loopy--update-accum-place-count loopy--loop-name var pos)
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'sequence cmd)
-              `((loopy--main-body
-                 (loopy--optimized-stack-accum
-                  ( :loop ,loopy--loop-name :var ,var :val ,val
-                    :cmd ,cmd :name ,name :at ,pos))))
-              ;; (if (memq var loopy--optimized-accum-vars)
-              ;;     nil
-              ;;   `((loopy--accumulation-vars (,var nil))
-              ;;     ,@(if (eq pos 'end)
-              ;;           (loopy--produce-drop-end-tracking var val)
-              ;;         `((loopy--main-body
-              ;;            (setq ,var (seq-subseq ,var ,val))))))
-              ;;   )
-              )
-  :implicit (loopy--plist-bind (:at (pos 'start))
-                opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
-              (loopy--update-accum-place-count loopy--loop-name var pos)
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'sequence cmd)
-              `((loopy--main-body
-                 (loopy--optimized-stack-accum
-                  ( :loop ,loopy--loop-name :var ,var :val ,val
-                    :cmd ,cmd :name ,name :at ,pos)))
-                (loopy--implicit-return ,var))))
-
-
-(defun loopy--get-accumulation-category (loop-name variable)
-  "Get the accumulation category from `loopy--accumulation-variable-info'.
-
-LOOP-NAME is the loop name.  VARIABLE is the variable."
-
-  (let ((key (cons loop-name variable)))
-    (seq-let (category _)
-        (alist-get key loopy--accumulation-variable-info nil nil #'equal)
-      category)))
-
-(defvar loopy--known-list-accumulation-categories '(list reverse-list)
-  "Known accumulation categories for lists.
-
-This is a subset of `loopy--known-sequence-accumulation-categories' and so
-of `loopy--known-accumulation-categories'.")
-
-(defun loopy--known-list-accumulation-category-p (category)
-  "Whether CATEGORY is a member of `loopy--known-list-accumulation-categories'."
-  (memq category loopy--known-list-accumulation-categories))
-
-
 (defun loopy--construct-stack-accum-drop (plist)
   "Construct an optimized `drop' stack accumulation from PLIST."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
@@ -2245,6 +2183,56 @@ of `loopy--known-accumulation-categories'.")
                               ,last-link (last ,var)))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
+(loopy--defaccumulation drop
+  "Parse a command of the form `(drop VAR N :at POS)'."
+  :keywords (:at)
+  :explicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos))))
+              ;; (if (memq var loopy--optimized-accum-vars)
+              ;;     nil
+              ;;   `((loopy--accumulation-vars (,var nil))
+              ;;     ,@(if (eq pos 'end)
+              ;;           (loopy--produce-drop-end-tracking var val)
+              ;;         `((loopy--main-body
+              ;;            (setq ,var (seq-subseq ,var ,val))))))
+              ;;   )
+              )
+  :implicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
+
+
+(defun loopy--get-accumulation-category (loop-name variable)
+  "Get the accumulation category from `loopy--accumulation-variable-info'.
+
+LOOP-NAME is the loop name.  VARIABLE is the variable."
+
+  (let ((key (cons loop-name variable)))
+    (seq-let (category _)
+        (alist-get key loopy--accumulation-variable-info nil nil #'equal)
+      category)))
 
 ;;;;;;; Find
 (loopy--defaccumulation find
