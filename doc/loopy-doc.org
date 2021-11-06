@@ -50,6 +50,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#sequence-reference-iteration][Sequence Reference Iteration]]
   - [[#accumulation][Accumulation]]
     -  [[#accumulation-commands][Accumulation Commands]]
+    - [[#stack-based-accumulations][Stack-Based Accumulations]]
     -  [[#optimizing-accumulations][Optimizing Accumulations]]
   - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
@@ -2319,6 +2320,49 @@ simple wrappers of the above =nums= command.
        (loopy (list i '([1 2 3] [4 5 6]))
               (vconcat i :at 'start))
      #+END_SRC
+
+
+*** Stack-Based Accumulations
+:PROPERTIES:
+:CUSTOM_ID: stack-accumulations
+:DESCRIPTION: Treating accumlation variables like a stack or queue.
+:END:
+
+These commands technically don't accumulate values, but are purposefully made to
+be able to efficiently edit the accumulation variables.  These commands are
+always optimized given the settings of the other accumulation commands used.
+
+#+findex: drop
+- =(drop VAR NUMBER &key pos)= :: Remove the first or last =NUMBER= items from
+  =VAR=, depending on the value of =POS=.  This command is similar to the
+  function ~seq-drop~, but can work on the beginning or end of the variable.
+  Like that function, it defaults to operating on the front of the variable.
+
+  As with other accumulation commands, the value =NUMBER= can be a variable
+  whose value changes during the loop.
+
+  #+begin_src emacs-lisp
+    ;; => (4 5 6 7 8 9)
+    (loopy (with (N 1))
+           (array i [(1 2 3) (4 5 6) (7 8 9)])
+           (append i :at end)
+           (drop N :at start))
+
+    ;; (5 6 7)
+    (loopy (array i [(1 2 3) (3 4 5) (5 6 7)])
+           (append coll i :at start)
+           (drop coll 2 :at end)
+           (finally-return coll))
+
+    ;; => [5 6 7 4 5 1]
+    (loopy (accum-opt (coll start))
+           (list i '((1 2 3 3) [4 5] (5 6 7)))
+           (set count (1+ count) :init 0)
+           (vconcat coll i :at start)
+           (when (eq count 2)
+             (drop coll 3 :at end))
+           (finally-return coll))
+  #+end_src
 
 
 ***  Optimizing Accumulations
