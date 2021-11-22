@@ -2234,9 +2234,11 @@ This function is called by `loopy--get-optimized-accum'."
     ;;       then come back and get their accumulation type.
     (setq pos (loopy--get-quoted-symbol pos))
     (let ((category (loopy--get-accumulation-category loop var))
-          (test-form (if (loopy--quoted-form-p val)
-                         `(,(loopy--get-function-symbol val) ,val)
-                       val)))
+          ;; TODO: All expressions like in the `find' command?
+          ;; (test-form (if (loopy--quoted-form-p val)
+          ;;                `(,(loopy--get-function-symbol val) ,val)
+          ;;              val))
+          )
       `((loopy--accumulation-vars (,var nil))
         ,@(pcase category
             ;; If `var' is a generic sequence (meaning no other command gave it
@@ -2254,22 +2256,21 @@ This function is called by `loopy--get-optimized-accum'."
                                    (loopy--count-while ,val ,var :from-end t))))))))
             ;; If `var' is a list, then we can use `nthcdr' or `butlast'.
             ((or 'list 'reverse-list)
-             (let ((count (gensym)))
-               (if (or (and (eq category 'list)
-                            (eq pos 'start))
-                       (and (eq category 'reverse-list)
-                            (eq pos 'end)))
-                   `((loopy--main-body (while ,val
-                                         (setq ,var (cdr ,var)))))
-                 (let ((last-link (loopy--get-accumulation-list-end-var
-                                   loop var)))
-                   `((loopy--accumulation-vars (,last-link (last ,var)))
-                     (loopy--main-body (setq ,last-link
-                                             (nthcdr (- (1- (length ,var))
-                                                        (loopy--count-while
-                                                         ,val ,var))
-                                                     ,var)))
-                     (loopy--main-body (setcdr ,last-link nil)))))))
+             (if (or (and (eq category 'list)
+                          (eq pos 'start))
+                     (and (eq category 'reverse-list)
+                          (eq pos 'end)))
+                 `((loopy--main-body (while ,val
+                                       (setq ,var (cdr ,var)))))
+               (let ((last-link (loopy--get-accumulation-list-end-var
+                                 loop var)))
+                 `((loopy--accumulation-vars (,last-link (last ,var)))
+                   (loopy--main-body (setq ,last-link
+                                           (nthcdr (- (1- (length ,var))
+                                                      (loopy--count-while
+                                                       ,val ,var))
+                                                   ,var)))
+                   (loopy--main-body (setcdr ,last-link nil))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'reverse-vector 'reverse-string 'vector 'string)
