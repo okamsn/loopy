@@ -49,27 +49,89 @@
   "Check whether the `car' of A equals the `car' of B."
   (equal (car a) (car b)))
 
-(defun loopy--count-while (pred list)
-  "Count the number of items while PRED is true in LIST.
+(cl-defun loopy--count-while (pred seq &key from-end if-all)
+  "Count the number of items while PRED is true in SEQ.
+
+Count from the end if FROM-END is non-nil.  If IF-ALL
+is non-nill, return the count and whether the entire
+sequence was checked in a dotted list.
 
 This function returns 0 if PRED is immediately false.
 PRED is a function taking one argument: the item.
 
 For example, applying `cl-evenp' on (2 4 6 7) returns 3."
-  (cl-loop for i in list
-           while (funcall pred i)
-           sum 1))
+  (cl-etypecase seq
+    (list
+     (let ((count 0)
+           (iter-list (if from-end (reverse seq) seq)))
+       (while (funcall pred (car iter-list))
+         (cl-incf count)
+         (setq iter-list (cdr iter-list)))
+       (if if-all
+           ;; As an approximation of Common Lisp's `values'.
+           ;; `cl-values' is just `list'.
+           (cons count iter-list)
+         count)))
+    ;; Arrays have a constant time to access any element.
+    (array
+     (if from-end
+         (cl-loop with count  = 0
+                  with length = (length seq)
+                  for i from length downto 0
+                  while (funcall pred (aref seq i))
+                  do (cl-incf count)
+                  finally return (if if-all
+                                     (cons count (= count length))
+                                   count))
+       (let ((i 0)
+             (len (length seq)))
+         (while (and (< i len) (funcall pred (aref seq i)))
+           (cl-incf i))
+         (if if-all
+             (cons i (= i len))
+           i))))))
 
-(defun loopy--count-until (pred list)
-  "Count the number of items until PRED is true in LIST.
+(cl-defun loopy--count-until (pred seq &key from-end if-all)
+  "Count the number of items until PRED is true in SEQ.
+
+Count from the end if FROM-END is non-nil.  If IF-ALL
+is non-nill, return the count and whether the entire
+sequence was checked in a dotted list.
 
 This function returns 0 if PRED is immediately true.
 PRED is a function taking one argument: the item.
 
 For example, applying `cl-oddp' on (2 4 6 7) returns 3."
-  (cl-loop for i in list
-           until (funcall pred i)
-           sum 1))
+  (cl-etypecase seq
+    (list
+     (let ((count 0)
+           (iter-list (if from-end (reverse seq) seq)))
+       (while (not (funcall pred (car iter-list)))
+         (cl-incf count)
+         (setq iter-list (cdr iter-list)))
+       (if if-all
+           ;; As an approximation of Common Lisp's `values'.
+           ;; `cl-values' is just `list'.
+           (cons count iter-list)
+         count)))
+    ;; Arrays have a constant time to access any element.
+    (array
+     (if from-end
+         (cl-loop with count  = 0
+                  with length = (length seq)
+                  for i from length downto 0
+                  until (funcall pred (aref seq i))
+                  do (cl-incf count)
+                  finally return (if if-all
+                                     (cons count (= count length))
+                                   count))
+       (let ((i 0)
+             (len (length seq)))
+         (while (and (< i len) (not (funcall pred (aref seq i))))
+           (cl-incf i))
+         (if if-all
+             (cons i (= i len))
+           i))))))
 
 
 (defun loopy--every-other (list)
