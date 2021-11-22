@@ -2192,6 +2192,7 @@ This function is called by `loopy--get-optimized-accum'."
                               ,last-link (last ,var)))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
+
 (loopy--defaccumulation drop
   "Parse a command of the form `(drop VAR N :at POS)'."
   :keywords (:at)
@@ -2223,6 +2224,127 @@ This function is called by `loopy--get-optimized-accum'."
                     :cmd ,cmd :name ,name :at ,pos)))
                 (loopy--implicit-return ,var))))
 
+;;;;;;; Drop While
+(defun loopy--construct-stack-accum-drop-while (plist)
+  "Construct an optimized `drop' stack accumulation from PLIST."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end))
+      plist
+    ;; TODO: To do this right, we need to go through all of the other commands,
+    ;;       then come back and get their accumulation type.
+    (setq pos (loopy--get-quoted-symbol pos))
+    (let ((category (loopy--get-accumulation-category loop var))
+          (test-form (if (loopy--quoted-form-p val)
+                         `(,(loopy--get-function-symbol val) ,val)
+                       val)))
+      `((loopy--accumulation-vars (,var nil))
+        ,@(pcase category
+            ;; If `var' is a generic sequence (meaning no other command gave it
+            ;; an explicit type) or an array (meaning there is no end tracking)
+            ;; then we play it safe and use the `seq-*' commands.
+            ((or 'generic 'sequence
+                 (and (or 'string 'vector)
+                      (guard (not (memq var loopy--optimized-accum-vars)))))
+             `((loopy--main-body
+                (setq ,var ,(if (eq pos 'start)
+                                `(seq-drop-while ,var ,val)
+                              `(seq-subseq
+                                ,var 0
+                                (- (length ,var)
+                                   (loopy--count-while ,val ,var :from-end t))))))))
+            ;; If `var' is a list, then we can use `nthcdr' or `butlast'.
+            ((or 'list 'reverse-list)
+             (let ((count (gensym)))
+               (if (or (and (eq category 'list)
+                            (eq pos 'start))
+                       (and (eq category 'reverse-list)
+                            (eq pos 'end)))
+                   `((loopy--main-body (while ,val
+                                         (setq ,var (cdr ,var)))))
+                 (let ((last-link (loopy--get-accumulation-list-end-var
+                                   loop var)))
+                   `((loopy--accumulation-vars (,last-link (last ,var)))
+                     (loopy--main-body (setq ,last-link
+                                             (nthcdr (- (1- (length ,var))
+                                                        (loopy--count-while
+                                                         ,val ,var))
+                                                     ,var)))
+                     (loopy--main-body (setcdr ,last-link nil)))))))
+            ;; These are all optimized forms that are lists that will be passed
+            ;; to `concat' or `vconcat'.
+            ((or 'reverse-vector 'reverse-string 'vector 'string)
+             (let ((val-holder (gensym))
+                   (count-holder (gensym))
+                   (var-holder (gensym)))
+               (if (or (and (memq category '(reverse-vector reverse-string))
+                            (eq pos 'end))
+                       (and (memq category '(vector string))
+                            (eq pos 'start)))
+                   `((loopy--main-body
+                      (let ((,val-holder)
+                            (,count-holder))
+                        (while (and ,var
+                                    (let ((,val-holder
+                                           (loopy--count-while ,val (car ,var)
+                                                               :if-all t)))
+                                      (setq ,count-holder (car ,val-holder))
+                                      (cdr ,val-holder)))
+                          (setq ,var (cdr ,var)))
+                        (setcar ,var (seq-subseq (car ,var) ,count-holder)))))
+                 (let ((last-link (loopy--get-accumulation-list-end-var
+                                   loop var)))
+                   `((loopy--accumulation-vars (,last-link (last ,var)))
+                     ;; TODO: Unsure of the efficiency of using `reverse' like this.
+                     (loopy--main-body
+                      (let ((,val-holder)
+                            (,count-holder)
+                            (,var-holder (reverse ,var)))
+                        (while (and ,var
+                                    (let ((,val-holder
+                                           (loopy--count-while
+                                            ,val (car ,var-holder)
+                                            :if-all t :from-end t)))
+                                      (setq ,count-holder (car ,val-holder))
+                                      ;; Return whether all elements counted.
+                                      (cdr ,val-holder)))
+                          (setq ,var-holder (cdr ,var-holder)))
+                        (setcar ,var-holder (seq-subseq (car ,var-holder)
+                                                        0 (- ,count-holder)))
+                        (setq ,var (nreverse ,var-holder)
+                              ,last-link (last ,var)))))))))
+            (_
+             (error "Bad thing: %s" cmd)))))))
+
+(loopy--defaccumulation drop-while
+  "Parse a command of the form `(drop-while VAR PRED :at POS)'."
+  :keywords (:at)
+  :explicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))))
+  :implicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
 
 ;;;;;;; Find
 (loopy--defaccumulation find
