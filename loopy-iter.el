@@ -439,83 +439,7 @@ information on how to use `loopy' and `loopy-iter'.
    (setq body (loopy--process-special-arg-finally-protect
                body loopy-iter-ignored-names))
 
-   ;; ;; Process the special macro arguments.
-   ;; ;; For now, allow aliases, but don't allow `let*' for `with'.
-   ;;
-   ;; ;; There should be only one of each of these arguments.
-   ;;
-   ;; (let ((loop-name (seq-find #'symbolp body)))
-   ;;   (setq loopy--loop-name loop-name
-   ;;         loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
-   ;;         loopy--non-returning-exit-tag-name
-   ;;         (loopy--produce-non-returning-exit-tag-name loop-name))
-   ;;   (cl-callf2 seq-remove #'symbolp body))
-   ;;
-   ;; ;; Flags
-   ;; ;; Process any flags passed to the macro.  In case of conflicts, the
-   ;; ;; processing order is:
-   ;; ;;
-   ;; ;; 1. Flags in `loopy-default-flags'.
-   ;; ;; 2. Flags in the `flag' macro argument, which can undo the first group.
-   ;; (mapc #'loopy--apply-flag loopy-default-flags)
-   ;; (loopy--process-special-marco-args '(flag flags)
-   ;;   (mapc #'loopy--apply-flag arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name))
-   ;;              body))
-   ;;
-   ;; ;; With
-   ;; ;; Note: These values don't have to be used literally, due to destructuring.
-   ;; (loopy--process-special-marco-args '(with init)
-   ;;   (setq loopy--with-vars
-   ;;         (mapcar (lambda (binding)
-   ;;                   (cond ((symbolp binding)      (list binding nil))
-   ;;                         ((= 1 (length binding)) (list (cl-first binding)
-   ;;                                                       nil))
-   ;;                         (t                       binding)))
-   ;;                 arg-value))
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Without
-   ;; (loopy--process-special-marco-args '(without no-with no-init)
-   ;;   (setq loopy--without-vars arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Wrap
-   ;; (loopy--process-special-marco-args '(wrap)
-   ;;   (setq loopy--wrapping-forms arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Before do
-   ;; (loopy--process-special-marco-args '( before-do before
-   ;;                                       initially-do initially)
-   ;;   (setq loopy--before-do arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; After do
-   ;; (loopy--process-special-marco-args '(after-do after else-do else)
-   ;;   (setq loopy--after-do arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Finally Do
-   ;; (loopy--process-special-marco-args '(finally-do finally)
-   ;;   (setq loopy--final-do arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Final Return
-   ;; (loopy--process-special-marco-args '(finally-return)
-   ;;   (setq loopy--final-return (if (= 1 (length arg-value))
-   ;;                                 (cl-first arg-value)
-   ;;                               (cons 'list arg-value)))
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-   ;;
-   ;; ;; Finally Protect
-   ;; (loopy--process-special-marco-args '(finally-protect finally-protected)
-   ;;   (setq loopy--final-protect arg-value)
-   ;;   (cl-callf2 seq-remove (lambda (x) (eq (car x) arg-name)) body))
-
    ;; Process the main body.
-   (push loopy--loop-name loopy--known-loop-names)
-   (push (list loopy--loop-name) loopy--accumulation-places)
    (unwind-protect
        (progn
          (setq loopy--main-body (loopy-iter--replace-in-tree body))
@@ -530,11 +454,7 @@ information on how to use `loopy' and `loopy-iter'.
                                                loopy--loop-name)
                                       :erroring-instructions
                                       '(loopy--main-body)))
-     (pop loopy--known-loop-names)
-     (pop loopy--accumulation-places)
-     (cl-callf map-delete loopy--at-instructions loopy--loop-name)
-     (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
-                loopy--accumulation-list-end-vars))
+     (loopy--clean-up-stack-vars))
 
    ;; Make sure the order-dependent lists are in the correct order.
    (setq loopy--iteration-vars (nreverse loopy--iteration-vars)

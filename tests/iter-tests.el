@@ -513,4 +513,50 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                 (let* ((j (+ i 10)))
                                   (push j target)))
                     target))))
+
+(ert-deftest loopy-iter-clean-stack-variables ()
+  (let ((loopy--known-loop-names)
+        (loopy--accumulation-places)
+        (loopy--at-instructions)
+        (loopy--accumulation-list-end-vars)
+        (loopy--accumulation-variable-info))
+    (should (equal '((3 4) (1 2) 1 2 3 4)
+                   (eval (quote (loopy-iter my-loop
+                                            (for array i [(1 2) (3 4)])
+                                            (accum collect i :at start)
+                                            (for loop inner
+                                                 (for list j i)
+                                                 (for at my-loop
+                                                      (accum collect j :at
+                                                             end))))))))
+    (should-not (or loopy--known-loop-names
+                    loopy--accumulation-places
+                    loopy--at-instructions
+                    loopy--accumulation-list-end-vars
+                    loopy--accumulation-variable-info)))
+
+  (let ((loopy--known-loop-names)
+        (loopy--accumulation-places)
+        (loopy--at-instructions)
+        (loopy--accumulation-list-end-vars)
+        (loopy--accumulation-variable-info))
+    (macroexpand '(loopy-iter
+                   main
+                   (flag lax-naming)
+                   (with (a 1) (b 2) (c 3))
+                   (while clause)
+                   (loopy-let* ((key (pop clause))
+                                ((key-fn take-fn transform-fn) (--first (funcall (car it) key)
+                                                                        oo-bind-processers))
+                                (taken (loop (while (and clause
+                                                         (not (keywordp it))
+                                                         (funcall take-fn it)))
+                                             (collecting (pop clause)))))
+                     (collecting (funcall transform-fn (list (cons key taken) rest))
+                                 :at start))))
+    (should-not (or loopy--known-loop-names
+                    loopy--accumulation-places
+                    loopy--at-instructions
+                    loopy--accumulation-list-end-vars
+                    loopy--accumulation-variable-info))))
 ;; end

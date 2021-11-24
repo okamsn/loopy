@@ -4080,5 +4080,26 @@ This assumes that you're on guix."
                                        (a j [4 5 6])
                                        (collect (cons i j)))))))))
 
+;;; Clean Stack Variables
+(ert-deftest clean-stack-variables ()
+  (let (loopy--known-loop-names
+        loopy--accumulation-places
+        loopy--at-instructions
+        loopy--accumulation-list-end-vars
+        loopy--accumulation-variable-info)
+    (should (equal '((3 4) (1 2) 1 2 3 4)
+                   (eval (quote (loopy my-loop
+                                       (array i [(1 2) (3 4)])
+                                       (collect i :at start)
+                                       (loop inner
+                                             (list j i)
+                                             (at my-loop (collect j :at end))))))))
+    (should-not (or loopy--known-loop-names
+                    loopy--accumulation-places
+                    loopy--at-instructions
+                    loopy--accumulation-list-end-vars
+                    loopy--accumulation-variable-info))))
+
+
 ;; Local Variables:
 ;; End:
