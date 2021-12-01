@@ -1230,8 +1230,10 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 ;;;;; Accumulation
 ;;;;;; Compatibility
 (defvar loopy--known-accumulation-categories
-  '( list reverse-list string reverse-string vector
-     reverse-vector number generic sequence)
+  '( list reverse-list
+     string string-list string-reverse-list
+     vector vector-list vector-reverse-list
+     number generic sequence)
   "Known accumulation categories.
 
 Used for error checking with `loopy--check-accumulation-compatibility.'")
@@ -1241,7 +1243,9 @@ Used for error checking with `loopy--check-accumulation-compatibility.'")
   (memq category loopy--known-accumulation-categories))
 
 (defvar loopy--known-sequence-accumulation-categories
-  '(list reverse-list string reverse-string vector reverse-vector)
+  '( list reverse-list
+     string string-list string-reverse-list
+     vector vector-list vector-reverse-list)
   "Known sequence accumulation categories.
 
 This is a subset of `loopy--known-accumulation-categories', and
@@ -1260,24 +1264,53 @@ Known accumulation commands are listed in
 `loopy--accumulation-variable-info'.
 
 LOOP-NAME is the name of the loop in which VARIABLE accumulates.
-VARIABLE is the accumulation variable.  CATEGORY is one of
-`list', `reverse-list', `string', `reverse-string', `vector',
-`reverse-vector', `number', and `generic'.  It describes how the
-accumulation is being built and its return type, ignoring special
-circumstances like the `:result-type' keyword argument of
-commands like `collect'.  COMMAND is the accumulation command.
+VARIABLE is the accumulation variable.  COMMAND is the
+accumulation command.  CATEGORY describes how the accumulation is
+being built and its return type, ignoring special circumstances
+like the `:result-type' keyword argument of commands like
+`collect'.  It is one of the following:
 
-- Strings are only made by `concat'.
-- Vectors are only made by `vconcat'.
-- `number' is made by commands like `sum' and `max'.
-- Lists are made by commands like `append', `collect', and `union'.
-- Reverse-lists are made by commands which construct lists in
-  reverse for efficiency, whose normal result is a list.  This
-  excludes commands like `concat' and `vconcat', and is
-  unaffected by commands which coerce the type of result after
-  the loop, such as `collect'.
 - `generic' works with any other type.
-- `sequence' works with strings, lists, and vectors."
+
+- `sequence' works with strings, lists, and vectors.
+
+- `number' is made by commands like `sum' and `max'.
+
+- `list' are lists.  They are made by commands like `append',
+  `collect', and `union'.
+
+- `reverse-list' is a list made in reverse.  Reverse-lists are
+  made by commands which construct lists in reverse for
+  efficiency, whose normal result is a list.  This excludes
+  commands like `concat' and `vconcat', and is unaffected by
+  commands which coerce the type of result after the loop, such
+  as `collect'.
+
+- `string' is a normal string.  Strings are only made by the
+  command unoptimized implementation of `concat'.
+
+- `string-list' is a list of sequences that will be `concat'-ed
+  into a string.  These are only made by the optimized
+  implementation of the command `concat'.
+
+- `string-reverse-list' is a reverse-list of sequences that will
+  be `concat'-ed into a string.  These are only made by the
+  optimized implementation of the command `concat' in such case
+  where variables are optimized for access at the end of the
+  \"string\".
+
+- `vector' is a normal vector.  Vectors are only made by the
+  command unoptimized implementation of `vconcat'.
+
+- `vector-list' is a list of sequences that will be `vconcat'-ed
+  into a vector.  These are only made by the optimized
+  implementation of the command `vconcat'.
+
+- `vector-reverse-list' is a reverse-list of sequences that will
+  be `vconcat'-ed into a vector.  These are only made by the
+  optimized implementation of the command `vconcat' in such case
+  where variables are optimized for access at the end of the
+  \"vector\"."
   (unless (loopy--known-accumulation-category-p category)
     (error "Bad accumulation description: %s" category))
 
@@ -2051,14 +2084,14 @@ This function is called by `loopy--get-optimized-accum'."
       ;; Forward list order.
       (if (>= start end)
           (progn
-            (loopy--check-accumulation-compatibility loop var 'string cmd)
+            (loopy--check-accumulation-compatibility loop var 'string-list cmd)
             `(,@(if (eq pos 'start)
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
               (loopy--accumulation-final-updates
                (,var . (setq ,var (apply #'concat ,var))))))
         ;; Reverse list order.
-        (loopy--check-accumulation-compatibility loop var 'reverse-string cmd)
+        (loopy--check-accumulation-compatibility loop var 'string-reverse-list cmd)
         `(,@(if (eq pos 'start)
                 (loopy--produce-collect-end-tracking var val)
               `((loopy--main-body (setq ,var (cons ,val ,var)))))
@@ -2739,14 +2772,14 @@ This function is called by `loopy--get-optimized-accum'."
       ;; Forward list order.
       (if (>= start end)
           (progn
-            (loopy--check-accumulation-compatibility loop var 'vector cmd)
+            (loopy--check-accumulation-compatibility loop var 'vector-list cmd)
             `(,@(if (eq pos 'start)
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
               (loopy--accumulation-final-updates
                (,var . (setq ,var (apply #'vconcat ,var))))))
         ;; Reverse list order.
-        (loopy--check-accumulation-compatibility loop var 'reverse-vector cmd)
+        (loopy--check-accumulation-compatibility loop var 'vector-reverse-list cmd)
         `(,@(if (eq pos 'start)
                 (loopy--produce-collect-end-tracking var val)
               `((loopy--main-body (setq ,var (cons ,val ,var)))))
