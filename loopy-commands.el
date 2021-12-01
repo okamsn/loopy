@@ -2170,9 +2170,7 @@ This function is called by `loopy--get-optimized-accum'."
             ;; If `var' is a generic sequence (meaning no other command gave it
             ;; an explicit type) or an array (meaning there is no end tracking)
             ;; then we play it safe and use the `seq-*' commands.
-            ((or 'generic 'sequence
-                 (and (or 'string 'vector)
-                      (guard (not (memq var loopy--optimized-accum-vars)))))
+            ((or 'generic 'sequence 'string 'vector)
              `((loopy--main-body (setq ,var ,(if (eq pos 'start)
                                                  `(seq-drop ,var ,val)
                                                `(seq-subseq ,var 0 (- ,val)))))))
@@ -2192,37 +2190,44 @@ This function is called by `loopy--get-optimized-accum'."
                    (loopy--main-body (setcdr ,last-link nil))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
-            ((or 'reverse-vector 'reverse-string 'vector 'string)
+            ((or 'vector-reverse-list 'string-reverse-list 'vector-list 'string-list)
              (let ((val-holder (gensym))
-                   (len-holder (gensym))
                    (var-holder (gensym)))
-               (if (or (and (memq category '(reverse-vector reverse-string))
+               (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
-                       (and (memq category '(vector string))
+                       (and (memq category '(vector-list string-list))
                             (eq pos 'start)))
-                   `((loopy--main-body (let ((,val-holder ,val)
-                                             (,len-holder (length (car ,var))))
-                                         (while (> ,val-holder ,len-holder)
-                                           (setq ,var (cdr ,var)
-                                                 ,val-holder (- ,val-holder ,len-holder)
-                                                 ,len-holder (length (car ,var))))
-                                         (setcar ,var (seq-subseq (car ,var) ,val-holder)))))
-                 (let ((last-link (loopy--get-accumulation-list-end-var
-                                   loop var)))
+                   `((loopy--main-body
+                      (let ((,val-holder ,val))
+                        (while (and ,var (> ,val-holder 0))
+                          (cl-decf ,val-holder (length (car ,var)))
+                          (setq ,var (cl-rest ,var)))
+                        ,(if (eq pos 'start)
+                             ;; `val-holder' is negative or 0 at this point.
+                             ;; If removing from the start, using that negative
+                             ;; value as the starting point.
+                             `(cl-callf seq-subseq (car ,var) ,val-holder)
+                           `(cl-callf seq-subseq (car ,var) 0 (- ,val-holder))))))
+                 (let ((last-link (loopy--get-accumulation-list-end-var loop var))
+                       (drop-count (gensym)))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
-                     ;; TODO: Unsure of the efficiency of using `reverse' like this.
+                     ;; TODO: Is there a more efficient way to do this?
                      (loopy--main-body
-                      (let ((,val-holder ,val)
-                            (,var-holder (reverse ,var)))
-                        (let ((,len-holder (length (car ,var-holder))))
-                          (while (> ,val-holder ,len-holder)
-                            (setq ,var-holder (cdr ,var-holder)
-                                  ,val-holder (- ,val-holder ,len-holder)
-                                  ,len-holder (length (car ,var-holder)))))
-                        (setcar ,var-holder (seq-subseq (car ,var-holder)
-                                                        0 (- ,val-holder)))
-                        (setq ,var (nreverse ,var-holder)
-                              ,last-link (last ,var)))))))))
+                      (let ((,drop-count 0)
+                            (,var-holder (reverse ,var))
+                            (,val-holder ,val))
+                        (while (> ,val-holder 0)
+                          (cl-decf ,val-holder (length (car ,var)))
+                          (setq ,var-holder (cl-rest ,var-holder))
+                          (cl-incf ,drop-count))
+                        (setq ,last-link (last ,var ,drop-count))
+                        (setcdr ,last-link nil)
+                        ,(if (eq pos 'start)
+                             ;; `val-holder' is negative or 0 at this point.
+                             ;; If removing from the start, using that negative
+                             ;; value as the starting point.
+                             `(cl-callf seq-subseq (car ,last-link) ,val-holder)
+                           `(cl-callf seq-subseq (car ,last-link) 0 (- ,val-holder))))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
 
