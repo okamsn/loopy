@@ -2191,9 +2191,8 @@ This function is called by `loopy--get-optimized-accum'."
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list 'vector-list 'string-list)
-             (let ((val-holder (gensym))
-                   (var-holder (gensym))
-                   (length-holder (gensym)))
+             (let ((val-holder (gensym "drop-amount"))
+                   (length-holder (gensym "test-item-len")))
                (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
                        (and (memq category '(vector-list string-list))
@@ -2218,25 +2217,36 @@ This function is called by `loopy--get-optimized-accum'."
                                `(cl-callf seq-subseq (car ,var) ,val-holder)
                              `(cl-callf seq-subseq (car ,var) 0 (- ,val-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var loop var))
-                       (drop-count (gensym)))
+                       (new-last-pos (gensym "new-last-pos"))
+                       (var-holder (gensym "drop-seq-holder")))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
                      ;; TODO: Is there a more efficient way to do this?
                      (loopy--main-body
-                      (let ((,drop-count 0)
+                      (let ((,val-holder ,val)
                             (,var-holder (reverse ,var))
-                            (,val-holder ,val))
-                        (while (> ,val-holder 0)
-                          (cl-decf ,val-holder (length (car ,var)))
-                          (setq ,var-holder (cl-rest ,var-holder))
-                          (cl-incf ,drop-count))
-                        (setq ,last-link (last ,var ,drop-count))
-                        (setcdr ,last-link nil)
-                        ,(if (eq pos 'start)
-                             ;; `val-holder' is negative or 0 at this point.
-                             ;; If removing from the start, using that negative
-                             ;; value as the starting point.
-                             `(cl-callf seq-subseq (car ,last-link) ,val-holder)
-                           `(cl-callf seq-subseq (car ,last-link) 0 (- ,val-holder))))))))))
+                            (,new-last-pos 1)); (last L 1) is final cons cell.
+                        (let ((,length-holder (length (car ,var-holder))))
+                          ;; In case `val' is greater than the length of all
+                          ;; items in `var', we need to check whether `var'
+                          ;; is nil.
+                          (while (and ,var-holder (> ,val-holder ,length-holder))
+                            (setq ,val-holder (- ,val-holder ,length-holder)
+                                  ,var-holder (cl-rest ,var-holder)
+                                  ,length-holder (length (car ,var-holder))
+                                  ,new-last-pos (1+ ,new-last-pos)))
+                          (setq ,last-link (last ,var ,new-last-pos))
+                          (setcdr ,last-link nil)
+                          ;; If `var' is nil, then getting a subsequence
+                          ;; is an error.
+                          (when ,var-holder
+                            ,(if (eq pos 'start)
+                                 ;; `val-holder' is negative or 0 at this point.
+                                 ;; If removing from the start, using that negative
+                                 ;; value as the starting point.
+                                 `(cl-callf seq-subseq (car ,last-link)
+                                    ,val-holder)
+                               `(cl-callf seq-subseq (car ,last-link) 0
+                                          (- ,val-holder))))))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
 
