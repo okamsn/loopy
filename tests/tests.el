@@ -2803,6 +2803,73 @@
              (eval (quote (loopy (list i '(t nil t nil))
                                  (counting i)))))))
 
+(ert-deftest drop-explicit-var ()
+  (should (equal '(7 8 9 10)
+                 (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                        (append coll i)
+                        (drop coll 2)
+                        (finally-return coll))))
+
+  (should (equal '(1 4 7 8)
+                 (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                        (append coll i)
+                        (drop coll 2 :at end)
+                        (finally-return coll))))
+
+  (should (equal [7 8 9 10]
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat coll i)
+                        (drop coll 2)
+                        (finally-return coll))))
+
+  (should (equal [1 4 7 8]
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat coll i)
+                        (drop coll 2 :at end)
+                        (finally-return coll)))))
+
+(ert-deftest drop-implicit-var ()
+  (should (equal '(7 8 9 10)
+                 (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                        (append i)
+                        (drop 2))))
+
+  (should (equal '(1 4 7 8)
+                 (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                        (append i)
+                        (drop 2 :at end))))
+
+  (should (equal '([9 10 6 3]
+                   (([1 2 3])
+                    ([4 5 6] [3])
+                    ([7 8 9 10] [6] [3])))
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat i :at start)
+                        (collect coll (copy-sequence loopy-result))
+                        (drop 2)
+                        (finally-return loopy-result coll))))
+
+  (should (equal '([] (([1 2 3]) ([4 5 6]) ([7 8 9 10])))
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat i :at start)
+                        (collect coll (copy-sequence loopy-result))
+                        (drop 7)
+                        (finally-return loopy-result coll))))
+
+  (should (equal '([7 8 9 10]
+                   (([1 2 3])
+                    ([4 5 6] [1])
+                    ([7 8 9 10] [4 5])))
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat i :at start)
+                        (collect coll (copy-sequence loopy-result))
+                        (drop 2 :at end)
+                        (finally-return loopy-result coll))))
+
+  (should (equal [1 4 7 8]
+                 (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                        (vconcat i)
+                        (drop 2 :at end)))))
 ;;;;; Max
 (ert-deftest max ()
   (should (= 11
