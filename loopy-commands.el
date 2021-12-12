@@ -2192,22 +2192,31 @@ This function is called by `loopy--get-optimized-accum'."
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list 'vector-list 'string-list)
              (let ((val-holder (gensym))
-                   (var-holder (gensym)))
+                   (var-holder (gensym))
+                   (length-holder (gensym)))
                (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
                        (and (memq category '(vector-list string-list))
                             (eq pos 'start)))
                    `((loopy--main-body
-                      (let ((,val-holder ,val))
-                        (while (and ,var (> ,val-holder 0))
-                          (cl-decf ,val-holder (length (car ,var)))
-                          (setq ,var (cl-rest ,var)))
-                        ,(if (eq pos 'start)
-                             ;; `val-holder' is negative or 0 at this point.
-                             ;; If removing from the start, using that negative
-                             ;; value as the starting point.
-                             `(cl-callf seq-subseq (car ,var) ,val-holder)
-                           `(cl-callf seq-subseq (car ,var) 0 (- ,val-holder))))))
+                      (let ((,length-holder (length (car ,var)))
+                            (,val-holder ,val))
+                        ;; In case `val' is greater than the length of all
+                        ;; items in `var', we need to check whether `var'
+                        ;; is nil.
+                        (while (and ,var (> ,val-holder ,length-holder))
+                          (setq ,val-holder (- ,val-holder ,length-holder)
+                                ,var (cl-rest ,var)
+                                ,length-holder (length (car ,var))))
+                        ;; If `var' is nil, then getting a subsequence
+                        ;; is an error.
+                        (when ,var
+                          ,(if (eq pos 'start)
+                               ;; `val-holder' is negative or 0 at this point.
+                               ;; If removing from the start, using that negative
+                               ;; value as the starting point.
+                               `(cl-callf seq-subseq (car ,var) ,val-holder)
+                             `(cl-callf seq-subseq (car ,var) 0 (- ,val-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var loop var))
                        (drop-count (gensym)))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
