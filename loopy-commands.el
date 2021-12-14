@@ -2182,12 +2182,18 @@ This function is called by `loopy--get-optimized-accum'."
                           (eq pos 'end)))
                  `((loopy--main-body (setq ,var (nthcdr ,val ,var))))
                (let ((last-link (loopy--get-accumulation-list-end-var
-                                 loop var)))
+                                 loop var))
+                     (len-holder (gensym "length")))
                  `((loopy--accumulation-vars (,last-link (last ,var)))
-                   (loopy--main-body (setq ,last-link
-                                           (nthcdr (- (1- (length ,var)) ,val)
-                                                   ,var)))
-                   (loopy--main-body (setcdr ,last-link nil))))))
+                   (loopy--main-body
+                    (let ((,len-holder (length ,var)))
+                      (if (> ,len-holder ,val)
+                          (progn
+                            (setq ,last-link (nthcdr (- (1- ,len-holder) ,val)
+                                                     ,var))
+                            (setcdr ,last-link nil))
+                        (setq ,var nil
+                              ,last-link ,var))))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list 'vector-list 'string-list)
