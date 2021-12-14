@@ -107,6 +107,7 @@ Definition must exist.  Neither argument need be quoted."
     (count           . (counting))
     (cycle           . (repeat))
     (drop            . (pop))
+    (drop-while      . (pop-while))
     (finally-do      . (finally))
     (finally-protect . (finally-protected))
     (find            . (finding))
