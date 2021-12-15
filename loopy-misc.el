@@ -49,6 +49,7 @@
   "Check whether the `car' of A equals the `car' of B."
   (equal (car a) (car b)))
 
+;;;###autoload
 (cl-defun loopy--count-while (pred seq &key from-end if-all)
   "Count the number of items while PRED is true in SEQ.
 
