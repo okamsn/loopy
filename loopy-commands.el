@@ -2344,9 +2344,7 @@ This function is called by `loopy--get-optimized-accum'."
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list
                  'vector-list 'string-list)
-             (let ((val-holder (gensym))
-                   (count-holder (gensym "count"))
-                   (var-holder (gensym))
+             (let ((count-holder (gensym "count"))
                    (temp-holder (gensym "temp")))
                (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
@@ -2369,26 +2367,32 @@ This function is called by `loopy--get-optimized-accum'."
                                `(cl-callf seq-subseq (car ,var) ,count-holder)
                              `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var
-                                   loop var)))
+                                   loop var))
+                       (var-holder (gensym))
+                       (new-last-pos (gensym "last-pos")))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
                      ;; TODO: Unsure of the efficiency of using `reverse' like this.
                      (loopy--main-body
-                      (let ((,val-holder)
-                            (,count-holder)
-                            (,var-holder (reverse ,var)))
-                        (while (and ,var
-                                    (let ((,val-holder
-                                           (loopy--count-while
-                                            ,val (car ,var-holder)
-                                            :if-all t :from-end t)))
-                                      (setq ,count-holder (car ,val-holder))
-                                      ;; Return whether all elements counted.
-                                      (cdr ,val-holder)))
-                          (setq ,var-holder (cdr ,var-holder)))
-                        (setcar ,var-holder (seq-subseq (car ,var-holder)
-                                                        0 (- ,count-holder)))
-                        (setq ,var (nreverse ,var-holder)
-                              ,last-link (last ,var)))))))))
+                      (let ((,count-holder)
+                            (,temp-holder)
+                            (,var-holder (reverse ,var))
+                            (,new-last-pos 1))
+                        (while (and ,var-holder
+                                    (progn
+                                      (setq ,temp-holder (loopy--count-while
+                                                          ,val (car ,var-holder)
+                                                          :from-end ,(eq pos 'end)
+                                                          :if-all t)
+                                            ,count-holder (car ,temp-holder))
+                                      (cdr ,temp-holder)))
+                          (setq ,var (cdr ,var-holder)
+                                ,new-last-pos (1+ ,new-last-pos)))
+                        (setq ,last-link (last ,var ,new-last-pos))
+                        (setcdr ,last-link nil)
+                        (when ,var
+                          ,(if (eq pos 'start)
+                               `(cl-callf seq-subseq (car ,last-link) ,count-holder)
+                             `(cl-callf seq-subseq (car ,last-link) 0 (- ,count-holder)))))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
 
