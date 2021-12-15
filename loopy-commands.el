@@ -2342,25 +2342,32 @@ This function is called by `loopy--get-optimized-accum'."
                         (setcdr ,last-link nil))))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
-            ((or 'reverse-vector 'reverse-string 'vector 'string)
+            ((or 'vector-reverse-list 'string-reverse-list
+                 'vector-list 'string-list)
              (let ((val-holder (gensym))
-                   (count-holder (gensym))
-                   (var-holder (gensym)))
-               (if (or (and (memq category '(reverse-vector reverse-string))
+                   (count-holder (gensym "count"))
+                   (var-holder (gensym))
+                   (temp-holder (gensym "temp")))
+               (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
-                       (and (memq category '(vector string))
+                       (and (memq category '(vector-list string-list))
                             (eq pos 'start)))
                    `((loopy--main-body
-                      (let ((,val-holder)
-                            (,count-holder))
+                      (let ((,count-holder)
+                            (,temp-holder))
                         (while (and ,var
-                                    (let ((,val-holder
-                                           (loopy--count-while ,val (car ,var)
-                                                               :if-all t)))
-                                      (setq ,count-holder (car ,val-holder))
-                                      (cdr ,val-holder)))
+                                    (progn
+                                      (setq ,temp-holder (loopy--count-while
+                                                          ,val (car ,var)
+                                                          :from-end ,(eq pos 'end)
+                                                          :if-all t)
+                                            ,count-holder (car ,temp-holder))
+                                      (cdr ,temp-holder)))
                           (setq ,var (cdr ,var)))
-                        (setcar ,var (seq-subseq (car ,var) ,count-holder)))))
+                        (when ,var
+                          ,(if (eq pos 'start)
+                               `(cl-callf seq-subseq (car ,var) ,count-holder)
+                             `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var
                                    loop var)))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
