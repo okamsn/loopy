@@ -179,6 +179,7 @@ true names and lists of aliases.
     (cycle        . loopy--parse-cycle-command)
     (do           . loopy--parse-do-command)
     (drop         . loopy--parse-drop-command)
+    (drop-while   . loopy--parse-drop-while-command)
     (find         . loopy--parse-find-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)
@@ -616,7 +617,8 @@ Generally, this is used with commands that produce lists, such as
 This is used by the function `loopy--get-optimized-accum'.")
 
 (defvar loopy--stack-accumulation-constructors
-  '((drop . loopy--construct-stack-accum-drop))
+  '((drop . loopy--construct-stack-accum-drop)
+    (drop-while . loopy--construct-stack-accum-drop-while))
   "Functions that produce code for optimized stack-like accumulations.
 
 For efficiency, commands like `drop' and `take' are always optimized

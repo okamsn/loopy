@@ -2156,6 +2156,7 @@ This function is called by `loopy--get-optimized-accum'."
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Drop
+;; TODO: Only create end-tracking variables conditionally.
 (defun loopy--construct-stack-accum-drop (plist)
   "Construct an optimized `drop' stack accumulation from PLIST."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
@@ -2307,9 +2308,7 @@ This function is called by `loopy--get-optimized-accum'."
             ;; If `var' is a generic sequence (meaning no other command gave it
             ;; an explicit type) or an array (meaning there is no end tracking)
             ;; then we play it safe and use the `seq-*' commands.
-            ((or 'generic 'sequence
-                 (and (or 'string 'vector)
-                      (guard (not (memq var loopy--optimized-accum-vars)))))
+            ((or 'generic 'sequence 'string 'vector)
              `((loopy--main-body
                 (setq ,var ,(if (eq pos 'start)
                                 `(seq-drop-while ,var ,val)
@@ -2323,17 +2322,24 @@ This function is called by `loopy--get-optimized-accum'."
                           (eq pos 'start))
                      (and (eq category 'reverse-list)
                           (eq pos 'end)))
-                 `((loopy--main-body (while ,val
-                                       (setq ,var (cdr ,var)))))
+                 `((loopy--main-body
+                    (while ,(loopy--apply-function val `(car ,var))
+                      (setq ,var (cdr ,var)))))
                (let ((last-link (loopy--get-accumulation-list-end-var
-                                 loop var)))
+                                 loop var))
+                     (len-holder (gensym "length"))
+                     (count-holder (gensym "count")))
                  `((loopy--accumulation-vars (,last-link (last ,var)))
-                   (loopy--main-body (setq ,last-link
-                                           (nthcdr (- (1- (length ,var))
-                                                      (loopy--count-while
-                                                       ,val ,var))
-                                                   ,var)))
-                   (loopy--main-body (setcdr ,last-link nil))))))
+                   (loopy--main-body
+                    (let ((,len-holder (length ,var))
+                          (,count-holder
+                           (loopy--count-while ,val (reverse ,var))))
+                      (if (= ,len-holder ,count-holder)
+                          (setq ,var nil ,last-link ,var)
+                        (setq ,last-link (nthcdr (- (1- ,len-holder)
+                                                    ,count-holder)
+                                                 ,var))
+                        (setcdr ,last-link nil))))))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'reverse-vector 'reverse-string 'vector 'string)
