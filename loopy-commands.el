@@ -2311,7 +2311,7 @@ This function is called by `loopy--get-optimized-accum'."
             ((or 'generic 'sequence 'string 'vector)
              `((loopy--main-body
                 (setq ,var ,(if (eq pos 'start)
-                                `(seq-drop-while ,var ,val)
+                                `(seq-drop-while ,val ,var)
                               `(seq-subseq
                                 ,var 0
                                 (- (length ,var)
