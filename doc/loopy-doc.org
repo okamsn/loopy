@@ -211,6 +211,17 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   particular loop ([[#flags][Using Flags]]).  Each of these ideas is explained in detail
   later in this document.
 
+  #+cindex: lexical binding
+  #+ATTR_TEXINFO: :tag Note
+  #+begin_quote
+  This macro uses functional paradigms for some behavior, and requires that
+  lexical binding be enabled ([[info:elisp#Using Lexical Binding]]).
+
+  Typically, this is done by including ~-*- lexical-binding: t; -*-~
+  in a comment in the first line of an Emacs Lisp file, such as your =init.el=.
+  #+end_quote
+
+
 * Special Macro Arguments
   :PROPERTIES:
   :CUSTOM_ID: macro-arguments
