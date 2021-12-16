@@ -2377,24 +2377,26 @@ always optimized given the settings of the other accumulation commands used.
   #+end_src
 
 #+findex: drop-while
-- =(drop-while|pop-while VAR PREDICATE &key pos)= :: Remove items from the start
-  or end of =VAR= while =PREDICATE= is true.  This command is similar to the
-  function ~seq-drop-while~, but can work on the beginning or end of the
-  variable.  Like those functions, it defaults to operating on the front of the
-  variable.
+- =(drop-while|pop-while VAR PREDICATE &key pos)= :: Remove items
+  from the start or end of =VAR= while =PREDICATE= is true.  This command is
+  similar to the function ~seq-drop-while~, but can work on the beginning or end
+  of the variable.  Like those functions, it defaults to operating on the front
+  of the variable.
 
   As with other accumulation commands, the function =PREDICATE= should be
   quoted.  In this command, it is a function taking the tested element as its
-  only argument.
+  first argument.
 
   #+begin_src emacs-lisp
-    ;; => (5)
-    (loopy (list i '((1 1 2) (2 3 3) (4 4 5)))
-           (append coll i)
-           (if (cl-evenp (car coll))
-               (drop-while coll #'cl-evenp)
-             (drop-while coll #'cl-oddp))
-           (finally-return coll))
+    ;; => ((4 5)
+    ;;     ((1 1 2) (2 2 3) (3 3 4 5)))
+    (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+           (append coll1 i)
+           (collect coll2 (copy-sequence coll1))
+           (if (cl-evenp (car coll1))
+               (drop-while coll1 #'cl-evenp)
+             (drop-while coll1 #'cl-oddp))
+           (finally-return coll1 coll2))
   #+end_src
 
 ***  Optimizing Accumulations
