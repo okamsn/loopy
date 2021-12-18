@@ -2372,7 +2372,7 @@ This function is called by `loopy--get-optimized-accum'."
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list
-                 'vector-list 'string-list)
+                  'vector-list 'string-list)
              (let ((count-holder (gensym "count"))
                    (temp-holder (gensym "temp")))
                (if (or (and (memq category '(vector-reverse-list string-reverse-list))
