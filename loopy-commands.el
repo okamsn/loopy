@@ -2308,7 +2308,7 @@ This function is called by `loopy--get-optimized-accum'."
             ;; If `var' is a generic sequence (meaning no other command gave it
             ;; an explicit type) or an array (meaning there is no end tracking)
             ;; then we play it safe and use the `seq-*' commands.
-            ((or 'generic 'sequence 'string 'vector)
+            ((or 'generic 'sequence)
              `((loopy--main-body
                 (setq ,var ,(if (eq pos 'start)
                                 `(seq-drop-while ,val ,var)
@@ -2316,6 +2316,34 @@ This function is called by `loopy--get-optimized-accum'."
                                 ,var 0
                                 (- (length ,var)
                                    (loopy--count-while ,val ,var :from-end t))))))))
+            ((or 'string 'vector)
+             (let ((pos-holder (gensym "pos"))
+                   (len-holder (gensym "len")))
+               (if (eq pos 'start)
+                   `((loopy--main-body
+                      (let ((,pos-holder 0)
+                            (,len-holder (length ,var)))
+                        (while (and (>= ,len-holder ,pos-holder)
+                                    ,(loopy--apply-function
+                                      val `(aref ,var ,pos-holder)))
+                          (setq ,pos-holder (1+ ,pos-holder)))
+                        (setq ,var (if (= ,pos-holder ,len-holder)
+                                       ,(if (eq category 'string)
+                                            ""
+                                          '(vector))
+                                     (substring ,var ,pos-holder))))))
+                 `((loopy--main-body
+                    (let* ((,pos-holder (1- (length ,var))))
+                      (while (and (>= ,pos-holder 0)
+                                  ,(loopy--apply-function val `(aref ,var ,pos-holder)))
+                        (setq ,pos-holder (1- ,pos-holder)))
+                      (setq ,var
+                            (if (= ,pos-holder -1)
+                                ,(if (eq category 'string)
+                                     ""
+                                   '(vector))
+                              ;; NOTE: The TO in `substring' is /exclusive/.
+                              (substring ,var 0 (1+ ,pos-holder))))))))))
             ;; If `var' is a list, then we can use `nthcdr' or `butlast'.
             ((or 'list 'reverse-list)
              (if (or (and (eq category 'list)
