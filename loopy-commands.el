@@ -2359,9 +2359,9 @@ This function is called by `loopy--get-optimized-accum'."
                      (count-holder (gensym "count")))
                  `((loopy--accumulation-vars (,last-link (last ,var)))
                    (loopy--main-body
-                    (let ((,var-holder (reverse var))
+                    (let ((,var-holder (reverse ,var))
                           (,count-holder 0))
-                      (while ,(loopy--apply-function val `(car ,var))
+                      (while ,(loopy--apply-function val `(car ,var-holder))
                         (setq ,var-holder (cdr ,var-holder)
                               ,count-holder (1+ ,count-holder)))
                       (unless (zerop ,count-holder)
