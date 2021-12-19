@@ -2372,56 +2372,135 @@ This function is called by `loopy--get-optimized-accum'."
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
             ((or 'vector-reverse-list 'string-reverse-list
-                  'vector-list 'string-list)
+                 'vector-list 'string-list)
              (let ((count-holder (gensym "count"))
-                   (temp-holder (gensym "temp")))
+                   (temp-holder (gensym "temp"))
+                   (len-holder (gensym "length-holder")))
                (if (or (and (memq category '(vector-reverse-list string-reverse-list))
                             (eq pos 'end))
                        (and (memq category '(vector-list string-list))
                             (eq pos 'start)))
                    `((loopy--main-body
-                      (let ((,count-holder)
-                            (,temp-holder))
+                      (let ((,count-holder))
                         (while (and ,var
-                                    (progn
-                                      (setq ,temp-holder (loopy--count-while
-                                                          ,val (car ,var)
-                                                          :from-end ,(eq pos 'end)
-                                                          :if-all t)
-                                            ,count-holder (car ,temp-holder))
-                                      (cdr ,temp-holder)))
+                                    ,(if (eq pos 'start)
+                                         `(let ((,temp-holder (car ,var)))
+                                            (if (vectorp ,temp-holder)
+                                                (let ((,len-holder (length ,temp-holder)))
+                                                  (setq ,count-holder 0)
+                                                  (while (and (< ,count-holder ,len-holder)
+                                                              ,(loopy--apply-function
+                                                                val
+                                                                `(aref ,temp-holder
+                                                                       ,count-holder)))
+                                                    (cl-incf ,count-holder))
+                                                  (= ,count-holder ,len-holder))
+                                              ;; redundant `progn' for organization
+                                              (progn
+                                                (setq ,count-holder 0)
+                                                (while (and ,temp-holder
+                                                            ,(loopy--apply-function
+                                                              val `(car ,temp-holder)))
+                                                  (cl-incf ,count-holder)
+                                                  (setq ,temp-holder (cdr ,temp-holder)))
+                                                (null ,temp-holder))))
+                                       ;; Counting from end of subsequences in
+                                       ;; vector list
+                                       `(if (vectorp (car ,var))
+                                            (let* ((,temp-holder (car ,var))
+                                                   (,len-holder (length ,temp-holder)))
+                                              (setq ,count-holder (1- ,len-holder))
+                                              (while (and (>= ,count-holder 0)
+                                                          ,(loopy--apply-function
+                                                            val
+                                                            `(aref ,temp-holder
+                                                                   ,count-holder)))
+                                                (cl-decf ,count-holder))
+                                              (prog1
+                                                  (= -1 ,count-holder)
+                                                ;; Switch `count-holder' from
+                                                ;; backwards index to how many
+                                                ;; to drop from end.
+                                                (setq ,count-holder
+                                                      (- ,len-holder
+                                                         (1+ ,count-holder)))))
+                                          ;; redundant `progn' for organization
+                                          (let ((,temp-holder (reverse (car ,var))))
+                                            (setq ,count-holder 0)
+                                            (while (and ,temp-holder
+                                                        ,(loopy--apply-function
+                                                          val `(car ,temp-holder)))
+                                              (cl-incf ,count-holder)
+                                              (setq ,temp-holder (cdr ,temp-holder)))
+                                            (null ,temp-holder)))))
                           (setq ,var (cdr ,var)))
                         (when ,var
                           ,(if (eq pos 'start)
-                               `(cl-callf seq-subseq (car ,var) ,count-holder)
+                               `(cl-callf seq-drop (car ,var) ,count-holder)
                              `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var
                                    loop var))
-                       (var-holder (gensym))
-                       (new-last-pos (gensym "last-pos")))
+                       (rev-holder (gensym "rev-holder")))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
-                     ;; TODO: Unsure of the efficiency of using `reverse' like this.
                      (loopy--main-body
                       (let ((,count-holder)
-                            (,temp-holder)
-                            (,var-holder (reverse ,var))
-                            (,new-last-pos 1))
-                        (while (and ,var-holder
-                                    (progn
-                                      (setq ,temp-holder (loopy--count-while
-                                                          ,val (car ,var-holder)
-                                                          :from-end ,(eq pos 'end)
-                                                          :if-all t)
-                                            ,count-holder (car ,temp-holder))
-                                      (cdr ,temp-holder)))
-                          (setq ,var (cdr ,var-holder)
-                                ,new-last-pos (1+ ,new-last-pos)))
-                        (setq ,last-link (last ,var ,new-last-pos))
-                        (setcdr ,last-link nil)
+                            (,rev-holder (reverse ,var)))
+                        (while (and ,var
+                                    ,(if (eq pos 'start)
+                                         `(let ((,temp-holder (car ,rev-holder)))
+                                            (if (vectorp ,temp-holder)
+                                                (let ((,len-holder (length ,temp-holder)))
+                                                  (setq ,count-holder 0)
+                                                  (while (and (< ,count-holder ,len-holder)
+                                                              ,(loopy--apply-function
+                                                                val
+                                                                `(aref ,temp-holder
+                                                                       ,count-holder)))
+                                                    (cl-incf ,count-holder))
+                                                  (= ,count-holder ,len-holder))
+                                              ;; redundant `progn' for organization
+                                              (progn
+                                                (setq ,count-holder 0)
+                                                (while (and ,temp-holder
+                                                            ,(loopy--apply-function
+                                                              val `(car ,temp-holder)))
+                                                  (cl-incf ,count-holder)
+                                                  (setq ,temp-holder (cdr ,temp-holder)))
+                                                (null ,temp-holder))))
+                                       ;; Counting from end of subsequences in
+                                       ;; vector list
+                                       `(if (vectorp (car ,rev-holder))
+                                            (let* ((,temp-holder (car ,rev-holder))
+                                                   (,len-holder (length ,temp-holder)))
+                                              (setq ,count-holder (1- ,len-holder))
+                                              (while (and (>= ,count-holder 0)
+                                                          ,(loopy--apply-function
+                                                            val
+                                                            `(aref ,temp-holder
+                                                                   ,count-holder)))
+                                                (cl-decf ,count-holder))
+                                              (prog1
+                                                  (= -1 ,count-holder)
+                                                ;; Switch `count-holder' from
+                                                ;; backwards index to how many
+                                                ;; to drop from end.
+                                                (setq ,count-holder
+                                                      (- ,len-holder
+                                                         (1+ ,count-holder)))))
+                                          ;; redundant `progn' for organization
+                                          (let ((,temp-holder (reverse (car ,rev-holder))))
+                                            (setq ,count-holder 0)
+                                            (while (and ,temp-holder
+                                                        ,(loopy--apply-function
+                                                          val `(car ,temp-holder)))
+                                              (cl-incf ,count-holder)
+                                              (setq ,temp-holder (cdr ,temp-holder)))
+                                            (null ,temp-holder)))))
+                          (setq ,var (cdr ,var)))
                         (when ,var
                           ,(if (eq pos 'start)
-                               `(cl-callf seq-subseq (car ,last-link) ,count-holder)
-                             `(cl-callf seq-subseq (car ,last-link) 0 (- ,count-holder)))))))))))
+                               `(cl-callf seq-drop (car ,var) ,count-holder)
+                             `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
 

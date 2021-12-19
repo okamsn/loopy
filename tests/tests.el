@@ -2948,6 +2948,25 @@
                                                  :at end)
                                      (finally-return coll1 coll2)))))))
 
+(ert-deftest drop-while-implicit-var ()
+  (should (equal '(4 5)
+                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                                     (append i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp)))))))
+
+  (should (equal [4 5]
+                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                                     (vconcat i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp)))))))
+
+  )
+
 
 ;;;;; Max
 (ert-deftest max ()
