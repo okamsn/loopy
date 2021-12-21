@@ -2920,7 +2920,7 @@
                                      (finally-return coll1 coll2))))))
 
   (should (equal '([4 5] ([1 1 2] [2 2 3] [3 3 4 5]))
-                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                 (eval (quote (loopy (list i '((1 1 2) [2 3] [3 4 5]))
                                      (vconcat coll1 i)
                                      (collect coll2 (copy-sequence coll1))
                                      (if (cl-evenp (aref coll1 1))
@@ -2939,10 +2939,10 @@
                                      (finally-return coll1 coll2))))))
 
   (should (equal '([1 3 5] ([1 2 2] [1 3 4 4] [1 3 5 6 6]))
-                 (eval (quote (loopy (list i '((1 2 2) (3 4 4) (5 6 6)))
+                 (eval (quote (loopy (list i '([1 2 2] (3 4 4) [5 6 6]))
                                      (vconcat coll1 i)
                                      (collect coll2 (copy-sequence coll1))
-                                     (set last (car (last i)))
+                                     (set last (elt (reverse i) 1))
                                      (drop-while coll1 (lambda (x)
                                                          (= x last))
                                                  :at end)
@@ -2958,7 +2958,7 @@
                                        (drop-while #'cl-evenp)))))))
 
   (should (equal [4 5]
-                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                 (eval (quote (loopy (list i '((1 1 2) [2 3] [3 4 5]))
                                      (vconcat i)
                                      (set test t (not test))
                                      (if test
