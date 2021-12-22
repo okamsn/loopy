@@ -2963,9 +2963,36 @@
                                      (set test t (not test))
                                      (if test
                                          (drop-while #'cl-oddp)
-                                       (drop-while #'cl-evenp)))))))
+                                       (drop-while #'cl-evenp))))))))
 
-  )
+(ert-deftest drop-while-end-tracking ()
+  (should (equal '(1 3 5)
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((1 2 2) (3 4 4) (5 6 6)))
+                                     (append coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal '(6 6 4 4 2 2)
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((1 1 2 2) (3 3 4 4) (5 5 6 6)))
+                                     (append coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll))))))
+
+  (should (equal [1 3 5]
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((1 2 2) [3 4 4] (5 6 6)))
+                                     (vconcat coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal [6 6 4 4 2 2]
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((1 1 2 2) [3 3 4 4] (5 5 6 6)))
+                                     (vconcat coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll)))))))
 
 
 ;;;;; Max
