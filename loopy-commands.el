@@ -2440,12 +2440,14 @@ This function is called by `loopy--get-optimized-accum'."
                              `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))
                  (let ((last-link (loopy--get-accumulation-list-end-var
                                    loop var))
-                       (rev-holder (gensym "rev-holder")))
+                       (rev-holder (gensym "rev-holder"))
+                       (last-pos (gensym "last-pos")))
                    `((loopy--accumulation-vars (,last-link (last ,var)))
                      (loopy--main-body
                       (let ((,count-holder)
-                            (,rev-holder (reverse ,var)))
-                        (while (and ,var
+                            (,rev-holder (reverse ,var))
+                            (,last-pos 1))
+                        (while (and ,rev-holder
                                     ,(if (eq pos 'start)
                                          `(let ((,temp-holder (car ,rev-holder)))
                                             (if (vectorp ,temp-holder)
@@ -2496,11 +2498,16 @@ This function is called by `loopy--get-optimized-accum'."
                                               (cl-incf ,count-holder)
                                               (setq ,temp-holder (cdr ,temp-holder)))
                                             (null ,temp-holder)))))
-                          (setq ,var (cdr ,var)))
-                        (when ,var
-                          ,(if (eq pos 'start)
-                               `(cl-callf seq-drop (car ,var) ,count-holder)
-                             `(cl-callf seq-subseq (car ,var) 0 (- ,count-holder)))))))))))
+                          (setq ,rev-holder (cdr ,rev-holder)
+                                ,last-pos (1+ ,last-pos)))
+                        (if ,rev-holder
+                            (progn
+                              (setq ,last-link (last ,var ,last-pos))
+                              (setcdr ,last-link nil)
+                              ,(if (eq pos 'start)
+                                   `(cl-callf seq-drop (car ,last-link) ,count-holder)
+                                 `(cl-callf seq-subseq (car ,last-link) 0 (- ,count-holder))))
+                          (setq var nil)))))))))
             (_
              (error "Bad thing: %s" cmd)))))))
 
