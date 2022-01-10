@@ -2978,7 +2978,8 @@
                                      (list i '((1 1 2 2) (3 3 4 4) (5 5 6 6)))
                                      (append coll i :at start)
                                      (drop-while coll #'cl-oddp :at start)
-                                     (finally-return coll))))))
+                                     (finally-return coll))
+                              ))))
 
   (should (equal [1 3 5]
                  (eval (quote (loopy (accum-opt (coll start))
@@ -4318,4 +4319,5 @@ This assumes that you're on guix."
 
 
 ;; Local Variables:
+;; eval: (remove-hook 'flymake-diagnostic-functions #'elisp-flymake-checkdoc t)
 ;; End:
