@@ -1823,7 +1823,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
         (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
         `(,@(if (eq pos 'end)
                 `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var))))
-              (loopy--produce-multi-item-end-tracking var val))
+              (loopy--produce-multi-item-end-tracking var `(reverse ,val)))
           (loopy--accumulation-final-updates
            (,var . (setq ,var (nreverse ,var)))))))))
 

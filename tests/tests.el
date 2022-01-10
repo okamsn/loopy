@@ -2505,6 +2505,18 @@
                         (append (mapcar (lambda (x) (+ x 7)) i)
                                 :at end))))
 
+  (should (equal '(6 7 3 4 1 2)
+                 (loopy (accum-opt (coll end))
+                        (list i '((1 2) (3 4) (6 7)))
+                        (append coll i :at start)
+                        (finally-return coll))))
+
+  (should (equal '(1 2 3 4 6 7)
+                 (loopy (accum-opt (coll start))
+                        (list i '((1 2) (3 4) (6 7)))
+                        (append coll i :at end)
+                        (finally-return coll))))
+
   (should (equal '(1 2 3 4 5 6)
                  (loopy (flag split)
                         (list i '((1 2) (3 4) (5 6)))
@@ -3059,6 +3071,18 @@
                                      (nconc (mapcar (lambda (x) (+ x 10))
                                                     (copy-sequence i))
                                             :at end))))))
+
+  (should (equal '(5 6 3 4 1 2)
+                 (loopy (accum-opt (coll end))
+                        (list i (list (list 1 2) (list 3 4) (list 5 6)))
+                        (append coll i :at start)
+                        (finally-return coll))))
+
+  (should (equal '(1 2 3 4 5 6)
+                 (loopy (accum-opt (coll start))
+                        (list i (list (list 1 2) (list 3 4) (list 5 6)))
+                        (append coll i :at end)
+                        (finally-return coll))))
 
   (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
