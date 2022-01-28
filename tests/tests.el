@@ -3029,6 +3029,14 @@
                                          (drop-while #'cl-oddp)
                                        (drop-while #'cl-evenp)))))))
 
+  (should (equal "de"
+                 (eval (quote (loopy (list i '((?a ?a ?b) [?b ?c] [?c ?d ?e]))
+                                     (concat i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp)))))))
+
   (should (equal [4 5]
                  (eval (quote (loopy (list i '((1 1 2) [2 3] [3 4 5]))
                                      (vconcat i)
@@ -3049,6 +3057,19 @@
                  (eval (quote (loopy (accum-opt (coll end))
                                      (list i '((1 1 2 2) (3 3 4 4) (5 5 6 6)))
                                      (append coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll))))))
+  (should (equal "ace"
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((?a ?b ?b) [?c ?d ?d] (?e ?f ?f)))
+                                     (concat coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal "ffddbb"
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((?a ?a ?b ?b) [?c ?c ?d ?d] (?e ?e ?f ?f)))
+                                     (concat coll i :at start)
                                      (drop-while coll #'cl-oddp :at start)
                                      (finally-return coll))))))
 
