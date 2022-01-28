@@ -2816,6 +2816,22 @@
                                      (drop coll 2 :at end)
                                      (finally-return coll))))))
 
+  (should (equal "ghij"
+                 (eval (quote (loopy (array i [[?a ?b ?c]
+                                               [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat coll i)
+                                     (drop coll 2)
+                                     (finally-return coll))))))
+
+  (should (equal "adgh"
+                 (eval (quote (loopy (array i [[?a ?b ?c]
+                                               [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat coll i)
+                                     (drop coll 2 :at end)
+                                     (finally-return coll))))))
+
   (should (equal [7 8 9 10]
                  (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
                                      (vconcat coll i)
@@ -2839,6 +2855,38 @@
                                      (append i)
                                      (drop 2 :at end))))))
 
+  (should (equal '("ijfc"
+                   (([?a ?b ?c])
+                    ([?d ?e ?f] [?c])
+                    ([?g ?h ?i ?j] [?f] [?c])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '("" (([?a ?b ?c]) ([?d ?e ?f]) ([?g ?h ?i ?j])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 7)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '("ghij"
+                   (([?a ?b ?c])
+                    ([?d ?e ?f] [?a])
+                    ([?g ?h ?i ?j] [?d ?e])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2 :at end)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal "adgh"
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i)
+                                     (drop 2 :at end))))))
   (should (equal '([9 10 6 3]
                    (([1 2 3])
                     ([4 5 6] [3])
@@ -2870,6 +2918,30 @@
                  (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
                                      (vconcat i)
                                      (drop 2 :at end)))))))
+
+(ert-deftest drop-string-list-end-tracking ()
+  (should (equal '("g"
+                   (((?a ?b ?c))
+                    ([?d] nil)
+                    ([?e ?f] [?d])
+                    ((?g ?h ?i ?j) [])))
+                 (eval (quote (loopy (accum-opt (vect start))
+                                     (array i [(?a ?b ?c) [?d] [?e ?f] (?g ?h ?i ?j)])
+                                     (concat vect i :at start)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at end) ; End tracking
+                                     (finally-return vect coll))))))
+
+  (should (equal '("j" (((?a ?b ?c))
+                        ([?d] nil)
+                        ([?e ?f] [?d])
+                        ((?g ?h ?i ?j) [])))
+                 (eval (quote (loopy (accum-opt (vect end))
+                                     (array i [(?a ?b ?c) [?d] [?e ?f] (?g ?h ?i ?j)])
+                                     (concat vect i :at end)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at start) ; End tracking
+                                     (finally-return vect coll)))))))
 
 (ert-deftest drop-vector-list-end-tracking ()
   (should (equal '([7]
