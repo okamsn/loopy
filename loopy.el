@@ -8,7 +8,7 @@
 ;; Version: 0.9.1
 ;; Package-Requires: ((emacs "27.1") (map "3.0") (seq "2.22"))
 ;; Keywords: extensions
-;; LocalWords:  Loopy's emacs
+;; LocalWords:  Loopy's emacs Edebug
 
 ;;; Disclaimer:
 ;; This file is not part of GNU Emacs.
@@ -795,6 +795,108 @@ In `loopy', processing instructions is stateful."
              instruction)))
   (mapc #'loopy--process-instruction instructions))
 
+;; Here we define the Edebug specifications for better warnings.
+;; TODO:
+;; - Can we make Edebug work with aliases?
+;; - Can we make it work with added functions?
+(def-edebug-spec loopy--special-macro-arg-edebug-spec
+  [&or ([&or "with" "let*" "init"] &rest (symbolp &optional form))
+       ([&or "without" "no-with" "no-init"] &rest symbolp)
+       ([&or "flag" "flags"] &rest symbolp)
+       ([&or "accum-opt" "opt-accum"]
+        [&or symbolp (symbolp [&or "end" "start" "beginning"])])
+       ;; This is basically the same as the spec used by
+       ;; `thread-first':
+       ("wrap" &rest [&or symbolp (sexp &rest form)])
+       ;; "body" is the same as "&rest form":
+       ([&or "before-do" "before" "initially-do" "initially"] body)
+       ([&or "after-do" "after" "else-do" "else"] body)
+       ([&or "finally-do" "finally"] body)
+       ([&or "finally-protect" "finally-protected"] body)
+       ("finally-return" form &optional [&rest form])])
+
+(def-edebug-spec loopy--destr-var-name-edebug-spec
+  [&or symbolp
+       (&rest loopy--destr-var-name-edebug-spec)
+       (vector &rest loopy--destr-var-name-edebug-spec)
+       (loopy--destr-var-name-edebug-spec . loopy--destr-var-name-edebug-spec)])
+
+(def-edebug-spec loopy--seq-iter-keywords-edebug-spec
+  [&or [[&or ":from" ":upfrom" ":downfrom" ":to" ":downto" ":upto"
+             ":above" ":below" ":by"]
+        numberp]
+       [":index" symbolp]])
+
+(def-edebug-spec loopy--accum-common-keywords-edebug-spec
+  [&or [":at" [&or "start" "end" "beginning"]]
+       [":into" loopy--destr-var-name-edebug-spec]
+       [":test" form]
+       [":key" form]
+       [":init" form]
+       [":result-type" symbolp]])
+
+(def-edebug-spec loopy--command-edebug-specs
+  [&or
+   ;; `at':
+   (symbolp symbolp &rest loopy--command-edebug-specs)
+   ;; `subloop':
+   (symbolp &rest [&or loopy--special-macro-arg-edebug-spec
+                       loopy--command-edebug-specs])
+   ;; `nums',  `nums-dir':
+   ( symbolp symbol [&rest [&optional numberp]]
+     &rest [[&or ":from" ":upfrom" ":downfrom" ":to" ":downto" ":upto"
+                 ":above" ":below" ":by"]
+            numberp])
+   ;; `array', `string', `seq', and `seq-index':
+   (symbolp loopy--destr-var-name-edebug-spec
+            form [&optional [&rest form]]
+            [&optional [&rest loopy--seq-iter-keywords-edebug-spec]])
+   ;; `cons', `list':
+   (symbolp loopy--destr-var-name-edebug-spec form [&optional [&rest form]]
+            [&optional ":by" form])
+   ;; `map':
+   (symbolp loopy--destr-var-name-edebug-spec form [&optional ":unique" form])
+   ;; Ref specs are like normal forms, but use "place" instead of "form".
+   ;; `seq-ref', `array-ref':
+   (symbolp loopy--destr-var-name-edebug-spec
+            place [&optional [&rest loopy--seq-iter-keywords-edebug-spec]])
+   ;; `list-ref'
+   (symbolp loopy--destr-var-name-edebug-spec place [&optional ":by" form])
+   ;; `map-ref':
+   (symbolp loopy--destr-var-name-edebug-spec place
+            [&optional [&rest [&or [":unique" form]
+                                   [":key" symbolp]]]])
+   ;; Accumulation commands:
+   (symbolp [&optional loopy--destr-var-name-edebug-spec] form
+            [&optional [&rest loopy--accum-common-keywords-edebug-spec]])
+   ;; `accumulate' and `reduce':
+   (symbolp [&optional symbolp] form form [&optional ":init" form])
+   ;; `find':
+   (symbolp [&optional symbolp] form form [&optional ":on-failure" form])
+   ;; `set':
+   (symbolp loopy--destr-var-name-edebug-spec
+            [&optional &rest form] [&optional ":init" form])
+   ;; `set-prev':
+   ( symbolp symbolp form
+     &optional [&rest [&or [":init" form] [":back" numberp]]])
+   ;; `cycle':
+   (symbolp [&optional symbolp] numberp)
+   ;; `command-do'
+   (symbolp &rest loopy--command-edebug-specs)
+   ;; `when', `unless', `if'
+   (symbolp form &rest loopy--command-edebug-specs)
+   ;; `cond':
+   (symbolp &rest (form [&rest loopy--command-edebug-specs]))
+   ;; `return-from':
+   (symbolp symbolp form)
+   ;; This is so general that it should be checked last.
+   ;; `do', `always', `never', `thereis', `return', `while', `until':
+   (symbolp body)
+   ;; `skip-from', `leave-from'
+   (symbolp symbolp)
+   ;; `skip', `leave'
+   (symbolp)])
+
 ;;;###autoload
 (cl-defmacro loopy (&rest body)
   "A looping macro.
@@ -839,25 +941,8 @@ Any other argument in BODY is assumed to be a loop command.  For
 more information, including a list of available loop commands,
 see the Info node `(loopy)' distributed with this package."
 
-  (declare (debug (&rest ;; TODO: Is this correct?
-                   [&or
-                    ([&or "with" "let*" "init"] &rest (symbolp &optional form))
-                    ([&or "without" "no-with" "no-init"] &rest symbolp)
-                    ([&or "flag" "flags"] &rest symbolp)
-                    ([&or "before-do" "before" "initially-do" "initially"] body)
-                    [&or (symbolp ;; This one covers most commands.
-                          &optional
-                          [&or symbolp sexp] ; destructured arg
-                          form
-                          [&or symbolp function-form lambda-expr])
-                         ([&or "when" "if" "unless"] form body)
-                         ([&or "expr" "exprs" "set"] [&or symbolp sexp]
-                          &optional [&rest form])
-                         ("cond" &rest (body))
-                         ("group" body)]
-                    ([&or "after-do" "after" "else-do" "else"] body)
-                    ([&or "finally-do" "finally"] body)
-                    ("finally-return" form &optional [&rest form]) ])))
+  (declare (debug (&rest [&or loopy--command-edebug-specs
+                              loopy--special-macro-arg-edebug-spec])))
 
   ;; Bind variables in `loopy--variables' around code to build the expanded
   ;; loop.

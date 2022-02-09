@@ -8,7 +8,7 @@
 ;; Version: 0.9.1
 ;; Package-Requires: ((emacs "27.1"))
 ;; Keywords: extensions
-;; LocalWords:  Loopy's emacs
+;; LocalWords:  Loopy's emacs sexps
 
 ;;; Disclaimer:
 ;; This file is not part of GNU Emacs.
@@ -398,6 +398,26 @@ These expressions can have loop commands in the body."
         (loopy-iter--produce-at-instruction-from-targets)
         :erroring-instructions '(loopy--main-body))))))
 
+(def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
+  ;; This is the same as for `loopy', but without `let*'.
+  [&or ([&or "with" "init"] &rest (symbolp &optional form))
+       ([&or "without" "no-with" "no-init"] &rest symbolp)
+       ([&or "flag" "flags"] &rest symbolp)
+       ([&or "accum-opt" "opt-accum"]
+        [&or symbolp (symbolp [&or "end" "start" "beginning"])])
+       ;; This is basically the same as the spec used by
+       ;; `thread-first':
+       ("wrap" &rest [&or symbolp (sexp &rest form)])
+       ;; "body" is the same as "&rest form":
+       ([&or "before-do" "before" "initially-do" "initially"] body)
+       ([&or "after-do" "after" "else-do" "else"] body)
+       ([&or "finally-do" "finally"] body)
+       ([&or "finally-protect" "finally-protected"] body)
+       ("finally-return" form &optional [&rest form])])
+
+(def-edebug-spec loopy-iter--command-edebug-specs
+  ([&optional symbolp] . loopy--command-edebug-specs))
+
 ;;;; The macro itself
 (defmacro loopy-iter (&rest body)
   "An `iter'-like `loopy' macro.
@@ -413,6 +433,12 @@ One useful difference is that `let*' is not an alias of the
 information on how to use `loopy' and `loopy-iter'.
 
 \(fn CODE-or-COMMAND...)"
+  ;; This Edebug spec, doesn't say much, but, since we're wrapping commands
+  ;; in arbitrary sexps, it's hard to be specific.  At most, the special macro
+  ;; arguments must be at the top level.
+  (declare (debug (&rest [&or loopy-iter--special-macro-arg-edebug-spec
+                              loopy-iter--command-edebug-specs
+                              sexp])))
 
   (loopy--wrap-variables-around-body
 
