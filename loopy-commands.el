@@ -1348,12 +1348,15 @@ LOOP-NAME is the loop name.  VARIABLE is the variable."
                        loopy--accumulation-variable-info nil nil #'equal)))
 
 ;;;;;; End Tracking
-(defun loopy--get-accumulation-list-end-var (loop var)
+(cl-defun loopy--get-accumulation-list-end-var (loop var &key (create t))
   "Return a variable for referring to the last link in VAR in LOOP.
 
 This function addresses that all accumulation commands
 manipulating the same variable should use the same variable to
 keep track of a list's last link.
+
+By default, this function will create new variables when none exist.
+Set CREATE to nil to disable this.
 
 This function uses `loopy--accumulation-list-end-vars' to store
 end-tracking variables."
@@ -1361,10 +1364,11 @@ end-tracking variables."
     (or (alist-get key loopy--accumulation-list-end-vars nil nil #'equal)
         ;; `map-put!' would fail here, since the association doesn't exist
         ;; yet.  `setf' isn't as useful, since it first tries `map-put!'.
-        (let ((tracking-var (gensym (format "%s-last-link-" var))))
-          (push (cons key tracking-var)
-                loopy--accumulation-list-end-vars)
-          tracking-var))))
+        (when create
+          (let ((tracking-var (gensym (format "%s-last-link-" var))))
+            (push (cons key tracking-var)
+                  loopy--accumulation-list-end-vars)
+            tracking-var)))))
 
 (defun loopy--produce-collect-end-tracking (var val)
   "Produce instructions for an end-tracking accumulation of single items.
