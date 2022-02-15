@@ -3656,6 +3656,44 @@
              (eval (quote (loopy (list i '(1 2 3))
                                  (summing i)))))))
 
+;;;;; Take
+(ert-deftest take-implicit-start ()
+  (should (equal '(7 8 9 4 5 6 1 2)
+                 (loopy (array i (vector (list 1 2 3)
+                                         (list 4 5 6)
+                                         (list 7 8 9)))
+                        (append i :at start)
+                        (cond
+                         ((equal '(1 2 3) i)
+                          (take 2 :at start))
+                         ((equal '(4 5 6) i)
+                          (take 5 :at start))
+                         ;; ((equal '(7 8 9) i)
+                         ;;  )
+                         ))))
+
+  (should (equal [7 8 9 4 5 6 1 2]
+                 (loopy (array i (vector (list 1 2 3)
+                                         (list 4 5 6)
+                                         (list 7 8 9)))
+                        (vconcat i :at start)
+                        (cond
+                         ((equal '(1 2 3) i)
+                          (take 2 :at start))
+                         ((equal '(4 5 6) i)
+                          (take 5 :at start))))))
+
+  (should (equal "ghidefab"
+                 (loopy (array i (vector (list ?a ?b ?c)
+                                         (list ?d ?e ?f)
+                                         (list ?g ?h ?i)))
+                        (concat i :at start)
+                        (cond
+                         ((equal '(?a ?b ?c) i)
+                          (take 2 :at start))
+                         ((equal '(?d ?e ?f) i)
+                          (take 5 :at start)))))))
+
 ;;;;; Union
 (ert-deftest union ()
   ;; TODO: `union' currently has predictable behavior due to the `:at' position,
