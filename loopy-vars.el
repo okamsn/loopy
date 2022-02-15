@@ -213,6 +213,7 @@ true names and lists of aliases.
     (skip-from    . loopy--parse-skip-from-command)
     (sub-loop     . loopy--parse-sub-loop-command)
     (sum          . loopy--parse-sum-command)
+    (take         . loopy--parse-take-command)
     (thereis      . loopy--parse-thereis-command)
     (union        . loopy--parse-union-command)
     (unless       . loopy--parse-when-unless-command)
@@ -618,7 +619,8 @@ This is used by the function `loopy--get-optimized-accum'.")
 
 (defvar loopy--stack-accumulation-constructors
   '((drop . loopy--construct-stack-accum-drop)
-    (drop-while . loopy--construct-stack-accum-drop-while))
+    (drop-while . loopy--construct-stack-accum-drop-while)
+    (take       . loopy--construct-stack-accum-take))
   "Functions that produce code for optimized stack-like accumulations.
 
 For efficiency, commands like `drop' and `take' are always optimized
