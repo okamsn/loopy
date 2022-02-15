@@ -2590,22 +2590,23 @@ This function is called by `loopy--get-optimized-accum'."
                    (let ((ptr-holder (or (loopy--get-accumulation-list-end-var
                                           loop var :create nil)
                                          (gensym "pointer"))))
-                     `(let ((,length-holder (length (car ,var)))
-                            (,val-holder ,val)
-                            (,ptr-holder ,var))
-                        (while (and ,ptr-holder
-                                    (> ,val-holder ,length-holder))
-                          (cl-decf ,val-holder ,length-holder)
-                          (cl-callf cl-rest ,ptr-holder)
-                          (setf ,length-holder (length (car ,ptr-holder))))
-                        ;; If pointer nil, then we're taking the entire
-                        ;; sequence and so do nothing.
-                        (when ,ptr-holder
-                          (setcdr ,ptr-holder nil)
-                          ,(if (eq pos 'start)
-                               `(cl-callf seq-take (car ,ptr-holder) ,val-holder)
-                             `(cl-callf seq-subseq (car ,ptr-holder)
-                                (- ,length-holder ,val-holder))))))
+                     `((loopy--main-body
+                        (let ((,length-holder (length (car ,var)))
+                              (,val-holder ,val)
+                              (,ptr-holder ,var))
+                          (while (and ,ptr-holder
+                                      (> ,val-holder ,length-holder))
+                            (cl-decf ,val-holder ,length-holder)
+                            (cl-callf cl-rest ,ptr-holder)
+                            (setf ,length-holder (length (car ,ptr-holder))))
+                          ;; If pointer nil, then we're taking the entire
+                          ;; sequence and so do nothing.
+                          (when ,ptr-holder
+                            (setcdr ,ptr-holder nil)
+                            ,(if (eq pos 'start)
+                                 `(cl-callf seq-take (car ,ptr-holder) ,val-holder)
+                               `(cl-callf seq-subseq (car ,ptr-holder)
+                                  (- ,length-holder ,val-holder))))))))
                  (let ((new-last-pos (gensym "new-last-pos"))
                        (var-holder (gensym "drop-seq-holder"))
                        (ptr-holder (gensym "pointer")))
