@@ -3430,7 +3430,9 @@ instructions are removed.
 This function gets the parser, and passes the command to that parser."
   (let ((parser (loopy--get-command-parser (cl-first command))))
     (if-let ((instructions (funcall parser command)))
-        (remq nil instructions)
+        (if-let ((bad-instrs (seq-remove #'listp instructions)))
+            (error "Invalid instructions: %s" bad-instrs)
+          (remq nil instructions))
       (error "Loopy: No instructions returned by command parser: %s"
              parser))))
 
