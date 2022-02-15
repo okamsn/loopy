@@ -2564,7 +2564,9 @@ This function is called by `loopy--get-optimized-accum'."
              `((loopy--main-body (setq ,var ,(if (eq pos 'start)
                                                  `(seq-take ,var ,val)
                                                `(seq-subseq ,var (- ,val)))))))
-            ;; If `var' is a list, then we can use `nthcdr' or `butlast'.
+            ;; If `var' is a list, we can set some Nth cdr to nil
+            ;; to take from the front or use `last' to take
+            ;; from the end.
             ((or 'list 'reverse-list)
              (if (or (and (eq category 'list)
                           (eq pos 'start))
@@ -2572,9 +2574,16 @@ This function is called by `loopy--get-optimized-accum'."
                           (eq pos 'end)))
                  (if-let ((last-link (loopy--get-accumulation-list-end-var
                                       loop var :create nil)))
-                     `((loopy--main-body (setq ,last-link (nthcdr (1- ,val) ,var)))
-                       (loopy--main-body (setcdr ,last-link nil)))
-                   `((loopy--main-body (setf (nthcdr ,val ,var) nil))))
+                     ;; We can't set the `cdr' of nil, so we need
+                     ;; to check for it.
+                     `((loopy--main-body (setq ,last-link
+                                               (nthcdr (1- ,val) ,var)))
+                       (loopy--main-body (if ,last-link
+                                             (setcdr ,last-link nil)
+                                           (setq ,last-link (last ,var)))))
+                   (let ((cdr (gensym "cdr")))
+                     `((loopy--main-body (when-let ((,cdr (nthcdr ,val ,var)))
+                                           (setf (cdr ,cdr) nil))))))
                `((loopy--main-body (cl-callf last ,var ,val)))))
             ;; These are all optimized forms that are lists that will be passed
             ;; to `concat' or `vconcat'.
