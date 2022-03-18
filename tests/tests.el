@@ -3657,6 +3657,35 @@
                                  (summing i)))))))
 
 ;;;;; Take
+(ert-deftest take-implicit-past ()
+  (should (equal '(7 8 9 4 5 6 1 2 3)
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append i :at start)
+                                     (take 1000 :at start))))))
+
+  (should (equal [7 8 9 4 5 6 1 2 3]
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat i :at start)
+                                     (take 1000 :at start))))))
+
+  (should (equal '(1 2 3 4 5 6 7 8 9)
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append i :at end)
+                                     (take 1000 :at end))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9]
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat i :at end)
+                                     (take 1000 :at end)))))))
+
 (ert-deftest take-implicit-start ()
   (should (equal '(7 8 9 4 5 6 1)
                  (loopy (array i (vector (list 1 2 3)
