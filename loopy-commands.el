@@ -2582,7 +2582,7 @@ This function is called by `loopy--get-optimized-accum'."
                                              (setcdr ,last-link nil)
                                            (setq ,last-link (last ,var)))))
                    (let ((cdr (gensym "cdr")))
-                     `((loopy--main-body (when-let ((,cdr (nthcdr ,val ,var)))
+                     `((loopy--main-body (when-let ((,cdr (nthcdr (1- ,val) ,var)))
                                            (setf (cdr ,cdr) nil))))))
                `((loopy--main-body (cl-callf last ,var ,val)))))
             ;; These are all optimized forms that are lists that will be passed
