@@ -2674,6 +2674,147 @@ This function is called by `loopy--get-optimized-accum'."
                     :cmd ,cmd :name ,name :at ,pos)))
                 (loopy--implicit-return ,var))))
 
+;;;;;;; Take While
+(defun loopy--construct-stack-accum-take-while (plist)
+  "Construct an optimized `take' stack accumulation from PLIST."
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
+                       :at (pos 'end))
+      plist
+    (setq pos (loopy--get-quoted-symbol pos))
+    (let ((category (loopy--get-accumulation-category loop var)))
+      `((loopy--accumulation-vars (,var nil))
+        ,@(pcase category
+            ;; If `var' is a generic sequence (meaning no other command gave it
+            ;; an explicit type) or an array (meaning there is no end tracking)
+            ;; then we play it safe and use the `seq-*' commands.
+            ((or 'generic 'sequence 'string 'vector)
+             `((loopy--main-body
+                (setq ,var ,(if (eq pos 'start)
+                                `(seq-take-while ,val ,var)
+                              (let ((count (gensym "count"))
+                                    (all (gensym "all")))
+                                `(cl-destructuring-bind (,count . ,all)
+                                     (loopy--count-while ,val ,var
+                                                         :from-end t
+                                                         :if-all t)
+                                   (cond ((zerop ,count)
+                                          ;; Copy type of `var'.
+                                          (seq-take ,var 0))
+                                         (,all
+                                          ,var)
+                                         (t
+                                          (seq-subseq ,var (- ,count)))))))))))
+
+            ;; If `var' is a list, we can set some Nth cdr to nil
+            ;; to take from the front or use `last' to take
+            ;; from the end.
+            ((or 'list 'reverse-list)
+             (if (or (and (eq category 'list)
+                          (eq pos 'start))
+                     (and (eq category 'reverse-list)
+                          (eq pos 'end)))
+                 (if-let ((last-link (loopy--get-accumulation-list-end-var
+                                      loop var :create nil)))
+                     ;; We can't set the `cdr' of nil, so we need
+                     ;; to check for it.
+                     `((loopy--main-body (setq ,last-link
+                                               (nthcdr (1- ,val) ,var)))
+                       (loopy--main-body (if ,last-link
+                                             (setcdr ,last-link nil)
+                                           (setq ,last-link (last ,var)))))
+                   (let ((cdr (gensym "cdr")))
+                     `((loopy--main-body (when-let ((,cdr (nthcdr (1- ,val) ,var)))
+                                           (setf (cdr ,cdr) nil))))))
+               `((loopy--main-body (cl-callf last ,var ,val)))))
+            ;; These are all optimized forms that are lists that will be passed
+            ;; to `concat' or `vconcat'.
+            ((or 'vector-reverse-list 'string-reverse-list
+                 'vector-list 'string-list)
+             (let ((val-holder (gensym "take-amount"))
+                   (length-holder (gensym "test-item-len")))
+               (if (or (and (memq category '(vector-reverse-list
+                                             string-reverse-list))
+                            (eq pos 'end))
+                       (and (memq category '(vector-list string-list))
+                            (eq pos 'start)))
+                   (let ((ptr-holder (or (loopy--get-accumulation-list-end-var
+                                          loop var :create nil)
+                                         (gensym "pointer"))))
+                     `((loopy--main-body
+                        (let ((,length-holder (length (car ,var)))
+                              (,val-holder ,val)
+                              (,ptr-holder ,var))
+                          (while (and ,ptr-holder
+                                      (> ,val-holder ,length-holder))
+                            (cl-decf ,val-holder ,length-holder)
+                            (cl-callf cl-rest ,ptr-holder)
+                            (setf ,length-holder (length (car ,ptr-holder))))
+                          ;; If pointer nil, then we're taking the entire
+                          ;; sequence and so do nothing.
+                          (when ,ptr-holder
+                            (setcdr ,ptr-holder nil)
+                            ,(if (eq pos 'start)
+                                 `(cl-callf seq-take (car ,ptr-holder) ,val-holder)
+                               `(cl-callf seq-subseq (car ,ptr-holder)
+                                  (- ,length-holder ,val-holder))))))))
+                 (let ((new-last-pos (gensym "new-last-pos"))
+                       (var-holder (gensym "drop-seq-holder"))
+                       (ptr-holder (gensym "pointer")))
+                   ;; TODO: Is there a more efficient way to do this?
+                   `((loopy--main-body
+                      (let ((,val-holder ,val)
+                            (,var-holder (reverse ,var))
+                            (,new-last-pos 1)); (last L 1) is final cons cell.
+                        (let ((,length-holder (length (car ,var-holder)))
+                              (,ptr-holder ,var-holder))
+                          (while (and ,ptr-holder
+                                      (> ,val-holder ,length-holder))
+                            (cl-decf ,val-holder ,length-holder)
+                            (cl-callf cl-rest ,ptr-holder)
+                            (cl-incf ,new-last-pos)
+                            (setf ,length-holder (length (car ,ptr-holder))))
+                          ;; If pointer nil, then we're taking the entire
+                          ;; sequence and so do nothing.
+                          (when ,ptr-holder
+                            (cl-callf last ,var ,new-last-pos)
+                            ,(if (eq pos 'start)
+                                 `(cl-callf seq-take (car ,ptr-holder) ,val-holder)
+                               `(cl-callf seq-subseq (car ,ptr-holder)
+                                  (- ,length-holder ,val-holder))))))))))))
+            (_
+             (error "Bad thing: %s" cmd)))))))
+
+(loopy--defaccumulation take-while
+  "Parse a command of the form `(take-while VAR COND :at POS)'."
+  :keywords (:at)
+  :explicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))))
+  :implicit (loopy--plist-bind (:at (pos 'start))
+                opts
+              (setq pos (loopy--normalize-symbol pos))
+              (when (eq pos 'beginning) (setq pos 'start))
+              (unless (memq pos '(start beginning end))
+                (error "Bad `:at' position: %s" cmd))
+              (loopy--update-accum-place-count loopy--loop-name var pos)
+              (loopy--check-accumulation-compatibility
+               loopy--loop-name var 'sequence cmd)
+              `((loopy--main-body
+                 (loopy--optimized-stack-accum
+                  ( :loop ,loopy--loop-name :var ,var :val ,val
+                    :cmd ,cmd :name ,name :at ,pos)))
+                (loopy--implicit-return ,var))))
+
 ;;;;;;; Find
 (loopy--defaccumulation find
   "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
