@@ -3793,38 +3793,39 @@
                                       ((equal '(?d ?e ?f) i)
                                        (take 4 :at start)))))))))
 
-  (should (equal '(7 8 9 4 5 6 1)
+(ert-deftest take-implicit-end ()
+  (should (equal '(3 4 5 6 7 8 9)
                  (loopy (array i (vector (list 1 2 3)
                                          (list 4 5 6)
                                          (list 7 8 9)))
-                        (append i :at start)
+                        (append i :at end)
                         (cond
                          ((equal '(1 2 3) i)
-                          (take 2 :at start))
+                          (take 2 :at end))
                          ((equal '(4 5 6) i)
-                          (take 4 :at start))))))
+                          (take 4 :at end))))))
 
-  (should (equal [7 8 9 4 5 6 1]
+  (should (equal [3 4 5 6 7 8 9]
                  (loopy (array i (vector (list 1 2 3)
                                          (list 4 5 6)
                                          (list 7 8 9)))
-                        (vconcat i :at start)
+                        (vconcat i :at end)
                         (cond
                          ((equal '(1 2 3) i)
-                          (take 2 :at start))
+                          (take 2 :at end))
                          ((equal '(4 5 6) i)
-                          (take 4 :at start))))))
+                          (take 4 :at end))))))
 
-  (should (equal "ghidefa"
+  (should (equal "cdefghi"
                  (loopy (array i (vector (list ?a ?b ?c)
                                          (list ?d ?e ?f)
                                          (list ?g ?h ?i)))
-                        (concat i :at start)
+                        (concat i :at end)
                         (cond
                          ((equal '(?a ?b ?c) i)
-                          (take 2 :at start))
+                          (take 2 :at end))
                          ((equal '(?d ?e ?f) i)
-                          (take 4 :at start)))))))
+                          (take 4 :at end)))))))
 
 ;;;;; Union
 (ert-deftest union ()
