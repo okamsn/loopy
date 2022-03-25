@@ -2803,6 +2803,291 @@
              (eval (quote (loopy (list i '(t nil t nil))
                                  (counting i)))))))
 
+(ert-deftest drop-explicit-var ()
+  (should (equal '(7 8 9 10)
+                 (eval (quote (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                                     (append coll i)
+                                     (drop coll 2)
+                                     (finally-return coll))))))
+
+  (should (equal '(1 4 7 8)
+                 (eval (quote (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                                     (append coll i)
+                                     (drop coll 2 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal "ghij"
+                 (eval (quote (loopy (array i [[?a ?b ?c]
+                                               [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat coll i)
+                                     (drop coll 2)
+                                     (finally-return coll))))))
+
+  (should (equal "adgh"
+                 (eval (quote (loopy (array i [[?a ?b ?c]
+                                               [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat coll i)
+                                     (drop coll 2 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal [7 8 9 10]
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat coll i)
+                                     (drop coll 2)
+                                     (finally-return coll))))))
+
+  (should (equal [1 4 7 8]
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat coll i)
+                                     (drop coll 2 :at end)
+                                     (finally-return coll)))))))
+
+(ert-deftest drop-implicit-var ()
+  (should (equal '(7 8 9 10)
+                 (eval (quote (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                                     (append i)
+                                     (drop 2))))))
+
+  (should (equal '(1 4 7 8)
+                 (eval (quote (loopy (array i [(1 2 3) (4 5 6) (7 8 9 10)])
+                                     (append i)
+                                     (drop 2 :at end))))))
+
+  (should (equal '("ijfc"
+                   (([?a ?b ?c])
+                    ([?d ?e ?f] [?c])
+                    ([?g ?h ?i ?j] [?f] [?c])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f]
+                                               [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '("" (([?a ?b ?c]) ([?d ?e ?f]) ([?g ?h ?i ?j])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 7)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '("ghij"
+                   (([?a ?b ?c])
+                    ([?d ?e ?f] [?a])
+                    ([?g ?h ?i ?j] [?d ?e])))
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2 :at end)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal "adgh"
+                 (eval (quote (loopy (array i [[?a ?b ?c] [?d ?e ?f] [?g ?h ?i ?j]])
+                                     (concat i)
+                                     (drop 2 :at end))))))
+  (should (equal '([9 10 6 3]
+                   (([1 2 3])
+                    ([4 5 6] [3])
+                    ([7 8 9 10] [6] [3])))
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '([] (([1 2 3]) ([4 5 6]) ([7 8 9 10])))
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 7)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal '([7 8 9 10]
+                   (([1 2 3])
+                    ([4 5 6] [1])
+                    ([7 8 9 10] [4 5])))
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat i :at start)
+                                     (collect coll (copy-sequence loopy-result))
+                                     (drop 2 :at end)
+                                     (finally-return loopy-result coll))))))
+
+  (should (equal [1 4 7 8]
+                 (eval (quote (loopy (array i [[1 2 3] [4 5 6] [7 8 9 10]])
+                                     (vconcat i)
+                                     (drop 2 :at end)))))))
+
+(ert-deftest drop-string-list-end-tracking ()
+  (should (equal '("g"
+                   (((?a ?b ?c))
+                    ([?d] nil)
+                    ([?e ?f] [?d])
+                    ((?g ?h ?i ?j) [])))
+                 (eval (quote (loopy (accum-opt (vect start))
+                                     (array i [(?a ?b ?c) [?d] [?e ?f] (?g ?h ?i ?j)])
+                                     (concat vect i :at start)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at end) ; End tracking
+                                     (finally-return vect coll))))))
+
+  (should (equal '("j" (((?a ?b ?c))
+                        ([?d] nil)
+                        ([?e ?f] [?d])
+                        ((?g ?h ?i ?j) [])))
+                 (eval (quote (loopy (accum-opt (vect end))
+                                     (array i [(?a ?b ?c) [?d] [?e ?f] (?g ?h ?i ?j)])
+                                     (concat vect i :at end)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at start) ; End tracking
+                                     (finally-return vect coll)))))))
+
+(ert-deftest drop-vector-list-end-tracking ()
+  (should (equal '([7]
+                   (((1 2 3))
+                    ([4] nil)
+                    ([5 6] [4])
+                    ((7 8 9 10) [])))
+                 (eval (quote (loopy (accum-opt (vect start))
+                                     (array i [(1 2 3) [4] [5 6] (7 8 9 10)])
+                                     (vconcat vect i :at start)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at end) ; End tracking
+                                     (finally-return vect coll))))))
+
+  (should (equal '([10] (((1 2 3)) ([4] nil) ([5 6] [4]) ((7 8 9 10) [])))
+                 (eval (quote (loopy (accum-opt (vect end))
+                                     (array i [(1 2 3) [4] [5 6] (7 8 9 10)])
+                                     (vconcat vect i :at end)
+                                     (collect coll (copy-sequence vect))
+                                     (drop vect 3 :at start) ; End tracking
+                                     (finally-return vect coll)))))))
+
+(ert-deftest drop-list-end-tracking ()
+  (should (equal '(7)
+                 (eval (quote (loopy (accum-opt (my-list start))
+                                     (array i [(1 2 3) (4) (5 6) (7 8 9 10)])
+                                     (append my-list i :at start)
+                                     (drop my-list 3 :at end)
+                                     (finally-return my-list))))))
+
+  (should (equal '((7) ((1 2 3) (4) (5 6) (7 8 9 10)))
+                 (eval (quote (loopy (accum-opt (my-list start))
+                                     (array i [(1 2 3) (4) (5 6) (7 8 9 10)])
+                                     (append my-list i :at end)
+                                     (collect coll (copy-sequence my-list))
+                                     (drop my-list 3 :at end)
+                                     (finally-return my-list coll)))))))
+
+(ert-deftest drop-while-explicit-var ()
+  (should (equal '((4 5)
+                   ((1 1 2) (2 2 3) (3 3 4 5)))
+                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                                     (append coll1 i)
+                                     (collect coll2 (copy-sequence coll1))
+                                     (if (cl-evenp (car coll1))
+                                         (drop-while coll1 #'cl-evenp)
+                                       (drop-while coll1 #'cl-oddp))
+                                     (finally-return coll1 coll2))))))
+
+  (should (equal '([4 5] ([1 1 2] [2 2 3] [3 3 4 5]))
+                 (eval (quote (loopy (list i '((1 1 2) [2 3] [3 4 5]))
+                                     (vconcat coll1 i)
+                                     (collect coll2 (copy-sequence coll1))
+                                     (if (cl-evenp (aref coll1 1))
+                                         (drop-while coll1 #'cl-evenp)
+                                       (drop-while coll1 #'cl-oddp))
+                                     (finally-return coll1 coll2))))))
+
+  (should (equal '((1 3 5) ((1 2 2) (1 3 4 4) (1 3 5 6 6)))
+                 (eval (quote (loopy (list i '((1 2 2) (3 4 4) (5 6 6)))
+                                     (append coll1 i)
+                                     (collect coll2 (copy-sequence coll1))
+                                     (set last (car (last i)))
+                                     (drop-while coll1 (lambda (x)
+                                                         (= x last))
+                                                 :at end)
+                                     (finally-return coll1 coll2))))))
+
+  (should (equal '([1 3 5] ([1 2 2] [1 3 4 4] [1 3 5 6 6]))
+                 (eval (quote (loopy (list i '([1 2 2] (3 4 4) [5 6 6]))
+                                     (vconcat coll1 i)
+                                     (collect coll2 (copy-sequence coll1))
+                                     (set last (elt (reverse i) 1))
+                                     (drop-while coll1 (lambda (x)
+                                                         (= x last))
+                                                 :at end)
+                                     (finally-return coll1 coll2)))))))
+
+(ert-deftest drop-while-implicit-var ()
+  (should (equal '(4 5)
+                 (eval (quote (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+                                     (append i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp)))))))
+
+  (should (equal "de"
+                 (eval (quote (loopy (list i '((?a ?a ?b) [?b ?c] [?c ?d ?e]))
+                                     (concat i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp)))))))
+
+  (should (equal [4 5]
+                 (eval (quote (loopy (list i '((1 1 2) [2 3] [3 4 5]))
+                                     (vconcat i)
+                                     (set test t (not test))
+                                     (if test
+                                         (drop-while #'cl-oddp)
+                                       (drop-while #'cl-evenp))))))))
+
+(ert-deftest drop-while-end-tracking ()
+  (should (equal '(1 3 5)
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((1 2 2) (3 4 4) (5 6 6)))
+                                     (append coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal '(6 6 4 4 2 2)
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((1 1 2 2) (3 3 4 4) (5 5 6 6)))
+                                     (append coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll))))))
+  (should (equal "ace"
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((?a ?b ?b) [?c ?d ?d] (?e ?f ?f)))
+                                     (concat coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal "ffddbb"
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((?a ?a ?b ?b) [?c ?c ?d ?d] (?e ?e ?f ?f)))
+                                     (concat coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll))))))
+
+  (should (equal [1 3 5]
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (list i '((1 2 2) [3 4 4] (5 6 6)))
+                                     (vconcat coll i :at end)
+                                     (drop-while coll #'cl-evenp :at end)
+                                     (finally-return coll))))))
+
+  (should (equal [6 6 4 4 2 2]
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (list i '((1 1 2 2) [3 3 4 4] (5 5 6 6)))
+                                     (vconcat coll i :at start)
+                                     (drop-while coll #'cl-oddp :at start)
+                                     (finally-return coll)))))))
+
+
 ;;;;; Max
 (ert-deftest max ()
   (should (= 11
@@ -3370,6 +3655,177 @@
   (should (= 6
              (eval (quote (loopy (list i '(1 2 3))
                                  (summing i)))))))
+
+;;;;; Take
+(ert-deftest take-implicit-past ()
+  (should (equal '(7 8 9 4 5 6 1 2 3)
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append i :at start)
+                                     (take 1000 :at start))))))
+
+  (should (equal [7 8 9 4 5 6 1 2 3]
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat i :at start)
+                                     (take 1000 :at start))))))
+
+  (should (equal '(1 2 3 4 5 6 7 8 9)
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append i :at end)
+                                     (take 1000 :at end))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9]
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat i :at end)
+                                     (take 1000 :at end)))))))
+
+(ert-deftest take-exlicit-past ()
+  (should (equal '(7 8 9 4 5 6 1 2 3)
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append coll i :at start)
+                                     (take coll 1000 :at start)
+                                     (finally-return coll))))))
+
+  (should (equal '(7 8 9 4 5 6 1 2 3)
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append coll i :at start)
+                                     (take coll 1000 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal '(1 2 3 4 5 6 7 8 9)
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append coll i :at end)
+                                     (take coll 1000 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal '(1 2 3 4 5 6 7 8 9)
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append coll i :at end)
+                                     (take coll 1000 :at start)
+                                     (finally-return coll))))))
+
+  (should (equal [7 8 9 4 5 6 1 2 3]
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat coll i :at start)
+                                     (take coll 1000 :at start)
+                                     (finally-return coll))))))
+
+  (should (equal [7 8 9 4 5 6 1 2 3]
+                 (eval (quote (loopy (accum-opt (coll start))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat coll i :at start)
+                                     (take coll 1000 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9]
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat coll i :at end)
+                                     (take coll 1000 :at end)
+                                     (finally-return coll))))))
+
+  (should (equal [1 2 3 4 5 6 7 8 9]
+                 (eval (quote (loopy (accum-opt (coll end))
+                                     (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat coll i :at end)
+                                     (take coll 1000 :at start)
+                                     (finally-return coll)))))))
+
+(ert-deftest take-implicit-start ()
+  (should (equal '(7 8 9 4 5 6 1)
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (append i :at start)
+                                     (cond
+                                      ((equal '(1 2 3) i)
+                                       (take 2 :at start))
+                                      ((equal '(4 5 6) i)
+                                       (take 4 :at start))))))))
+
+  (should (equal [7 8 9 4 5 6 1]
+                 (eval (quote (loopy (array i (vector (list 1 2 3)
+                                                      (list 4 5 6)
+                                                      (list 7 8 9)))
+                                     (vconcat i :at start)
+                                     (cond
+                                      ((equal '(1 2 3) i)
+                                       (take 2 :at start))
+                                      ((equal '(4 5 6) i)
+                                       (take 4 :at start))))))))
+
+  (should (equal "ghidefa"
+                 (eval (quote (loopy (array i (vector (list ?a ?b ?c)
+                                                      (list ?d ?e ?f)
+                                                      (list ?g ?h ?i)))
+                                     (concat i :at start)
+                                     (cond
+                                      ((equal '(?a ?b ?c) i)
+                                       (take 2 :at start))
+                                      ((equal '(?d ?e ?f) i)
+                                       (take 4 :at start)))))))))
+
+(ert-deftest take-implicit-end ()
+  (should (equal '(3 4 5 6 7 8 9)
+                 (loopy (array i (vector (list 1 2 3)
+                                         (list 4 5 6)
+                                         (list 7 8 9)))
+                        (append i :at end)
+                        (cond
+                         ((equal '(1 2 3) i)
+                          (take 2 :at end))
+                         ((equal '(4 5 6) i)
+                          (take 4 :at end))))))
+
+  (should (equal [3 4 5 6 7 8 9]
+                 (loopy (array i (vector (list 1 2 3)
+                                         (list 4 5 6)
+                                         (list 7 8 9)))
+                        (vconcat i :at end)
+                        (cond
+                         ((equal '(1 2 3) i)
+                          (take 2 :at end))
+                         ((equal '(4 5 6) i)
+                          (take 4 :at end))))))
+
+  (should (equal "cdefghi"
+                 (loopy (array i (vector (list ?a ?b ?c)
+                                         (list ?d ?e ?f)
+                                         (list ?g ?h ?i)))
+                        (concat i :at end)
+                        (cond
+                         ((equal '(?a ?b ?c) i)
+                          (take 2 :at end))
+                         ((equal '(?d ?e ?f) i)
+                          (take 4 :at end)))))))
 
 ;;;;; Union
 (ert-deftest union ()
@@ -4126,4 +4582,5 @@ This assumes that you're on guix."
 
 
 ;; Local Variables:
+;; eval: (remove-hook 'flymake-diagnostic-functions #'elisp-flymake-checkdoc t)
 ;; End:

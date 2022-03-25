@@ -975,6 +975,7 @@ see the Info node `(loopy)' distributed with this package."
          ;;
          ;; TODO: What are the limitations of this?
          (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+         (cl-callf2 mapcar #'loopy--stack-accum-code-expansion loopy--main-body)
 
          ;; Process any `at' instructions from loops lower in the call list.
          (loopy--process-instructions (map-elt loopy--at-instructions

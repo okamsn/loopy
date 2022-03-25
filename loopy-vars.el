@@ -106,6 +106,8 @@ Definition must exist.  Neither argument need be quoted."
     (cons            . (conses on))
     (count           . (counting))
     (cycle           . (repeat))
+    (drop            . (pop dropping popping))
+    (drop-while      . (pop-while dropping-while popping-while))
     (finally-do      . (finally))
     (finally-protect . (finally-protected))
     (find            . (finding))
@@ -176,6 +178,8 @@ true names and lists of aliases.
     (count        . loopy--parse-count-command)
     (cycle        . loopy--parse-cycle-command)
     (do           . loopy--parse-do-command)
+    (drop         . loopy--parse-drop-command)
+    (drop-while   . loopy--parse-drop-while-command)
     (find         . loopy--parse-find-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)
@@ -209,6 +213,7 @@ true names and lists of aliases.
     (skip-from    . loopy--parse-skip-from-command)
     (sub-loop     . loopy--parse-sub-loop-command)
     (sum          . loopy--parse-sum-command)
+    (take         . loopy--parse-take-command)
     (thereis      . loopy--parse-thereis-command)
     (union        . loopy--parse-union-command)
     (unless       . loopy--parse-when-unless-command)
@@ -568,7 +573,7 @@ single way.")
 (defvar loopy--accumulation-variable-info nil
   "Information about accumulation variables to ensure command compatibility.
 
-Information is of the form (VARIABLE-NAME CATEGORY COMMAND).
+Information is of the form ((LOOP-NAME VARIABLE-NAME) . CATEGORY COMMAND).
 Current categories are `list', `string', `vector', `value', and
 `reverse-list'.
 
@@ -611,6 +616,15 @@ Generally, this is used with commands that produce lists, such as
   "Functions that produce the code of an optimized accumulation.
 
 This is used by the function `loopy--get-optimized-accum'.")
+
+(defvar loopy--stack-accumulation-constructors
+  '((drop . loopy--construct-stack-accum-drop)
+    (drop-while . loopy--construct-stack-accum-drop-while)
+    (take       . loopy--construct-stack-accum-take))
+  "Functions that produce code for optimized stack-like accumulations.
+
+For efficiency, commands like `drop' and `take' are always optimized
+when possible.")
 
 (defvar loopy--optimized-accum-vars nil
   "Explicit accumulations variables to optimize.

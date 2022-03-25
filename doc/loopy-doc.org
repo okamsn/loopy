@@ -50,6 +50,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#sequence-reference-iteration][Sequence Reference Iteration]]
   - [[#accumulation][Accumulation]]
     -  [[#accumulation-commands][Accumulation Commands]]
+    - [[#stack-based-accumulations][Stack-Based Accumulations]]
     -  [[#optimizing-accumulations][Optimizing Accumulations]]
   - [[#boolean][Boolean]]
   - [[#control-flow][Control Flow]]
@@ -209,6 +210,17 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   custom command aliases ([[#custom-aliases][Custom Aliases]]), and specify macro options for a
   particular loop ([[#flags][Using Flags]]).  Each of these ideas is explained in detail
   later in this document.
+
+  #+cindex: lexical binding
+  #+ATTR_TEXINFO: :tag Note
+  #+begin_quote
+  This macro uses functional paradigms for some behavior, and requires that
+  lexical binding be enabled ([[info:elisp#Using Lexical Binding]]).
+
+  Typically, this is done by including ~-*- lexical-binding: t; -*-~
+  in a comment in the first line of an Emacs Lisp file, such as your =init.el=.
+  #+end_quote
+
 
 * Special Macro Arguments
   :PROPERTIES:
@@ -2320,6 +2332,78 @@ simple wrappers of the above =nums= command.
               (vconcat i :at 'start))
      #+END_SRC
 
+
+*** Stack-Based Accumulations
+:PROPERTIES:
+:CUSTOM_ID: stack-accumulations
+:DESCRIPTION: Treating accumlation variables like a stack or queue.
+:END:
+
+These commands technically don't accumulate values, but are purposefully made to
+be able to efficiently edit the accumulation variables.  These commands are
+always optimized given the settings of the other accumulation commands used.
+
+#+findex: drop, pop
+- =(drop|pop VAR NUMBER &key pos)= :: Remove the first or last =NUMBER= items
+  from =VAR=, depending on the value of =POS=.  This command is similar to the
+  functions ~seq-drop~ or ~pop~, but can work on the beginning or end of the
+  variable.  Like those functions, it defaults to operating on the front of the
+  variable.
+
+  As with other accumulation commands, the value =NUMBER= can be a variable
+  whose value changes during the loop.
+
+  #+begin_src emacs-lisp
+    ;; => (4 5 6 7 8 9)
+    (loopy (with (N 1))
+           (array i [(1 2 3) (4 5 6) (7 8 9)])
+           (append i :at end)
+           (drop N :at start))
+
+    ;; (5 6 7)
+    (loopy (array i [(1 2 3) (3 4 5) (5 6 7)])
+           (append coll i :at start)
+           (drop coll 2 :at end)
+           (finally-return coll))
+
+    ;; => [5 6 7 4 5 1]
+    (loopy (accum-opt (coll start))
+           (list i '((1 2 3 3) [4 5] (5 6 7)))
+           (set count (1+ count) :init 0)
+           (vconcat coll i :at start)
+           (when (eq count 2)
+             (pop coll 3 :at end))
+           (finally-return coll))
+  #+end_src
+
+#+findex: drop-while
+- =(drop-while|pop-while VAR PREDICATE &key pos)= :: Remove items
+  from the start or end of =VAR= while =PREDICATE= is true.  This command is
+  similar to the function ~seq-drop-while~, but can work on the beginning or end
+  of the variable.  Like those functions, it defaults to operating on the front
+  of the variable.
+
+  As with other accumulation commands, the function =PREDICATE= should be
+  quoted.  In this command, it is a function taking the tested element as its
+  first argument.
+
+  #+name: drop-while
+  #+begin_src emacs-lisp
+    ;; => ((4 5)
+    ;;     ((1 1 2) (2 2 3) (3 3 4 5)))
+    (loopy (list i '((1 1 2) (2 3) (3 4 5)))
+           (append coll1 i)
+           (collect coll2 (copy-sequence coll1))
+           (if (cl-evenp (car coll1))
+               (drop-while coll1 #'cl-evenp)
+             (drop-while coll1 #'cl-oddp))
+           (finally-return coll1 coll2))
+
+    ;; => [1 3 5]
+    (loopy (list i '((1 2 2) [3 4 4] (5 6 6)))
+           (vconcat i)
+           (drop-while #'cl-evenp :at end))
+  #+end_src
 
 ***  Optimizing Accumulations
 :PROPERTIES:
