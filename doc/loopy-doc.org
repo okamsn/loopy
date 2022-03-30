@@ -41,6 +41,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 - [[#basic-concepts][Basic Concepts]]
 - [[#special-macro-arguments][Special Macro Arguments]]
 - [[#loop-commands][Loop Commands]]
+  - [[#basic-destructuring][Basic Destructuring]]
   - [[#generic-evaluation][Generic Evaluation]]
   - [[#iteration][Iteration]]
     - [[#generic-iteration][Generic Iteration]]
@@ -580,141 +581,198 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   Generally, =VAR= is initialized to ~nil~, but not always.  This document
   tries to note when that is not the case.
 
-  #+cindex: variable destructuring
-  Similar to features like ~seq-let~, ~cl-destructuring-bind~, and ~pcase-let~,
-  ~loopy~ is capable of destructuring values when assigning values to variables.
-  Unlike in ~cl-loop~, destructuring can also be used with accumulation
-  commands.
+** Basic Destructuring
+:PROPERTIES:
+:CUSTOM_ID: basic-destructuring
+:DESCRIPTION: How to destructure variables and values in loop commands.
+:END:
+
+#+cindex: variable destructuring
+Similar to features like ~seq-let~, ~cl-destructuring-bind~, and ~pcase-let~,
+~loopy~ is capable of destructuring values when assigning values to variables.
+Destructuring in Loopy is similar to, but more featureful than, what is
+provided in =cl-lib=.
+
+Some differences include:
+- Destructuring arrays
+- Destructuring in accumulation commands ([[#accumulation-commands]])
+- Destructuring in commands iterating through ~setf~-able places in a sequence
+  ([[#sequence-reference-iteration]])
+
+In addition to what can be done in loop commands, several macros are available
+for using Loopy's destructuring outside of ~loopy~ loops ([[#destr-macros]]).
+
+This section describes the basic built-in destructuring used by most loop
+commands, such as =set= and =list=.  Destructuring in accumulation commands and
+sequence reference commands works slightly differently, and is described more in
+those sections.
+
+The last thing to note is that ~loopy~ loops can be made to use alternative
+destructuring systems, such as ~seq-let~ or ~pcase-let~.  This is done by using
+the =flag= special macro argument ([[#flags]]).  If you are familiar with the
+package =dash= [fn:dash] and its Clojure-style destructuring, consider trying
+the flag =dash= provided by the package =loopy-dash=.
+
+Below are two examples of destructuring in ~cl-loop~ and ~loopy~.
+
+#+caption: Destructuring values in a list.
+#+begin_src emacs-lisp
+  ;; => (1 2 3 4)
+  (cl-loop for (i . j) in '((1 . 2) (3 . 4))
+           collect i
+           collect j)
+
+  ;; => (1 2 3 4)
+  (loopy (list (i . j) '((1 . 2) (3 . 4)))
+         (collect i)
+         (collect j))
+#+end_src
+
+#+caption: Destructuring values in assignment.
+#+begin_src emacs-lisp
+  ;; => (1 2 3 4)
+  (cl-loop for elem in '((1 . 2) (3 . 4))
+           for (i . j) = elem
+           collect i
+           collect j)
+
+  ;; => (1 2 3 4)
+  (loopy (list elem '((1 . 2) (3 . 4)))
+         (set (i . j) elem)
+         (collect i)
+         (collect j))
+#+end_src
+
+
+You can use destructured assignment by passing an unquoted sequence of symbols
+as the =VAR= argument of a loop command.  Loopy supports destructuring lists and
+arrays (which includes strings and vectors).
+- To destructure lists, use a list.
+- To destructure arrays, use a vector.
+
+This sequence of symbols can be shorter than the destructured sequence, /but not
+longer/.  If shorter, the unassigned elements of the list are simply ignored.
+
+An element in the sequence =VAR= can be one of the following:
+
+- A positional variable which will be bound to the corresponding element in the
+  sequence.  These variables can themselves be sequences, but must be of the
+  correct type.  Unlike ~seq-let~, Loopy does not yet have a generic syntax for
+  sequences.
 
   #+begin_src emacs-lisp
-    ;; => '((1 3) (2 4))
-    (loopy (list (car . cdr) '((1 . 2) (3 . 4)))
-           (collect cars car)
-           (collect cdrs cdr)
-           (finally-return cars cdrs))
-
-    ;; Using `cl-loop':
-    (cl-loop for (car . cdr) in '((1 . 2) (3 . 4))
-             collect car into cars
-             collect cdr into cdrs
-             finally return (list cars cdrs))
-
-    ;; Not possible in `cl-loop':
-    ;; => '((1 3) (2 4))
-    (loopy (list i '((1 . 2) (3 . 4)))
-           (collect (cars . cdrs) i)
-           (finally-return cars cdrs))
+    ;; ((1 2 3) (4 5 6))
+    (loopy (list [i (j k)] '([1 (2 3)] [4 (5 6)]))
+           (collect (list i j k)))
   #+end_src
 
-  You can use destructured assignment by passing an unquoted sequence as the
-  =VAR= argument of a loop command.  To destructure lists, use a list.  To
-  destructure arrays (including strings and vectors), use a vector.  This
-  sequence of symbols can be shorter than the destructured sequence, /but not
-  longer/.  If shorter, the unassigned elements of the list are simply ignored.
+- The symbol =&whole=: If =&whole= is the first element in the sequence, then
+  the second element of the sequence names a variable that holds the entire
+  value of what is destructured.
 
-  An element in the sequence =VAR= can be one of the following:
+  This is the same as when used in a CL ~lambda~ list.
 
-  - A positional variable which will be bound to the corresponding element in
-    the sequence.  These variables can be recursive.
+  #+begin_src emacs-lisp
+    ;; See that the variable `both' holds the value of the entire
+    ;; list element:
+    ;; => (((1 2) 1 2)
+    ;;     ((3 4) 3 4))
+    (loopy (list (&whole both i j)  '((1 2) (3 4)))
+           (collect (list both i j)))
 
-    #+begin_src emacs-lisp
-      ;; ((1 2 3) (4 5 6))
-      (loopy (list [i (j k)] '([1 (2 3)] [4 (5 6)]))
-             (collect (list i j k)))
-    #+end_src
+    (mapcar (cl-function (lambda ((&whole both i j))
+                           (list both i j)))
+            '((1 2) (3 4)))
+  #+end_src
 
-  - =&whole=: If =&whole= is the first element in the sequence, then the second
-    element names a variable that holds the entire value of what is
-    destructured.
+- The symbol =&rest=: A variable named after =&rest= contains the remaining
+  elements of the destructured value.  When destructuring lists, one can
+  alternatively use dotted notation.  These variables can themselves be
+  sequences.
 
-    #+begin_src emacs-lisp
-      ;; See that the variable `whole' holds the value of the entire
-      ;; list element:
-      ;; => (((1 2 3) 1 2 3)
-      ;;     ((4 5 6) 4 5 6))
-      (loopy (list (&whole whole i j k)  '((1 2 3) (4 5 6)))
-             (collect (list whole i j k)))
-    #+end_src
+  This is the same as when used in ~seq-let~.
 
-  - =&rest=: A variable named after =&rest= contains the remaining elements of
-    the destructured value.  When destructuring lists, one can alternatively use
-    dotted notation.  These variables can be recursive.
+  #+begin_src emacs-lisp
+    ;; => ((1 [2 3]) (4 [5 6]))
+    (loopy (list [i &rest j] '([1 2 3] [4 5 6]))
+           (collect (list i j)))
 
-    #+begin_src emacs-lisp
-      ;; => ((1 [2 3]) (4 [5 6]))
-      (loopy (list [i &rest j] '([1 2 3] [4 5 6]))
-             (collect (list i j)))
+    ;; => ((1 2 3) (4 5 6))
+    (loopy (list [i &rest [j k]] '([1 2 3] [4 5 6]))
+           (collect (list i j k)))
 
-      ;; => ((1 (2 3)) (4 (5 6)))
-      (loopy (list (i . j) '((1 2 3) (4 5 6)))
-             (collect (list i j)))
+    ;; => ((1 (2 3)) (4 (5 6)))
+    (loopy (list (i . j) '((1 2 3) (4 5 6)))
+           (collect (list i j)))
 
-      ;; Works the same as above:
-      (loopy (list (i &rest j) '((1 2 3) (4 5 6)))
-             (collect (list i j)))
+    ;; Works the same as above:
+    (loopy (list (i &rest j) '((1 2 3) (4 5 6)))
+           (collect (list i j)))
 
-      ;; => ((1 2 3) (4 5 6))
-      (loopy (list (i . [j k]) '((1 . [2 3]) (4 . [5 6])))
-             (collect (list i j k)))
+    ;; The above using `seq-let':
+    (let ((result))
+      (dolist (elem '((1 2 3) (4 5 6)))
+        (seq-let [i &rest j] elem
+          (push (list i j) result)))
+      (reverse result))
+  #+end_src
 
-      ;; Works the same as above:
-      (loopy (list (i &rest [j k]) '((1 . [2 3]) (4 . [5 6])))
-             (collect (list i j k)))
-    #+end_src
+- The symbol =&key=: Variables named after =&key= are transformed into keys
+  whose values will be sought using ~plist-get~, which returns ~nil~ if the key
+  isn't in the list.
 
-  - =&key=: Variables named after =&key= are transformed into keys whose values
-    will be sought using ~plist-get~.  Optionally, these variables can be a list
-    of 2 elements: (1) the variable and (2) a default value if that key isn't
-    found.
-    - Currently, only lists support this destructuring.
-    - Keys are sought in values after those bound to positional variables, which
-      can be the same values to the variable named by =&rest= when both are
-      used.
-    - =&key= and =&rest= can be used in any order, but =&key= must come before
-      the dot in dotted lists.
+  Currently, only lists support this destructuring.
 
-    #+begin_src emacs-lisp
-      ;; => ((1 2) (4 5))
-      (loopy (list (&key a b) '((:b 2 :c 3 :a 1)
-                                (:a 4 :b 5 :c 6)))
-             (collect (list a b)))
+  #+begin_src emacs-lisp
+    ;; => ((1 2 nil) (4 5 nil))
+    (loopy (list (&key a b missing) '((:b 2 :c 3 :a 1)
+                                      (:a 4 :b 5 :c 6)))
+           (collect (list a b missing)))
+  #+end_src
 
-      ;; Giving a default value:
-      ;; Note that `nil' is not the same as a missing value.
-      ;; => ((1 2 nil 25) (4 5 24 25))
-      (loopy (list (&key a b (c 24) (d 25)) '((:b 2 :c nil :a 1)
-                                              (:a 4 :b 5)))
-             (collect (list a b c d)))
+  Default values can be provided by using a list of the variable and the default
+  value if that key isn't found.  If a default value is provided, then keys are
+  sought using ~plist-member~ so that a value of ~nil~ for a key is not the same
+  as a missing key.
 
-      ;; Keys are only sought after positional variables:
-      ;; => ((1 2 :k1 'ignored 3))
-      (loopy (array (a b c d &key k1) [(1 2 :k1 'ignored :k1 3)])
-             (collect (list a b c d k1)))
+  #+begin_src emacs-lisp
+    ;; Note that `nil' is not the same as a missing value.
+    ;; => ((1 2 nil 25) (4 5 24 25))
+    (loopy (list (&key a b (c 24) (missing 25)) '((:b 2 :c nil :a 1)
+                                                  (:a 4 :b 5)))
+           (collect (list a b c missing)))
+  #+end_src
 
-      ;; If `&rest' is used, keys are sought only in that variable:
-      ;; => ((1 (:k1 3) 3))
-      (loopy (array (a &rest b &key k1) [(1 :k1 3)])
-             (collect (list a b k1)))
+  Keys are sought in values after those bound to positional variables, which can
+  be the same values bound to the variable named by =&rest= when both are
+  used.
 
-      ;; The below two examples work the same as the above:
+  #+begin_src emacs-lisp
+    ;; Keys are only sought after positional variables:
+    ;; => ((1 2 :k1 'ignored 3))
+    (loopy (array (a b c d &key k1) [(1 2 :k1 'ignored :k1 3)])
+           (collect (list a b c d k1)))
 
-      (loopy (array (a &key k1 &rest b) [(1 :k1 3)])
-             (collect (list a b k1)))
+    ;; If `&rest' is used, keys are sought only in that variable:
+    ;; => ((1 (:k1 3) 3))
+    (loopy (array (a &rest b &key k1) [(1 :k1 3)])
+           (collect (list a b k1)))
+  #+end_src
 
-      (loopy (array (a &key k1 . b) [(1 :k1 3)])
-             (collect (list a b k1)))
-    #+end_src
+  =&key= and =&rest= can be used in any order, but =&key= must come before
+  the dot in dotted lists.
 
+  #+begin_src emacs-lisp
+    ;; => ((1 (:k1 3) 3))
+    (loopy (array (a &rest b &key k1) [(1 :k1 3)])
+           (collect (list a b k1)))
 
-  Alternative destructuring systems can be used via flags ([[#flags]]).  For more
-  flexible pattern matching, see the flag =pcase=.  For more kinds of key-value
-  destructuring, see the flag =dash= provided by the package =loopy-dash=.
+    (loopy (array (a &key k1 &rest b) [(1 :k1 3)])
+           (collect (list a b k1)))
 
-  Most commands that assign variables can use destructuring, but not all kinds
-  of destructuring make sense in all situations.  Accumulation commands
-  ([[#accumulation-commands]]) and commands iterating through ~setf~-able places in
-  a sequence ([[#sequence-reference-iteration]]) have their own kinds of
-  destructuring.  They are explained more in their respective sections.
+    (loopy (array (a &key k1 . b) [(1 :k1 3)])
+           (collect (list a b k1)))
+  #+end_src
 
 ** Generic Evaluation
    :PROPERTIES:
@@ -3710,9 +3768,8 @@ is the forward-compatible way of creating aliases.
 
    #+vindex: loopy--loop-name
    Some commands might depend on the name of the loop.  The symbol which names
-   the loop is stored in the variable ~loopy--loop-name~.  The default value is
-   ~nil~ for normal loop and uniquely generated for sub-loops created with the
-   =sub-loop= command.
+   the loop is stored in the variable ~loopy--loop-name~.  The default name is
+   ~nil~.
 
    The structure of the macro’s expanded code depends on the features used
    (e.g., ~loopy~ won’t try to declare variables if none exist), but the result
@@ -4610,6 +4667,7 @@ effect.
   :END:
 
 * Footnotes
+[fn:dash] https://github.com/magnars/dash.el
 
 [fn:1] Strings being a kind of array.  See [[info:elisp#Sequences Arrays Vectors]]
 for more.

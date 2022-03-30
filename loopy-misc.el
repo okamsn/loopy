@@ -381,7 +381,7 @@ Only the positional variables and the remainder can be recursive."
               bindings)))
 
     ;; Find the key vars, if any.  The key vars must be drawn from
-    ;; the remaining part after the normal variables of bound.
+    ;; the remaining part after the normal variables are bound.
     (seq-let (before after)
         (loopy--split-list-before var '&key)
       ;; We might as well be forgiving of this mistake.
