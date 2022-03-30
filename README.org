@@ -30,7 +30,7 @@ please let me know.
 -----
 
  _Recent breaking changes:_
- - Unreleased:
+ - Version 0.10.1 (2022-02-29):
    - The default test function for commands like =adjoin= and =union= is now
      ~equal~.  Previously, ~loopy~ copied ~cl-loop~ and used ~eql~, but it makes
      more sense to copy the behavior of other Emacs Lisp libraries (like

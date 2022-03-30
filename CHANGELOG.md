@@ -2,7 +2,9 @@
 
 This document describes the user-facing changes to Loopy.
 
-## Unreleased
+## 0.10.1
+
+Released 2022-03-29.
 
 ### Bugs Fixed
 
