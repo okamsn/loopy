@@ -7,6 +7,7 @@
 (require 'cl-lib)
 (require 'map)
 (require 'ert)
+(require 'pcase)
 (require 'map "./dependecy-links/map.el" 'no-error)
 (require 'loopy "./loopy.el")
 
@@ -14,6 +15,14 @@
 (defmacro lq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
   `(eval (quote (loopy ,@body))))
+
+(defmacro loopy-test-structure (input output-pattern)
+  "Use `pcase' to check a destructurings bindings.
+INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
+  `(pcase ,input
+     (,output-pattern
+      t)
+     (_ nil)))
 
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
@@ -488,6 +497,65 @@
 
 
 ;;; Destructuring
+
+(ert-deftest destructure-array-errors ()
+  (should-error (loopy--destructure-array [a b &rest] 'val))
+  (should-error (loopy--destructure-array [a b &rest c d] 'val))
+  (should-error (loopy--destructure-array [&rest] 'val))
+  (should-error (loopy--destructure-array [&whole &rest] 'val))
+  (should-error (loopy--destructure-array [&whole] 'val))
+  (should-error (loopy--destructure-array [&whole _] 'val))
+  (should-error (loopy--destructure-array [&rest _] 'val))
+  (should-error (loopy--destructure-array [_ _] 'val)))
+
+(ert-deftest destructure-arrays-steps-output ()
+  "Test for ideal output."
+  (should (loopy-test-structure (loopy--destructure-array [a] 'val)
+                                `((a (aref val 0)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [a _] 'val)
+                                `((a (aref val 0)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [_ b] 'val)
+                                `((b (aref val 1)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [_ b _] 'val)
+                                `((b (aref val 1)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [a b] 'val)
+                                `((,_ val)
+                                  (a (aref ,_ 0))
+                                  (b (aref ,_ 1)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [_ b c] 'val)
+                                `((,_ val)
+                                  (b (aref ,_ 1))
+                                  (c (aref ,_ 2)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [_ b c _ _] 'val)
+                                `((,_ val)
+                                  (b (aref ,_ 1))
+                                  (c (aref ,_ 2)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [a b &rest c] 'val)
+                                `((,_ val)
+                                  (a (aref ,_ 0))
+                                  (b (aref ,_ 1))
+                                  (c (substring ,_ 2)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [a _ &rest c] 'val)
+                                `((,_ val)
+                                  (a (aref ,_ 0))
+                                  (c (substring ,_ 2)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [a b &rest _] 'val)
+                                `((,_ val)
+                                  (a (aref ,_ 0))
+                                  (b (aref ,_ 1)))))
+
+  (should (loopy-test-structure (loopy--destructure-array [_ b _ &rest _] 'val)
+                                `((b (aref val 1))))))
+
 (ert-deftest destructure-arrays ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy-let* (([a b c] [1 2 3]))
@@ -512,6 +580,247 @@
   (should (equal '([1 2 3] 1 2 3)
                  (eval (quote (loopy-let* (([&whole cat a &rest [b c]] [1 2 3]))
                                 (list cat a b c)))))))
+
+(ert-deftest destructure-list-errors ()
+  (should-error (loopy--destructure-list '(a b &rest) 'val))
+  (should-error (loopy--destructure-list '(a b &rest c d) 'val))
+  (should-error (loopy--destructure-list '(&rest) 'val))
+  (should-error (loopy--destructure-list '(&whole &rest) 'val))
+  (should-error (loopy--destructure-list '(&whole) 'val))
+  (should-error (loopy--destructure-list '(&whole _) 'val))
+  (should-error (loopy--destructure-list '(&rest _) 'val))
+  (should-error (loopy--destructure-list '(&key) 'val))
+  (should-error (loopy--destructure-list '(&keys) 'val))
+  (should-error (loopy--destructure-list '(_ _) 'val)))
+
+(ert-deftest destructure-lists-steps-output-rest ()
+  (should (loopy-test-structure (loopy--destructure-list '(a b &rest c)  'val)
+                                `((c val)
+                                  (a (pop c))
+                                  (b (pop c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole a b &rest c)  'val)
+                                `((whole val)
+                                  (c whole)
+                                  (a (pop c))
+                                  (b (pop c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(a _ &rest c)  'val)
+                                `((c val)
+                                  (a (pop c))
+                                  (c (nthcdr 1 c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole a _ &rest c)  'val)
+                                `((whole val)
+                                  (c whole)
+                                  (a (pop c))
+                                  (c (nthcdr 1 c)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ a _ _ &rest c)  'val)
+           `((c (nthcdr 2 val))
+             (a (pop c))
+             (c (nthcdr 2 c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(a b &rest _)  'val)
+                                `((b val)
+                                  (a (pop b))
+                                  (b (car b)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole a b &rest _)  'val)
+                                `((whole val)
+                                  (b whole)
+                                  (a (pop b))
+                                  (b (car b)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ &rest (a b))  'val)
+           `((b (nthcdr 2 val))
+             (a (pop b))
+             (b (car b)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ &rest (a b))  'val)
+           `((whole val)
+             (b (nthcdr 2 whole))
+             (a (pop b))
+             (b (car b)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ b _ &rest _)  'val)
+           `((b (nth 1 val)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ b _ &rest _)  'val)
+           `((whole val)
+             (b (nth 1 whole)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ b _ &rest (c d e))  'val)
+           `((,_ (nthcdr 1 val))
+             (b (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (e ,_)
+             (c (pop ,_))
+             (d (pop ,_))
+             (e (car e)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ b _ &rest (c d e))  'val)
+           `((whole val)
+             (,_ (nthcdr 1 whole))
+             (b (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (e ,_)
+             (c (pop ,_))
+             (d (pop ,_))
+             (e (car e)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ &rest b)  'val)
+           `((b (nthcdr 2 val)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ &rest b)  'val)
+           `((whole val)
+             (b (nthcdr 2 whole))))))
+
+(ert-deftest destructure-lists-steps-output-key ()
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&key k1 k2)  'val)
+           `((,_ val)
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ &rest b &key k1 k2)  'val)
+           `((b (nthcdr 2 val))
+             (k1 (plist-get b :k1))
+             (k2 (plist-get b :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ &rest b &key k1 k2)  'val)
+           `((whole val)
+             (b (nthcdr 2 whole))
+             (k1 (plist-get b :k1))
+             (k2 (plist-get b :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ &rest _ &key k1 k2)  'val)
+           `((,_ (nthcdr 2 val))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ &rest _ &key k1 k2)  'val)
+           `((whole val)
+             (,_ (nthcdr 2 whole))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ &key k1 k2)  'val)
+           `((,_ (nthcdr 2 val))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ &key k1 k2)  'val)
+           `((whole val)
+             (,_ (nthcdr 2 whole))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(a _ &key k1 k2)  'val)
+           `((,_ val)
+             (a (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ a _ &key k1 k2)  'val)
+           `((,_ (nthcdr 2 val))
+             (a (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(&whole whole _ _ a _ &key k1 k2)  'val)
+           `((whole val)
+             (,_ (nthcdr 2 whole))
+             (a (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (k1 (plist-get ,_ :k1))
+             (k2 (plist-get ,_ :k2)))))
+
+  (should (loopy-test-structure
+           (loopy--destructure-list '(_ _ a _ &key k1 (k2 25) k3)  'val)
+           `((,_ (nthcdr 2 val))
+             (a (pop ,_))
+             (,_ (nthcdr 1 ,_))
+             (k1 (plist-get ,_ :k1))
+             (k2 (if-let ((key-found (plist-member ,_ :k2)))
+                     (cl-second key-found)
+                   25))
+             (k3 (plist-get ,_ :k3))))))
+
+(ert-deftest destructure-lists-steps-output ()
+  "Test for ideal output."
+  (should (loopy-test-structure (loopy--destructure-list '(a)  'val)
+                                `((a (nth 0 val)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole a)  'val)
+                                `((whole val)
+                                  (a (nth 0 whole)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(a _)  'val)
+                                `((a (nth 0 val)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(_ b)  'val)
+                                `((b (nth 1 val)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole _ b)  'val)
+                                `((whole val)
+                                  (b (nth 1 whole)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(_ b _)  'val)
+                                `((b (nth 1 val)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(a b)  'val)
+                                `((b val)
+                                  (a (pop b))
+                                  (b (car b)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(_ b c)  'val)
+                                `((c (nthcdr 1 val))
+                                  (b (pop c))
+                                  (c (car c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(_ b c _ _)  'val)
+                                `((c (nthcdr 1 val))
+                                  (b (pop c))
+                                  (c (car c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole _ b c _ _)  'val)
+                                `((whole val)
+                                  (c (nthcdr 1 whole))
+                                  (b (pop c))
+                                  (c (car c)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(_ (a b) _)  'val)
+                                `((b (nth 1 val))
+                                  (a (pop b))
+                                  (b (car b)))))
+
+  (should (loopy-test-structure (loopy--destructure-list '(&whole whole _ (a b) _)  'val)
+                                `((whole val)
+                                  (b (nth 1 whole))
+                                  (a (pop b))
+                                  (b (car b))))))
 
 (ert-deftest destructure-lists ()
   (should (equal '(1 2 3)
@@ -1473,20 +1782,20 @@
                                           (finally-return my-list))))))))
 
 (ert-deftest list-ref-recursive-destructuring ()
-  (should (and (equal '((7 (8 9)) (7 (8 9)))
-                      (eval (quote (loopy (with (my-list '((1 (2 3)) (4 (5 6)))))
-                                          (list-ref (i (j k)) my-list)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-list)))))
-               (equal '([7 (8 9) 4] [7 (8 9) 8])
-                      (eval (quote (loopy (with (my-list '([1 (2 3) 4] [4 (5 6) 8])))
-                                          (list-ref [i (j k) l] my-list)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-list))))))))
+  (should (equal '((7 (8 9)) (7 (8 9)))
+                 (eval (quote (loopy (with (my-list '((1 (2 3)) (4 (5 6)))))
+                                     (list-ref (i (j k)) my-list)
+                                     (do (setf i 7)
+                                         (setf j 8)
+                                         (setf k 9))
+                                     (finally-return my-list))))))
+  (should (equal '([7 (8 9) 4] [7 (8 9) 8])
+                 (eval (quote (loopy (with (my-list '([1 (2 3) 4] [4 (5 6) 8])))
+                                     (list-ref [i (j k) l] my-list)
+                                     (do (setf i 7)
+                                         (setf j 8)
+                                         (setf k 9))
+                                     (finally-return my-list)))))))
 
 ;;;;; Map
 (ert-deftest map ()
@@ -4127,3 +4436,5 @@ This assumes that you're on guix."
 
 ;; Local Variables:
 ;; End:
+
+; LocalWords:  destructurings

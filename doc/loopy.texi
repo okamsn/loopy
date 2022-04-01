@@ -574,7 +574,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org46ef9ae
+@float Listing,org3efb956
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -684,7 +684,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org763ca25
+@float Listing,org973058e
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -699,7 +699,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org730ef9b
+@float Listing,orga78f8af
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -743,6 +743,24 @@ sequences.
 ;; ((1 2 3) (4 5 6))
 (loopy (list [i (j k)] '([1 (2 3)] [4 (5 6)]))
        (collect (list i j k)))
+@end lisp
+
+@item
+The symbol @samp{_}: The symbol @samp{_} means to avoid creating a variable.  This can
+be more efficient.
+
+@lisp
+;; Only create the variables `a' and `c'.
+(loopy (list (a _ c) '((1 2 3) (4 5 6)))
+       (collect (list a c)))
+
+;; These two destructurings do the same thing,
+;; and only bind the variable `a':
+(loopy (array (a) [(1 2) (3 4)])
+       (collect a))
+
+(loopy (array (a . _) [(1 2) (3 4)])
+       (collect a))
 @end lisp
 
 @item
@@ -799,9 +817,9 @@ This is the same as when used in @code{seq-let}.
 @end lisp
 
 @item
-The symbol @samp{&key}: Variables named after @samp{&key} are transformed into keys
-whose values will be sought using @code{plist-get}, which returns @code{nil} if the key
-isn't in the list.
+The symbol @samp{&key} or @samp{&keys}: Variables named after @samp{&key} are transformed
+into keys whose values will be sought using @code{plist-get}, which returns @code{nil}
+if the key isn't found in the list.
 
 Currently, only lists support this destructuring.
 
@@ -812,10 +830,10 @@ Currently, only lists support this destructuring.
        (collect (list a b missing)))
 @end lisp
 
-Default values can be provided by using a list of the variable and the default
-value if that key isn't found.  If a default value is provided, then keys are
-sought using @code{plist-member} so that a value of @code{nil} for a key is not the same
-as a missing key.
+If the key is not in the list, a default value can be provided by using a
+two-item list of the variable and the default value.  If a default value is
+provided, then keys are sought using @code{plist-member} so that a value of @code{nil}
+for a key is not the same as a missing key.
 
 @lisp
 ;; Note that `nil' is not the same as a missing value.
@@ -3225,9 +3243,9 @@ commands.
 @chapter Destructuring Macros
 
 Loopy's built-in destructuring functionality can also be used via the listed
-macros below.  These macros are @emph{not} affected by flags which configure
-destructuring (@ref{Using Flags}), as equivalent features are already provided by those
-libraries.
+macros below (@ref{Basic Destructuring}).  These macros are @emph{not} affected by flags
+which configure destructuring (@ref{Using Flags}), as equivalent features are already
+provided by those libraries (e.g., @code{pcase-let} and @code{seq-let}).
 
 These macros can be used anywhere, not just inside calls to @code{loopy}.
 

@@ -2,6 +2,31 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Bugs Fixed
+
+- Signal an error when destructuring doesn't produce any bindings ([#117]).
+- Destructured bindings that should have signaled an error now do. For example,
+  values after `&rest` and `&key` are now better checked. See [#117].
+
+### Breaking Changes
+
+- None yet.
+
+### Other Changes
+
+- Improvements to destructuring ([#117]):
+  - Document ignoring variables in the Org doc.  This feature has existed for a
+    while.
+  - Document `&keys` as an alternative to `&key`.  This feature has existed for
+    a while.
+  - Better skip ignored variables.
+  - Add slight optimizations for common uses, such as for `(car . _)` and
+    `(_ . cdr)`.
+
+[#117]: https://github.com/okamsn/loopy/pull/117
+
 ## 0.10.1
 
 Released 2022-03-29.

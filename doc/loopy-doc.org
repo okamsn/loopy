@@ -666,6 +666,23 @@ An element in the sequence =VAR= can be one of the following:
            (collect (list i j k)))
   #+end_src
 
+- The symbol =_=: The symbol =_= means to avoid creating a variable.  This can
+  be more efficient.
+
+  #+begin_src emacs-lisp
+    ;; Only create the variables `a' and `c'.
+    (loopy (list (a _ c) '((1 2 3) (4 5 6)))
+           (collect (list a c)))
+
+    ;; These two destructurings do the same thing,
+    ;; and only bind the variable `a':
+    (loopy (array (a) [(1 2) (3 4)])
+           (collect a))
+
+    (loopy (array (a . _) [(1 2) (3 4)])
+           (collect a))
+  #+end_src
+
 - The symbol =&whole=: If =&whole= is the first element in the sequence, then
   the second element of the sequence names a variable that holds the entire
   value of what is destructured.
@@ -717,9 +734,9 @@ An element in the sequence =VAR= can be one of the following:
       (reverse result))
   #+end_src
 
-- The symbol =&key=: Variables named after =&key= are transformed into keys
-  whose values will be sought using ~plist-get~, which returns ~nil~ if the key
-  isn't in the list.
+- The symbol =&key= or =&keys=: Variables named after =&key= are transformed
+  into keys whose values will be sought using ~plist-get~, which returns ~nil~
+  if the key isn't found in the list.
 
   Currently, only lists support this destructuring.
 
@@ -730,10 +747,10 @@ An element in the sequence =VAR= can be one of the following:
            (collect (list a b missing)))
   #+end_src
 
-  Default values can be provided by using a list of the variable and the default
-  value if that key isn't found.  If a default value is provided, then keys are
-  sought using ~plist-member~ so that a value of ~nil~ for a key is not the same
-  as a missing key.
+  If the key is not in the list, a default value can be provided by using a
+  two-item list of the variable and the default value.  If a default value is
+  provided, then keys are sought using ~plist-member~ so that a value of ~nil~
+  for a key is not the same as a missing key.
 
   #+begin_src emacs-lisp
     ;; Note that `nil' is not the same as a missing value.
@@ -2991,9 +3008,9 @@ remove the sorting requirements on the accumulations variables.
   :END:
 
   Loopy's built-in destructuring functionality can also be used via the listed
-  macros below.  These macros are /not/ affected by flags which configure
-  destructuring ([[#flags]]), as equivalent features are already provided by those
-  libraries.
+  macros below ([[#basic-destructuring]]).  These macros are /not/ affected by flags
+  which configure destructuring ([[#flags]]), as equivalent features are already
+  provided by those libraries (e.g., ~pcase-let~ and ~seq-let~).
 
   These macros can be used anywhere, not just inside calls to ~loopy~.
 

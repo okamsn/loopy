@@ -239,46 +239,114 @@ If SEQ is `_', then a generated variable name will be used."
 - If `&rest', bind the remaining values in the array.
 - If `&whole', name a variable holding the whole value."
   (let ((bindings)
-        (holding-var)
-        (remaining-var))
-    (if (eq '&whole (aref var 0))
-        (setq holding-var (aref var 1)
-              remaining-var (seq-drop var 2))
-      (setq holding-var (gensym "cl-array-")
-            remaining-var var))
+        (using-rest-var)
+        (remaining-var var)
+        (using-whole-var)
+        (remaining-length (length var))
+        (rest-pos nil)
+        (starting-index 0))
 
-    (push `(,holding-var ,value-expression)
-          bindings)
+    (when (eq '&whole (aref var 0))
+      (cond ((or (= 1 remaining-length)
+                 (eq (aref var 1) '&rest))
+             (error "`&whole' variable not named: %s" var))
+            ((sequencep (aref remaining-var 1))
+             (error "`&whole' variable is sequence: %s" var))
+            (t
+             (let ((whole-var (aref remaining-var 1)))
+               (when (= 2 remaining-length)
+                 (warn "`&whole' variable used alone: %s" var))
 
-    (cl-loop named loop
-             with array-length = (length remaining-var)
-             for v across remaining-var
-             for idx from 0
-             do (cond
-                 ((loopy--var-ignored-p v)) ; Do nothing if variable is `_'.
-                 ((eq v '&rest)
-                  (let* ((next-idx (1+ idx))
-                         (next-var (aref remaining-var next-idx)))
-                    ;; Check that the var after `&rest' is the last:
-                    (when (> (1- array-length) next-idx)
-                      (error "More than one variable after `&rest': %s"
-                             var))
+               (setq remaining-var (substring remaining-var 2)
+                     remaining-length (max 0 (- remaining-length 2)))
 
-                    (if (sequencep next-var)
-                        (dolist (binding (loopy--destructure-sequence
-                                          next-var `(seq-subseq ,holding-var
-                                                                ,idx)))
-                          (push binding bindings))
-                      (push `(,next-var (seq-subseq ,holding-var ,idx))
-                            bindings))
-                    ;; Exit the loop.
-                    (cl-return-from loop)))
-                 (t (if (sequencep v)
-                        (dolist (binding (loopy--destructure-sequence
-                                          v `(aref ,holding-var ,idx)))
-                          (push binding bindings))
-                      (push `(,v (aref ,holding-var ,idx))
-                            bindings)))))
+               (if (loopy--var-ignored-p whole-var)
+                   (warn "`&whole' variable ignored: %s" var)
+                 (setq using-whole-var whole-var))))))
+
+    (when-let ((pos (cl-position '&rest remaining-var :test #'eq)))
+      (cond
+       ((= (1+ pos) remaining-length)
+        (error "`&rest' variable not named: %s" var))
+       ((> remaining-length (+ 2 pos))
+        (error "Too many variables after `&rest': %s" var))
+       (t
+        ;; (when (zerop pos)
+        ;;   (warn "`&rest' variable used like `&whole': %s" var))
+        (let ((rest-var (aref remaining-var (1+ pos))))
+          (unless (loopy--var-ignored-p rest-var)
+            (setq using-rest-var rest-var
+                  rest-pos pos))
+          (setq remaining-length (max 0 (- remaining-length 2))
+                remaining-var (substring remaining-var 0 -2))))))
+
+    ;; Remove ignored positions from the beginning and end.
+    (cl-loop for x across remaining-var
+             for ind from 0
+             while (loopy--var-ignored-p x)
+             finally (setq remaining-var (substring remaining-var ind)
+                           remaining-length (- remaining-length ind)
+                           ;; Be sure that we know what is left.
+                           starting-index ind))
+
+    ;; (loopy (array x var :index ind :downfrom (1- remaining-length))
+    ;;        (unless (eq x '_)
+    ;;          (do (setq remaining-var (substring remaining-var 0 (1+ ind))
+    ;;                    remaining-length (1+ ind)))
+    ;;          (leave)))
+
+    (cl-loop for x across (reverse remaining-var)
+             for ind downfrom (1- remaining-length)
+             while (loopy--var-ignored-p x)
+             finally do
+             ;; `substring' is end exclusive.
+             (setq remaining-var (substring remaining-var 0 (1+ ind))
+                   remaining-length (1+ ind)))
+
+    (cond
+     ((zerop (length remaining-var))
+      (error "No variables bound: %s" var))
+     ;; Check to see if we can avoid binding the holding variable.
+     ((and (= 1 remaining-length)
+           (not using-whole-var)
+           (not using-rest-var))
+      (push `(,(aref remaining-var 0) (aref ,value-expression ,starting-index))
+            bindings))
+     (t
+      ;; Even if we're not using `whole-var', we still need to bind
+      ;; a holding variable in case of `rest-var' or the positional
+      ;; variables.
+      (let ((holding-var (if using-whole-var
+                             using-whole-var
+                           (gensym "destr-array-"))))
+
+        ;; Otherwise, bind the holding variable and repeatedly access it.
+        (push `(,holding-var ,value-expression) bindings)
+
+        (cl-loop named loop
+                 for v across remaining-var
+                 for idx from starting-index
+                 do (cond
+                     ((loopy--var-ignored-p v)) ; Do nothing if variable is `_'.
+                     (t (if (sequencep v)
+                            (dolist (binding (loopy--destructure-sequence
+                                              v `(aref ,holding-var ,idx)))
+                              (push binding bindings))
+                          (push `(,v (aref ,holding-var ,idx))
+                                bindings)))))
+
+        ;; Now bind the `&rest' var, if needed.
+        (when using-rest-var
+          (let ((rest-val `(substring ,holding-var ,rest-pos)))
+            (if (sequencep using-rest-var)
+                (dolist (binding (loopy--destructure-sequence
+                                  using-rest-var rest-val))
+                  (push binding bindings))
+              (push `(,using-rest-var ,rest-val) bindings))))
+
+        (when (null (cdr bindings))
+          (error "No variables bound: %s" var)))))
+
     (nreverse bindings)))
 
 (cl-defun loopy--destructure-list (var value-expression)
@@ -305,64 +373,78 @@ Only the positional variables and the remainder can be recursive."
         (rest-var-was-sequence nil)
         ;; A value holder for if we only use keys.
         (key-target-var (gensym "key-target-"))
+        ;; Whether we pop positional variables from `key-target-var'.
+        ;; This determines whether we need to bind `key-target-var' before
+        ;;  or after processing the positional variables.
+        (popping-key-target-var)
         ;; Variables after `&key' or `&keys'.  These are the final values bound,
         ;; but must be detected before the positional variables are processed.
         (key-vars)
         ;; The positional variables processed.  This is a copy of `var', since
         ;; `var' is eaten away in a `while' loop while processing those
         ;; variables.  This affects where `&key' variables are sought.
-        (positional-vars))
+        (positional-vars)
+        ;; Copy for consumption.
+        (remaining-var var))
 
-    ;; Find `whole-var'.  If found, remove from `var'.
-    (when (eq (cl-first var) '&whole)
-      (cond
-       ;; Make sure there is a variable named.
-       ((null (cdr var))
-        (error "Bad destructuring: %s" var))
-       ;; If it's the only variable named, just bind it and return.
-       ((not (cddr var))
-        (warn "`&whole' used when only one variable listed: %s" var)
-        (cl-return-from loopy--destructure-list
-          `((,(cl-second var) ,value-expression))))
-       (t
-        (let ((possible-whole-var (cl-second var)))
-          (setq whole-var (if (loopy--var-ignored-p possible-whole-var)
-                              (progn
-                                (warn "`&whole' won't be ignored: %s" var)
-                                (gensym "list-whole-"))
-                            possible-whole-var)
-                ;; Now just operate on remaining variables.
-                var (cddr var))
-          (push `(,whole-var ,value-expression) bindings)))))
+    ;; Find `whole-var'.  If found, remove from `remaining-var'.
+    (when (eq (cl-first remaining-var) '&whole)
+      (if (null (cdr remaining-var))
+          ;; Make sure there is a variable named.
+          (error "Bad destructuring: %s" var)
+        (let ((possible-whole-var (cl-second remaining-var)))
+          (cond
+           ;; Make sure we have a variable and not a special symbol.
+           ((memq possible-whole-var '(&rest &key &keys))
+            (error "`&whole' variable not named: %s" var))
+           ((sequencep possible-whole-var)
+            (error "`&whole' variable can't be a sequence: %s" var))
+           ;; If it's the only variable named, just bind it and return.
+           ((and (not (cddr remaining-var))
+                 (not (loopy--var-ignored-p possible-whole-var)))
+            (warn "`&whole' used when only one variable listed: %s" var)
+            (cl-return-from loopy--destructure-list
+              `((,possible-whole-var ,value-expression))))
+           (t
+            ;; Now just operate on remaining variables.
+            (setq remaining-var (cddr remaining-var))
+            (if (loopy--var-ignored-p possible-whole-var)
+                (warn "`&whole' variable ignored: %s" var)
+              (setq whole-var possible-whole-var)
+              (push `(,whole-var ,value-expression) bindings)))))))
 
     ;; Find any (_ &rest `rest') or (_ . `rest') variable.  If found, set
-    ;; `rest-var' and remove them from the variable list `var'.
+    ;; `rest-var' and remove them from the variable list `remaining-var'.
     (let ((possible-rest-var))
-      (if (proper-list-p var)
-          (seq-let (before after) (loopy--split-list-before var '&rest)
+      (if (not (proper-list-p remaining-var))
+          ;; If REMAINING-VAR is not a proper list, then the last cons cell is dotted.
+          (seq-let (other-vars last-var)
+              (loopy--split-off-last-var remaining-var)
+            (setq remaining-var other-vars
+                  possible-rest-var last-var))
 
-            (unless before
-              (warn "`&rest' being treated same as `&whole': %s" var))
+        (seq-let (before after)
+            (loopy--split-list-before remaining-var '&rest)
 
-            (when after
-              ;; This is the best place to check that argument only uses
-              ;; keys after the `rest-var'.
-              (if-let* ((vars-after-rest-var (cddr after)))
-                  (progn
-                    (unless (memq (cl-first vars-after-rest-var) '(&key &keys))
-                      (error "Bad arguments after `&rest' var: %s"
-                             vars-after-rest-var))
-                    ;; Now just operate on remaining variables.
-                    (setq var (append before vars-after-rest-var)))
-                (setq var before))
+          (unless before
+            (warn "`&rest' being treated same as `&whole': %s" var))
 
-              (setq possible-rest-var (cl-second after))))
-
-        ;; If VAR is not a proper list, then the last cons cell is dotted.
-        (seq-let (other-vars last-var)
-            (loopy--split-off-last-var var)
-          (setq var other-vars
-                possible-rest-var last-var)))
+          (when after
+            (let ((rest-var (cl-second after))
+                  (vars-after-rest-var (cddr after)))
+              (cond ((or (null rest-var)
+                         (memq (cl-second after) '(&key &keys)))
+                     (error "`&rest' variable not named: %s" var))
+                    ;; This is the best place to check that argument only uses
+                    ;; keys after the `rest-var'.
+                    ((and vars-after-rest-var
+                          (not (memq (cl-first vars-after-rest-var)
+                                     '(&key &keys))))
+                     (error "Bad arguments after `&rest' var: %s" var))
+                    (t
+                     ;; Now just operate on remaining variables.
+                     (setq remaining-var (append before vars-after-rest-var)
+                           possible-rest-var rest-var)))))))
 
       ;; Finally, bind the &rest var, if any.
       (when (and possible-rest-var
@@ -373,145 +455,236 @@ Only the positional variables and the remainder can be recursive."
         (if (and possible-rest-var
                  (sequencep possible-rest-var))
             (setq rest-var-was-sequence possible-rest-var
-                  rest-var (gensym "list-rest-"))
-          (setq rest-var possible-rest-var))
-        ;; Rest var is bound here, in its own section, in case there are no
-        ;; positional variables.
-        (push `(,rest-var ,(or whole-var value-expression))
-              bindings)))
+                  rest-var (gensym "seq-rest-"))
+          (setq rest-var possible-rest-var))))
 
     ;; Find the key vars, if any.  The key vars must be drawn from
     ;; the remaining part after the normal variables are bound.
     (seq-let (before after)
-        (loopy--split-list-before var '&key)
+        (loopy--split-list-before remaining-var '&key)
       ;; We might as well be forgiving of this mistake.
       (unless after
         (seq-let (bef aft)
-            (loopy--split-list-before var '&keys)
+            (loopy--split-list-before remaining-var '&keys)
           (setq before bef after aft)))
       (when after
-        (setq key-vars (cdr after)
-              var before)))
+        (if (null (cdr after))
+            (error "No `&key' variables: %s" var)
+          (setq key-vars (cdr after)
+                remaining-var before))))
 
     ;; Handle the positional variables.  Generally, we want to `pop' the
     ;; positional values off of some container variable.  This could be the
     ;; `rest' variable, the `whole' variable, the variable in which keys are
     ;; sought, or the last positional variable.
-    (when var
-      ;; Whether `positional-vars' is non-nil affects where keys are sought.
-      ;; We just need to record that they exists before we consume `var' in the
-      ;; `while' list.
-      (setq positional-vars var)
+    ;;
+    ;; NOTE: By this point, there may still be variable to ignore,
+    ;;       so we bind the `rest' var inside of here.
+    (when remaining-var
+      ;; Whether `positional-vars' is non-nil affects where keys are sought.  We
+      ;; just need to record that they exists before we consume `remaining-var'
+      ;; in the `while' list.
+      (setq positional-vars remaining-var)
 
-      (let (;; The positional variables sans those that can be ignored given the
-            ;; destructuring requirements.
-            (popped-vars)
-            ;; Whence positional values are popped.  This can be a generated
-            ;; variable.
-            (pop-target)
-            ;; Whether we'll need to do more destructuring after processing
-            ;; the variables in `popped-vars'.  This is the orignal sequence,
-            ;; not the generated variable.
-            (pop-target-was-seq)
-            ;; If `pop-target' is the last valid positional variable, then it
-            ;; needs to be extracted from a list of remaining values after the
-            ;; preceding positional variables are bound.  This is not a concern
-            ;; when `rest-var' is the `pop-target'.
-            (pop-target-is-positional-var))
+      ;; If we can, we should skip over as many ignored values as possible.
+      ;;
+      ;; We still need to record where ignored values end so that we can
+      ;; correctly bind the `rest' var, and where true values being
+      ;; so that we can start popping from the correct place.
+      (let* ((fist-positional-pos 0)
+             (rest-pos (length remaining-var))
+             (last-positional-pos (1- rest-pos)))
 
-        ;; Choose the variables to bind and whence they will be extracted.
-        (cond
-         ;; Rest var is bound in its own section, in case there are no
-         ;; positional variables.  Otherwise, it would be bound here.
-         (rest-var (setq pop-target rest-var
-                         popped-vars var
-                         pop-target-was-seq rest-var-was-sequence
-                         pop-target-is-positional-var nil))
+        (cl-loop for v in (copy-sequence remaining-var)
+                 while (loopy--var-ignored-p v)
+                 do
+                 (cl-incf fist-positional-pos)
+                 (setq remaining-var (cl-rest remaining-var)))
 
-         (key-vars (setq pop-target key-target-var
-                         popped-vars var
-                         pop-target-was-seq nil
-                         pop-target-is-positional-var nil)
-                   ;; `key-target-var' is only used with `&key' without `&rest'.
-                   (push `(,key-target-var ,(or whole-var value-expression))
-                         bindings))
+        ;; `cl-subseq' uses an exclusive final argument
+        (cl-loop with final-exclusive-index = (- rest-pos fist-positional-pos)
+                 for v in (reverse remaining-var)
+                 while (loopy--var-ignored-p v)
+                 do (progn
+                      (cl-decf final-exclusive-index)
+                      (cl-decf last-positional-pos))
+                 finally do
+                 (cl-callf cl-subseq remaining-var 0 final-exclusive-index))
 
-         (t      (setq pop-target-is-positional-var t)
-                 (seq-let (other-vars last-var)
-                     (loopy--split-off-last-var var)
-                   ;; If the last variable is to be ignored, then we find
-                   ;; another valid variable.
-                   (when (loopy--var-ignored-p last-var)
-                     (let ((reverse-good-var
-                            (seq-drop-while #'loopy--var-ignored-p
-                                            (reverse other-vars))))
-                       (setq last-var (cl-first reverse-good-var)
-                             other-vars (reverse (cl-rest reverse-good-var)))))
+        ;; If need be, bind the `rest' variable.  If there are no key vars,
+        ;; no positional vars, and the rest var is a sequence, then we can just
+        ;; destructure
+        (when rest-var
+          (let* ((val-expr (or whole-var value-expression))
+                 (rest-val (if (zerop fist-positional-pos)
+                               val-expr
+                             `(nthcdr ,fist-positional-pos ,val-expr))))
+            (cond
+             (key-vars
+              ;; Otherwise, if no positional variables, just bind the &rest var.
+              (push `(,rest-var ,rest-val) bindings))
+             ((null remaining-var)
+              (if (and rest-var-was-sequence (null key-vars))
+                  (dolist (binding (loopy--destructure-sequence
+                                    rest-var-was-sequence rest-val))
+                    (push binding bindings))
+                (push `(,rest-var ,rest-val) bindings)))
+             (t
+              (push `(,rest-var ,rest-val) bindings)))))
 
-                   (when (sequencep last-var)
-                     (setq pop-target-was-seq last-var))
+        ;; If we don't need a pop target, then we can take a shortcut
+        ;; and consume the single remaining variable.
+        (when (and (null rest-var)
+                   (null key-vars)
+                   (= 1 (length remaining-var)))
+          (let ((single-var (cl-first remaining-var))
+                (final-val `(nth ,fist-positional-pos
+                                 ,(or whole-var value-expression))))
+            (if (sequencep single-var)
+                (dolist (binding (loopy--destructure-sequence
+                                  single-var final-val))
+                  (push binding bindings))
+              (push `(,single-var ,final-val) bindings)))
+          ;; Consume final remaining positional var.
+          (setq remaining-var nil))
 
-                   (setq popped-vars other-vars
-                         pop-target (if pop-target-was-seq
-                                        (gensym "pop-target-")
-                                      last-var))
+        ;; Otherwise, if there are still unignored positional variables,
+        ;; we need to decide how to pop them off.
+        (when remaining-var
 
-                   (push `(,pop-target ,(or whole-var value-expression))
-                         bindings))))
+          (let (;; The positional variables sans those that can be ignored given the
+                ;; destructuring requirements.
+                (popped-vars)
+                ;; Whence positional values are popped.  This can be a generated
+                ;; variable.
+                (pop-target)
+                ;; Whether we'll need to do more destructuring after processing
+                ;; the variables in `popped-vars'.  This is the orignal sequence,
+                ;; not the generated variable.
+                (pop-target-was-seq)
+                ;; If `pop-target' is the last valid positional variable, then it
+                ;; needs to be extracted from a list of remaining values after the
+                ;; preceding positional variables are bound.  This is not a concern
+                ;; when `rest-var' is the `pop-target'.
+                (pop-target-is-positional-var))
 
-        ;; Now that variables are decided, pop `popped-vars' off of the value of
-        ;; `pop-target'.  If there are sublists of ignored variables, we skip
-        ;; over all of them and simply set the `pop-target' to some nth `cdr' of
-        ;; itself.
-        (while popped-vars
-          (let ((i (car popped-vars)))
-            (setq popped-vars (cdr popped-vars))
-            (cond ((sequencep i)
-                   (dolist (binding (loopy--destructure-sequence
-                                     i `(pop ,pop-target)))
-                     (push binding bindings)))
-                  ((loopy--var-ignored-p i)
-                   ;; Combine multiple ignored popped-vars.
-                   (let ((count (loopy--count-while
-                                 #'loopy--var-ignored-p popped-vars)))
-                     ;; `nthcdr' is a C function, so it should be fast enough
-                     ;; even for high counts.
-                     (push `(,pop-target (nthcdr ,(1+ count) ,pop-target))
-                           bindings)
-                     (setq popped-vars (nthcdr count popped-vars))))
-                  (t
-                   (push `(,i (pop ,pop-target))
-                         bindings)))))
+            ;; Choose the variables to bind and whence they will be extracted.
+            (cond
+             ;; Rest var is bound in its own section, in case there are no
+             ;; positional variables.  Otherwise, it would be bound here.
+             (rest-var (setq pop-target rest-var
+                             popped-vars remaining-var
+                             pop-target-was-seq rest-var-was-sequence
+                             pop-target-is-positional-var nil))
 
-        ;; Do final update of `pop-target' if need be.  We only need to do this
-        ;; if it was a sequence (in which case there are more variables to bind)
-        ;; or if it was a positional variable.
-        (cond
-         (pop-target-was-seq
-          (dolist (bind (loopy--destructure-sequence
-                         ;; If `pop-target' is `rest-var', then it is the
-                         ;; remainder of the current list. Else, `pop-target' is
-                         ;; an element of that list.
-                         pop-target-was-seq (if rest-var
-                                                pop-target
-                                              `(car ,pop-target))))
-            (push bind bindings)))
-         (pop-target-is-positional-var
-          (push `(,pop-target (car ,pop-target)) bindings)))))
+             (key-vars (setq pop-target key-target-var
+                             popped-vars remaining-var
+                             pop-target-was-seq nil
+                             pop-target-is-positional-var nil)
+
+                       ;; `key-target-var' is only used with `&key' without
+                       ;; `&rest'.
+                       (let ((val (or whole-var value-expression)))
+                         (push `(,key-target-var
+                                 ,(if (zerop fist-positional-pos)
+                                      val
+                                    `(nthcdr ,fist-positional-pos ,val)))
+                               bindings))
+                       (setq popping-key-target-var t))
+
+             ;; TODO: Optimize when final var is pop var.
+             (t (seq-let (other-vars last-var)
+                    (loopy--split-off-last-var remaining-var)
+
+                  (setq pop-target-is-positional-var t
+                        pop-target-was-seq (and (sequencep last-var) last-var)
+                        popped-vars other-vars
+                        pop-target (if pop-target-was-seq
+                                       (gensym "pop-target-")
+                                     last-var))
+
+                  (let ((val (or whole-var value-expression)))
+                    (push `(,pop-target ,(if (zerop fist-positional-pos)
+                                             val
+                                           `(nthcdr ,fist-positional-pos ,val)))
+                          bindings)))))
+
+            ;; Now that variables are decided, pop `popped-vars' off of the value of
+            ;; `pop-target'.  If there are sublists of ignored variables, we skip
+            ;; over all of them and simply set the `pop-target' to some nth `cdr' of
+            ;; itself.
+            (while popped-vars
+              (let ((i (car popped-vars)))
+                (setq popped-vars (cdr popped-vars))
+                (cond ((sequencep i)
+                       (dolist (binding (loopy--destructure-sequence
+                                         i `(pop ,pop-target)))
+                         (push binding bindings)))
+                      ((loopy--var-ignored-p i)
+                       ;; Combine multiple ignored popped-vars.
+                       (let ((count (loopy--count-while
+                                     #'loopy--var-ignored-p popped-vars)))
+                         ;; `nthcdr' is a C function, so it should be fast enough
+                         ;; even for high counts.
+                         (push `(,pop-target (nthcdr ,(1+ count) ,pop-target))
+                               bindings)
+                         (setq popped-vars (nthcdr count popped-vars))))
+                      (t
+                       (push `(,i (pop ,pop-target))
+                             bindings)))))
+
+
+            ;; Since we can ignore positions between the last unignored
+            ;; positional variable and the rest var, we need to make sure that
+            ;; the rest var is the correct Nth cdr now that we're done popping.
+            ;;
+            ;; `rest-pos' is technically just the length of the list of
+            ;; positional variables before we started processing them,
+            ;; so it is always bound to a number.
+            (when (or rest-var key-vars)
+              (let ((pos-diff (- rest-pos last-positional-pos))
+                    (var (or rest-var key-target-var)))
+                (when (> pos-diff 1)
+                  (push `(,var (nthcdr ,(1- pos-diff) ,var))
+                        bindings))))
+
+            ;; Do final update of `pop-target' if need be.  We only need to do this
+            ;; if it was a sequence (in which case there are more variables to bind)
+            ;; or if it was a positional variable.
+            (cond
+             (pop-target-was-seq
+              (dolist (bind (loopy--destructure-sequence
+                             ;; If `pop-target' is `rest-var', then it is the
+                             ;; remainder of the current list. Else, `pop-target' is
+                             ;; an element of that list.
+                             pop-target-was-seq (if rest-var
+                                                    pop-target
+                                                  `(car ,pop-target))))
+                (push bind bindings)))
+             (pop-target-is-positional-var
+              (push `(,pop-target (car ,pop-target)) bindings)))))))
 
     ;; Now process the keys.
     (when key-vars
-      ;; If we are only using keys, then we need to create a holding variable in
-      ;; which to search.
-      (unless bindings
-        (push `(,key-target-var ,value-expression)
-              bindings))
       (let ((target-var (or rest-var
                             ;; If we used positional variables, then they can be
-                            ;; popped off of `key-target-var'.
+                            ;; popped off of `key-target-var', which is bound
+                            ;; to the value expression or `whole-var'.
                             (and positional-vars key-target-var)
                             whole-var
                             key-target-var)))
+
+        ;; If we are only using keys, then we need to create a holding variable in
+        ;; which to search.
+        (when (and (eq target-var key-target-var)
+                   (null popping-key-target-var))
+          (let ((val (or whole-var value-expression)))
+            (push `(,key-target-var
+                    ,(if positional-vars
+                         `(nthcdr ,(length positional-vars) ,val)
+                       val))
+                  bindings)))
+
         ;; TODO: In Emacs 28, `pcase' was changed so that all named variables
         ;; are at least bound to nil.  Before that version, we should make sure
         ;; that `default' is bound.
@@ -528,6 +701,10 @@ Only the positional variables and the remainder can be recursive."
                               ,default)
                          `(plist-get ,target-var ,key)))
                     bindings))))))
+
+    ;; Check that things were bound.
+    (when (null bindings)
+      (error "No variables bound: %s" var))
 
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
@@ -556,45 +733,65 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 - `&rest' references a subsequence place.
 - `&whole' references the entire place."
   (let ((bindings)
-        (remaining-var))
-    (if (eq '&whole (aref var 0))
-        (progn
-          (push `(,(aref var 1) ,value-expression)
-                bindings)
-          (setq remaining-var (seq-drop var 2)))
-      (setq remaining-var var))
+        (using-rest-var)
+        (remaining-var var)
+        (using-whole-var)
+        (remaining-length (length var)))
 
-    (cl-loop named loop
-             with array-length = (length remaining-var)
-             for v across remaining-var
+    (when (eq '&whole (aref var 0))
+      (cond ((= 1 remaining-length)
+             (error "`&whole' variable not named: %s" var))
+            ((sequencep (aref remaining-var 1))
+             (error "`&whole' variable is sequence: %s" var))
+            (t
+             (let ((whole-var (aref remaining-var 1)))
+               (when (= 2 remaining-length)
+                 (warn "`&whole' variable used alone: %s" var))
+
+               (setq remaining-var (substring remaining-var 2)
+                     remaining-length (max 0 (- remaining-length 2)))
+
+               (if (loopy--var-ignored-p whole-var)
+                   (warn "`&whole' variable ignored: %s" var)
+                 (setq using-whole-var whole-var))))))
+
+    (when-let ((pos (cl-position '&rest remaining-var :test #'eq)))
+      (cond
+       ((= (1+ pos) remaining-length)
+        (error "`&rest' variable not named: %s" var))
+       ((> remaining-length (+ 2 pos))
+        (error "Too many variables after `&rest': %s" var))
+       (t
+        (setq using-rest-var (aref remaining-var (1+ pos))
+              remaining-length (max 0 (- remaining-length 2))
+              remaining-var (substring remaining-var 0 -2)))))
+
+    (when using-whole-var
+      (push `(,using-whole-var ,value-expression) bindings))
+
+    (cl-loop for v across remaining-var
              for idx from 0
              do (cond
                  ((loopy--var-ignored-p v)) ; Do nothing if variable is `_'.
-                 ((eq v '&rest)
-                  (let* ((next-idx (1+ idx))
-                         (next-var (aref remaining-var next-idx)))
-                    ;; Check that the var after `&rest' is the last:
-                    (when (> (1- array-length) next-idx)
-                      (error "More than one variable after `&rest': %s"
-                             var))
-
-                    (if (sequencep next-var)
-                        (dolist (binding (loopy--destructure-generalized-sequence
-                                          ;; Note: `seq-subseq' doesn't have a
-                                          ;; setter, but `cl-subseq' does.
-                                          next-var `(cl-subseq ,value-expression
-                                                               ,idx)))
-                          (push binding bindings))
-                      (push `(,next-var (cl-subseq ,value-expression ,idx))
-                            bindings))
-                    ;; Exit the loop.
-                    (cl-return-from loop)))
                  (t (if (sequencep v)
                         (dolist (binding (loopy--destructure-generalized-sequence
                                           v `(aref ,value-expression ,idx)))
                           (push binding bindings))
                       (push `(,v (aref ,value-expression ,idx))
                             bindings)))))
+
+    ;; Now bind the `&rest' var, if needed.
+    (when (and using-rest-var
+               (not (loopy--var-ignored-p using-rest-var)))
+      ;; Note: Can't use the more specific `substring' here, as that would
+      ;;       convert the sequence to a string in `setf'.
+      (let ((rest-val `(cl-subseq ,value-expression ,remaining-length)))
+        (if (sequencep using-rest-var)
+            (dolist (binding (loopy--destructure-sequence
+                              using-rest-var rest-val))
+              (push binding bindings))
+          (push `(,using-rest-var ,rest-val) bindings))))
+
     (nreverse bindings)))
 
 (cl-defun loopy--destructure-generalized-list (var value-expression)
@@ -608,23 +805,24 @@ returns a list of bindings suitable for `cl-symbol-macrolet'.
 - `&whole' references the entire place.
 
 See `loopy--destructure-list' for normal values."
-  (let ((bindings nil))                  ; The result of this function.
+  (let ((var-list var)                  ; For reporting errors.
+        (bindings nil))                 ; The result of this function.
 
     (when (eq (cl-first var) '&whole)
       (cond
        ;; Make sure there is a variable named.
        ((null (cdr var))
-        (error "Bad destructuring: %s" var))
+        (error "Bad destructuring: %s" var-list))
        ;; If it's the only variable named, just bind it and return.
        ((null (cddr var))
         (warn "`&whole' used when only one variable listed: %s"
-              var)
+              var-list)
         (cl-return-from loopy--destructure-generalized-list
           `((,(cl-second var) ,value-expression))))
        (t
         (let ((possible-whole-var (cl-second var)))
           (if (loopy--var-ignored-p possible-whole-var)
-              (warn "`&whole' variable being ignored: %s" var)
+              (warn "`&whole' variable being ignored: %s" var-list)
             ;; Now just operate on remaining variables.
             (push `(,possible-whole-var ,value-expression)
                   bindings)))
@@ -654,18 +852,30 @@ See `loopy--destructure-list' for normal values."
 
            ((eq v '&rest)
             (setq looking-at-key-vars nil)
-            (when var-is-dotted
-              (error "Can't use `&rest' in dotted list: %s" var))
-            (let ((rest-var (cl-second var)))
-              (setq rest-var-value `(nthcdr ,index ,value-expression))
-              (if (sequencep rest-var)
-                  (dolist (bind (loopy--destructure-generalized-sequence
-                                 rest-var rest-var-value))
-                    (push bind bindings))
-                (push `(,rest-var ,rest-var-value)
-                      bindings)))
-            (setq var (cddr var))
-            (cl-incf index 2))
+            (let ((rest-var (cl-second var))
+                  (vars-after-rest-var (cddr var)))
+              (cond
+               (var-is-dotted
+                (error "Can't use `&rest' in dotted list: %s"
+                       var-list))
+               ((or (null rest-var)
+                    (memq rest-var '(&key &keys)))
+                (error "`&rest' variable not named: %s" var-list))
+               ((and vars-after-rest-var
+                     (not (memq (cl-first vars-after-rest-var)
+                                '(&key &keys))))
+                (error "Bad arguments after `&rest' var: %s" var-list))
+               (t
+                (unless (loopy--var-ignored-p rest-var)
+                  (setq rest-var-value `(nthcdr ,index ,value-expression))
+                  (if (sequencep rest-var)
+                      (dolist (bind (loopy--destructure-generalized-sequence
+                                     rest-var rest-var-value))
+                        (push bind bindings))
+                    (push `(,rest-var ,rest-var-value)
+                          bindings)))
+                (setq var (cddr var))
+                (cl-incf index 2)))))
 
            ;; For keys, we don't want to increase the index, just skip over
            ;; them.  Key variables stop once `&rest' or the last cdr of a

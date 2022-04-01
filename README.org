@@ -30,6 +30,8 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - More incorrect destructured bindings now correctly signal an error.
  - Version 0.10.1 (2022-02-29):
    - The default test function for commands like =adjoin= and =union= is now
      ~equal~.  Previously, ~loopy~ copied ~cl-loop~ and used ~eql~, but it makes
