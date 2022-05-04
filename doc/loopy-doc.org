@@ -490,95 +490,100 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   #+END_QUOTE
 
 * Loop Commands
-  :PROPERTIES:
-  :CUSTOM_ID: loop-commands
-  :DESCRIPTION: The main features of `loopy'.
-  :END:
+:PROPERTIES:
+:CUSTOM_ID: loop-commands
+:DESCRIPTION: The main features of `loopy'.
+:END:
 
-  #+cindex: loop command
-  If a macro argument does not match one of the previously listed special macro
-  arguments ([[#macro-arguments][Special Macro Arguments]]), ~loopy~ will attempt to treat it as a
-  loop command.  Loop commands are only valid as a top-level argument to the
-  macro, or inside another loop command.
+#+cindex: loop command
+If a macro argument does not match one of the previously listed special macro
+arguments ([[#macro-arguments][Special Macro Arguments]]), ~loopy~ will attempt to treat it as a loop
+command.  Loop commands are only valid as a top-level argument to the macro, or
+inside another loop command.
 
-  Therefore, these macro calls are valid:
+Therefore, these macro calls are valid:
 
-  #+BEGIN_SRC emacs-lisp
-    (loopy (list i '(1 2 3))
-           (collect coll i)
-           ;; Special macro argument:
-           (finally-return coll))
+#+BEGIN_SRC emacs-lisp
+  (loopy (list i '(1 2 3))
+         (collect coll i)
+         ;; Special macro argument:
+         (finally-return coll))
 
-    ;; Implicit accumulation variable and implicit return value:
-    (loopy (list i '(1 2 3))
-           (collect i))
-  #+END_SRC
+  ;; Implicit accumulation variable and implicit return value:
+  (loopy (list i '(1 2 3))
+         (collect i))
+#+END_SRC
 
-  and this is not:
+and this is not:
 
-  #+BEGIN_SRC emacs-lisp
-    (loopy (with (list i '(1 2 3)))
-           (finally-return (collect coll i)))
-  #+END_SRC
+#+BEGIN_SRC emacs-lisp
+  (loopy (with (list i '(1 2 3)))
+         (finally-return (collect coll i)))
+#+END_SRC
 
-  Trying to use loop commands in places where they don't belong will result in
-  errors when the code is evaluated.
+Trying to use loop commands in places where they don't belong will result in
+errors when the code is evaluated.
 
-  You should keep in mind that commands are evaluated in order.  This means that
-  attempting to do something like the below example might not do what you
-  expect, as =i= is assigned a value from the list after collecting =i= into
-  =coll=.
+You should keep in mind that commands are evaluated in order.  This means that
+attempting to do something like the below example might not do what you expect,
+as =i= is assigned a value from the list after collecting =i= into =coll=.
 
-  #+caption: An example of how loop commands are evaluated in order.
-  #+BEGIN_SRC emacs-lisp
-    ;; => (nil 1 2)
-    (loopy (collect coll i)
-           (list i '(1 2 3))
-           (finally-return coll))
-  #+END_SRC
+#+caption: An example of how loop commands are evaluated in order.
+#+BEGIN_SRC emacs-lisp
+  ;; => (nil 1 2)
+  (loopy (collect coll i)
+         (list i '(1 2 3))
+         (finally-return coll))
+#+END_SRC
 
-  For convenience and understanding, the same command might have multiple names,
-  called {{{dfn(aliases)}}}.  For example, the command =set= has an alias
-  =expr=, because =set= is used to /set/ a variable to the value of an
-  /expression/.  Similary, the =array= command has the alias =string=, because
-  the =array= command can be used to iterate through the elements of an array or
-  string[fn:1].  You can define custom aliases using the macro ~loopy-defalias~
-  ([[#custom-aliases][Custom Aliases]]).
+For convenience and understanding, the same command might have multiple names,
+called {{{dfn(aliases)}}}.  For example, the command =set= has an alias =expr=,
+because =set= is used to /set/ a variable to the value of an /expression/.
+Similary, the =array= command has the alias =string=, because the =array=
+command can be used to iterate through the elements of an array or string[fn:1].
+You can define custom aliases using the macro ~loopy-defalias~ ([[#custom-aliases][Custom Aliases]]).
 
-  Some commands take optional keyword arguments.  For example, the command
-  =list= can take a function argument following the keyword =:by=, which affects
-  how that iterates through the elements in the list.
+Similar to other libraries, many commands have an alias of the present
+participle form (the "-ing" form).  A few examples are seen in the table below.
 
-  For simplicity, the commands are described using the following notation:
+| Command   | "-ing" Alias |
+|-----------+--------------|
+| =set=     | =setting=    |
+| =list=    | =listing=    |
+| =collect= | =collecting= |
+| =numbers= | =numbering=  |
 
-  - If a command has multiple names, the names are separated by a vertical
-    bar, such as in =set|expr=.
-  - =VAR= is an unquoted symbol that will be used as a variable name, such as
-    =i= in =(list i my-list)=.
-  - =FUNC= is a quoted Lisp function name, such as ~#'my-func~ or ~'my-func~, a
-    variable whose value is a function, or a ~lambda~ expression.
-  - =NAME= is an unquoted name of a loop (or, more accurately, of a
-    =cl-block=).
-  - =EXPR= is a single Lisp expression, such as =(+ 1 2)=, ='(1 2 3)=,
-    =my-var=, or =(some-function my-var)=.  =EXPRS= means multiple expressions.
-    Really, we are concerned with the value of the expression, not the
-    expression itself.
-  - =CMD= is a loop command, as opposed to a normal Lisp expression.
-    =(list i '(1 2 3))=, =(cycle 5)=, and =(return-from outer-loop 7)=
-    are examples of loop commands.  =CMDS= means multiple commands.
-  - Optional arguments are surround by brackets.  =[EXPR]= is an optional
-    expression, and =[CMD]= is an optional command.  By extension,
-    =[EXPRS]= is equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to
-    =[CMD [CMD [...]]]=.
-  - Optional keyword arguments are shown as =&key key1 key2 ...=, where =key1=,
-    =key2=, and so on are the literal keywords.  Just like in normal Lisp
-    functions, keywords must be prefixed by a colon (":").  For example, the
-    iteration command =nums= has a keyword argument =by=, which can be given a
-    value using =:by SOME-EXPRESSION=.
+Some commands take optional keyword arguments.  For example, the command =list=
+can take a function argument following the keyword =:by=, which affects how that
+iterates through the elements in the list.
+
+For simplicity, the commands are described using the following notation:
+
+- If a command has multiple names, the names are separated by a vertical bar,
+  such as in =set|expr=.
+- =VAR= is an unquoted symbol that will be used as a variable name, such as =i=
+  in =(list i my-list)=.
+- =FUNC= is a quoted Lisp function name, such as ~#'my-func~ or ~'my-func~, a
+  variable whose value is a function, or a ~lambda~ expression.
+- =NAME= is an unquoted name of a loop (or, more accurately, of a =cl-block=).
+- =EXPR= is a single Lisp expression, such as =(+ 1 2)=, ='(1 2 3)=, =my-var=,
+  or =(some-function my-var)=.  =EXPRS= means multiple expressions.  Really, we
+  are concerned with the value of the expression, not the expression itself.
+- =CMD= is a loop command, as opposed to a normal Lisp expression.
+  =(list i '(1 2 3))=, =(cycle 5)=, and =(return-from outer-loop 7)=
+  are examples of loop commands.  =CMDS= means multiple commands.
+- Optional arguments are surround by brackets.  =[EXPR]= is an optional
+  expression, and =[CMD]= is an optional command.  By extension, =[EXPRS]= is
+  equivalent to =[EXPR [EXPR [...]]]=, and =[CMDS]= to =[CMD [CMD [...]]]=.
+- Optional keyword arguments are shown as =&key key1 key2 ...=, where =key1=,
+  =key2=, and so on are the literal keywords.  Just like in normal Lisp
+  functions, keywords must be prefixed by a colon (":").  For example, the
+  iteration command =list= has a keyword argument =by=, which can be given a
+  value using =:by SOME-EXPRESSION=.
 
 
-  Generally, =VAR= is initialized to ~nil~, but not always.  This document
-  tries to note when that is not the case.
+Generally, =VAR= is initialized to ~nil~, but not always.  This document tries
+to note when that is not the case.
 
 ** Basic Destructuring
 :PROPERTIES:
@@ -932,63 +937,58 @@ An element in the sequence =VAR= can be one of the following:
      #+end_src
 
 ** Iteration
-   :PROPERTIES:
-   :CUSTOM_ID: iteration-and-looping-commands
-   :DESCRIPTION: Iterating through sequences, etc.
-   :END:
+:PROPERTIES:
+:CUSTOM_ID: iteration-and-looping-commands
+:DESCRIPTION: Iterating through sequences, etc.
+:END:
 
-   Iteration commands bind local variables and determine when the loop ends.  If
-   no command sets an ending condition, then the loop runs forever.  Infinite
-   loops can be exited by using early-exit commands ([[#exiting-the-loop-early]]) or
-   boolean commands ([[#boolean-commands]]).
+Iteration commands bind local variables and determine when the loop ends.  If no
+command sets an ending condition, then the loop runs forever.  Infinite loops
+can be exited by using early-exit commands ([[#exiting-the-loop-early]]) or boolean
+commands ([[#boolean-commands]]).
 
-   Iteration commands must occur in the top level of the ~loopy~ form or in a
-   =sub-loop= command.  Trying to do something like the below will signal an
-   error.
+Iteration commands must occur in the top level of the ~loopy~ form or in a
+=sub-loop= command.  Trying to do something like the below will signal an error.
 
-   #+begin_src emacs-lisp
-     ;; Signals an error:
-     (loopy (list i '(1 2 3 4 5))
-            (when (cl-evenp i)
-              ;; Can't use `list' in a `when'.
-              ;; Will signal an error.
-              (list j '(6 7 8 9 10))
-              (collect j)))
-   #+end_src
+#+begin_src emacs-lisp
+  ;; Signals an error:
+  (loopy (list i '(1 2 3 4 5))
+         (when (cl-evenp i)
+           ;; Can't use `list' in a `when'.
+           ;; Will signal an error.
+           (list j '(6 7 8 9 10))
+           (collect j)))
+#+end_src
 
 
-   In ~loopy~, iteration commands are named after what they iterate through.
-   For example, the =array= and =list= commands iterate through the elements of
-   arrays and lists, respectively.  For the sake of familiarity, these commands
-   also have aliases based on their equivalent =for=-clause from ~cl-loop~.  To
-   translate =for VAR in LIST= from ~cl-loop~, one can use either
-   =(list VAR LIST)= or =(in VAR LIST)=.
-
+In ~loopy~, iteration commands are named after what they iterate through.  For
+example, the =array= and =list= commands iterate through the elements of arrays
+and lists, respectively.
 
 *** Generic Iteration
-   :PROPERTIES:
-   :CUSTOM_ID: generic-iteration
-   :DESCRIPTION: Looping a certain number of times.
-   :END:
+:PROPERTIES:
+:CUSTOM_ID: generic-iteration
+:DESCRIPTION: Looping a certain number of times.
+:END:
 
-    #+findex: cycle, repeat
-    - =(cycle|repeat [VAR] EXPR)= :: Add a condition that the loop should stop
-      after =EXPR= iterations.  If specified, =VAR= starts at 0, and is
-      incremented by 1 at the end of the loop.  If =EXPR= is 0, then the loop
-      isn't run.
+#+findex: cycle, repeat
+- =(cycle|repeat [VAR] EXPR)= :: Add a condition that the loop should stop
+  after =EXPR= iterations.  If specified, =VAR= starts at 0, and is
+  incremented by 1 at the end of the loop.  If =EXPR= is 0, then the loop
+  isn't run.
 
-      #+BEGIN_SRC emacs-lisp
-        (loopy (cycle 3)
-               (do (message "Messaged three times.")))
+  #+BEGIN_SRC emacs-lisp
+    (loopy (cycle 3)
+           (do (message "Messaged three times.")))
 
-        (loopy (repeat i 3)
-               (do (message "%d" i)))
+    (loopy (repeat i 3)
+           (do (message "%d" i)))
 
-        ;; An argument of 0 stops the loop from running:
-        ;; => nil
-        (loopy (cycle 0)
-               (collect 'some-value))
-      #+END_SRC
+    ;; An argument of 0 stops the loop from running:
+    ;; => nil
+    (loopy (cycle 0)
+           (collect 'some-value))
+  #+END_SRC
 
 
 *** Numeric Iteration
@@ -1152,277 +1152,271 @@ simple wrappers of the above =nums= command.
 
 
 *** Sequence Iteration
-    :PROPERTIES:
-    :CUSTOM_ID: sequence-iteration
-    :DESCRIPTION: Iterating through sequences.
-    :END:
+:PROPERTIES:
+:CUSTOM_ID: sequence-iteration
+:DESCRIPTION: Iterating through sequences.
+:END:
 
-    These commands provide various ways to iterate through sequences
-    ([[info:elisp#Sequences Arrays Vectors]]).
+These commands provide various ways to iterate through sequences
+([[info:elisp#Sequences Arrays Vectors]]).
 
-    #+cindex: sequence element distribution
-    Instead of iterating through just one sequence, the =array=, =list=, and
-    =seq= commands can be given multiple sequences of various sizes.  In such
-    cases, the elements of the sequences are {{{dfn(distributed)}}}, like in the
-    distributive property from mathematics.  A new sequence of distributed
-    elements is created before the loop runs, and that sequence is used for
-    iteration instead of the source sequences.  As seen in the below example,
-    the resulting behavior is similar to that of nested loops.
+#+cindex: sequence element distribution
+Instead of iterating through just one sequence, the =array=, =list=, and =seq=
+commands can be given multiple sequences of various sizes.  In such cases, the
+elements of the sequences are {{{dfn(distributed)}}}, like in the distributive
+property from mathematics.  A new sequence of distributed elements is created
+before the loop runs, and that sequence is used for iteration instead of the
+source sequences.  As seen in the below example, the resulting behavior is
+similar to that of nested loops.
 
-    #+begin_src emacs-lisp
-      ;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
-      (loopy (list i '(1 2) '(3 4 5) '(6))
-             (collect i))
+#+begin_src emacs-lisp
+  ;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
+  (loopy (list i '(1 2) '(3 4 5) '(6))
+         (collect i))
 
-      ;; Gives the same result as this
-      (let ((result nil))
-        (dolist (i '(1 2))
-          (dolist (j '(3 4 5))
-            (dolist (k '(6))
-              (push (list i j k) result))))
-        (nreverse result))
+  ;; Gives the same result as this
+  (let ((result nil))
+    (dolist (i '(1 2))
+      (dolist (j '(3 4 5))
+        (dolist (k '(6))
+          (push (list i j k) result))))
+    (nreverse result))
 
-      ;; and this
-      (cl-loop for i in '(1 2)
-               append (cl-loop for j in '(3 4 5)
-                               append (cl-loop for k in '(6)
-                                               collect (list i j k))))
-    #+end_src
-
-
-    The =array= and =sequence= commands can use the same keywords as the =nums=
-    command ([[#numeric-iteration]]) for working with the index and choosing a range
-    of the sequence elements through which to iterate.  In addition to those
-    keywords, they also have an =index= keyword, which names the variable used
-    to store the accessed index during the loop.
-
-    #+begin_src emacs-lisp
-      ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
-      (loopy (array i [10 9 8 6 7 5 4 3 2 1] :from 1 :by 2 :index ind)
-             (collect (cons ind i)))
-    #+end_src
-
-    Keep in mind that if used with sequence distribution, these keywords affect
-    iterating through the sequence of distributed elements.  That is, they do
-    not affect how said sequence is produced.  In the example below, see that
-    ~cddr~ is applied to the sequence of distributed elements.  It is /not/
-    applied to the source sequences.
-
-    #+begin_src emacs-lisp
-      ;; This code creates the sequence of distributed elements
-      ;; ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
-      ;; and then moves through this sequence using `cddr'.
-      ;;
-      ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
-      (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
-             (collect i))
-
-      ;; Not the same as:
-      ;; => ((1 4) (1 6) (3 4) (3 6))
-      (loopy (list i '(1 3) '(4 6))
-             (collect i))
-    #+end_src
+  ;; and this
+  (cl-loop for i in '(1 2)
+           append (cl-loop for j in '(3 4 5)
+                           append (cl-loop for k in '(6)
+                                           collect (list i j k))))
+#+end_src
 
 
-    #+findex: array, string, across
-    - =(array|string|across VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
-      elements of the array =EXPR=.  In Emacs Lisp, strings are arrays whose
-      elements are characters.
+The =array= and =sequence= commands can use the same keywords as the =nums=
+command ([[#numeric-iteration]]) for working with the index and choosing a range of
+the sequence elements through which to iterate.  In addition to those keywords,
+they also have an =index= keyword, which names the variable used to store the
+accessed index during the loop.
 
-      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
-      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
-      used to store the index being accessed.  For others, see the =nums=
-      command.
+#+begin_src emacs-lisp
+  ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
+  (loopy (array i [10 9 8 6 7 5 4 3 2 1] :from 1 :by 2 :index ind)
+         (collect (cons ind i)))
+#+end_src
 
-      If multiple arrays are given, then the elements of these arrays are
-      distributed into an array of lists.  In that case, the above keywords
-      apply to this new, resulting array of lists.
+Keep in mind that if used with sequence distribution, these keywords affect
+iterating through the sequence of distributed elements.  That is, they do not
+affect how said sequence is produced.  In the example below, see that ~cddr~ is
+applied to the sequence of distributed elements.  It is /not/ applied to the
+source sequences.
 
-      #+BEGIN_SRC emacs-lisp
-        (loopy (array i [1 2 3])
-               (do (message "%d" i)))
+#+begin_src emacs-lisp
+  ;; This code creates the sequence of distributed elements
+  ;; ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+  ;; and then moves through this sequence using `cddr'.
+  ;;
+  ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+  (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+         (collect i))
 
-        ;; => (1 3)
-        (loopy (array i [1 2 3 4] :by 2)
-               (collect i))
+  ;; Not the same as:
+  ;; => ((1 4) (1 6) (3 4) (3 6))
+  (loopy (list i '(1 3) '(4 6))
+         (collect i))
+#+end_src
 
-        ;; Collects the integer values representing each character.
-        ;; => (97 98 99)
-        (loopy (string c "abc")
-               (collect c))
 
-        ;; This is the same as using [(1 3) (1 4) (2 3) (2 4)].
-        ;; => ((1 3) (1 4) (2 3) (2 4))
-        (loopy (array i [1 2] [3 4])
-               (collect i))
+#+findex: array, string
+- =(array|string VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
+  elements of the array =EXPR=.  In Emacs Lisp, strings are arrays whose
+  elements are characters.
 
-        ;; => ((1 3) (2 3))
-        (loopy (array i [1 2] [3 4] :by 2)
-               (collect i))
-      #+END_SRC
+  =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+  =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+  used to store the index being accessed.  For others, see the =nums= command.
 
-    #+findex: cons, conses, on
-    - =(cons|conses|on VAR EXPR &key by)= :: Loop through the cons cells of
-      =EXPR=.  Optionally, find the cons cells via function =by= instead of
-      =cdr=.
+  If multiple arrays are given, then the elements of these arrays are
+  distributed into an array of lists.  In that case, the above keywords apply to
+  this new, resulting array of lists.
 
-      #+BEGIN_SRC emacs-lisp
-        (loopy (cons i '(1 2 3))
-               (collect coll i)
-               (finally-return coll)) ; => ((1 2 3) (2 3) (3))
-      #+END_SRC
+  #+BEGIN_SRC emacs-lisp
+    (loopy (array i [1 2 3])
+           (do (message "%d" i)))
 
-    #+findex: list, in, each
-    - =(list|in|each VAR EXPR [EXPRS] &key by)= :: Loop through each element of
-      the list =EXPR=.  Optionally, update the list by =by= instead of =cdr=.
+    ;; => (1 3)
+    (loopy (array i [1 2 3 4] :by 2)
+           (collect i))
 
-      If multiple lists are given, distribute the elements of the lists into one
-      new list.  In such cases, =by= applies to the new list, not the arguments
-      of the command.
+    ;; Collects the integer values representing each character.
+    ;; => (97 98 99)
+    (loopy (string c "abc")
+           (collect c))
 
-      #+BEGIN_SRC emacs-lisp
-        (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
-               (do (message "%d" i)))
+    ;; This is the same as using [(1 3) (1 4) (2 3) (2 4)].
+    ;; => ((1 3) (1 4) (2 3) (2 4))
+    (loopy (array i [1 2] [3 4])
+           (collect i))
 
-        ;; => ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
-        (loopy (list i '(1 2 3) '(4 5 6))
-               (collect i))
+    ;; => ((1 3) (2 3))
+    (loopy (array i [1 2] [3 4] :by 2)
+           (collect i))
+  #+END_SRC
 
-        ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
-        (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
-               (collect i))
-      #+END_SRC
+#+findex: cons, conses
+- =(cons|conses VAR EXPR &key by)= :: Loop through the cons cells of =EXPR=.
+  Optionally, find the cons cells via function =by= instead of =cdr=.
 
-    #+findex: map, map-pairs
-    - =(map|map-pairs VAR EXPR &key unique)= :: Iterate through the dotted key-value pairs
-      of =EXPR=, using the function ~map-pairs~ from the =map.el= library.  This
-      library generalizes working with association lists ("alists"), property
-      lists ("plists"), hash-tables, and vectors.
+  #+BEGIN_SRC emacs-lisp
+    (loopy (cons i '(1 2 3))
+           (collect coll i)
+           (finally-return coll)) ; => ((1 2 3) (2 3) (3))
+  #+END_SRC
 
-      In each dotted pair assigned to =VAR=, the ~car~ is the key and the ~cdr~
-      is the value.
+#+findex: list, each
+- =(list|each VAR EXPR [EXPRS] &key by)= :: Loop through each element of the
+  list =EXPR=.  Optionally, update the list by =by= instead of =cdr=.
 
-      By default, only the unique keys are used.  To disable this deduplication,
-      pass ~nil~ to the =unique= keyword argument.
+  If multiple lists are given, distribute the elements of the lists into one new
+  list.  In such cases, =by= applies to the new list, not the arguments of the
+  command.
 
-      You should not rely on the order in which the key-value pairs are found.
+  #+BEGIN_SRC emacs-lisp
+    (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
+           (do (message "%d" i)))
 
-      These pairs are created before the loop begins.  In other words, the map
-      =EXPR= is not processed progressively, but all at once.  Therefore, this
-      command can have a noticeable start-up cost when working with very large
-      maps.
+    ;; => ((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+    (loopy (list i '(1 2 3) '(4 5 6))
+           (collect i))
 
-      #+begin_src emacs-lisp
-        ;; => ((a . 1) (b . 2))
-        (loopy (map pair '((a . 1) (b . 2)))
-               (collect pair))
+    ;; => ((1 4) (1 6) (2 5) (3 4) (3 6))
+    (loopy (list i '(1 2 3) '(4 5 6) :by #'cddr)
+           (collect i))
+  #+END_SRC
 
-        ;; => ((a b) (1 2))
-        (loopy (map (key . value) '((a . 1) (b . 2)))
-               (collect keys key)
-               (collect values value)
-               (finally-return keys values))
+#+findex: map, map-pairs
+- =(map|map-pairs VAR EXPR &key unique)= :: Iterate through the dotted key-value
+  pairs of =EXPR=, using the function ~map-pairs~ from the =map.el= library.
+  This library generalizes working with association lists ("alists"), property
+  lists ("plists"), hash-tables, and vectors.
 
-        ;; => ((:a :b) (1 2))
-        (loopy (map (key . value) '(:a  1 :b 2))
-               (collect keys key)
-               (collect values value)
-               (finally-return keys values))
+  In each dotted pair assigned to =VAR=, the ~car~ is the key and the ~cdr~ is
+  the value.
 
-        ;; NOTE: For vectors, the keys are indices.
-        ;; => ((0 1) (1 2))
-        (loopy (map (key . value) [1 2])
-               (collect keys key)
-               (collect values value)
-               (finally-return keys values))
+  By default, only the unique keys are used.  To disable this deduplication,
+  pass ~nil~ to the =unique= keyword argument.
 
-        ;; => ((a b) (1 2))
-        (let ((my-table (make-hash-table)))
-          (puthash 'a 1 my-table)
-          (puthash 'b 2 my-table)
+  You should not rely on the order in which the key-value pairs are found.
 
-          (loopy (map (key . value) my-table)
-                 (collect keys key)
-                 (collect values value)
-                 (finally-return keys values)))
-      #+end_src
+  These pairs are created before the loop begins.  In other words, the map
+  =EXPR= is not processed progressively, but all at once.  Therefore, this
+  command can have a noticeable start-up cost when working with very large maps.
 
-      Depending on how a map is created, a map might repeat a key multiple
-      times.  Currently, the function ~map-pairs~ returns such keys.  By
-      default, the command =map-pairs= ignores such duplicate keys.  This is for
-      two reasons:
-      1. This is more consistent with the command =map-ref=, for which such
-         duplicates are more likely to cause errors.
-      2. For maps that can have duplicate keys (alists, plists, etc.), there are
-         already other iteration commands (=list=, =cons=, etc.) that explicitly
-         include the duplicates.
+  #+begin_src emacs-lisp
+    ;; => ((a . 1) (b . 2))
+    (loopy (map pair '((a . 1) (b . 2)))
+           (collect pair))
 
-      Again, this can be disabled by setting =unique= to nil.
+    ;; => ((a b) (1 2))
+    (loopy (map (key . value) '((a . 1) (b . 2)))
+           (collect keys key)
+           (collect values value)
+           (finally-return keys values))
 
-      #+begin_src emacs-lisp
-        ;; A comparison of setting the `unique' key to nil:
-        ;;
-        ;; => ((a 1) (a 2) (b 3))
-        (loopy (map (key . val) '((a . 1) (a . 2) (b . 3)) :unique nil)
-               (collect (list key val)))
+    ;; => ((:a :b) (1 2))
+    (loopy (map (key . value) '(:a  1 :b 2))
+           (collect keys key)
+           (collect values value)
+           (finally-return keys values))
 
-        ;; In this case, `list' has the same result:
-        ;; => ((a 1) (a 2) (b 3))
-        (loopy (list (key . val) '((a . 1) (a . 2) (b . 3)))
-               (collect (list key val)))
+    ;; NOTE: For vectors, the keys are indices.
+    ;; => ((0 1) (1 2))
+    (loopy (map (key . value) [1 2])
+           (collect keys key)
+           (collect values value)
+           (finally-return keys values))
 
-        ;; => ((:a 1) (:a 2) (:b 3))
-        (loopy (map (key . val) '(:a 1 :a 2 :b 3) :unique nil)
-               (collect (list key val)))
+    ;; => ((a b) (1 2))
+    (let ((my-table (make-hash-table)))
+      (puthash 'a 1 my-table)
+      (puthash 'b 2 my-table)
 
-        ;; In this case, `cons' has the same result:
-        ;; => ((:a 1) (:a 2) (:b 3))
-        (loopy (cons (key val) '(:a 1 :a 2 :b 3) :by #'cddr)
-               (collect (list key val)))
-      #+end_src
+      (loopy (map (key . value) my-table)
+             (collect keys key)
+             (collect values value)
+             (finally-return keys values)))
+  #+end_src
 
-    #+findex: seq, sequence, elements
-    - =(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)= :: Loop through the
-      sequence =EXPR=, binding =VAR= to the elements of the sequence.  This is a
-      more generic form of the commands =list= and =array=, though it is
-      somewhat less efficient.
+  Depending on how a map is created, a map might repeat a key multiple times.
+  Currently, the function ~map-pairs~ returns such keys.  By default, the
+  command =map-pairs= ignores such duplicate keys.  This is for two reasons:
+  1. This is more consistent with the command =map-ref=, for which such
+     duplicates are more likely to cause errors.
+  2. For maps that can have duplicate keys (alists, plists, etc.), there are
+     already other iteration commands (=list=, =cons=, etc.) that explicitly
+     include the duplicates.
 
-      =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
-      =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
-      used to store the index being accessed.  For others, see the =nums=
-      command.
+  Again, this can be disabled by setting =unique= to nil.
 
-      If multiple sequences are given, then these keyword arguments apply to the
-      resulting sequence of distributed elements.
+  #+begin_src emacs-lisp
+    ;; A comparison of setting the `unique' key to nil:
+    ;;
+    ;; => ((a 1) (a 2) (b 3))
+    (loopy (map (key . val) '((a . 1) (a . 2) (b . 3)) :unique nil)
+           (collect (list key val)))
 
-      #+BEGIN_SRC emacs-lisp
-        ;; => (1 2 3)
-        (loopy (seq i [1 2 3])
-               (collect coll i)
-               (finally-return coll))
+    ;; In this case, `list' has the same result:
+    ;; => ((a 1) (a 2) (b 3))
+    (loopy (list (key . val) '((a . 1) (a . 2) (b . 3)))
+           (collect (list key val)))
 
-        ;; => (0 2 4)
-        (loopy (seq i [0 1 2 3 4 5] :by 2)
-               (collect i))
+    ;; => ((:a 1) (:a 2) (:b 3))
+    (loopy (map (key . val) '(:a 1 :a 2 :b 3) :unique nil)
+           (collect (list key val)))
 
-        ;; => (1 3 5)
-        (loopy (seq i [0 1 2 3 4 5 6]
-                    :by 2 :from 1 :to 5)
-               (collect i))
+    ;; In this case, `cons' has the same result:
+    ;; => ((:a 1) (:a 2) (:b 3))
+    (loopy (cons (key val) '(:a 1 :a 2 :b 3) :by #'cddr)
+           (collect (list key val)))
+  #+end_src
 
-        ;; => (5 3 1)
-        (loopy (seq i '(0 1 2 3 4 5 6)
-                    :downfrom 5 :by 2 :to 1)
-               (collect i))
+#+findex: seq, sequence
+- =(seq|sequence VAR EXPR [EXPRS] &key KEYS)= :: Loop through the sequence
+  =EXPR=, binding =VAR= to the elements of the sequence.  This is a more generic
+  form of the commands =list= and =array=, though it is somewhat less efficient.
 
-        ;; => ((1 3) (1 4) (2 3) (2 4))
-        (loopy (seq i [1 2] '(3 4))
-               (collect i))
+  =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+  =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
+  used to store the index being accessed.  For others, see the =nums= command.
 
-        ;; => ((1 3) (2 3))
-        (loopy (seq i [1 2] '(3 4) :by 2)
-               (collect i))
-      #+END_SRC
+  If multiple sequences are given, then these keyword arguments apply to the
+  resulting sequence of distributed elements.
+
+  #+BEGIN_SRC emacs-lisp
+    ;; => (1 2 3)
+    (loopy (seq i [1 2 3])
+           (collect coll i)
+           (finally-return coll))
+
+    ;; => (0 2 4)
+    (loopy (seq i [0 1 2 3 4 5] :by 2)
+           (collect i))
+
+    ;; => (1 3 5)
+    (loopy (seq i [0 1 2 3 4 5 6]
+                :by 2 :from 1 :to 5)
+           (collect i))
+
+    ;; => (5 3 1)
+    (loopy (seq i '(0 1 2 3 4 5 6)
+                :downfrom 5 :by 2 :to 1)
+           (collect i))
+
+    ;; => ((1 3) (1 4) (2 3) (2 4))
+    (loopy (seq i [1 2] '(3 4))
+           (collect i))
+
+    ;; => ((1 3) (2 3))
+    (loopy (seq i [1 2] '(3 4) :by 2)
+           (collect i))
+  #+END_SRC
 
 *** Sequence Index Iteration
     :PROPERTIES:

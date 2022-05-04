@@ -37,8 +37,23 @@ This document describes the user-facing changes to Loopy.
   - Better skip ignored variables.
   - Add slight optimizations for common uses, such as for `(car . _)` and
     `(_ . cdr)`.
+- Present-participle aliases (the "-ing" form) have been added for more
+  commands, such as `listing` for `list` and `setting` for `set`.  They already
+  existed for accumulation commands, such as `collecting` for `collect`.  See
+  [#118] and [#104].
+  - Aliases from `cl-loop`, such as `across` for the command `array` and `in` for
+    the command `list`, have been de-emphasized.  The present-participle aliases
+    are preferred when using the `lax-naming` flag.
+    ```elisp
+    (loopy-iter (flag +lax-naming)
+                (listing i '(1 2 3 4))
+                (collecting i))
+    ```
 
+
+[#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
+[#118]: https://github.com/okamsn/loopy/pull/118
 
 ## 0.10.1
 

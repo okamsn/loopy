@@ -98,22 +98,27 @@ Definition must exist.  Neither argument need be quoted."
     (adjoin          . (adjoining))
     (after-do        . (else after else-do))
     (append          . (appending))
-    (array           . (string across))
-    (array-ref       . (stringf arrayf across-ref string-ref))
+    (array           . (arraying string stringing across))
+    (array-ref       . ( arraying-ref arrayf arrayingf
+                         stringf stringingf
+                         string-ref stringing-ref
+                         across-ref))
     (before-do       . (initially-do initially before))
     (collect         . (collecting))
     (concat          . (concating))
-    (cons            . (conses on))
+    (cons            . (conses consing on))
     (count           . (counting))
-    (cycle           . (repeat))
+    (cycle           . (cycling repeat repeating))
     (finally-do      . (finally))
     (finally-protect . (finally-protected))
     (find            . (finding))
     (flag            . (flags))
-    (list            . (each in))
-    (list-ref        . (in-ref listf))
-    (map             . (map-pairs))
-    (map-ref         . (mapf))
+    (leave           . (leaving))
+    (leave-from      . (leaving-from))
+    (list            . (listing each in))
+    (list-ref        . (listf listingf in-ref))
+    (map             . (mapping map-pairs mapping-pairs))
+    (map-ref         . (mapf mappingf))
     (max             . (maximizing maximize maxing))
     ;; Unlike "maxing", there doesn't seem to be much on-line about the word
     ;; "minning", but the double-N follows conventional spelling rules, such as
@@ -121,22 +126,31 @@ Definition must exist.  Neither argument need be quoted."
     (min             . (minimizing minimize minning))
     (multiply        . (multiplying))
     (nconc           . (nconcing))
-    (nums            . (num number numbers))
-    (nums-down       . (numdown  number-down num-down  numbers-down numsdown))
-    (nums-up         . (numup  number-up num-up  numbers-up numsup))
+    (nums            . (num number numbers numbering))
+    (nums-down       . ( numdown  number-down num-down  numbers-down numsdown
+                         numbering-down))
+    (nums-up         . ( numup number-up num-up  numbers-up numsup
+                         numbering-up))
     (nunion          . (nunioning))
     (opt-accum       . (accum-opt))
     (prepend         . (prepending))
     (push-into       . (push pushing pushing-into))
     (reduce          . (reducing callf))
-    (set             . (exprs expr))
-    (set-prev        . (prev prev-expr prev-set))
-    (seq             . (sequence elements))
-    (seq-index       . ( list-index listi seqi arrayi stringi array-index
-                         string-index))
-    (seq-ref         . (seqf sequencef elements-ref))
-    (skip            . (continue-from continue))
-    (sub-loop        . (subloop loop))
+    (return          . (returning))
+    (return-from     . (returning-from))
+    (set             . (setting exprs expr))
+    (set-prev        . (setting-prev prev prev-expr prev-set))
+    (seq             . (seqing sequence sequencing elements))
+    (seq-index       . ( seqing-index sequencing-index seqi
+                         list-index listing-index listi
+                         array-index arraying-index arrayi
+                         string-index stringing-index stringi))
+    (seq-ref         . ( seqf seqing-ref
+                         sequencef sequencingf sequence-ref
+                         elements-ref))
+    (skip            . (skipping continue continuing))
+    (skip-from       . (skipping-from continue-from continuing-from))
+    (sub-loop        . (sub-looping subloop sublooping loop looping))
     (sum             . (summing))
     (union           . (unioning))
     (vconcat         . (vconcating))

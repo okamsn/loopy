@@ -541,9 +541,9 @@ or values listed in @samp{finally-return} from being returned.
 
 @cindex loop command
 If a macro argument does not match one of the previously listed special macro
-arguments (@ref{Special Macro Arguments}), @code{loopy} will attempt to treat it as a
-loop command.  Loop commands are only valid as a top-level argument to the
-macro, or inside another loop command.
+arguments (@ref{Special Macro Arguments}), @code{loopy} will attempt to treat it as a loop
+command.  Loop commands are only valid as a top-level argument to the macro, or
+inside another loop command.
 
 Therefore, these macro calls are valid:
 
@@ -569,11 +569,10 @@ Trying to use loop commands in places where they don't belong will result in
 errors when the code is evaluated.
 
 You should keep in mind that commands are evaluated in order.  This means that
-attempting to do something like the below example might not do what you
-expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
-@samp{coll}.
+attempting to do something like the below example might not do what you expect,
+as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org9b878a8
+@float Listing,orga7bd808
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -584,58 +583,70 @@ expect, as @samp{i} is assigned a value from the list after collecting @samp{i} 
 @end float
 
 For convenience and understanding, the same command might have multiple names,
-called @dfn{aliases}.  For example, the command @samp{set} has an alias
-@samp{expr}, because @samp{set} is used to @emph{set} a variable to the value of an
-@emph{expression}.  Similary, the @samp{array} command has the alias @samp{string}, because
-the @samp{array} command can be used to iterate through the elements of an array or
-string@footnote{Strings being a kind of array.  See @ref{Sequences Arrays Vectors,,,elisp,}
-for more.}.  You can define custom aliases using the macro @code{loopy-defalias}
-(@ref{Custom Aliases}).
+called @dfn{aliases}.  For example, the command @samp{set} has an alias @samp{expr},
+because @samp{set} is used to @emph{set} a variable to the value of an @emph{expression}.
+Similary, the @samp{array} command has the alias @samp{string}, because the @samp{array}
+command can be used to iterate through the elements of an array or string@footnote{Strings being a kind of array.  See @ref{Sequences Arrays Vectors,,,elisp,}
+for more.}.
+You can define custom aliases using the macro @code{loopy-defalias} (@ref{Custom Aliases}).
 
-Some commands take optional keyword arguments.  For example, the command
-@samp{list} can take a function argument following the keyword @samp{:by}, which affects
-how that iterates through the elements in the list.
+Similar to other libraries, many commands have an alias of the present
+participle form (the ``-ing'' form).  A few examples are seen in the table below.
+
+@multitable {aaaaaaaaa} {aaaaaaaaaaaa}
+@headitem Command
+@tab ``-ing'' Alias
+@item @samp{set}
+@tab @samp{setting}
+@item @samp{list}
+@tab @samp{listing}
+@item @samp{collect}
+@tab @samp{collecting}
+@item @samp{numbers}
+@tab @samp{numbering}
+@end multitable
+
+Some commands take optional keyword arguments.  For example, the command @samp{list}
+can take a function argument following the keyword @samp{:by}, which affects how that
+iterates through the elements in the list.
 
 For simplicity, the commands are described using the following notation:
 
 @itemize
 @item
-If a command has multiple names, the names are separated by a vertical
-bar, such as in @samp{set|expr}.
+If a command has multiple names, the names are separated by a vertical bar,
+such as in @samp{set|expr}.
 @item
-@samp{VAR} is an unquoted symbol that will be used as a variable name, such as
-@samp{i} in @samp{(list i my-list)}.
+@samp{VAR} is an unquoted symbol that will be used as a variable name, such as @samp{i}
+in @samp{(list i my-list)}.
 @item
 @samp{FUNC} is a quoted Lisp function name, such as @code{#'my-func} or @code{'my-func}, a
 variable whose value is a function, or a @code{lambda} expression.
 @item
-@samp{NAME} is an unquoted name of a loop (or, more accurately, of a
-@samp{cl-block}).
+@samp{NAME} is an unquoted name of a loop (or, more accurately, of a @samp{cl-block}).
 @item
-@samp{EXPR} is a single Lisp expression, such as @samp{(+ 1 2)}, @samp{'(1 2 3)},
-@samp{my-var}, or @samp{(some-function my-var)}.  @samp{EXPRS} means multiple expressions.
-Really, we are concerned with the value of the expression, not the
-expression itself.
+@samp{EXPR} is a single Lisp expression, such as @samp{(+ 1 2)}, @samp{'(1 2 3)}, @samp{my-var},
+or @samp{(some-function my-var)}.  @samp{EXPRS} means multiple expressions.  Really, we
+are concerned with the value of the expression, not the expression itself.
 @item
 @samp{CMD} is a loop command, as opposed to a normal Lisp expression.
 @samp{(list i '(1 2 3))}, @samp{(cycle 5)}, and @samp{(return-from outer-loop 7)}
 are examples of loop commands.  @samp{CMDS} means multiple commands.
 @item
 Optional arguments are surround by brackets.  @samp{[EXPR]} is an optional
-expression, and @samp{[CMD]} is an optional command.  By extension,
-@samp{[EXPRS]} is equivalent to @samp{[EXPR [EXPR [...]]]}, and @samp{[CMDS]} to
-@samp{[CMD [CMD [...]]]}.
+expression, and @samp{[CMD]} is an optional command.  By extension, @samp{[EXPRS]} is
+equivalent to @samp{[EXPR [EXPR [...]]]}, and @samp{[CMDS]} to @samp{[CMD [CMD [...]]]}.
 @item
 Optional keyword arguments are shown as @samp{&key key1 key2 ...}, where @samp{key1},
 @samp{key2}, and so on are the literal keywords.  Just like in normal Lisp
 functions, keywords must be prefixed by a colon (``:'').  For example, the
-iteration command @samp{nums} has a keyword argument @samp{by}, which can be given a
+iteration command @samp{list} has a keyword argument @samp{by}, which can be given a
 value using @samp{:by SOME-EXPRESSION}.
 @end itemize
 
 
-Generally, @samp{VAR} is initialized to @code{nil}, but not always.  This document
-tries to note when that is not the case.
+Generally, @samp{VAR} is initialized to @code{nil}, but not always.  This document tries
+to note when that is not the case.
 
 @menu
 * Basic Destructuring::          How to destructure variables and values in loop commands.
@@ -683,7 +694,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org8c2ce03
+@float Listing,org290218d
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -698,7 +709,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org4c87aab
+@float Listing,org90393f3
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1027,14 +1038,13 @@ As in @samp{set}, when using destructuring, each variable is initialized to
 @node Iteration
 @section Iteration
 
-Iteration commands bind local variables and determine when the loop ends.  If
-no command sets an ending condition, then the loop runs forever.  Infinite
-loops can be exited by using early-exit commands (@ref{Early Exit}) or
-boolean commands (@ref{Boolean}).
+Iteration commands bind local variables and determine when the loop ends.  If no
+command sets an ending condition, then the loop runs forever.  Infinite loops
+can be exited by using early-exit commands (@ref{Early Exit}) or boolean
+commands (@ref{Boolean}).
 
 Iteration commands must occur in the top level of the @code{loopy} form or in a
-@samp{sub-loop} command.  Trying to do something like the below will signal an
-error.
+@samp{sub-loop} command.  Trying to do something like the below will signal an error.
 
 @lisp
 ;; Signals an error:
@@ -1047,12 +1057,9 @@ error.
 @end lisp
 
 
-In @code{loopy}, iteration commands are named after what they iterate through.
-For example, the @samp{array} and @samp{list} commands iterate through the elements of
-arrays and lists, respectively.  For the sake of familiarity, these commands
-also have aliases based on their equivalent @samp{for}-clause from @code{cl-loop}.  To
-translate @samp{for VAR in LIST} from @code{cl-loop}, one can use either
-@samp{(list VAR LIST)} or @samp{(in VAR LIST)}.
+In @code{loopy}, iteration commands are named after what they iterate through.  For
+example, the @samp{array} and @samp{list} commands iterate through the elements of arrays
+and lists, respectively.
 
 @menu
 * Generic Iteration::            Looping a certain number of times.
@@ -1257,13 +1264,13 @@ These commands provide various ways to iterate through sequences
 (@ref{Sequences Arrays Vectors,,,elisp,}).
 
 @cindex sequence element distribution
-Instead of iterating through just one sequence, the @samp{array}, @samp{list}, and
-@samp{seq} commands can be given multiple sequences of various sizes.  In such
-cases, the elements of the sequences are @dfn{distributed}, like in the
-distributive property from mathematics.  A new sequence of distributed
-elements is created before the loop runs, and that sequence is used for
-iteration instead of the source sequences.  As seen in the below example,
-the resulting behavior is similar to that of nested loops.
+Instead of iterating through just one sequence, the @samp{array}, @samp{list}, and @samp{seq}
+commands can be given multiple sequences of various sizes.  In such cases, the
+elements of the sequences are @dfn{distributed}, like in the distributive
+property from mathematics.  A new sequence of distributed elements is created
+before the loop runs, and that sequence is used for iteration instead of the
+source sequences.  As seen in the below example, the resulting behavior is
+similar to that of nested loops.
 
 @lisp
 ;; => ((1 3 6) (1 4 6) (1 5 6) (2 3 6) (2 4 6) (2 5 6))
@@ -1287,10 +1294,10 @@ the resulting behavior is similar to that of nested loops.
 
 
 The @samp{array} and @samp{sequence} commands can use the same keywords as the @samp{nums}
-command (@ref{Numeric Iteration}) for working with the index and choosing a range
-of the sequence elements through which to iterate.  In addition to those
-keywords, they also have an @samp{index} keyword, which names the variable used
-to store the accessed index during the loop.
+command (@ref{Numeric Iteration}) for working with the index and choosing a range of
+the sequence elements through which to iterate.  In addition to those keywords,
+they also have an @samp{index} keyword, which names the variable used to store the
+accessed index during the loop.
 
 @lisp
 ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
@@ -1299,10 +1306,10 @@ to store the accessed index during the loop.
 @end lisp
 
 Keep in mind that if used with sequence distribution, these keywords affect
-iterating through the sequence of distributed elements.  That is, they do
-not affect how said sequence is produced.  In the example below, see that
-@code{cddr} is applied to the sequence of distributed elements.  It is @emph{not}
-applied to the source sequences.
+iterating through the sequence of distributed elements.  That is, they do not
+affect how said sequence is produced.  In the example below, see that @code{cddr} is
+applied to the sequence of distributed elements.  It is @emph{not} applied to the
+source sequences.
 
 @lisp
 ;; This code creates the sequence of distributed elements
@@ -1320,21 +1327,20 @@ applied to the source sequences.
 @end lisp
 
 
-@findex array, string, across
+@findex array, string
 @table @asis
-@item @samp{(array|string|across VAR EXPR [EXPRS] &key KEYS)}
+@item @samp{(array|string VAR EXPR [EXPRS] &key KEYS)}
 Loop through the
 elements of the array @samp{EXPR}.  In Emacs Lisp, strings are arrays whose
 elements are characters.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
-used to store the index being accessed.  For others, see the @samp{nums}
-command.
+used to store the index being accessed.  For others, see the @samp{nums} command.
 
 If multiple arrays are given, then the elements of these arrays are
-distributed into an array of lists.  In that case, the above keywords
-apply to this new, resulting array of lists.
+distributed into an array of lists.  In that case, the above keywords apply to
+this new, resulting array of lists.
 
 @lisp
 (loopy (array i [1 2 3])
@@ -1360,12 +1366,11 @@ apply to this new, resulting array of lists.
 @end lisp
 @end table
 
-@findex cons, conses, on
+@findex cons, conses
 @table @asis
-@item @samp{(cons|conses|on VAR EXPR &key by)}
-Loop through the cons cells of
-@samp{EXPR}.  Optionally, find the cons cells via function @samp{by} instead of
-@samp{cdr}.
+@item @samp{(cons|conses VAR EXPR &key by)}
+Loop through the cons cells of @samp{EXPR}.
+Optionally, find the cons cells via function @samp{by} instead of @samp{cdr}.
 
 @lisp
 (loopy (cons i '(1 2 3))
@@ -1374,15 +1379,15 @@ Loop through the cons cells of
 @end lisp
 @end table
 
-@findex list, in, each
+@findex list, each
 @table @asis
-@item @samp{(list|in|each VAR EXPR [EXPRS] &key by)}
-Loop through each element of
-the list @samp{EXPR}.  Optionally, update the list by @samp{by} instead of @samp{cdr}.
+@item @samp{(list|each VAR EXPR [EXPRS] &key by)}
+Loop through each element of the
+list @samp{EXPR}.  Optionally, update the list by @samp{by} instead of @samp{cdr}.
 
-If multiple lists are given, distribute the elements of the lists into one
-new list.  In such cases, @samp{by} applies to the new list, not the arguments
-of the command.
+If multiple lists are given, distribute the elements of the lists into one new
+list.  In such cases, @samp{by} applies to the new list, not the arguments of the
+command.
 
 @lisp
 (loopy (list i (number-sequence 1 10 3)) ; Inclusive, so '(1 4 7 10).
@@ -1401,13 +1406,13 @@ of the command.
 @findex map, map-pairs
 @table @asis
 @item @samp{(map|map-pairs VAR EXPR &key unique)}
-Iterate through the dotted key-value pairs
-of @samp{EXPR}, using the function @code{map-pairs} from the @samp{map.el} library.  This
-library generalizes working with association lists (``alists''), property
+Iterate through the dotted key-value
+pairs of @samp{EXPR}, using the function @code{map-pairs} from the @samp{map.el} library.
+This library generalizes working with association lists (``alists''), property
 lists (``plists''), hash-tables, and vectors.
 
-In each dotted pair assigned to @samp{VAR}, the @code{car} is the key and the @code{cdr}
-is the value.
+In each dotted pair assigned to @samp{VAR}, the @code{car} is the key and the @code{cdr} is
+the value.
 
 By default, only the unique keys are used.  To disable this deduplication,
 pass @code{nil} to the @samp{unique} keyword argument.
@@ -1416,8 +1421,7 @@ You should not rely on the order in which the key-value pairs are found.
 
 These pairs are created before the loop begins.  In other words, the map
 @samp{EXPR} is not processed progressively, but all at once.  Therefore, this
-command can have a noticeable start-up cost when working with very large
-maps.
+command can have a noticeable start-up cost when working with very large maps.
 
 @lisp
 ;; => ((a . 1) (b . 2))
@@ -1454,10 +1458,9 @@ maps.
          (finally-return keys values)))
 @end lisp
 
-Depending on how a map is created, a map might repeat a key multiple
-times.  Currently, the function @code{map-pairs} returns such keys.  By
-default, the command @samp{map-pairs} ignores such duplicate keys.  This is for
-two reasons:
+Depending on how a map is created, a map might repeat a key multiple times.
+Currently, the function @code{map-pairs} returns such keys.  By default, the
+command @samp{map-pairs} ignores such duplicate keys.  This is for two reasons:
 @enumerate
 @item
 This is more consistent with the command @samp{map-ref}, for which such
@@ -1493,18 +1496,16 @@ Again, this can be disabled by setting @samp{unique} to nil.
 @end lisp
 @end table
 
-@findex seq, sequence, elements
+@findex seq, sequence
 @table @asis
-@item @samp{(seq|sequence|elements VAR EXPR [EXPRS] &key KEYS)}
-Loop through the
-sequence @samp{EXPR}, binding @samp{VAR} to the elements of the sequence.  This is a
-more generic form of the commands @samp{list} and @samp{array}, though it is
-somewhat less efficient.
+@item @samp{(seq|sequence VAR EXPR [EXPRS] &key KEYS)}
+Loop through the sequence
+@samp{EXPR}, binding @samp{VAR} to the elements of the sequence.  This is a more generic
+form of the commands @samp{list} and @samp{array}, though it is somewhat less efficient.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
-used to store the index being accessed.  For others, see the @samp{nums}
-command.
+used to store the index being accessed.  For others, see the @samp{nums} command.
 
 If multiple sequences are given, then these keyword arguments apply to the
 resulting sequence of distributed elements.
