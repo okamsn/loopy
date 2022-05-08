@@ -39,7 +39,6 @@ libraries @samp{seq} (@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref
 * Basic Concepts::               Basic information about `loopy' and its loops.
 * Special Macro Arguments::      Creating the environment of the loop.
 * Loop Commands::                The main features of `loopy'.
-* Special Variables::
 * Destructuring Macros::         Destructuring outside of the loop.
 * The @code{loopy-iter} Macro::  Embedding loop commands in arbitrary code.
 * Using Flags::                  Using flags to change behavior.
@@ -574,7 +573,7 @@ attempting to do something like the below example might not do what you
 expect, as @samp{i} is assigned a value from the list after collecting @samp{i} into
 @samp{coll}.
 
-@float Listing,org3efb956
+@float Listing,org9b878a8
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -684,7 +683,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org973058e
+@float Listing,org8c2ce03
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -699,7 +698,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orga78f8af
+@float Listing,org4c87aab
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -3220,25 +3219,6 @@ which they are used, even when using the @samp{at} command.
                  (collect 'dog))))
 @end lisp
 
-@node Special Variables
-@chapter Special Variables
-
-Beyond loop commands, there is one special variable that can be used inside of
-the loop.
-
-@vindex loopy-first-iteration
-@table @asis
-@item @samp{loopy-first-iteration}
-Whether the current loop is in its first
-iteration.
-
-@quotation Warning
-You should not attempt to set this variable, as it is used by some loop
-commands.
-
-@end quotation
-@end table
-
 @node Destructuring Macros
 @chapter Destructuring Macros
 
@@ -4211,19 +4191,17 @@ in mind when defining Lisp macro expansions in general.
 ;; An example expansion.
 (let* ((list-166 '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
        (name nil))
-  (let ((loopy-first-iteration t))
-    (cl-block nil
-      (while (consp list-166)
-        (setq name (car list-166))
-        (if (cadr name)
-            (message "Hello, %s %s"
-                     (car name)
-                     (cadr name))
-          (message "Hello, %s"
-                   (car name)))
-        (setq list-166 (cdr list-166))
-        (setq loopy-first-iteration nil))
-      nil)))
+  (cl-block nil
+    (while (consp list-166)
+      (setq name (car list-166))
+      (if (cadr name)
+          (message "Hello, %s %s"
+                   (car name)
+                   (cadr name))
+        (message "Hello, %s"
+                 (car name)))
+      (setq list-166 (cdr list-166)))
+    nil))
 @end lisp
 
 @node An @code{always} Command

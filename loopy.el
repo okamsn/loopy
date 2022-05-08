@@ -161,12 +161,6 @@
 
 (cl-callf map-insert loopy--flag-settings 'default #'loopy--enable-flag-default)
 
-;;;; Important Variables
-(defvaralias 'loopy-first-iteration-p 'loopy-first-iteration)
-
-(defvar loopy-first-iteration nil
-  "Whether this is the first cycle of the current loop.")
-
 ;;;; Miscellaneous and Utility Functions
 (defun loopy--validate-binding (binding)
   "Validate the form of BINDING.  Signal error if invalid.
@@ -377,9 +371,6 @@ The function creates quoted code that should be used by a macro."
         (setq result `(,@(get-result) ,@loopy--latter-body)
               result-is-one-expression nil))
 
-      (setq result `(,@(get-result) (setq loopy-first-iteration nil))
-            result-is-one-expression nil)
-
       (when loopy--post-conditions
         (setq result
               (append result
@@ -490,11 +481,6 @@ The function creates quoted code that should be used by a macro."
                                          (macroexp-progn result))
                         ,@loopy--final-protect)
               result-is-one-expression t))
-
-      ;; Bind `loopy-first-iteration'.
-      (setq result `(let ((loopy-first-iteration t))
-                      ,@(get-result))
-            result-is-one-expression t)
 
       ;; Declare the loop variables.
       (when loopy--iteration-vars

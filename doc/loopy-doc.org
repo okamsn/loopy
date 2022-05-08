@@ -58,7 +58,6 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#skipping-cycles][Skipping Cycles]]
     - [[#early-exit][Early Exit]]
   - [[#sub-loops][Sub-Loops]]
-- [[#special-variables][Special Variables]]
 - [[#destructuring-macros][Destructuring Macros]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
 - [[#using-flags][Using Flags]]
@@ -2981,26 +2980,6 @@ remove the sorting requirements on the accumulations variables.
                       (collect 'dog))))
    #+end_src
 
-
-* Special Variables
-  :PROPERTIES:
-  :CUSTOM_ID: special-vars
-  :END:
-
-  Beyond loop commands, there is one special variable that can be used inside of
-  the loop.
-
-  #+vindex: loopy-first-iteration
-  - =loopy-first-iteration= :: Whether the current loop is in its first
-    iteration.
-
-    #+attr_texinfo: :tag Warning
-    #+begin_quote
-    You should not attempt to set this variable, as it is used by some loop
-    commands.
-    #+end_quote
-
-
 * Destructuring Macros
   :PROPERTIES:
   :CUSTOM_ID: destr-macros
@@ -3887,19 +3866,17 @@ is the forward-compatible way of creating aliases.
      ;; An example expansion.
      (let* ((list-166 '(("John" "Deer") ("Jane" "Doe") ("Jimmy")))
             (name nil))
-       (let ((loopy-first-iteration t))
-         (cl-block nil
-           (while (consp list-166)
-             (setq name (car list-166))
-             (if (cadr name)
-                 (message "Hello, %s %s"
-                          (car name)
-                          (cadr name))
-               (message "Hello, %s"
-                        (car name)))
-             (setq list-166 (cdr list-166))
-             (setq loopy-first-iteration nil))
-           nil)))
+       (cl-block nil
+         (while (consp list-166)
+           (setq name (car list-166))
+           (if (cadr name)
+               (message "Hello, %s %s"
+                        (car name)
+                        (cadr name))
+             (message "Hello, %s"
+                      (car name)))
+           (setq list-166 (cdr list-166)))
+         nil))
    #+END_SRC
 
 ** An ~always~ Command

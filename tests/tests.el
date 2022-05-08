@@ -37,15 +37,6 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal '((a b c) d)
                  (loopy--split-off-last-var '(a b c . d)))))
 
-;;; Variables
-(ert-deftest first-iteration ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (repeat 3)
-                                     (if loopy-first-iteration
-                                         (expr i 1)
-                                       (expr i (1+ i)))
-                                     (collect i)))))))
-
 ;;; Macro arguments
 ;;;; With
 (ert-deftest with-arg-order ()

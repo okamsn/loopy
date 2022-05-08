@@ -12,7 +12,20 @@ This document describes the user-facing changes to Loopy.
 
 ### Breaking Changes
 
-- None yet.
+- Remove the variable `loopy-first-iteration`.  This was added to be more like
+  CL's Iterate, but it has little utility and was not being created
+  conditionally.  To achieve similar behavior, simply create a variable like in
+  the below example.
+
+  ``` elisp
+  ;; => ((1) (2 3))
+  (loopy (list i '(1 2 3))
+         (set first-cycle t nil)
+         (if first-cycle
+             (collect first i)
+           (collect rest i))
+         (finally-return first rest))
+  ```
 
 ### Other Changes
 
