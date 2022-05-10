@@ -2656,55 +2656,72 @@ remove the sorting requirements on the accumulations variables.
    :END:
 
 *** Conditionals
-    :PROPERTIES:
-    :CUSTOM_ID: conditionals
-    :DESCRIPTION: Choosing if commands should run.
-    :END:
+:PROPERTIES:
+:CUSTOM_ID: conditionals
+:DESCRIPTION: Choosing if commands should run.
+:END:
 
-    Conditional commands in ~loopy~ can take multiple sub-commands, and work
-    like their Lisp counterparts.  There is therefore no need for an =and=
-    command as used in ~cl-loop~.
+Conditional commands in ~loopy~ can take multiple sub-commands, and work like
+their Lisp counterparts.  There is therefore no need for an =and= command as
+used in ~cl-loop~.
 
-    #+findex: when
-    - =(when EXPR CMDS)= :: Run =CMDS= only if =EXPR= is non-nil.
+#+findex: when
+- =(when EXPR CMDS)= :: Run =CMDS= only if =EXPR= is non-nil.  This is the
+  ~loopy~ version of the ~when~ macro from normal Emacs Lisp.
 
-      #+BEGIN_SRC emacs-lisp
-        ;; Get only the inner lists with all even numbers.
-        ;; => '((2 4 6) (8 10 12) (16 18 20))
-        (loopy (list i '((2 4 6) (8 10 12) (13 14 15) (16 18 20)))
-               (when (loopy (list j i)
-                            (always (cl-evenp j)))
-                 (collect only-evens i))
-               (finally-return only-evens))
-      #+END_SRC
+  #+BEGIN_SRC emacs-lisp
+    ;; Get only the inner lists with all even numbers.
+    ;; => '((2 4 6) (8 10 12) (16 18 20))
+    (loopy (list i '((2 4 6) (8 10 12) (13 14 15) (16 18 20)))
+           (when (loopy (list j i)
+                        (always (cl-evenp j)))
+             (collect only-evens i))
+           (finally-return only-evens))
+  #+END_SRC
 
-    #+findex: if
-    - =(if EXPR CMDS)= :: Run the first command if =EXPR= is non-nil.
-      Otherwise, run the remaining commands.
+#+findex: if
+- =(if EXPR CMDS)= :: Run the first command if =EXPR= is non-nil.  Otherwise,
+  run the remaining commands.  This is the ~loopy~ version of the ~if~ special
+  form from normal Emacs Lisp.
 
-      #+BEGIN_SRC emacs-lisp
-        ;; => '((1 3 5 7) (2 4 6) (3 3 3))
-        (loopy (seq i [1 2 3 4 5 6 7])
-               (if (cl-oddp i)
-                   (collect odds i)
-                 (collect evens i)
-                 (collect some-threes 3))
-               (finally-return odds evens some-threes))
-      #+END_SRC
+  #+BEGIN_SRC emacs-lisp
+    ;; => '((1 3 5 7) (2 4 6) (3 3 3))
+    (loopy (seq i [1 2 3 4 5 6 7])
+           (if (cl-oddp i)
+               (collect odds i)
+             (collect evens i)
+             (collect some-threes 3))
+           (finally-return odds evens some-threes))
+  #+END_SRC
 
-    #+findex: cond
-    - =(cond [(SET CMDS) [...]])= :: Run the commands =CMDS= following the
-      first non-nil condition =EXPR=.
+#+findex: cond
+- =(cond [(EXPR CMDS) [...]])= :: Run the commands =CMDS= following the first
+  non-nil condition =EXPR=.  This is the ~loopy~ version of the ~cond~ special
+  form from normal Emacs Lisp.
 
-      #+BEGIN_SRC emacs-lisp
-        ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
-        (loopy (list i '(1 2 3 "cat" 4 5 6 "dog"))
-               (cond
-                ((not (numberp i)) (collect not-numbers i))
-                ((cl-evenp i)      (collect evens i))
-                (t                 (collect odds i)))
-               (finally-return evens odds not-numbers))
-      #+END_SRC
+  #+BEGIN_SRC emacs-lisp
+    ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
+    (loopy (list i '(1 2 3 "cat" 4 5 6 "dog"))
+           (cond
+            ((not (numberp i)) (collect not-numbers i))
+            ((cl-evenp i)      (collect evens i))
+            (t                 (collect odds i)))
+           (finally-return evens odds not-numbers))
+  #+END_SRC
+
+#+findex: unless
+- =(unless EXPR CMDS)= :: Run =CMDS= only if =EXPR= is nil.  This is the ~loopy~
+  version of the ~unless~ macro from normal Emacs Lisp.
+
+  #+BEGIN_SRC emacs-lisp
+    ;; Get only the inner lists with all even numbers.
+    ;; => '((2 4 6) (8 10 12) (16 18 20))
+    (loopy (list i '((2 4 6) (8 10 12) (13 14 15) (16 18 20)))
+           (unless (loopy (list j i)
+                          (thereis (cl-oddp j)))
+             (collect only-evens i))
+           (finally-return only-evens))
+  #+END_SRC
 
 *** Skipping Cycles
     :PROPERTIES:

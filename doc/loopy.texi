@@ -572,7 +572,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orga7bd808
+@float Listing,orgb257a71
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -694,7 +694,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org290218d
+@float Listing,org9326487
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -709,7 +709,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org90393f3
+@float Listing,orgf464168
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2872,14 +2872,15 @@ by @code{and}.
 @node Conditionals
 @subsection Conditionals
 
-Conditional commands in @code{loopy} can take multiple sub-commands, and work
-like their Lisp counterparts.  There is therefore no need for an @samp{and}
-command as used in @code{cl-loop}.
+Conditional commands in @code{loopy} can take multiple sub-commands, and work like
+their Lisp counterparts.  There is therefore no need for an @samp{and} command as
+used in @code{cl-loop}.
 
 @findex when
 @table @asis
 @item @samp{(when EXPR CMDS)}
-Run @samp{CMDS} only if @samp{EXPR} is non-nil.
+Run @samp{CMDS} only if @samp{EXPR} is non-nil.  This is the
+@code{loopy} version of the @code{when} macro from normal Emacs Lisp.
 
 @lisp
 ;; Get only the inner lists with all even numbers.
@@ -2895,8 +2896,9 @@ Run @samp{CMDS} only if @samp{EXPR} is non-nil.
 @findex if
 @table @asis
 @item @samp{(if EXPR CMDS)}
-Run the first command if @samp{EXPR} is non-nil.
-Otherwise, run the remaining commands.
+Run the first command if @samp{EXPR} is non-nil.  Otherwise,
+run the remaining commands.  This is the @code{loopy} version of the @code{if} special
+form from normal Emacs Lisp.
 
 @lisp
 ;; => '((1 3 5 7) (2 4 6) (3 3 3))
@@ -2911,9 +2913,10 @@ Otherwise, run the remaining commands.
 
 @findex cond
 @table @asis
-@item @samp{(cond [(SET CMDS) [...]])}
-Run the commands @samp{CMDS} following the
-first non-nil condition @samp{EXPR}.
+@item @samp{(cond [(EXPR CMDS) [...]])}
+Run the commands @samp{CMDS} following the first
+non-nil condition @samp{EXPR}.  This is the @code{loopy} version of the @code{cond} special
+form from normal Emacs Lisp.
 
 @lisp
 ;; => '((2 4 6) (1 3 5) ("cat" "dog"))
@@ -2923,6 +2926,23 @@ first non-nil condition @samp{EXPR}.
         ((cl-evenp i)      (collect evens i))
         (t                 (collect odds i)))
        (finally-return evens odds not-numbers))
+@end lisp
+@end table
+
+@findex unless
+@table @asis
+@item @samp{(unless EXPR CMDS)}
+Run @samp{CMDS} only if @samp{EXPR} is nil.  This is the @code{loopy}
+version of the @code{unless} macro from normal Emacs Lisp.
+
+@lisp
+;; Get only the inner lists with all even numbers.
+;; => '((2 4 6) (8 10 12) (16 18 20))
+(loopy (list i '((2 4 6) (8 10 12) (13 14 15) (16 18 20)))
+       (unless (loopy (list j i)
+                      (thereis (cl-oddp j)))
+         (collect only-evens i))
+       (finally-return only-evens))
 @end lisp
 @end table
 
