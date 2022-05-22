@@ -27,6 +27,32 @@ This document describes the user-facing changes to Loopy.
          (finally-return first rest))
   ```
 
+- `loopy-iter` has been changed to rely on Emacs's macro expansion facilities
+  instead of trying to use custom code-walking functions.  This should make the
+  macro more robust. See [#119].  User options were added, updated, or obsoleted
+  to allow this.  See the manual for more details.
+  - The flag `lax-naming` is deprecated.  Its behavior is now the default for
+    command aliases listed in `loopy-iter-bare-commands`.
+  - The user option `loopy-ignored-names` is now deprecated.  Instead of an
+    exclusive approach, it is replaced by an inclusive approach using the new
+    user options `loopy-iter-bare-commands` and
+    `loopy-iter-bare-special-marco-arguments`.
+
+    ```elisp
+    ;; No need for flag `lax-naming' anymore:
+    (loopy-iter (listing i '(1 2 3))
+                (collecting i))
+    ```
+
+  - Using keywords will continue to work.  See the variable
+    `loopy-iter-keywords`, renamed from `loopy-iter-command-keywords`.  The
+    old name is now an obsolete alias.  These keywords now work for special
+    macro arguments too.
+
+  - This change required better suppressing some macros, now in
+    `loopy-iter-suppressed-macros`.  Defaults include `cl-return`, `cl-block`,
+    and `cl-return-from`.
+
 ### Other Changes
 
 - Improvements to destructuring ([#117]):
@@ -37,6 +63,7 @@ This document describes the user-facing changes to Loopy.
   - Better skip ignored variables.
   - Add slight optimizations for common uses, such as for `(car . _)` and
     `(_ . cdr)`.
+
 - Present-participle aliases (the "-ing" form) have been added for more
   commands, such as `listing` for `list` and `setting` for `set`.  They already
   existed for accumulation commands, such as `collecting` for `collect`.  See
@@ -50,10 +77,27 @@ This document describes the user-facing changes to Loopy.
                 (collecting i))
     ```
 
+- `loopy-iter` can now use keywords for naming special macro arguments, as done
+  with commands.  This can help to avoid naming conflicts.  Added the keyword
+  `arg`.  See [#119].
+
+  ```elisp
+  ;; No more conflict with special form `let*':
+  (loopy-iter (arg let* (a 7))
+              (returning a))
+  ```
+
+- Added the remaining present participle aliases to `loopy` and `loopy-iter`.
+  They are now the default bare forms (see breaking changes above) for
+  `loopy-iter`.  See [#119].
+
+- Added `loopy-iter-suppressed-macros` (see breaking changes above).  See
+  [#119].
 
 [#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
 [#118]: https://github.com/okamsn/loopy/pull/118
+[#119]: https://github.com/okamsn/loopy/pull/119
 
 ## 0.10.1
 

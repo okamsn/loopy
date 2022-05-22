@@ -88,6 +88,7 @@ Custom Commands
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
 * An @code{always} Command::     Adding a feature from `cl-loop'.
+* Custom commands in the @code{loopy-iter} macro::
 * Finding More Examples::
 
 Translating to and from @samp{cl-loop}
@@ -572,7 +573,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgb257a71
+@float Listing,org8da9bfa
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -694,7 +695,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org9326487
+@float Listing,org9b576c0
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -709,7 +710,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgf464168
+@float Listing,org0fa6941
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2091,8 +2092,8 @@ name in the present participle form (the ``-ing'' form).
 For example, instead of ``min'' or ``minimize'', you can use ``minning'' or
 ``minimizing''.  Instead of ``sum'' and ``append'', you can use ``summing'' and
 ``appending''.  This is similar to the behavior of @code{cl-loop}, and helps to
-avoid name collisions when using the @code{loopy-iter} macro with the @samp{lax-naming}
-flag enabled (@ref{The @code{loopy-iter} Macro}).
+avoid name collisions when using the @code{loopy-iter} macro
+(@ref{The @code{loopy-iter} Macro}).
 
 @end quotation
 
@@ -3344,53 +3345,105 @@ confused with the @code{iter-*} functions provided by Emacs).
 @lisp
 (require 'loopy-iter) ; <- Must `require' to load feature.
 
-;; => (2 4 6)
-(loopy-iter (for list i '(1 2 3))
-            (let ((a (* 2 i)))
-              (accum collect a)))
+;; => (9 11 13)
+(loopy-iter (with (a 7))
+            (listing i '(1 2 3))
+            (let ((b (+ a (* 2 i))))
+              (collecting b)))
+
+;; => (1 2 3)
+(loopy-iter (listing elem '(1 2 3))
+            (funcall #'(lambda (x) (collecting x))
+                     elem))
 @end lisp
 
-@cindex loopy-iter keywords
-@vindex loopy-iter-command-keywords
-To clearly distinguish between loop commands and Emacs features (such as
-between the loop command @samp{list} and the function @code{list}), a loop command must
-be preceded by one of the keywords listed in @code{loopy-iter-command-keywords}.
-By default, this is one of @samp{for}, @samp{accum}, or @samp{exit}.  These keywords do not
-share a name with any built-in Emacs feature and are similar to the keywords
-used by other packages.  For example, @samp{(list VAR LIST)} would be @samp{(for list
-VAR LIST)} or @samp{(for in VAR LIST)}.
+Loop commands are treated as macros inside of @code{loopy-iter}, and they are found
+and expanded using @code{macroexpand-all}. Hence, a loop command could overshadow the
+function value of a symbol.  There are two ways to avoid such conflicts.
 
-Any keyword in the user option @code{loopy-iter-command-keywords} can be used to
-identify any loop command.  For example, @samp{(accum collect a)} and
-@samp{(for collect a)} are both valid ways of referring to the @samp{collect} loop
-command in @code{loopy-iter}.
-
-To disable this requirement, use the flag @samp{lax-naming} (@ref{Using Flags}).  When
-using @samp{lax-naming}, @code{loopy-iter} will always prefer built-in features to loop
-commands.  For example, ``list'' will always be understood as referring to the
-function @code{list} and not the loop command @samp{list}.
-
-Special macro arguments, already having clearly distinguishable names, do not
-need to be preceded by one of the above keywords.
-
-@cindex Ignoring names in loopy-iter
-@vindex loopy-iter-ignored-names
-That being said, the names of some @code{loopy} features @emph{can} cause conflicts, such
-as the alias @samp{let*} for the special macro argument @samp{with}.  To ignore these
-names, list them in the user option @code{loopy-iter-ignored-names}.  The symbol
-@samp{let*} is included by default.
-
-This user option always applies to special macro arguments.  It only applies to
-loop commands when @samp{lax-naming} is enabled.
+The first way is to use non-conflicting aliases.  Like in Iterate (and
+@code{cl-loop}, to an extent), almost all commands in @code{loopy} have aliases in the
+present participle form (the ``-ing'' form).  For example, Loopy provides the
+command @samp{list} with the alias @samp{listing}.  Because the command name @samp{list} would
+conflict with the built-in Emacs Lisp function @code{list}, only the command name
+@samp{listing} is supported by default.  The command name @samp{at} (a preposition) is an
+exception to this rule, though the made-up word @samp{atting} is provided as an alias
+for consistency.
 
 @lisp
-;; => ((1 8) (2 9) (3 10))
-(loopy-iter (with (a 7))                ; <- Set once around loop.
-            (for list elem '(1 2 3))
-            (let* ((c elem)             ; <- These set inside of loop.
-                   (d (+ a c)))
-              (accum collect (list c d))))
+;; `list' is unambiguously a command name in `loopy'.
+;; => (1 2 3 4)
+(loopy outer
+       (list i '((1 2) (3 4)))
+       (loop (list j i)
+             (at outer (collect j))))
+
+;; `list' would be a function.  `listing' is the command.
+;; => (1 2 3 4)
+(loopy-iter outer
+            (listing i '((1 2) (3 4)))
+            ;; Equivalent to `loopy-iter':
+            (looping (listing j i)
+                     ;; Can use `at' instead of `atting':
+                     (at outer (collecting j))))
 @end lisp
+
+@vindex loopy-iter-bare-commands
+The command aliases recognized by @code{loopy-iter} can be customized using the user
+option @code{loopy-iter-bare-commands}, which is a list of symbols naming commands and
+their aliases.  Again, these commands are found in the loop body using Emacs
+Lisp's macro-expansion features, so adding an alias that overrides a symbol's
+function definition can cause errors.  @code{loopy}, whose environment is more
+limited, does not have this restriction.
+
+@vindex loopy-iter-bare-special-macro-arguments
+The special macro arguments (and their aliases) recognized by @code{loopy-iter} can
+be set in the user option @code{loopy-iter-bare-special-macro-arguments}.  Some of their
+built-in aliases, such as @samp{let*} for @samp{with}, are excluded by default.
+
+@cindex loopy-iter keywords
+@vindex loopy-iter-keywords
+The first method above deals with commands that are written like functions.  If
+for some reason a suitable command alias cannot be used or cannot be added to
+one of the above user options, one can write the command name preceded by one of
+the keywords in @code{loopy-iter-keywords}.  This is the second method.
+
+By default, the possible keywords are @samp{for}, @samp{accum}, @samp{exit}, and @samp{arg}.  These
+symbols do not share a name with any built-in Emacs feature and are similar to
+the keywords used by other packages.  Note that these are not Lisp ``keywords''
+that are prefixed with a colon, such as the @samp{:test} in @code{(cl-count ITEM SEQ :test
+FUNC)}.  For example,
+@itemize
+@item
+the command @samp{(listing VAR LIST)} could also be written as @samp{(for list VAR
+  LIST)}.
+@item
+the special marco argument @samp{with}, with the alias @samp{let*}, could also be
+written as @samp{(arg let* (VAR EXPR) ...)}.  See that this does not conflict with
+using the @code{let*} special form.
+@end itemize
+
+This method recognizes all commands and their aliases in the user option
+@code{loopy-aliases}.
+
+@float Listing,orgd371b4c
+@lisp
+;; => (9 11 13)
+(loopy-iter (arg let* (a 7))
+            (for list i '(1 2 3))
+            (let ((b (+ a (* 2 i))))
+              (accum collect b)))
+@end lisp
+@caption{The first example, but now using keyword symbols.}
+@end float
+
+While the symbols @samp{for}, @samp{accum}, @samp{exit}, and @samp{arg} are named for iteration,
+accumulation, early exits, and special macro arguments, respectively, any
+keyword in the user option @code{loopy-iter-keywords} can be used to identify any
+loop command or special macro argument.  For example, @samp{(accum collect a)} and
+@samp{(for collect a)} are both valid ways of referring to the @samp{collect} loop command
+in @code{loopy-iter}.  Instead of @samp{(arg let* (a 7))} in the example above, one could
+also write @samp{(exit let* (a 7))} if one really wanted to.
 
 Restrictions on the placement of loop commands and special macro arguments
 still apply in @code{loopy-iter}.  For example, iteration commands must still occur
@@ -3399,77 +3452,69 @@ at the top level of @code{loopy-iter} or a sub-loop.
 @lisp
 ;; BAD
 (loopy-iter (let ((a (progn
-                       ;; ERROR: `list' must occur at top level.
-                       (for list j '(8 9 10 11 12))
+                       ;; ERROR: `listing' must occur at the top level.
+                       (listing j '(8 9 10 11 12))
                        j)))
-              (accum collect a)))
+              (collecting a)))
 
 ;; GOOD
 ;; => (8 9 10 11 12)
 (loopy-iter (let ((a (progn
-                       ;; NOTE: No restriction on placement of `expr'.
-                       (for expr j 8 (1+ j))
-                       ;; Leave loop but don't force return value,
-                       ;; allowing the implicit result to be returned.
-                       (exit until (> j 12))
+                       ;; NOTE: No restriction on placement of `setting'.
+                       (setting j 8 (1+ j))
+                       (when (> j 12) (leaving))
                        j)))
-              (accum collect a)))
-@end lisp
-
-@quotation Caution
-You should not reply on the value of a loop command's expanded code.  Such
-expanded code is an implementation detail and subject to change.
-
-@end quotation
-
-For convenience, @code{loopy-iter} will not attempt to interpret loop commands in
-quoted code, except in sharp-quoted @code{lambda} forms.  This is because the
-@code{lambda} macro is self-quoting, and so Emacs might quote the form before it is
-seen by @code{loopy-iter}.
-
-@lisp
-;; => (1 2 3)
-(loopy-iter (for list elem '(1 2 3))
-            (funcall (lambda (x)
-                       (accum collect x))
-                     elem))
-
-;; => (1 2 3)
-(loopy-iter (for list elem '(1 2 3))
-            (funcall #'(lambda (x) ; <- sharp-quoted, but still interpreted
-                         (accum collect x))
-                     elem))
+              (collecting a)))
 @end lisp
 
 In @code{loopy}, the @samp{sub-loop} command is a full @code{loopy} loop (@ref{Sub-Loops}).  In
-@code{loopy-iter}, it is a full @code{loopy-iter} loop.
+@code{loopy-iter}, it is a full @code{loopy-iter} loop.  If you do not want this, you can
+specifically use a full @code{loopy} loop using the loop command @code{loopy} instead, as
+in @samp{(for loopy)} or just @samp{loopy}.
 
 @lisp
 ;; => (2 3 4 5)
 (loopy-iter outer
-            (for list i '([1 2] [3 4]))
-            (for loop
-                 ;; NOTE: `loopy-iter' style, not `loopy' style
-                 (for array j i)
-                 (for at outer
-                      (let ((val (1+ j)))
-                        (accum collect val)))))
+            (listing i '([1 2] [3 4]))
+            ;; NOTE: `loopy-iter' style, not `loopy' style
+            (sub-looping (arraying j i)
+                         (at outer
+                             (let ((val (1+ j)))
+                               (collecting val)))))
+
+;; => (2 3 4 5)
+(loopy-iter outer
+            (listing i '([1 2] [3 4]))
+            ;; NOTE: `loopy' style, not `loopy-iter' style
+            (loopy (array j i)
+                   (set val (1+ j))
+                   (at outer (collect val))))
 @end lisp
 
-If you do not want this, you can specifically use a full @code{loopy} loop using
-the loop command @code{loopy} instead, as in @samp{(for loopy)}.
-
-@quotation Note
-Nesting arbitrary code in the loop requires knowing how to understand the
-code.  You might find cases where @code{loopy-iter} interprets code incorrectly.
-
-Please report such cases on this project's @uref{https://github.com/okamsn/loopy/issues, issues tracker}.
-
-@end quotation
-
+Finally, there are a few things to keep in mind when using @code{loopy-iter}:
+@enumerate
+@item
 @code{loopy} (and so @code{loopy-iter}) does not currently have all of the features of
-Common Lisp's @code{iter} macro.  Think of it more as an alternative form of
-@code{loopy} instead of a port of @code{iter}.
+Common Lisp's @code{iterate} macro.  Think of it more as an alternative form of
+@code{loopy} instead of a port of @code{iterate}.
+@item
+You should not rely on the value of a loop command's expanded code.  Such
+expansion is an implementation detail and subject to change.
+@item
+Some macros, especially those that interact with each other, produce broken
+code while @code{loopy-iter} is expanding its arguments.  For example,
+@code{cl-return-from} is known to be problematic, since it tries to interact with
+the correct @code{cl-block}.
+
+Macros that should not be expanded while @code{loopy-iter} expands are listed in
+@code{loopy-iter-suppressed-macros}.  Note that this suppression is only in effect
+while @code{loopy-iter} expands its loop commands.  Once @code{loopy-iter} outputs its
+code, Emacs will attempt to further expand any macros in the outputted code.
+
+Ideally, such problematic macros are infrequent.  Please report such cases on
+this project's @uref{https://github.com/okamsn/loopy/issues, issues tracker} so that they can be added to
+@code{loopy-iter-suppressed-macros} by default.
+@end enumerate
 
 @node Using Flags
 @chapter Using Flags
@@ -3513,12 +3558,6 @@ Use the style of destructuring found in the @samp{dash} library
 @item @samp{split}
 Make accumulation commands with implicit variables accumulate into
 separate variables, which are then collected into @code{loopy-result}.
-@end table
-@cindex lax-naming flag
-@table @asis
-@item @samp{lax-naming}
-In @code{loopy-iter}, don't require keywords when using loop
-commands (@ref{The @code{loopy-iter} Macro}).
 @end table
 @cindex default flag
 @table @asis
@@ -3759,6 +3798,7 @@ add custom commands to @code{loopy}.  Two examples are provided.
 * Background Info::              The internals of `loopy'.
 * Hello World::                  A minimal working example.
 * An @code{always} Command::     Adding a feature from `cl-loop'.
+* Custom commands in the @code{loopy-iter} macro::
 * Finding More Examples::
 @end menu
 
@@ -4385,6 +4425,87 @@ Here are some examples of the command in action:
        (list j '(2 4 6 8 9))
        (always (and (< i 10) (cl-evenp j))))
 @end lisp
+
+@node Custom commands in the @code{loopy-iter} macro
+@section Custom commands in the @code{loopy-iter} macro
+
+See also @ref{The @code{loopy-iter} Macro}.
+
+@code{loopy-iter} works by:
+@enumerate
+@item
+separating main-body instructions from other instructions
+@item
+expanding that main-body code for @code{loopy} sub-commands
+@item
+collected those expansions into the outputted loop's body
+@item
+processing the collected non-main-body instructions
+@end enumerate
+
+Most loop commands should work with @code{loopy-iter} without any changes.  Some loop
+commands are just @code{loopy} versions of built-in Lisp macros or special forms, and
+so aren't needed in @code{loopy-iter} in the first place.
+
+However, special consideration is needed for commands that produce main-body
+code outside of main-body instructions, or that assume all of their arguments
+are loop commands.  Consider the parser for the @samp{at} command:
+
+@lisp
+(cl-defun loopy--parse-at-command ((_ target-loop &rest commands))
+  "Parse the `at' command as (at &rest COMMANDS).
+
+These commands affect other loops higher up in the call list."
+  (loopy--check-target-loop-name target-loop)
+  (let ((loopy--loop-name target-loop)
+        (loopy--in-sub-level t))
+    `((loopy--at-instructions
+       (,target-loop
+        ,@@(loopy--parse-loop-commands commands))))))
+@end lisp
+
+All it does is process its arguments and wrap the resulting instructions in an
+@samp{at} instruction.  By wrapping main-body instructions in an @samp{at} instruction,
+@code{loopy-iter} does not see the main-body code, and so cannot use it.  Instead, an
+alternative parser must be use:
+
+@lisp
+  (cl-defun loopy-iter--parse-at-command ((_ target-loop &rest commands))
+  "Parse the `at' command as (at &rest COMMANDS).
+
+These commands affect other loops higher up in the call list."
+  (loopy--check-target-loop-name target-loop)
+  ;; We need to capture all non-main-body instructions into a new `at'
+  ;; instruction, so we just temporarily `let'-bind
+  ;; `loopy-iter--non-main-body-instructions' while expanders push to it,
+  ;; we which then wrap back in a new instruction and pass up to the calling
+  ;; function, which consumes instructions.
+  (loopy (with (loopy-iter--non-main-body-instructions nil)
+               (loopy--loop-name target-loop)
+               (loopy--in-sub-level t))
+         (list cmd commands)
+         (collect (list 'loopy--main-body (loopy-iter--macroexpand-sub cmd)))
+         (finally-return
+          ;; Return list of instructions to comply with expectations of calling
+          ;; function, which thinks that this is a normal loop-command parser.
+          `(,@@loopy-result
+            (loopy--at-instructions
+             (,target-loop
+              ,@@(thread-last loopy-iter--non-main-body-instructions
+                             nreverse
+                             (apply #'append))))))))
+@end lisp
+
+@vindex loopy-iter--non-main-body-instructions
+This @code{loopy-iter}-specific definition separates the main-body instructions out
+from the other instructions so that @code{loopy-iter} can operate on their values
+directly.  The variable @code{loopy-iter--non-main-body-instructions} is a place
+where the macro-expanding parsers used by @code{loopy-iter} can push lists of
+instructions (see the code for usage examples).
+
+@vindex loopy-iter-overwritten-command-parsers
+These alternative command parsers are listed in
+@code{loopy-iter-overwritten-command-parsers}.
 
 @node Finding More Examples
 @section Finding More Examples

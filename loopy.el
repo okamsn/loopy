@@ -129,8 +129,6 @@
 (require 'loopy-commands)
 (require 'loopy-vars)
 
-(defvar loopy-iter--lax-naming) ; A flag defined in file "loopy-iter.el".
-
 ;;;; Built-in flags
 ;;;;; Split
 (defun loopy--enable-flag-split ()
@@ -156,8 +154,7 @@
         loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
-        #'loopy--parse-destructuring-accumulation-command
-        loopy-iter--lax-naming nil))
+        #'loopy--parse-destructuring-accumulation-command))
 
 (cl-callf map-insert loopy--flag-settings 'default #'loopy--enable-flag-default)
 
@@ -956,11 +953,27 @@ see the Info node `(loopy)' distributed with this package."
        (progn
          (loopy--process-instructions (loopy--parse-loop-commands body))
 
+         ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
          ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-         ;; using the function `loopy--get-optimized-accum'.
+         ;; using the function `loopy--expand-optimized-accum'.
          ;;
-         ;; TODO: What are the limitations of this?
-         (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+         ;; Prevent the expansion of, at the very least, `cl-block',
+         ;; `cl-return-from', and `cl-return' shouldn't be expanded.
+         ;;
+         ;; TODO: Is there a way to more precisely only expand
+         ;;       `loopy--optimized-accum'?
+         ;; Another option is this, but it massively slows down expansion:
+         ;;     (cl-loop for i being the symbols
+         ;;              when (eq (car-safe (symbol-function i)) 'macro)
+         ;;              collect (cons i nil))
+         (setq loopy--main-body
+               (cl-loop
+                with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
+                                                collect (cons i nil))
+                                     (loopy--optimized-accum
+                                      . loopy--expand-optimized-accum))
+                for i in loopy--main-body
+                collect (macroexpand-all i macro-funcs)))
 
          ;; Process any `at' instructions from loops lower in the call list.
          (loopy--process-instructions (map-elt loopy--at-instructions

@@ -30,18 +30,10 @@
 ;; A macro similar to, and heavily inspired by, Common Lisp's Iterate package.
 ;; This package is somewhat like a translation of Iter into Loopy.
 ;;
-;; To be able to arbitrarily nest structures, Loopy's constructs must be clearly
-;; distinct from Lisp's other functions.
-;;
-;; Subject to change:
-;; - loop commands start with `for': (for list i '(1 2 3))
-;; - accumulation commands start with `accum': (accum collect i)
-;; - early exit commands start with `exit': (exit return i)
-;; - Special macro arguments should use unambiguous versions.  No aliases.
-;;
-;; See the `loopy' documentation for more details.
+;; See the info node `(loopy)The loopy-iter Macro'.
 
 ;;; Code:
+(eval-when-compile (require 'loopy))
 (require 'loopy)
 (require 'loopy-vars)
 (require 'loopy-misc)
@@ -50,26 +42,26 @@
 (require 'seq)
 (require 'map)
 (require 'macroexp)
+(require 'subr-x)
 
 ;; How the Code Works:
 ;;
-;; Instead of using `loopy--parse-loop-commands' and
-;; `loopy--process-instructions' directly, the list of arguments is treated as a
-;; tree of code, and is passed to `loopy-iter--replace-in-tree'.  That function
-;; recursively goes through each element in the argument list, looking for loop
-;; commands according to `loopy-iter--lax-naming'.  Found commands are
-;; processed, and their main-body instructions are substituted into the
-;; command's place in the tree.  Other instructions are handled as normal.
+;; Instead of parsing commands using `loopy--parse-loop-command', we use
+;; `loopy-iter--parse-command' with commands being expanded like a normal Lisp
+;; macro.  The code in the value of main-body instructions is taken and further
+;; expanded, while non-main-body instructions are stored and eventually
+;; processed after processing all of the macro arguments.
 ;;
-;; Some code requires specific handling, which is done using helper functions
-;; like `loopy-iter--replace-in-setq-form'.  It is hoped that by using
-;; `macroexpand-all' on the elements of the argument list that any macros will
-;; be expanded into uses of special forms already handled.
-;;
-;; After the argument list is processed, `loopy--main-body' is set to that one,
-;; new tree, and expansion proceeds as normal.
+;; Previously, `loopy-iter' used its tree-walking functions, as done by CL's
+;; Iterate, but now it just defers to what Emacs already does when expanding
+;; macros, such as in `macroexpand-all'.
 
-;;;; Flags
+;;;; Flags (obsolete)
+(make-obsolete-variable
+ 'loopy-iter--lax-naming
+ "Use `loopy-iter-bare-special-macro-arguments' or
+`loopy-iter-bare-commands' instead.  See the manual."
+ "2022-07")
 (defvar loopy-iter--lax-naming nil
   "Whether loop commands must be preceded by keywords to be recognized.
 
@@ -80,25 +72,29 @@ loop commands from other Emacs features.
 The flag `lax-naming' disables this requirement, at the cost of
 name collisions becoming more likely.")
 
+(make-obsolete 'loopy-iter--enable-flag-lax-naming nil "2022-07")
 (defun loopy-iter--enable-flag-lax-naming ()
   "Set `loopy-iter--lax-naming' to t inside the loop."
   (setq loopy-iter--lax-naming t))
 
+(make-obsolete 'loopy-iter--disable-flag-lax-naming nil "2022-07")
 (defun loopy-iter--disable-flag-lax-naming ()
   "Set `loopy-iter--lax-naming' to nil inside the loop if active."
   ;; Currently redundant, but leaves room for possibilities.
   (if loopy-iter--lax-naming
       (setq loopy-iter--lax-naming nil)))
 
-(dolist (flag '(lax-naming +lax-naming lax-names +lax-names))
-  (setf loopy--flag-settings
-        (map-insert loopy--flag-settings flag
-                    #'loopy-iter--enable-flag-lax-naming)))
+(let ((f #'(lambda ()
+             (warn (concat "loopy-iter: Flag `lax-naming' is now obsolete.  "
+                           "See manual or changelog.")))))
 
-(dolist (flag '(-lax-naming -lax-names))
-  (setf loopy--flag-settings
-        (map-insert loopy--flag-settings flag
-                    #'loopy-iter--disable-flag-lax-naming)))
+  (dolist (flag '(lax-naming +lax-naming lax-names +lax-names))
+    (setf loopy--flag-settings
+          (map-insert loopy--flag-settings flag f)))
+
+  (dolist (flag '(-lax-naming -lax-names))
+    (setf loopy--flag-settings
+          (map-insert loopy--flag-settings flag f))))
 
 ;;;; Custom User Options
 (defgroup loopy-iter nil
@@ -106,8 +102,11 @@ name collisions becoming more likely.")
   :group 'loopy
   :prefix "loopy-iter-")
 
-(define-obsolete-variable-alias 'loopy-iter-ignored-commands
-  'loopy-iter-ignored-names "2020-10")
+(make-obsolete-variable
+ 'loopy-iter-ignored-names
+ "Use `loopy-iter-bare-special-macro-arguments' or
+`loopy-iter-bare-commands' instead.  See the manual."
+ "2022-07")
 (defcustom loopy-iter-ignored-names '(let*)
   "Names of commands, special macro arguments, and their aliases to be ignored.
 
@@ -119,284 +118,51 @@ option is used with commands when the `lax-naming' flag is
 enabled."
   :type '(repeat symbol))
 
-(defcustom loopy-iter-command-keywords '(accum for exit)
+(define-obsolete-variable-alias 'loopy-iter-command-keywords
+  'loopy-iter-keywords "2022-07")
+(defcustom loopy-iter-keywords '(accum for exit arg)
   "Keywords that `loopy-iter' can use to recognize loop commands.
 
-By default, `loopy-iter' requires keywords to clearly distinguish
-loop commands from other Emacs features.  This requirement can be
-disabled with the `lax-naming' flag.
+By default, `loopy-iter' can use keywords to clearly distinguish
+loop commands and special macro arguments from other Emacs
+features.
 
-A loop command can be preceded by any of the keywords in this
-list.  For example, by default, \"(for collect i)\" and
-\"(accum collect i)\" are both valid way of identifying the
-`collect' loop command."
+A loop command or special macro argument can be preceded by any
+of the keywords in this list.  For example, by default, \"(for
+collect i)\" and \"(accum collect i)\" are both valid way of
+identifying the `collect' loop command.
+
+Without these keywords, one must use one of the names given in
+`loopy-iter-bare-commands' or
+`loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol))
 
-;;;;
-(defvar loopy-iter--let-forms '(let let*)
-  "Forms to treat like `let'.
 
-`let' forms might use constructs wrapped in variable definitions.")
-
-;; NOTE: The code "(list 'quote 'a)" is the same as "'a".  Therefore, "quote"
-;; should be the last symbol in the list.
-(defvar loopy-iter--literal-forms '(declare quote)
-  "Forms that shouldn't be evaluated.
-
-Currently, `lambda' forms (which are automatically quoted) are
-still evaluated.")
-
-
-(defvar loopy-iter--setq-forms '(setq)
-  "Special forms that work like `setq'.")
 
 ;;;; Miscellaneous Helper Functions
-(defun loopy-iter--valid-loop-command (name)
-  "Check if NAME is a known command.
-
-This checks for NAME as a key in `loopy-aliases'
-and `loopy-command-parsers', in that order."
-  (if (and loopy-iter--lax-naming
-           (memq name loopy-iter-ignored-names))
-      nil
-    (map-elt loopy-command-parsers (loopy--get-true-name name))))
-
-(defun loopy-iter--literal-form-p (form)
-  "Whether FORM is a literal form that should not be interpreted."
-  (or (and (consp form)
-           (memq (cl-first form) loopy-iter--literal-forms))
-      (arrayp form)))
-
-(defun loopy-iter--sub-loop-command-p (name)
-  "Whether command named NAME is a sub-loop."
-  (memq name (loopy--get-all-names 'sub-loop
-                                   :from-true t
-                                   :ignored loopy-iter-ignored-names)))
-
-;;;; Replacement functions
-;; (defvar loopy-iter--unexpanded-macros '(cl-block cl-return-from)
-;;   "Macros to not expand.
+;; (defun loopy-iter--valid-loop-command (name)
+;;   "Check if NAME is a known command.
 ;;
-;; Some macro expansions interact, like `cl-block' with
-;; `cl-return-from'.  Therefore, we must prevent some expansions
-;; before walking the tree in `loopy-iter--replace-in-tree'.  Such
-;; macros are expanded later by Emacs after `loopy-iter' is itself
-;; expanded.
+;; This checks for NAME as a key in `loopy-aliases'
+;; and `loopy-command-parsers', in that order."
+;;   (if (and loopy-iter--lax-naming
+;;            (memq name loopy-iter-ignored-names))
+;;       nil
+;;     (map-elt loopy-command-parsers (loopy--get-true-name name))))
 ;;
-;; We do this because we wrap the loop body in `cl-block' /after/
-;; expanding the tree.")
+;; (defun loopy-iter--literal-form-p (form)
+;;   "Whether FORM is a literal form that should not be interpreted."
+;;   (or (and (consp form)
+;;            (memq (cl-first form) loopy-iter--literal-forms))
+;;       (arrayp form)))
+;;
+;; (defun loopy-iter--sub-loop-command-p (name)
+;;   "Whether command named NAME is a sub-loop."
+;;   (memq name (loopy--get-all-names 'sub-loop
+;;                                    :from-true t
+;;                                    :ignored loopy-iter-ignored-names)))
 
-(defun loopy-iter--replace-in-tree (tree)
-  "Replace loop commands in TREE in-place with their main-body code.
 
-Other instructions are just pushed to their variables."
-  (if (nlistp tree)
-      ;; If `tree' is not a list, just return the object.  This can happen when
-      ;; trying to expand sub-expressions, such as the "v" in "(let ((i v)) ...)".
-      tree
-    (let ((new-tree))
-      ;; TODO: How to handle macro expansion?  Ideally, we only need to parse
-      ;; the fundamental building blocks of source code, and macros would expand
-      ;; to usages of these blocks.  Should this be `macroexpand-all'?
-      (dolist (elem (if (not loopy--in-sub-level)
-                        (macroexpand-all tree
-                                         ;; (mapcar (lambda (x)
-                                         ;;           (cons x
-                                         ;;                 `(lambda (&rest args)
-                                         ;;                    (cons 'loopy--unexpand
-                                         ;;                          (cons (quote ,x)
-                                         ;;                                args)))))
-                                         ;;         loopy-iter--unexpanded-macros)
-                                         )
-                      tree))
-        (if (consp elem)
-            ;; Depending on the structure that we're dealing with, we need to
-            ;; expand differently.
-            (let* ((key (cl-first elem))
-                   (cmd)
-                   (subtree))
-
-              (if loopy-iter--lax-naming
-                  (setq cmd key
-                        subtree (cl-rest elem))
-                (setq cmd (cl-second elem)
-                      subtree (cddr elem)))
-
-              (cond
-               ;; We pass the command expression to the optimizer for better
-               ;; error signaling, so we need to check for this to avoid
-               ;; infinite recursion.
-               ((eq key 'loopy--optimized-accum)
-                (push `(,key
-                        ,(apply #'append
-                                (map-apply (lambda (key val)
-                                             `(,key
-                                               ,(if (eq key :cmd)
-                                                    val
-                                                  (loopy-iter--replace-in-tree val))))
-                                           (cl-second elem))))
-                      new-tree))
-
-               ;; ((eq key 'loopy--unexpand)
-               ;;  (push (cdr elem) new-tree))
-
-               ;; Check if it's a lambda form
-               ((eq key 'lambda)
-                (push (loopy-iter--replace-in-lambda-form elem)
-                      new-tree))
-
-               ;; Check if it's a literal form.
-               ((loopy-iter--literal-form-p elem)
-                (push elem new-tree))
-
-               ;; Check if it's a `let'-like form.
-               ((memq key loopy-iter--let-forms)
-                (push (loopy-iter--replace-in-let-form elem)
-                      new-tree))
-
-               ;; Check if it's a `setq'-like form.
-               ((memq key loopy-iter--setq-forms)
-                (push (loopy-iter--replace-in-setq-form elem)
-                      new-tree))
-
-               ;; Check if it's the special `sub-loop' command before checking
-               ;; if it's any other kind of loop command.
-               ((loopy-iter--sub-loop-command-p cmd)
-                (push (macroexpand `(loopy-iter ,@subtree))
-                      new-tree))
-
-               ;; Handle `at' commands specially.
-               ((memq (if loopy-iter--lax-naming key (cl-second elem))
-                      (loopy--get-all-names
-                       'at
-                       :from-true t
-                       :ignored (and loopy-iter--lax-naming
-                                     loopy-iter-ignored-names)))
-                (push (macroexp-progn
-                       (loopy-iter--replace-in-at-command (cl-first subtree)
-                                                          (cl-rest subtree)))
-                      new-tree))
-
-               ;; Check if it's a loop command
-               (;; If lax-naming, just check the first element in the list.
-                ;; Otherwise, check if the first element is an appropriate
-                ;; keyword and the second element is a known command.
-                (if loopy-iter--lax-naming
-                    ;; It's better to prefer existing functions to loop commands
-                    ;; when using `lax-naming', since the expanded code might
-                    ;; include calls to the function `list', which is
-                    ;; indistinguishable from the loop command `list' in such
-                    ;; cases.
-                    (and (not (or (functionp key)
-                                  (macrop key)
-                                  (special-form-p key)))
-                         (loopy-iter--valid-loop-command cmd))
-                  (and (memq key loopy-iter-command-keywords)
-                       (loopy-iter--valid-loop-command cmd)))
-
-                (seq-let (main-body other-instructions)
-                    (loopy--extract-main-body
-                     ;; If using lax naming, then the entire `elem' is the loop
-                     ;; command.  Otherwise, it is the `cdr'.
-                     (loopy--parse-loop-command (if loopy-iter--lax-naming
-                                                    elem
-                                                  (cl-rest elem))))
-                  ;; Some loop commands might interleave expressions and
-                  ;; commands to produce a value, so we should also check the
-                  ;; expansion.
-                  (let ((recursively-parsed-main-body
-                         (loopy-iter--replace-in-tree main-body)))
-                    ;; Push the main body into the tree.
-                    (push (macroexp-progn recursively-parsed-main-body)
-                          new-tree))
-                  ;; Interpret the other instructions.
-                  (loopy--process-instructions
-                   other-instructions :erroring-instructions '(loopy--main-body))))
-
-               ;; Otherwise, recurse.
-               (t
-                (let ((loopy--in-sub-level t))
-                  (push (loopy-iter--replace-in-tree elem)
-                        new-tree)))))
-          ;; Just add anything else to the tree.
-          (push elem new-tree)))
-      ;; Return branches in correct order.
-      (nreverse new-tree))))
-
-(defun loopy-iter--replace-in-let-form (tree)
-  "Replace loop commands in `let'-like form TREE.
-
-These forms can have loop commands in the values of variables or in the body."
-  (let ((new-var-list))
-    ;; Handle the var-list
-    (dolist (pair (cl-second tree))
-      ;; If the pair is not the expected list (e.g., a single symbol which `let'
-      ;; treats as variable bound to nil), just push into the list.  Otherwise,
-      ;; we need to interpret the value being assigned to the variable.
-      (if (nlistp pair)
-          (push pair new-var-list)
-        ;; TODO: Why do we need to deal with quoted forms here specifically?
-        ;;       The `quote' doesn't seem to be passed along.
-        (let ((value (cl-second pair)))
-          (if (loopy-iter--literal-form-p value)
-              (push pair new-var-list)
-            (push (list (cl-first pair)
-                        (loopy-iter--replace-in-tree value))
-                  new-var-list)))))
-    ;; Return value
-    `(,(cl-first tree) ,(nreverse new-var-list)
-      ,@(loopy-iter--replace-in-tree (cddr tree)))))
-
-(defun loopy-iter--replace-in-setq-form (tree)
-  "Replace loop commands in `setq'-like form TREE.
-
-These forms can have loop commands in every other expression
-starting at the third element in TREE."
-  (let ((new-var-val-pairs)
-        (name (cl-first tree))
-        ;; Just to make the `while' loop easier.
-        (tree (cdr tree)))
-    (while tree
-      (push (list (pop tree)
-                  (let ((val (pop tree)))
-                    (if (loopy-iter--literal-form-p val)
-                        val
-                      (loopy-iter--replace-in-tree val))))
-            new-var-val-pairs))
-    ;; Return new tree.
-    `(,name ,@(apply #'append (nreverse new-var-val-pairs)))))
-
-(defun loopy-iter--replace-in-lambda-form (tree)
-  "Replace loop commands in `lambda'-like expression TREE.
-
-These expressions can have loop commands in the body."
-  `(lambda ,(cl-second tree)
-     ,@(loopy-iter--replace-in-tree (cddr tree))))
-
-(defmacro loopy-iter--wrap-at-targets (&rest body)
-  "`let'-bind the variables in `loopy--valid-external-at-targets' for BODY."
-  `(let ,loopy--valid-external-at-targets
-     ,@body))
-
-(defmacro loopy-iter--produce-at-instruction-from-targets ()
-  "Make an `at' instruction from targets in `loopy--valid-external-at-targets'."
-  `(list 'loopy--at-instructions
-         (cons loopy--loop-name
-               (append ,@(cl-loop for var in loopy--valid-external-at-targets
-                                  collect `(mapcar (lambda (instr)
-                                                     (list (quote ,var) instr))
-                                                   ,var))))))
-
-(defun loopy-iter--replace-in-at-command (target-loop tree)
-  "Replace loop commands in TREE with respect to TARGET-LOOP."
-  (loopy--check-target-loop-name target-loop)
-  (loopy-iter--wrap-at-targets
-   (let ((loopy--loop-name target-loop))
-     (prog1
-         (loopy-iter--replace-in-tree tree)
-       (loopy--process-instruction
-        (loopy-iter--produce-at-instruction-from-targets)
-        :erroring-instructions '(loopy--main-body))))))
 
 (def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
   ;; This is the same as for `loopy', but without `let*'.
@@ -418,63 +184,409 @@ These expressions can have loop commands in the body."
 (def-edebug-spec loopy-iter--command-edebug-specs
   ([&optional symbolp] . loopy--command-edebug-specs))
 
+;;;; For parsing commands
+
+(defcustom loopy-iter-bare-commands
+  '( at accumulating adjoining appending arraying string stringing
+     arraying-ref arrayingf stringf stringingf string-ref
+     stringing-ref collecting concating consing counting cycling
+     repeating finding leaving leaving-from listing listingf
+     mapping mapping-pairs mappingf maximizing maxing minimizing
+     minning multiplying nconcing numbering numbering-down
+     numbering-up nunioning prepending pushing pushing-into
+     reducing returning returning-from setting setting-prev
+     seqing sequencing seqing-index sequencing-index
+     listing-index arraying-index string-index stringing-index
+     stringi seqing-ref sequencingf skipping continuing
+     skipping-from continuing-from sub-looping sublooping looping
+     summing unioning vconcating)
+  "Commands recognized in `loopy-iter' without a preceding keyword.
+
+For special marco arguments, see `loopy-iter-bare-special-macro-arguments'.
+
+This option replaces the flag `lax-naming', and is always in effect."
+  :type '(repeat symbol)
+  :group 'loopy-iter)
+
+(defvar loopy-iter--command-parsers nil
+  "Parsers used by `loopy-iter'.
+
+This variable is bound while `loopy-iter' is running, combining
+`loopy-command-parsers' and
+`loopy-iter-overwritten-command-parsers'.")
+
+(defun loopy-iter--parse-command (command)
+  "An Iter version of `loopy--parse-loop-command'."
+  (let* ((cmd-name (cl-first command))
+         (parser (loopy--get-command-parser
+                  cmd-name
+                  :parsers loopy-iter--command-parsers)))
+    (if-let ((instructions (funcall parser command)))
+        (remq nil instructions)
+      (error "Loopy Iter: No instructions returned by command parser: %s"
+             parser))))
+
+(defvar loopy-iter--non-main-body-instructions nil
+  "Used to capture other instructions while expanding.
+
+Expanding functions `push' lists of instructions into this variable.")
+
+;;;;; Expanders
+
+(defvar loopy-iter--sub-level-expanders nil
+  "Macro expanders for sub-level expressions.")
+
+(defvar loopy-iter--top-level-expanders nil
+  "Macro expanders for top-level expressions.")
+
+(defun loopy-iter--macroexpand-top (expr)
+  "Expand a top-level expression using `loopy-iter--top-level-expanders'"
+  (macroexpand-1 expr loopy-iter--top-level-expanders))
+
+(defun loopy-iter--macroexpand-sub (expr)
+  "Expand a top-level expression using `loopy-iter--sub-level-expanders'"
+  (macroexpand-all expr loopy-iter--sub-level-expanders))
+
+(defun loopy-iter--keyword-expander-top (&rest args)
+  "Expand top-level commands preceded by keywords in `loopy-iter-keywords'."
+  (cl-destructuring-bind (main other)
+      (loopy--extract-main-body
+       (loopy-iter--parse-command args))
+    (push other loopy-iter--non-main-body-instructions)
+    (macroexp-progn main)))
+
+(defun loopy-iter--keyword-expander-sub (&rest args)
+  "Expand sub-level commands preceded by keywords in `loopy-iter-keywords'."
+  (cl-destructuring-bind (main other)
+      (loopy--extract-main-body
+       (let ((loopy--in-sub-level t))
+         (loopy-iter--parse-command args)))
+    (push other loopy-iter--non-main-body-instructions)
+    (macroexp-progn main)))
+
+(defun loopy-iter--opt-accum-expand-val (arg)
+  "Macro expand only the value of an optimized accumulation.
+
+Optimized accumulations are expanded into a special form, after
+which this function will recursively expand the expression of the
+accumulated value.
+
+To avoid an infinite loop, this function replaces the `loopy--optimized-accum'
+in the expression with `loopy--optimized-accum-2'."
+  (loopy (with (plist (cadr arg)))
+         (cons (k v) plist :by #'cddr)
+         (collect k)
+         ;; By this point, command expansion are already defined, so we don't
+         ;; need to try to handle instructions.
+         (collect (if (eq k :val)
+                      (macroexpand-all v loopy-iter--sub-level-expanders)
+                    v))
+         (finally-return `(loopy--optimized-accum-2 (quote ,loopy-result)))))
+
+;;;;; Overwritten definitions
+
+(defcustom loopy-iter-overwritten-command-parsers
+  '((at       . loopy-iter--parse-at-command)
+    (sub-loop . loopy-iter--parse-sub-loop-command))
+  "Overwritten command parsers.
+
+This is an alist of dotted pairs of base names and parsers, as in
+`loopy-command-parsers'.
+
+Some parsers reasonably assume that all of their body arguments are
+also commands.  For `loopy-iter', this cannot work, so some parsers
+need to be tweaked."
+  :type '(alist :key-type symbol :value-type function)
+  :group 'loopy-iter)
+
+(cl-defun loopy-iter--parse-at-command ((_ target-loop &rest commands))
+  "Parse the `at' command as (at &rest COMMANDS).
+
+These commands affect other loops higher up in the call list."
+  (loopy--check-target-loop-name target-loop)
+  ;; We need to capture all non-main-body instructions into a new `at'
+  ;; instruction, so we just temporarily `let'-bind
+  ;; `loopy-iter--non-main-body-instructions' while expanders push to it,
+  ;; we which then wrap back in a new instruction and pass up to the calling
+  ;; function, which consumes instructions.
+  (loopy (with (loopy-iter--non-main-body-instructions nil)
+               (loopy--loop-name target-loop)
+               (loopy--in-sub-level t))
+         (list cmd commands)
+         (collect (list 'loopy--main-body
+                        (loopy-iter--macroexpand-sub cmd)))
+         (finally-return
+          ;; Return list of instructions to comply with expectations of calling
+          ;; function, which thinks that this is a normal loop-command parser.
+          `(,@loopy-result
+            (loopy--at-instructions
+             (,target-loop
+              ,@(thread-last loopy-iter--non-main-body-instructions
+                             nreverse
+                             (apply #'append))))))))
+
+(cl-defun loopy-iter--parse-sub-loop-command ((_ &rest body))
+  "Parse the `sub-loop' command in `loopy-iter'."
+  `((loopy--main-body ,(macroexpand `(loopy-iter ,@body)))))
+
+;;;; For parsing special macro arguments
+
+(defcustom loopy-iter-bare-special-macro-arguments
+  '( after-do        after else-do else
+     before-do       before initially-do initially
+     finally-do      finally
+     finally-return
+     finally-protect finally-protected
+     flag            flags
+     accum-opt       opt-accum
+     with            init
+     without         no-with no-init
+     wrap)
+  "Symbols naming recognized special macro arguments and their aliases.
+
+These should not overwrite any other macros or functions in Emacs Lisp."
+  :type '(repeat symbol)
+  :group 'loopy-iter)
+
+;; TODO: Combine this with `loopy--def-special-processor'.
+(defmacro loopy-iter--def-special-processor (name &rest body)
+  "Create a processor for the special macro argument NAME and its aliases.
+
+BODY is the arguments to the macro `loopy' or `loopy-iter'.
+Each processor should set a special variable (such as those
+in `loopy--variables') and return a new BODY with its
+own argument removed.
+
+Variables available:
+- `all-names' is all of the names found
+- `matching-args' are all arguments that match elements in
+  `all-names'
+- `arg-value' is the value of the arg if there is only one match
+- `arg-name' the name of the arg found if there is only one match"
+  (declare (indent defun))
+  `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
+       (body)
+     ,(format "Process the special macro argument `%s' and its aliases.
+
+Returns BODY without the `%s' argument."
+              name name)
+     (loopy
+      (accum-opt matching-args new-body)
+      (with (all-names (loopy--get-all-names (quote ,name) :from-true t))
+            (bare-names (loopy (list name all-names)
+                               (when (memq name loopy-iter-bare-special-macro-arguments)
+                                 (collect name)))))
+      (listing expr body)
+      (if (and (consp expr)
+               (or (memq (cl-first expr) bare-names)
+                   (and (memq (cl-first expr) loopy-iter-keywords)
+                        (memq (cl-second expr) all-names))))
+          (collecting matching-args expr)
+        (collecting new-body expr))
+      (finally-do (when matching-args
+                    (if (cdr matching-args)
+                        (error "Conflicting arguments: %s" matching-args)
+                      (let ((arg (car matching-args))
+                            (arg-name)
+                            (arg-value))
+                        ;; TODO: Probably a better way to do this that doesn't
+                        ;; involve checking twice.
+                        (if (memq (cl-first arg) bare-names)
+                            (loopy-setq (arg-name . arg-value) arg)
+                          (loopy-setq (_ arg-name . arg-value) arg))
+                        (ignore arg-name)
+                        ,@body))))
+      (finally-return
+       new-body))))
+
+(loopy-iter--def-special-processor with
+  ;; Note: These values don't have to be used literally, due to
+  ;;       destructuring.
+  (loopy (list binding arg-value)
+         (collect
+          (cond ((symbolp binding)      (list binding nil))
+                ((= 1 (length binding)) (list (cl-first binding) nil))
+                (t                       binding)))
+         (finally-do
+          (setq loopy--with-vars loopy-result))))
+
+
+(loopy-iter--def-special-processor finally-return
+  (setq loopy--final-return (if (= 1 (length arg-value))
+                                (cl-first arg-value)
+                              (cons 'list arg-value))))
+
+(loopy-iter--def-special-processor flag
+  ;; Process any flags passed to the macro.  In case of conflicts, the
+  ;; processing order is:
+  ;;
+  ;; 1. Flags in `loopy-default-flags'.
+  ;; 2. Flags in the `flag' macro argument, which can undo the first group.
+  ;; (mapc #'loopy--apply-flag loopy-default-flags)
+  (mapc #'loopy--apply-flag arg-value))
+
+(loopy-iter--def-special-processor without
+  (setq loopy--without-vars arg-value))
+
+(loopy-iter--def-special-processor accum-opt
+  (pcase-dolist ((or `(,var ,pos) var) arg-value)
+    (push var loopy--optimized-accum-vars)
+    (when pos
+      (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
+
+(loopy-iter--def-special-processor wrap
+  (setq loopy--wrapping-forms arg-value))
+
+(loopy-iter--def-special-processor before-do
+  (setq loopy--before-do arg-value))
+
+(loopy-iter--def-special-processor after-do
+  (setq loopy--after-do arg-value))
+
+(loopy-iter--def-special-processor finally-do
+  (setq loopy--final-do arg-value))
+
+(loopy-iter--def-special-processor finally-protect
+  (setq loopy--final-protect arg-value))
+
+;;;; Misc
+
+(defvar loopy-iter-suppressed-macros '(cl-block cl-return cl-return-from)
+  "Macros that shouldn't be expanded as the `loopy-iter' expansion is built.
+
+Some macros interact in a way if one is expanded without the
+context of the other.  Others might not work for other reasons.
+The macros `cl-block', `cl-return-from', and `cl-return' are
+known to fall into the first group.")
+
 ;;;; The macro itself
+
 (defmacro loopy-iter (&rest body)
-  "An `iter'-like `loopy' macro.
+  "Allows embedding loop commands in arbitrary code within this macro's body.
 
-See `loopy' for information about BODY.
+This can be more flexible than using the `do' loop command in
+`loopy'.
 
-This macro allows for embedding many loop commands in arbitrary
-code.  This can be more flexible than using the `do' loop command
-in `loopy'.
+Loop commands are expanded like macros inside the body.  Hence,
+it's possible for the names of loop commands to overshadow other
+definitions.  To avoid this, see the user options
+`loopy-iter-bare-commands', `loopy-iter-bare-special-macro-arguments', and
+`loopy-iter-keywords'.
 
-One useful difference is that `let*' is not an alias of the
-`with' special macro argument.  See the Info node `(loopy)' for
-information on how to use `loopy' and `loopy-iter'.
+See the Info node `(loopy)The loopy-iter Macro' for information
+on how to use `loopy-iter'.  See the Info node `(loopy)' for how
+to use `loopy' in general.
 
 \(fn CODE-or-COMMAND...)"
-  ;; This Edebug spec, doesn't say much, but, since we're wrapping commands
-  ;; in arbitrary sexps, it's hard to be specific.  At most, the special macro
-  ;; arguments must be at the top level.
-  (declare (debug (&rest [&or loopy-iter--special-macro-arg-edebug-spec
-                              loopy-iter--command-edebug-specs
-                              sexp])))
-
   (loopy--wrap-variables-around-body
 
    (mapc #'loopy--apply-flag loopy-default-flags)
+
    (setq body (loopy--process-special-arg-loop-name body))
-   (setq body (loopy--process-special-arg-flag
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-with
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-without
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-accum-opt
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-wrap
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-before-do
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-after-do
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-finally-do
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-finally-return
-               body loopy-iter-ignored-names))
-   (setq body (loopy--process-special-arg-finally-protect
-               body loopy-iter-ignored-names))
+   (setq body (loopy-iter--process-special-arg-flag body))
+   (setq body (loopy-iter--process-special-arg-with body))
+   (setq body (loopy-iter--process-special-arg-without body))
+   (setq body (loopy-iter--process-special-arg-accum-opt body))
+   (setq body (loopy-iter--process-special-arg-wrap body))
+   (setq body (loopy-iter--process-special-arg-before-do body))
+   (setq body (loopy-iter--process-special-arg-after-do body))
+   (setq body (loopy-iter--process-special-arg-finally-do body))
+   (setq body (loopy-iter--process-special-arg-finally-return body))
+   (setq body (loopy-iter--process-special-arg-finally-protect body))
 
    ;; Process the main body.
    (unwind-protect
        (progn
-         (setq loopy--main-body (loopy-iter--replace-in-tree body))
+         (let ((suppressed-alist (loopy (list i loopy-iter-suppressed-macros)
+                                        (collect (cons i nil))))
+               (loopy-iter--command-parsers
+                (or loopy-iter--command-parsers
+                    (append loopy-iter-overwritten-command-parsers
+                            loopy-command-parsers))))
 
-         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-         ;; using the function `loopy--get-optimized-accum'.
-         ;;
-         ;; TODO: What are the limitations of this?
-         (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+           ;; During the initial top-level expansion and the subsequent
+           ;; all-level expansion, we make an effort to keep instructions in the
+           ;; same order that they are received.  This might help to avoid
+           ;; unexpected behavior regarding variable declarations.  For example,
+           ;; if the top level of a following expression refers back to a
+           ;; variable initialized in a preceeding sub-expression.
+           (let ((loopy-iter--non-main-body-instructions)
+                 (cmd-alist-1)
+                 (cmd-alist-sub)
+                 (keyword-alist-1)
+                 (keyword-alist-sub))
+
+             ;; Entries for command names.
+             (dolist (cmd loopy-iter-bare-commands)
+               (let ((cmd cmd))
+                 (push (cons cmd (lambda (&rest args)
+                                   (cl-destructuring-bind (main other)
+                                       (loopy--extract-main-body
+                                        (loopy-iter--parse-command
+                                         (cons cmd args)))
+                                     (push other
+                                           loopy-iter--non-main-body-instructions)
+                                     (macroexp-progn main))))
+                       cmd-alist-1)
+                 (push (cons cmd (lambda (&rest args)
+                                   (cl-destructuring-bind (main other)
+                                       (loopy--extract-main-body
+                                        (let ((loopy--in-sub-level t))
+                                          (loopy-iter--parse-command
+                                           (cons cmd args))))
+                                     (push other
+                                           loopy-iter--non-main-body-instructions)
+                                     (macroexp-progn main))))
+                       cmd-alist-sub)))
+
+             ;; Entries for keyword commands
+             (dolist (keyword loopy-iter-keywords)
+               (push (cons keyword #'loopy-iter--keyword-expander-top)
+                     keyword-alist-1)
+               (push (cons keyword #'loopy-iter--keyword-expander-sub)
+                     keyword-alist-sub))
+
+             (let* ((loopy-iter--top-level-expanders
+                     `(,@suppressed-alist
+                       (loopy--optimized-accum . loopy-iter--opt-accum-expand-val)
+                       (loopy--optimized-accum-2 . nil)
+                       ,@cmd-alist-1
+                       ,@keyword-alist-1))
+                    (loopy-iter--sub-level-expanders
+                     `(,@suppressed-alist
+                       (loopy--optimized-accum . loopy-iter--opt-accum-expand-val)
+                       (loopy--optimized-accum-2 . nil)
+                       ,@cmd-alist-sub
+                       ,@keyword-alist-sub
+                       ,@macroexpand-all-environment)))
+
+               ;; Now process the main body.
+               (loopy (accum-opt new-body)
+                      (list expr body)
+                      (collect new-body
+                               (thread-last expr
+                                            loopy-iter--macroexpand-top
+                                            loopy-iter--macroexpand-sub))
+                      (finally-do
+                       (setq loopy--main-body new-body)
+                       (loopy--process-instructions
+                        (thread-last loopy-iter--non-main-body-instructions
+                                     nreverse
+                                     (apply #'append)))))))
+
+           ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+           ;; using the function `loopy--expand-optimized-accum'.
+           (loopy
+            ;; TODO:
+            ;; - Is there a way to only expand `loopy--optimized-accum'?
+            (with (macro-funcs `(,@suppressed-alist
+                                 ;; Identify second version of optimized accumulation.
+                                 (loopy--optimized-accum-2 . loopy--expand-optimized-accum)
+                                 ,@macroexpand-all-environment)))
+            (list i loopy--main-body)
+            (collect (macroexpand-all i macro-funcs))
+            (finally-do (setq loopy--main-body loopy-result))))
+
 
          (loopy--process-instructions (map-elt loopy--at-instructions
                                                loopy--loop-name)

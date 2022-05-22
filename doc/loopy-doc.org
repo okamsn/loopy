@@ -66,6 +66,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   - [[#background-info][Background Info]]
   - [[#hello-world][Hello World]]
   - [[#an-always-command][An ~always~ Command]]
+  - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
   - [[#finding-more-examples][Finding More Examples]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
 - [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
@@ -1940,8 +1941,8 @@ source sequences.
    For example, instead of "min" or "minimize", you can use "minning" or
    "minimizing".  Instead of "sum" and "append", you can use "summing" and
    "appending".  This is similar to the behavior of ~cl-loop~, and helps to
-   avoid name collisions when using the ~loopy-iter~ macro with the =lax-naming=
-   flag enabled ([[#loopy-iter][The ~loopy-iter~ Macro]]).
+   avoid name collisions when using the ~loopy-iter~ macro
+   ([[#loopy-iter][The ~loopy-iter~ Macro]]).
    #+end_quote
 
 
@@ -3090,53 +3091,99 @@ confused with the ~iter-*~ functions provided by Emacs).
 #+begin_src emacs-lisp
   (require 'loopy-iter) ; <- Must `require' to load feature.
 
-  ;; => (2 4 6)
-  (loopy-iter (for list i '(1 2 3))
-              (let ((a (* 2 i)))
-                (accum collect a)))
+  ;; => (9 11 13)
+  (loopy-iter (with (a 7))
+              (listing i '(1 2 3))
+              (let ((b (+ a (* 2 i))))
+                (collecting b)))
+
+  ;; => (1 2 3)
+  (loopy-iter (listing elem '(1 2 3))
+              (funcall #'(lambda (x) (collecting x))
+                       elem))
 #+end_src
 
-#+cindex: loopy-iter keywords
-#+vindex: loopy-iter-command-keywords
-To clearly distinguish between loop commands and Emacs features (such as
-between the loop command =list= and the function ~list~), a loop command must
-be preceded by one of the keywords listed in ~loopy-iter-command-keywords~.
-By default, this is one of =for=, =accum=, or =exit=.  These keywords do not
-share a name with any built-in Emacs feature and are similar to the keywords
-used by other packages.  For example, =(list VAR LIST)= would be =(for list
-VAR LIST)= or =(for in VAR LIST)=.
+Loop commands are treated as macros inside of ~loopy-iter~, and they are found
+and expanded using ~macroexpand-all~. Hence, a loop command could overshadow the
+function value of a symbol.  There are two ways to avoid such conflicts.
 
-Any keyword in the user option ~loopy-iter-command-keywords~ can be used to
-identify any loop command.  For example, =(accum collect a)= and
-=(for collect a)= are both valid ways of referring to the =collect= loop
-command in ~loopy-iter~.
-
-To disable this requirement, use the flag =lax-naming= ([[#flags][Using Flags]]).  When
-using =lax-naming=, ~loopy-iter~ will always prefer built-in features to loop
-commands.  For example, "list" will always be understood as referring to the
-function ~list~ and not the loop command =list=.
-
-Special macro arguments, already having clearly distinguishable names, do not
-need to be preceded by one of the above keywords.
-
-#+cindex: Ignoring names in loopy-iter
-#+vindex: loopy-iter-ignored-names
-That being said, the names of some ~loopy~ features /can/ cause conflicts, such
-as the alias =let*= for the special macro argument =with=.  To ignore these
-names, list them in the user option ~loopy-iter-ignored-names~.  The symbol
-=let*= is included by default.
-
-This user option always applies to special macro arguments.  It only applies to
-loop commands when =lax-naming= is enabled.
+The first way is to use non-conflicting aliases.  Like in Iterate (and
+~cl-loop~, to an extent), almost all commands in ~loopy~ have aliases in the
+present participle form (the "-ing" form).  For example, Loopy provides the
+command =list= with the alias =listing=.  Because the command name =list= would
+conflict with the built-in Emacs Lisp function ~list~, only the command name
+=listing= is supported by default.  The command name =at= (a preposition) is an
+exception to this rule, though the made-up word =atting= is provided as an alias
+for consistency.
 
 #+begin_src emacs-lisp
-  ;; => ((1 8) (2 9) (3 10))
-  (loopy-iter (with (a 7))                ; <- Set once around loop.
-              (for list elem '(1 2 3))
-              (let* ((c elem)             ; <- These set inside of loop.
-                     (d (+ a c)))
-                (accum collect (list c d))))
+  ;; `list' is unambiguously a command name in `loopy'.
+  ;; => (1 2 3 4)
+  (loopy outer
+         (list i '((1 2) (3 4)))
+         (loop (list j i)
+               (at outer (collect j))))
+
+  ;; `list' would be a function.  `listing' is the command.
+  ;; => (1 2 3 4)
+  (loopy-iter outer
+              (listing i '((1 2) (3 4)))
+              ;; Equivalent to `loopy-iter':
+              (looping (listing j i)
+                       ;; Can use `at' instead of `atting':
+                       (at outer (collecting j))))
 #+end_src
+
+#+vindex: loopy-iter-bare-commands
+The command aliases recognized by ~loopy-iter~ can be customized using the user
+option ~loopy-iter-bare-commands~, which is a list of symbols naming commands and
+their aliases.  Again, these commands are found in the loop body using Emacs
+Lisp's macro-expansion features, so adding an alias that overrides a symbol's
+function definition can cause errors.  ~loopy~, whose environment is more
+limited, does not have this restriction.
+
+#+vindex: loopy-iter-bare-special-macro-arguments
+The special macro arguments (and their aliases) recognized by ~loopy-iter~ can
+be set in the user option ~loopy-iter-bare-special-macro-arguments~.  Some of their
+built-in aliases, such as =let*= for =with=, are excluded by default.
+
+#+cindex: loopy-iter keywords
+#+vindex: loopy-iter-keywords
+The first method above deals with commands that are written like functions.  If
+for some reason a suitable command alias cannot be used or cannot be added to
+one of the above user options, one can write the command name preceded by one of
+the keywords in ~loopy-iter-keywords~.  This is the second method.
+
+By default, the possible keywords are =for=, =accum=, =exit=, and =arg=.  These
+symbols do not share a name with any built-in Emacs feature and are similar to
+the keywords used by other packages.  Note that these are not Lisp "keywords"
+that are prefixed with a colon, such as the =:test= in ~(cl-count ITEM SEQ :test
+FUNC)~.  For example,
+- the command =(listing VAR LIST)= could also be written as =(for list VAR
+  LIST)=.
+- the special marco argument =with=, with the alias =let*=, could also be
+  written as =(arg let* (VAR EXPR) ...)=.  See that this does not conflict with
+  using the ~let*~ special form.
+
+This method recognizes all commands and their aliases in the user option
+~loopy-aliases~.
+
+#+caption: The first example, but now using keyword symbols.
+#+begin_src emacs-lisp
+  ;; => (9 11 13)
+  (loopy-iter (arg let* (a 7))
+              (for list i '(1 2 3))
+              (let ((b (+ a (* 2 i))))
+                (accum collect b)))
+#+end_src
+
+While the symbols =for=, =accum=, =exit=, and =arg= are named for iteration,
+accumulation, early exits, and special macro arguments, respectively, any
+keyword in the user option ~loopy-iter-keywords~ can be used to identify any
+loop command or special macro argument.  For example, =(accum collect a)= and
+=(for collect a)= are both valid ways of referring to the =collect= loop command
+in ~loopy-iter~.  Instead of =(arg let* (a 7))= in the example above, one could
+also write =(exit let* (a 7))= if one really wanted to.
 
 Restrictions on the placement of loop commands and special macro arguments
 still apply in ~loopy-iter~.  For example, iteration commands must still occur
@@ -3145,78 +3192,64 @@ at the top level of ~loopy-iter~ or a sub-loop.
 #+begin_src emacs-lisp
   ;; BAD
   (loopy-iter (let ((a (progn
-                         ;; ERROR: `list' must occur at top level.
-                         (for list j '(8 9 10 11 12))
+                         ;; ERROR: `listing' must occur at the top level.
+                         (listing j '(8 9 10 11 12))
                          j)))
-                (accum collect a)))
+                (collecting a)))
 
   ;; GOOD
   ;; => (8 9 10 11 12)
   (loopy-iter (let ((a (progn
-                         ;; NOTE: No restriction on placement of `expr'.
-                         (for expr j 8 (1+ j))
-                         ;; Leave loop but don't force return value,
-                         ;; allowing the implicit result to be returned.
-                         (exit until (> j 12))
+                         ;; NOTE: No restriction on placement of `setting'.
+                         (setting j 8 (1+ j))
+                         (when (> j 12) (leaving))
                          j)))
-                (accum collect a)))
-#+end_src
-
-#+attr_texinfo: :tag Caution
-#+begin_quote
-You should not reply on the value of a loop command's expanded code.  Such
-expanded code is an implementation detail and subject to change.
-#+end_quote
-
-For convenience, ~loopy-iter~ will not attempt to interpret loop commands in
-quoted code, except in sharp-quoted ~lambda~ forms.  This is because the
-~lambda~ macro is self-quoting, and so Emacs might quote the form before it is
-seen by ~loopy-iter~.
-
-#+begin_src emacs-lisp
-  ;; => (1 2 3)
-  (loopy-iter (for list elem '(1 2 3))
-              (funcall (lambda (x)
-                         (accum collect x))
-                       elem))
-
-  ;; => (1 2 3)
-  (loopy-iter (for list elem '(1 2 3))
-              (funcall #'(lambda (x) ; <- sharp-quoted, but still interpreted
-                           (accum collect x))
-                       elem))
+                (collecting a)))
 #+end_src
 
 In ~loopy~, the =sub-loop= command is a full ~loopy~ loop ([[#sub-loops]]).  In
-~loopy-iter~, it is a full ~loopy-iter~ loop.
+~loopy-iter~, it is a full ~loopy-iter~ loop.  If you do not want this, you can
+specifically use a full ~loopy~ loop using the loop command ~loopy~ instead, as
+in =(for loopy)= or just =loopy=.
 
 #+begin_src emacs-lisp
   ;; => (2 3 4 5)
   (loopy-iter outer
-              (for list i '([1 2] [3 4]))
-              (for loop
-                   ;; NOTE: `loopy-iter' style, not `loopy' style
-                   (for array j i)
-                   (for at outer
-                        (let ((val (1+ j)))
-                          (accum collect val)))))
+              (listing i '([1 2] [3 4]))
+              ;; NOTE: `loopy-iter' style, not `loopy' style
+              (sub-looping (arraying j i)
+                           (at outer
+                               (let ((val (1+ j)))
+                                 (collecting val)))))
+
+  ;; => (2 3 4 5)
+  (loopy-iter outer
+              (listing i '([1 2] [3 4]))
+              ;; NOTE: `loopy' style, not `loopy-iter' style
+              (loopy (array j i)
+                     (set val (1+ j))
+                     (at outer (collect val))))
 #+end_src
 
-If you do not want this, you can specifically use a full ~loopy~ loop using
-the loop command ~loopy~ instead, as in =(for loopy)=.
+Finally, there are a few things to keep in mind when using ~loopy-iter~:
+1. ~loopy~ (and so ~loopy-iter~) does not currently have all of the features of
+   Common Lisp's ~iterate~ macro.  Think of it more as an alternative form of
+   ~loopy~ instead of a port of ~iterate~.
+2. You should not rely on the value of a loop command's expanded code.  Such
+   expansion is an implementation detail and subject to change.
+3. Some macros, especially those that interact with each other, produce broken
+   code while ~loopy-iter~ is expanding its arguments.  For example,
+   ~cl-return-from~ is known to be problematic, since it tries to interact with
+   the correct ~cl-block~.
 
-#+attr_texinfo: :tag Note
-#+begin_quote
-Nesting arbitrary code in the loop requires knowing how to understand the
-code.  You might find cases where ~loopy-iter~ interprets code incorrectly.
+   Macros that should not be expanded while ~loopy-iter~ expands are listed in
+   ~loopy-iter-suppressed-macros~.  Note that this suppression is only in effect
+   while ~loopy-iter~ expands its loop commands.  Once ~loopy-iter~ outputs its
+   code, Emacs will attempt to further expand any macros in the outputted code.
 
-Please report such cases on this project's [[https://github.com/okamsn/loopy/issues][issues tracker]].
-#+end_quote
-
-~loopy~ (and so ~loopy-iter~) does not currently have all of the features of
-Common Lisp's ~iter~ macro.  Think of it more as an alternative form of
-~loopy~ instead of a port of ~iter~.
-
+   Ideally, such problematic macros are infrequent.  Please report such cases on
+   this project's [[https://github.com/okamsn/loopy/issues][issues tracker]] so that they can be added to
+   ~loopy-iter-suppressed-macros~ by default.
 
 * Using Flags
   :PROPERTIES:
@@ -3252,9 +3285,6 @@ Common Lisp's ~iter~ macro.  Think of it more as an alternative form of
   #+cindex: split flag
   - =split= :: Make accumulation commands with implicit variables accumulate into
     separate variables, which are then collected into ~loopy-result~.
-  #+cindex: lax-naming flag
-  - =lax-naming= :: In ~loopy-iter~, don't require keywords when using loop
-    commands ([[#loopy-iter][The ~loopy-iter~ Macro]]).
   #+cindex: default flag
   - =default= :: Use the default behavior for all options.
 
@@ -4050,6 +4080,82 @@ is the forward-compatible way of creating aliases.
             (always (and (< i 10) (cl-evenp j))))
    #+end_src
 
+** Custom commands in the ~loopy-iter~ macro
+:PROPERTIES:
+:CUSTOM_ID: custom-commands-for-loopy-iter
+:END:
+
+See also [[#loopy-iter]].
+
+~loopy-iter~ works by:
+1. separating main-body instructions from other instructions
+2. expanding that main-body code for ~loopy~ sub-commands
+3. collected those expansions into the outputted loop's body
+4. processing the collected non-main-body instructions
+
+Most loop commands should work with ~loopy-iter~ without any changes.  Some loop
+commands are just ~loopy~ versions of built-in Lisp macros or special forms, and
+so aren't needed in ~loopy-iter~ in the first place.
+
+However, special consideration is needed for commands that produce main-body
+code outside of main-body instructions, or that assume all of their arguments
+are loop commands.  Consider the parser for the =at= command:
+
+#+begin_src emacs-lisp
+  (cl-defun loopy--parse-at-command ((_ target-loop &rest commands))
+    "Parse the `at' command as (at &rest COMMANDS).
+
+  These commands affect other loops higher up in the call list."
+    (loopy--check-target-loop-name target-loop)
+    (let ((loopy--loop-name target-loop)
+          (loopy--in-sub-level t))
+      `((loopy--at-instructions
+         (,target-loop
+          ,@(loopy--parse-loop-commands commands))))))
+#+end_src
+
+All it does is process its arguments and wrap the resulting instructions in an
+=at= instruction.  By wrapping main-body instructions in an =at= instruction,
+~loopy-iter~ does not see the main-body code, and so cannot use it.  Instead, an
+alternative parser must be use:
+
+#+begin_src emacs-lisp
+  (cl-defun loopy-iter--parse-at-command ((_ target-loop &rest commands))
+  "Parse the `at' command as (at &rest COMMANDS).
+
+These commands affect other loops higher up in the call list."
+  (loopy--check-target-loop-name target-loop)
+  ;; We need to capture all non-main-body instructions into a new `at'
+  ;; instruction, so we just temporarily `let'-bind
+  ;; `loopy-iter--non-main-body-instructions' while expanders push to it,
+  ;; we which then wrap back in a new instruction and pass up to the calling
+  ;; function, which consumes instructions.
+  (loopy (with (loopy-iter--non-main-body-instructions nil)
+               (loopy--loop-name target-loop)
+               (loopy--in-sub-level t))
+         (list cmd commands)
+         (collect (list 'loopy--main-body (loopy-iter--macroexpand-sub cmd)))
+         (finally-return
+          ;; Return list of instructions to comply with expectations of calling
+          ;; function, which thinks that this is a normal loop-command parser.
+          `(,@loopy-result
+            (loopy--at-instructions
+             (,target-loop
+              ,@(thread-last loopy-iter--non-main-body-instructions
+                             nreverse
+                             (apply #'append))))))))
+#+end_src
+
+#+vindex: loopy-iter--non-main-body-instructions
+This ~loopy-iter~-specific definition separates the main-body instructions out
+from the other instructions so that ~loopy-iter~ can operate on their values
+directly.  The variable ~loopy-iter--non-main-body-instructions~ is a place
+where the macro-expanding parsers used by ~loopy-iter~ can push lists of
+instructions (see the code for usage examples).
+
+#+vindex: loopy-iter-overwritten-command-parsers
+These alternative command parsers are listed in
+~loopy-iter-overwritten-command-parsers~.
 
 ** Finding More Examples
    :PROPERTIES:

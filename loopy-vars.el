@@ -103,6 +103,7 @@ Definition must exist.  Neither argument need be quoted."
                          stringf stringingf
                          string-ref stringing-ref
                          across-ref))
+    (at              . (atting))
     (before-do       . (initially-do initially before))
     (collect         . (collecting))
     (concat          . (concating))
@@ -323,11 +324,11 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 ;; has already set them to nil.
 
 (defvar loopy--special-macro-arguments
-  '( flag flags with let*
-     init without no-with no-init before-do before initially-do
-     initially after-do after else-do else finally-do finally
-     finally-return wrap)
-  "List of built-in special macro arguments.")
+  '( flag with without before-do after-do finally-do finally-return wrap
+     finally-protect accum-opt)
+  "List of base names of built-in special macro arguments.
+
+These are only the base names as found in `loopy-aliases'.")
 
 (defvar loopy--special-maro-argument-processors
   '(loopy--process-special-arg-loop-name
@@ -632,6 +633,16 @@ This is used by the function `loopy--get-optimized-accum'.")
 Arguments to the `accum-opt' special macro argument are symbols
 or list of a symbol and a position.")
 
+;;;;; Pseudo-macro expansion
+;; TODO: This might need to be more aggressive.
+(defvar loopy--suppressed-macros '(cl-block cl-return cl-return-from)
+  "Macros that shouldn't be expanded as the `loopy' expansion is built.
+
+Some macros interact in a way if one is expanded without the
+context of the other.  Others might not work for other reasons.
+The macros `cl-block', `cl-return-from', and `cl-return' are
+known to fall into the first group.")
+
 ;;;; All variables
 (eval-and-compile
   (defvar loopy--variables
@@ -669,7 +680,6 @@ or list of a symbol and a position.")
       loopy--in-sub-level
 
       ;; -- Flag Variables --
-      loopy-iter--lax-naming
       loopy--destructuring-for-with-vars-function
       loopy--destructuring-for-iteration-function
       loopy--destructuring-accumulation-parser
