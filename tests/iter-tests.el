@@ -1,8 +1,10 @@
-;;; Tests for `loopy-iter'
+;;; Tests for `loopy-iter'  -*- lexical-binding: t; -*-
 
 (push (expand-file-name ".")
       load-path)
 
+(eval-when-compile (require 'loopy "./loopy.el")
+                   (require 'loopy-iter "./loopy-iter.el"))
 (require 'loopy "./loopy.el")
 (require 'loopy-iter "./loopy-iter.el")
 (require 'ert)

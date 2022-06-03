@@ -1,3 +1,5 @@
+;; -*- lexical-binding: t; -*-
+
 ;; Run these tests using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
@@ -9,6 +11,7 @@
 (require 'ert)
 (require 'pcase)
 (require 'map "./dependecy-links/map.el" 'no-error)
+(eval-when-compile (require 'loopy "./loopy.el"))
 (require 'loopy "./loopy.el")
 
 ;; "loopy quote"
@@ -65,24 +68,24 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 ;;;; Without
 (ert-deftest without ()
   (should (equal '(4 5)
-                 (let ((a 1) (b 2))
-                   (eval (quote (loopy (with (c 3))
+                 (eval (quote (let ((a 1) (b 2))
+                                (loopy (with (c 3))
                                        (without a b)
                                        (expr a (+ a c))
                                        (expr b (+ b c))
                                        (return a b)))))))
 
   (should (equal '(4 5)
-                 (let ((a 1) (b 2))
-                   (eval (quote (loopy (with (c 3))
+                 (eval (quote (let ((a 1) (b 2))
+                                (loopy (with (c 3))
                                        (no-init a b)
                                        (expr a (+ a c))
                                        (expr b (+ b c))
                                        (return a b)))))))
 
   (should (equal '(4 5)
-                 (let ((a 1) (b 2))
-                   (eval (quote (loopy (with (c 3))
+                 (eval (quote (let ((a 1) (b 2))
+                                (loopy (with (c 3))
                                        (no-with a b)
                                        (expr a (+ a c))
                                        (expr b (+ b c))
@@ -175,14 +178,14 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 ;;;; Final Instructions
 (ert-deftest finally-do ()
   (should (and (= 10
-                  (let (my-var)
-                    (eval (quote (loopy (list i (number-sequence 1 10))
-                                        (finally-do (setq my-var i)))))
+                  (let ((my-var))
+                    (loopy (list i (number-sequence 1 10))
+                           (finally-do (setq my-var i)))
                     my-var))
                (= 10
-                  (let (my-var)
-                    (eval (quote (loopy (list i (number-sequence 1 10))
-                                        (finally (setq my-var i)))))
+                  (let ((my-var))
+                    (loopy (list i (number-sequence 1 10))
+                           (finally (setq my-var i)))
                     my-var)))))
 
 (ert-deftest finally-do-not-affect-return ()
@@ -205,26 +208,26 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal (list 1 4 '(1 2 3 4))
                  (let ((test-result))
                    (should-error
-                    (lq (with (example-var 1))
-                        (list i '(1 2 3 4 5))
-                        (collect my-collection i)
-                        (when (> i 3)
-                          (do (error "%s" (list i))))
-                        (finally-protect
-                         (setq test-result (list example-var i my-collection))))
+                    (loopy (with (example-var 1))
+                           (list i '(1 2 3 4 5))
+                           (collect my-collection i)
+                           (when (> i 3)
+                             (do (error "%s" (list i))))
+                           (finally-protect
+                            (setq test-result (list example-var i my-collection))))
                     :type '(error))
                    test-result)))
 
   (should (equal (list 1 4 '(1 2 3 4))
                  (let ((test-result))
                    (should-error
-                    (lq (with (example-var 1))
-                        (list i '(1 2 3 4 5))
-                        (collect my-collection i)
-                        (when (> i 3)
-                          (do (error "%s" (list i))))
-                        (finally-protected
-                         (setq test-result (list example-var i my-collection))))
+                    (loopy (with (example-var 1))
+                           (list i '(1 2 3 4 5))
+                           (collect my-collection i)
+                           (when (> i 3)
+                             (do (error "%s" (list i))))
+                           (finally-protected
+                            (setq test-result (list example-var i my-collection))))
                     :type '(error))
                    test-result))))
 
@@ -946,73 +949,71 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 (ert-deftest destructure-list-ref-setf ()
   (should (equal '(1 2 3)
                  (let ((l (list 7 7 7)))
-                   (eval (quote (loopy-ref (((a b c) l))
-                                  (setf a 1 b 2 c 3)
-                                  l))))))
+                   (loopy-ref (((a b c) l))
+                     (setf a 1 b 2 c 3)
+                     l))))
 
   (should (equal '(1 2 (3 4))
                  (let ((l (list 7 7 (list 7 7))))
-                   (eval (quote (loopy-ref (((a b (c d)) l))
-                                  (setf a 1 b 2 c 3 d 4)
-                                  l))))))
+                   (loopy-ref (((a b (c d)) l))
+                     (setf a 1 b 2 c 3 d 4)
+                     l))))
 
   (should (equal '(1 2 3 4)
                  (let ((l (list 7 7 7 7)))
-                   (eval (quote (loopy-ref (((a b &rest (c d)) l))
-                                  (setf a 1 b 2 c 3 d 4)
-                                  l))))))
+                   (loopy-ref (((a b &rest (c d)) l))
+                     (setf a 1 b 2 c 3 d 4)
+                     l))))
 
   (should (equal '(1 2 . 3)
                  (let ((l (list 7 7 7 7)))
-                   (eval (quote (loopy-ref (((a b . c) l))
-                                  (setf a 1 b 2 c 3))))
+                   (loopy-ref (((a b . c) l))
+                     (setf a 1 b 2 c 3))
                    l)))
 
   (should (equal '(1 2 3 :d 4 :e 5)
                  (let ((l (list 7 7 7 :d 7 :e 7)))
-                   (eval (quote (loopy-ref (((a b c &key d e) l))
-                                  (setf a 1 b 2 c 3 d 4 e 5))))
+                   (loopy-ref (((a b c &key d e) l))
+                     (setf a 1 b 2 c 3 d 4 e 5))
                    l)))
 
   (should (equal '(1 2 3 :e 10 :d 8)
                  (let ((l (list 7 7 7 :e 7 :d 7)))
-                   (eval (quote (loopy-ref (((a b c &rest rest &key d e)
-                                             l))
-                                  (setf a 1 b 2 c 3 d 4 e 5
-                                        rest (mapcar (lambda (x)
-                                                       (if (numberp x)
-                                                           (* 2 x)
-                                                         x))
-                                                     rest)))))
+                   (loopy-ref (((a b c &rest rest &key d e) l))
+                     (setf a 1 b 2 c 3 d 4 e 5
+                           rest (mapcar (lambda (x)
+                                          (if (numberp x)
+                                              (* 2 x)
+                                            x))
+                                        rest)))
                    l)))
 
   (should (equal '(1 2 3 :e 10 :d 8)
                  (let ((l (list 7 7 7 :e 7 :d 7)))
-                   (eval (quote (loopy-ref (((a b c &key d e . rest)
-                                             l))
-                                  (setf a 1 b 2 c 3 d 4 e 5
-                                        rest (mapcar (lambda (x)
-                                                       (if (numberp x)
-                                                           (* 2 x)
-                                                         x))
-                                                     rest)))))
+                   (loopy-ref (((a b c &key d e . rest) l))
+                     (setf a 1 b 2 c 3 d 4 e 5
+                           rest (mapcar (lambda (x)
+                                          (if (numberp x)
+                                              (* 2 x)
+                                            x))
+                                        rest)))
                    l)))
 
   (should (equal '(1 2 3 :e 10 :d 8)
                  (let ((l (list 7 7 7 :e 7 :d 7)))
-                   (eval (quote (loopy-ref (((a b c &key d e &rest rest) l))
-                                  (setf a 1 b 2 c 3 d 4 e 5
-                                        rest (mapcar (lambda (x)
-                                                       (if (numberp x)
-                                                           (* 2 x)
-                                                         x))
-                                                     rest)))))
+                   (loopy-ref (((a b c &key d e &rest rest) l))
+                     (setf a 1 b 2 c 3 d 4 e 5
+                           rest (mapcar (lambda (x)
+                                          (if (numberp x)
+                                              (* 2 x)
+                                            x))
+                                        rest)))
                    l)))
 
   (should (equal '(7 7 :a 1 :b 2)
                  (let ((l (list 7 7 :a 7 :b 7)))
-                   (eval (quote (loopy-ref (((&key a b) l))
-                                  (setf a 1 b 2))))
+                   (loopy-ref (((&key a b) l))
+                     (setf a 1 b 2))
                    l)))
 
   (should (equal '(2 3)
@@ -1026,21 +1027,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 (ert-deftest destructure-array-refs ()
   (should (equal [1 2 3]
                  (let ((arr [7 7 7]))
-                   (eval (quote (loopy-ref (([a b c] arr))
-                                  (setf a 1 b 2 c 3))))
+                   (loopy-ref (([a b c] arr))
+                     (setf a 1 b 2 c 3))
                    arr)))
 
   (should (equal [2 3 4]
                  (let ((arr [7 7 7]))
-                   (eval (quote (loopy-ref (([&whole whole a b c] arr))
-                                  (setf a 1 b 2 c 3
-                                        whole (cl-map 'vector #'1+ whole)))))
+                   (loopy-ref (([&whole whole a b c] arr))
+                     (setf a 1 b 2 c 3
+                           whole (cl-map 'vector #'1+ whole)))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
                  (let ((arr [7 7 7 [7 7]]))
-                   (eval (quote (loopy-ref (([a b c [d e]] arr))
-                                  (setf a 1 b 2 c 3 d 4 e 5))))
+                   (loopy-ref (([a b c [d e]] arr))
+                     (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
   ;; TODO: This test currently doesn't pass due to Elisp limitations.
@@ -1053,18 +1054,16 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
-                 (eval (quote
-                        (let ((arr [7 7 7 7 7]))
-                          (loopy-ref (([a b c &rest d] arr))
-                            (setf a 1 b 2 c 3 d [4]))
-                          arr)))))
+                 (let ((arr [7 7 7 7 7]))
+                   (loopy-ref (([a b c &rest d] arr))
+                     (setf a 1 b 2 c 3 d [4]))
+                   arr)))
 
   (should (equal [1 2 3 4 7]
-                 (eval (quote
-                        (let ((arr [7 7 7 7 7]))
-                          (loopy-ref (([a b c &rest d] arr))
-                            (setf a 1 b 2 c 3 d [4]))
-                          arr)))))
+                 (let ((arr [7 7 7 7 7]))
+                   (loopy-ref (([a b c &rest d] arr))
+                     (setf a 1 b 2 c 3 d [4]))
+                   arr)))
 
   (should (equal [2 3]
                  (let ((arr [7 7]))
@@ -1814,9 +1813,9 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
     (puthash 'a 1 my-hash)
     (puthash 'b 2 my-hash)
     (should (equal '((a . 1) (b . 2))
-                   (eval (quote (loopy (map pair my-hash)
-                                       (collect coll pair)
-                                       (finally-return coll))))))))
+                   (loopy (map pair my-hash)
+                          (collect coll pair)
+                          (finally-return coll))))))
 
 (ert-deftest map-unique ()
   (should (equal '((a . 1) (b . 2) (c . 3))
@@ -1861,10 +1860,10 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
     (puthash 'a 1 my-hash)
     (puthash 'b 2 my-hash)
     (should (equal '((a b) (1 2))
-                   (eval (quote (loopy (map (key . val) my-hash)
-                                       (collect keys key)
-                                       (collect vals val)
-                                       (finally-return keys vals))))))))
+                   (loopy (map (key . val) my-hash)
+                          (collect keys key)
+                          (collect vals val)
+                          (finally-return keys vals))))))
 
 ;;;;; Map Ref
 
@@ -1885,21 +1884,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 (ert-deftest map-ref-unique ()
   (should (equal '(:a 8 :a ignored :b 10)
                  (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (eval (quote (loopy (map-ref i map)
-                                       (do (cl-incf i 7))
-                                       (finally-return map)))))))
+                   (loopy (map-ref i map)
+                          (do (cl-incf i 7))
+                          (finally-return map)))))
 
   (should (equal '(:a 8 :a ignored :b 10)
                  (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (eval (quote (loopy (map-ref i map :unique t)
-                                       (do (cl-incf i 7))
-                                       (finally-return map)))))))
+                   (loopy (map-ref i map :unique t)
+                          (do (cl-incf i 7))
+                          (finally-return map)))))
 
   (should (equal '(:a 15 :a ignored :b 10)
                  (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (eval (quote (loopy (map-ref i map :unique nil)
-                                       (do (cl-incf i 7))
-                                       (finally-return map))))))))
+                   (loopy (map-ref i map :unique nil)
+                          (do (cl-incf i 7))
+                          (finally-return map))))))
 
 (ert-deftest map-ref-destructuring ()
   (should (equal [[7 8] [7 8]]
@@ -2579,21 +2578,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal '((1 . 1) (2 . 3))
                  (let ((my-test #'=)
                        (my-key #'car))
-                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                       (adjoin a i :test my-test :key my-key)
-                                       (finally-return a)))))))
+                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                          (adjoin a i :test my-test :key my-key)
+                          (finally-return a)))))
 
   (should (equal '((1 . 1) (2 . 3))
                  (let ((my-key #'car))
-                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                       (adjoin a i :key my-key)
-                                       (finally-return a)))))))
+                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                          (adjoin a i :key my-key)
+                          (finally-return a)))))
 
   (should (equal '((1 . 1) (1 . 2) (2 . 3))
                  (let ((my-test #'equal))
-                   (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                       (adjoin a i :test my-test)
-                                       (finally-return a))))))))
+                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+                          (adjoin a i :test my-test)
+                          (finally-return a))))))
 
 (ert-deftest adjoin-destructuring ()
   (should (equal '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3)))
@@ -2735,23 +2734,23 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (ert-deftest adjoin-not-destructive ()
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (eval (quote (loopy (list i l1) (adjoin coll i :at start))))
+    (loopy (list i l1) (adjoin coll i :at start))
     (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
 
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (eval (quote (loopy (list i l1) (adjoin coll i :at end))))
+    (loopy (list i l1) (adjoin coll i :at end))
     (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
 
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (eval (quote (loopy (list i l1) (adjoin i :at start))))
+    (loopy (list i l1) (adjoin i :at start))
     (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
 
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (eval (quote (loopy (list i l1) (adjoin i :at end))))
+    (loopy (list i l1) (adjoin i :at end))
     (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
 
   (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (eval (quote (loopy (flag split) (list i l1) (adjoin i :at end))))
+    (loopy (flag split) (list i l1) (adjoin i :at end))
     (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))))
 
 ;;;;; Append
@@ -2836,23 +2835,23 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (ert-deftest append-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (append coll i :at start))))
+    (loopy (list i l1) (append coll i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (append coll i :at end))))
+    (loopy (list i l1) (append coll i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (append i :at start))))
+    (loopy (list i l1) (append i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (append i :at end))))
+    (loopy (list i l1) (append i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (flag split) (list i l1) (append i :at end))))
+    (loopy (flag split) (list i l1) (append i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
 
 ;;;;; Collect
@@ -2985,23 +2984,23 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 ;; This shouldn't ever happen, but it's still worth checking.
 (ert-deftest collect-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (collect coll i :at start))))
+    (loopy (list i l1) (collect coll i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (collect coll i :at end))))
+    (loopy (list i l1) (collect coll i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (collect i :at start))))
+    (loopy (list i l1) (collect i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (collect i :at end))))
+    (loopy (list i l1) (collect i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (flag split) (list i l1) (collect i :at end))))
+    (loopy (flag split) (list i l1) (collect i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
 
 ;;;;; Concat
@@ -3308,41 +3307,41 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 (ert-deftest nconc-at-new-lists ()
 
   (should (equal '(1 2 3 4 5 6)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc i)))))))
 
   (should (equal '(1 2 3 4 5 6)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc i :at end)))))))
 
   (should (equal '(4 5 6 1 2 3)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc i :at start)))))))
 
   (should (equal '(1 2 3 4 5 6)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc c i)
                                        (finally-return c)))))))
 
   (should (equal '(1 2 3 4 5 6)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc c i :at end)
                                        (finally-return c)))))))
 
   (should (equal '(4 5 6 1 2 3)
-                 (let ((l1 (list 1 2 3))
-                       (l2 (list 4 5 6)))
-                   (eval (quote (loopy (list i (list l1 l2))
+                 (eval (quote (let ((l1 (list 1 2 3))
+                                    (l2 (list 4 5 6)))
+                                (loopy (list i (list l1 l2))
                                        (nconc c i :at start)
                                        (finally-return c))))))))
 
@@ -3778,29 +3777,30 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (ert-deftest union-end-tracking ()
   (should (equal '(1 2 3 4 5 6 7 8)
-                 (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                   (eval (quote  (loopy (flag split)
-                                        (list i l1)
-                                        (union i :at end)))))))
+                 (eval (quote
+                        (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+                          (loopy (flag split)
+                                 (list i l1)
+                                 (union i :at end)))))))
 
   (should (equal '(1 2 3 4 5 6 7 8)
                  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                   (eval (quote  (loopy (flag -split)
-                                        (list i l1)
-                                        (union i :at end)))))))
+                   (loopy (flag -split)
+                          (list i l1)
+                          (union i :at end)))))
 
   (should (equal '(1 2 3 4 5 6)
                  (let ((l1 (list (list 1 2) (list 3 4) (list 4 3) (list 5 6))))
-                   (eval (quote (loopy (list i l1)
-                                       (union coll i :at end)
-                                       (finally-return coll)))))))
+                   (loopy (list i l1)
+                          (union coll i :at end)
+                          (finally-return coll)))))
 
   (should (equal '(1 2 3 4 5 6 7)
                  (let ((l1 (list (list 1 2) (list 3 4) (list 4 3) (list 5 6))))
-                   (eval (quote (loopy (list i l1)
-                                       (union coll i :at end)
-                                       (union coll (mapcar #'1+ i) :at end)
-                                       (finally-return coll)))))))
+                   (loopy (list i l1)
+                          (union coll i :at end)
+                          (union coll (mapcar #'1+ i) :at end)
+                          (finally-return coll)))))
 
   (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
                  (loopy (list i '((1 2) (3 4) (5 6)))
@@ -3816,25 +3816,24 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (ert-deftest union-not-destructive ()
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (union coll i :at start))))
+    (loopy (list i l1) (union coll i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (union coll i :at end))))
+    (loopy (list i l1) (union coll i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (list i l1) (union i :at start))))
+    (loopy (list i l1) (union i :at start))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
   (should (equal (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                   (eval (quote (loopy (list i l1) (union i :at end))))
+                   (loopy (list i l1) (union i :at end))
                    l1)
                  '((1 2) (3 4) (5 6) (7 8))))
 
-
   (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (eval (quote (loopy (flag split) (list i l1) (union i :at end))))
+    (loopy (flag split) (list i l1) (union i :at end))
     (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
 
 ;;;;; Vconcat
@@ -4353,46 +4352,46 @@ This assumes that you're on guix."
                                    (return a))))))))
 
 (ert-deftest custom-aliases-without ()
-  (let ((loopy-aliases (map-copy loopy-aliases)))
-    (loopy-defalias 'ignore 'without)
-    (should (= 5 (let ((a 1)
-                       (b 2))
-                   (eval (quote (loopy (ignore a b)
+  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
+                 (loopy-defalias 'ignore 'without)
+                 (should (= 5 (let ((a 1)
+                                    (b 2))
+                                (loopy (ignore a b)
                                        (repeat 1)
                                        (expr a 2)
-                                       (expr b 3))))
-                   (+ a b))))))
+                                       (expr b 3))
+                                (+ a b))))))))
 
 (ert-deftest custom-aliases-before-do ()
-  (let ((loopy-aliases (map-copy loopy-aliases)))
-    (loopy-defalias 'precode 'before-do)
-    (should (= 7 (eval (quote (loopy (with (i 2))
+  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
+                 (loopy-defalias 'precode 'before-do)
+                 (should (= 7 (loopy (with (i 2))
                                      (precode (setq i 7))
                                      (return i))))))))
 
 (ert-deftest custom-aliases-after-do ()
-  (let ((loopy-aliases (map-copy loopy-aliases)))
-    (loopy-defalias postcode after-do)
-    (should (eval (quote (loopy (with (my-ret nil))
+  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
+                 (loopy-defalias postcode after-do)
+                 (should (loopy (with (my-ret nil))
                                 (list i '(1 2 3 4))
                                 (postcode (setq my-ret t))
                                 (finally-return my-ret)))))))
 
 (ert-deftest custom-aliases-finally-do ()
-  (let ((loopy-aliases (map-copy loopy-aliases)))
-    (loopy-defalias 'fd finally-do)
-    (should
-     (= 10
-        (let (my-var)
-          (eval (quote (loopy (list i (number-sequence 1 10))
-                              (fd (setq my-var i)))))
-          my-var)))))
+  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
+                 (loopy-defalias 'fd finally-do)
+                 (should
+                  (= 10
+                     (let (my-var)
+                       (loopy (list i (number-sequence 1 10))
+                              (fd (setq my-var i)))
+                       my-var)))))))
 
 (ert-deftest custom-aliases-finally-return ()
-  (let ((loopy-aliases  (map-copy loopy-aliases)))
-    (loopy-defalias fr 'finally-return)
-    (should (= 10
-               (eval (quote (loopy (list i (number-sequence 1 10))
+  (eval (quote (let ((loopy-aliases  (map-copy loopy-aliases)))
+                 (loopy-defalias fr 'finally-return)
+                 (should (= 10
+                            (loopy (list i (number-sequence 1 10))
                                    (fr i))))))))
 
 (ert-deftest custom-aliases-list ()

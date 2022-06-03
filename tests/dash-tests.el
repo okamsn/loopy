@@ -1,3 +1,4 @@
+;;  -*- lexical-binding: t; -*-
 ;; Run these tests from project dir using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
