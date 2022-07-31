@@ -117,9 +117,9 @@ Definition must exist.  Neither argument need be quoted."
     (leave           . (leaving))
     (leave-from      . (leaving-from))
     (list            . (listing each in))
-    (list-ref        . (listf listingf in-ref))
+    (list-ref        . (listf listingf listing-ref in-ref))
     (map             . (mapping map-pairs mapping-pairs))
-    (map-ref         . (mapf mappingf))
+    (map-ref         . (mapf mappingf mapping-ref))
     (max             . (maximizing maximize maxing))
     ;; Unlike "maxing", there doesn't seem to be much on-line about the word
     ;; "minning", but the double-N follows conventional spelling rules, such as
@@ -127,11 +127,11 @@ Definition must exist.  Neither argument need be quoted."
     (min             . (minimizing minimize minning))
     (multiply        . (multiplying))
     (nconc           . (nconcing))
-    (nums            . (num number numbers numbering))
-    (nums-down       . ( numdown  number-down num-down  numbers-down numsdown
-                         numbering-down))
-    (nums-up         . ( numup number-up num-up  numbers-up numsup
-                         numbering-up))
+    (numbers            . (num nums number numbering))
+    (numbers-down       . ( nums-down numdown  number-down num-down numsdown
+                            numbering-down))
+    (numbers-up         . ( nums-up numup number-up num-up  numsup
+                            numbering-up))
     (nunion          . (nunioning))
     (opt-accum       . (accum-opt))
     (prepend         . (prepending))
@@ -142,12 +142,13 @@ Definition must exist.  Neither argument need be quoted."
     (set             . (setting exprs expr))
     (set-prev        . (setting-prev prev prev-expr prev-set))
     (seq             . (seqing sequence sequencing elements))
-    (seq-index       . ( seqing-index sequencing-index seqi
-                         list-index listing-index listi
-                         array-index arraying-index arrayi
+    (seq-index       . ( sequence-index seqing-index sequencing-index
+                         sequencing seqi list-index listing-index
+                         listi array-index arraying-index arrayi
                          string-index stringing-index stringi))
     (seq-ref         . ( seqf seqing-ref
                          sequencef sequencingf sequence-ref
+                         sequencing-ref
                          elements-ref))
     (skip            . (skipping continue continuing))
     (skip-from       . (skipping-from continue-from continuing-from))
@@ -206,9 +207,9 @@ true names and lists of aliases.
     (multiply     . loopy--parse-multiply-command)
     (never        . loopy--parse-never-command)
     (nconc        . loopy--parse-nconc-command)
-    (nums         . loopy--parse-nums-command)
-    (nums-up      . loopy--parse-nums-up-command)
-    (nums-down    . loopy--parse-nums-down-command)
+    (numbers      . loopy--parse-numbers-command)
+    (numbers-up   . loopy--parse-numbers-up-command)
+    (numbers-down . loopy--parse-numbers-down-command)
     (nunion       . loopy--parse-nunion-command)
     (prepend      . loopy--parse-prepend-command)
     (push-into    . loopy--parse-push-into-command)
@@ -470,22 +471,6 @@ returning a value.")
 
 (defvar loopy--non-returning-exit-tag-name nil
   "The tag used by the `leave', `while', and `until' commands.")
-
-
-(defvar loopy--accumulations-updated nil
-  "Whether the accumulation variables were finally updated.
-
-If a `cl-tagbody' exit is used (such by a `while' or `until'
-command, which don't return values, just leaving the loop), then
-the `after-do' body is skipped.  This also has the consequence of
-skipping the final update to accumulation variables, which needs
-to run before the `after-do' body so that the variable is safe
-when accessed.
-
-To work around this, the final update before the `after-do' will
-set this variable to t if it has run.  This value will be
-checked after the tag-body exit if `loopy--non-returning-exit-used' is
-t.")
 
 (defvar loopy--after-do nil
   "Expressions to run (in order) after the loop successfully completes.

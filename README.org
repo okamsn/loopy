@@ -82,7 +82,7 @@ Unlike ~cl-loop~, ~loopy~ uses symbolic expressions instead of "clauses".
            finally return (list odds evens))
 
   ;; How it could be done using `loopy':
-  (loopy (numbers i 1 10)
+  (loopy (numbers i :from 1 :to 10)
          (if (cl-evenp i)
              (collect evens i)
            (collect odds i))
@@ -175,14 +175,25 @@ clauses (like in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterat
 Generally, all of the packages handle basic use cases in similar ways.  One
 large difference is that ~iterate~ can embed its looping constructs in arbitrary
 code.  Loopy is currently experimenting with this feature using a separate
-macro, ~loopy-iter~.
+macro, ~loopy-iter~, which expands looping constructs using ~macroexpand~.
 
 #+begin_src emacs-lisp
   (require 'loopy-iter)
 
-  (loopy-iter (for repeat 10)          ; Use `for' and `accum'
-              (let ((var (random 10))) ; to recognize looping constructs
-                (accum collect var)))  ; `repeat' and `collect'.
+  ;; Things to node:
+  ;; - `accum-opt' produces more efficient accumulations
+  ;; - `cycling' is another name for `repeat'
+  ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
+  ;;     (0)
+  ;;     (1 2 3 4 5 6 7 8 9 10 11))
+  (loopy-iter (accum-opt positives negatives zeroes)
+              (numbering i :from -10 :to 10)
+              (let ((var (1+ i)))
+                (pcase var
+                  ((pred cl-plusp)  (collecting positives var))
+                  ((pred cl-minusp) (collecting negatives var))
+                  ((pred zerop)     (collecting zeroes var))))
+              (finally-return negatives zeroes positives))
 #+end_src
 
 Loopy is not yet feature complete.  Please request features or report problems
@@ -270,33 +281,24 @@ form.
 
 * Loop Commands in Arbitrary Code
 
-The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.  It
-requires using a keyword =for=, =accum=, or =exit= before a loop command to
-distinguish loop commands from built-in Emacs features (though this can be
-disabled with the flag =lax-naming=).
-
-#+begin_center
-*NOTE: This feature is still experimental.  Please report any problems you
-come across.*
-#+end_center
+The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.
 
 #+begin_src emacs-lisp
   (require 'loopy-iter)
 
-  ;; => (2 4 6)
-  (loopy-iter (for list i '(1 2 3))
-              (let ((a (* 2 i)))
-                (accum collect a)))
+  ;; => ((1 2 3) (-3 -2 -1) (0))
+  (loopy-iter (accum-opt positives negatives other)
+              (numbering i :from -3 :to 3)
+              (pcase i
+                ((pred cl-plusp)  (collecting positives i))
+                ((pred cl-minusp) (collecting negatives i))
+                (_                (collecting other i)))
+              (finally-return positives negatives other))
 
-  ;; => (8 9 10 11 12)
-  (loopy-iter (let ((a (progn
-                         (for expr j 8 (1+ j))
-                         (when (> j 12)
-                           ;; Leave the loop without preventing the use of the
-                           ;; implicit return value created by `collect'.
-                           (exit leave))
-                         j)))
-                (accum collect a)))
+  ;; => 6
+  (loopy-iter (listing elem '(1 2 3))
+              (funcall #'(lambda (x) (summing x))
+                       elem))
 #+end_src
 
 For more on this, [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#the-loopy-iter-macro][see the documentation]].

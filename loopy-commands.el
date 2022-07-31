@@ -110,10 +110,10 @@
   "Loopy: Bad command arguments"
   'loopy-error)
 
-(defun loopy--signal-bad-iter (command-name)
+(defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
-  (user-error "Can only use command \"%s\" in top level of `loopy' or sub-loop"
-              command-name))
+  (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
+              used-name true-name))
 
 (defun loopy--signal-must-be-top-level (command-name)
   "Signal an error for COMMAND-NAME."
@@ -563,7 +563,8 @@ instructions:
        ,doc-string
 
        (when loopy--in-sub-level
-         (loopy--signal-bad-iter (quote ,name)))
+         ;; Warn with the used name and the true name.
+         (loopy--signal-bad-iter name (quote ,name)))
 
        (let* ,(if keywords
                   (if other-vals
@@ -858,14 +859,14 @@ BY is the function to use to move through the list (default `cdr')."
       (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
-(cl-defun loopy--parse-map-command ((_ var val &key (unique t)))
+(cl-defun loopy--parse-map-command ((name var val &key (unique t)))
   "Parse the `map' loop command.
 
 Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'map))
+    (loopy--signal-bad-iter name 'map))
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars
        (,value-holder ,(if unique
@@ -876,7 +877,7 @@ vector using the library `map.el'."
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
 ;;;;;; Map-Ref
-(cl-defun loopy--parse-map-ref-command ((_ var val &key key (unique t)))
+(cl-defun loopy--parse-map-ref-command ((name var val &key key (unique t)))
   "Parse the `map-ref' command as (map-ref VAR VAL).
 
 KEY is a variable name in which to store the current key.
@@ -884,7 +885,7 @@ KEY is a variable name in which to store the current key.
 Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.  Duplicate keys are ignored."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'map-ref))
+    (loopy--signal-bad-iter name 'map-ref))
   (let ((key-list (gensym "map-ref-keys")))
     `((loopy--iteration-vars (,key-list ,(if unique
                                              `(seq-uniq (map-keys ,val))
@@ -897,9 +898,9 @@ map's keys.  Duplicate keys are ignored."
       (loopy--pre-conditions (consp ,key-list))
       (loopy--latter-body (setq ,key-list (cdr ,key-list))))))
 
-;;;;;; Nums
-(loopy--defiteration nums
-  "Parse the `nums' command as (nums VAR [START [END [STEP]]] &key KEYS).
+;;;;;; Numbers
+(loopy--defiteration numbers
+  "Parse the `numbers' command as (nums VAR [START [END [STEP]]] &key KEYS).
 
 - START is the starting index, if given.
 - END is the ending index (inclusive), if given.
@@ -973,9 +974,9 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                              (decreasing  `(1- ,var))
                              (t           `(1+ ,var))))))))))
 
-;;;;;; Nums Up
-(loopy--defiteration nums-up
-  "Parse the `nums-up' command as (nums-up START [END [STEP]] &key by).
+;;;;;; Numbers Up
+(loopy--defiteration numbers-up
+  "Parse the `numbers-up' command as (numbers-up START [END [STEP]] &key by).
 
 This is for increasing indices.
 
@@ -988,13 +989,14 @@ This is for increasing indices.
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
       (error "Conflicting command options given: %s" cmd))
-    (loopy--parse-loop-command `(nums ,var ,val
-                                      :upto ,(cl-first other-vals)
-                                      :by ,(or by (cl-second other-vals))))))
+    (loopy--parse-loop-command
+     `(numbers ,var ,val
+               :upto ,(cl-first other-vals)
+               :by ,(or by (cl-second other-vals))))))
 
-;;;;;; Nums Down
-(loopy--defiteration nums-down
-  "Parse the `nums-down' command as (nums-up START [END [STEP]] &key by).
+;;;;;; Numbers Down
+(loopy--defiteration numbers-down
+  "Parse the `numbers-down' command as (numbers-down START [END [STEP]] &key by).
 
 This is for decreasing indices.
 
@@ -1008,18 +1010,19 @@ This is for decreasing indices.
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
       (error "Conflicting command options given: %s" cmd))
-    (loopy--parse-loop-command `(nums ,var ,val
-                                      :downto ,(cl-first other-vals)
-                                      :by ,(or by (cl-second other-vals))))))
+    (loopy--parse-loop-command
+     `(numbers ,var ,val
+               :downto ,(cl-first other-vals)
+               :by ,(or by (cl-second other-vals))))))
 
 ;;;;;; Repeat
-(cl-defun loopy--parse-cycle-command ((_ var-or-count &optional count))
+(cl-defun loopy--parse-cycle-command ((name var-or-count &optional count))
   "Parse the `repeat' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter 'repeat))
+    (loopy--signal-bad-iter name 'cycle))
   (if count
       `((loopy--iteration-vars (,var-or-count 0))
         (loopy--latter-body (setq ,var-or-count (1+ ,var-or-count)))

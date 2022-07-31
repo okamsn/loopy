@@ -344,11 +344,16 @@ The function creates quoted code that should be used by a macro."
   ;;            ,(if loopy--final-return
   ;;                 loopy--final-return
   ;;               'loopy--early-return-capture))))))
-  (let (result
-        ;; Need a variable to track whether `result' is currently one
-        ;; expression, as that affects how it should be built.  For example,
-        ;; `(progn (thing1) (thing2))' vs `((thing1) (thing2))'
-        result-is-one-expression)
+  (let* ((result)
+         ;; Need a variable to track whether `result' is currently one
+         ;; expression, as that affects how it should be built.  For example,
+         ;; `(progn (thing1) (thing2))' vs `((thing1) (thing2))'
+         (result-is-one-expression)
+         (actual-accumulation-updates
+          (cl-loop for (_ . update) in loopy--accumulation-final-updates
+                   when update
+                   collect update))
+         (accum-updates-exist (car actual-accumulation-updates)))
 
     ;; This temporary function is just for convenience.  Since it checks the
     ;; structure of `result', it should always be used like:
@@ -391,10 +396,11 @@ The function creates quoted code that should be used by a macro."
             result-is-one-expression t)
 
       ;; Make sure that the implicit accumulation variable is correctly
-      ;; updated after the loop, if need be.
-      (when loopy--accumulation-final-updates
+      ;; updated after the loop, if need be.  Note that to avoid errors,
+      ;; a variable's final update will at least be `nil'.
+      (when accum-updates-exist
         (setq result `(,@(get-result)
-                       ,@(mapcar #'cdr loopy--accumulation-final-updates))
+                       ,@actual-accumulation-updates)
               result-is-one-expression nil))
 
       ;; Try to apply wrapping forms so that they're not disturbed by variable
@@ -414,18 +420,18 @@ The function creates quoted code that should be used by a macro."
 
       ;; Add the wrapper for the non-returning exit tag.
       (when loopy--non-returning-exit-used
-        (setq result `(catch (quote ,loopy--non-returning-exit-tag-name)
-                        ,@(get-result)
-                        nil)
-              result-is-one-expression t)
         ;; If there are final updates, then we need to make sure that they run
-        ;; even if a non-returning exit tag is used.
-        (if loopy--accumulation-final-updates
-            (setq result `(if ,@(get-result)
-                              ,(macroexp-progn
-                                (mapcar #'cdr
-                                        loopy--accumulation-final-updates)))
-                  result-is-one-expression t)))
+        ;; even if a non-returning exit tag is used.  Note that variables that
+        ;; aren't updated will have a final update of `nil'.
+        (if accum-updates-exist
+            (setq result `(if (catch (quote ,loopy--non-returning-exit-tag-name)
+                                ,@(get-result)
+                                nil)
+                              ,(macroexp-progn actual-accumulation-updates))
+                  result-is-one-expression t)
+          (setq result `(catch (quote ,loopy--non-returning-exit-tag-name)
+                          ,@(get-result))
+                result-is-one-expression t)))
 
       ;; Now add the code to run before the `while' loop.
       (when loopy--before-do
@@ -482,14 +488,6 @@ The function creates quoted code that should be used by a macro."
       ;; Declare the loop variables.
       (when loopy--iteration-vars
         (setq result `(let* ,loopy--iteration-vars ,@(get-result))
-              result-is-one-expression t))
-
-      ;; If there are final updates to made and a tag-body exit that can skip
-      ;; them, then we must initialize `loopy--accumulations-updated'.
-      (when (and loopy--accumulation-final-updates
-                 loopy--non-returning-exit-used)
-        (setq result `(let ((loopy--accumulations-updated nil))
-                        ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare accumulation variables.
@@ -996,8 +994,6 @@ see the Info node `(loopy)' distributed with this package."
 
    ;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))
-
-
 
 (provide 'loopy)
 ;;; loopy.el ends here

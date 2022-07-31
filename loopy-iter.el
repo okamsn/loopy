@@ -187,19 +187,67 @@ Without these keywords, one must use one of the names given in
 ;;;; For parsing commands
 
 (defcustom loopy-iter-bare-commands
-  '( at accumulating adjoining appending arraying string stringing
-     arraying-ref arrayingf stringf stringingf string-ref
-     stringing-ref collecting concating consing counting cycling
-     repeating finding leaving leaving-from listing listingf
-     mapping mapping-pairs mappingf maximizing maxing minimizing
-     minning multiplying nconcing numbering numbering-down
-     numbering-up nunioning prepending pushing pushing-into
-     reducing returning returning-from setting setting-prev
-     seqing sequencing seqing-index sequencing-index
-     listing-index arraying-index string-index stringing-index
-     stringi seqing-ref sequencingf skipping continuing
-     skipping-from continuing-from sub-looping sublooping looping
-     summing unioning vconcating)
+  '(accumulating
+    adjoining
+    always
+    appending
+    arraying
+    arraying-index
+    arraying-ref
+    at
+    collecting
+    concating
+    consing
+    continuing
+    continuing-from
+    counting
+    cycling
+    finding
+    leaving
+    leaving-from
+    listing
+    listing-index
+    listing-ref
+    looping
+    mapping
+    mapping-pairs
+    mapping-ref
+    maximizing
+    minimizing
+    multiplying
+    nconcing
+    never
+    numbering
+    numbering-down
+    numbering-up
+    nunioning
+    prepending
+    pushing
+    pushing-into
+    reducing
+    repeating
+    returning
+    returning-from
+    seqing
+    seqing-index
+    sequencing
+    sequencing-index
+    sequencing-ref
+    setting
+    setting-prev
+    skipping
+    skipping-from
+    string
+    string-index
+    string-ref
+    stringing
+    stringing-index
+    stringing-ref
+    sub-looping
+    thereis
+    summing
+    unioning
+    vconcating)
   "Commands recognized in `loopy-iter' without a preceding keyword.
 
 For special marco arguments, see `loopy-iter-bare-special-macro-arguments'.
@@ -454,10 +502,10 @@ Returns BODY without the `%s' argument."
 (defvar loopy-iter-suppressed-macros '(cl-block cl-return cl-return-from)
   "Macros that shouldn't be expanded as the `loopy-iter' expansion is built.
 
-Some macros interact in a way if one is expanded without the
-context of the other.  Others might not work for other reasons.
-The macros `cl-block', `cl-return-from', and `cl-return' are
-known to fall into the first group.")
+Some macros interact in a way where they might break if one is
+expanded without the context of the other.  Others might not work
+for other reasons.  The macros `cl-block', `cl-return-from', and
+`cl-return' are known to fall into the first group.")
 
 ;;;; The macro itself
 
