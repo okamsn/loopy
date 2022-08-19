@@ -234,6 +234,7 @@ Without these keywords, one must use one of the names given in
     sequencing-index
     sequencing-ref
     setting
+    setting-accum
     setting-prev
     skipping
     skipping-from

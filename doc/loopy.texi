@@ -675,7 +675,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgafd9ba6
+@float Listing,orgbb2667d
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -797,7 +797,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org9f6360a
+@float Listing,org6ead120
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -812,7 +812,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org4ae1db1
+@float Listing,org80f1530
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2118,8 +2118,7 @@ be overridden by using the the @samp{return} and @samp{return-from} loop command
 Unlike in @code{cl-loop}, this implied return value is bound to the variable
 @code{loopy-result} after the loop completes, even when the loop is left early.  This
 variable can be used in the @samp{after-do}, @samp{finally-do}, and @samp{finally-return}
-special macro arguments.  You should not attempt to modify or use the value of
-@code{loopy-result} during the loop.
+special macro arguments.
 
 @lisp
 ;; => (0 1 2 3 4 5)
@@ -2128,6 +2127,12 @@ special macro arguments.  You should not attempt to modify or use the value of
        (collect i)
        (finally-return (cons 0 loopy-result)))
 @end lisp
+
+In general, you should not attempt to modify or use the value of @code{loopy-result}
+during the loop, as it is not guaranteed to have a correct value when
+efficiently building sequences.  For example, it is often faster to build a list
+in reverse instead of appending to its end.  For some commands, such as those in
+@ref{Numeric Accumulation} and @ref{Generic Accumulation}, this does not matter.
 
 Be aware that explicitly named accumulation variables do not affect the implied
 return value of a loop.  Such values must be returned explicitly, or they will
@@ -2403,6 +2408,41 @@ knows how to expand efficiently for either case.
 Generic accumulation commands accumulate the output of functions that receive
 the accumulation variable.  They are very similar to updating a variable's value
 using the @samp{set} command.
+
+@findex set-accum
+@findex setting-accum
+@table @asis
+@item @samp{(set-accum VAR EXPR &key init)}
+Set the accumulation variable @samp{VAR} to the
+value of @samp{EXPR}.  @samp{init} sets the initial value of @samp{VAR}, which defaults to
+@code{nil}.
+
+This command also has the alias @samp{setting-accum}.
+
+This command is a basic wrapper around @samp{set} for only one value.  Because this
+command cannot be optimized (as it does not construct a sequence), it is safe
+to access the implicit variable @code{loopy-result} in @samp{EXPR}, so long as the
+variable is not being modified by another command for which that would be
+unsafe.
+
+@lisp
+;; => 16
+(loopy (array i [1 2 3])
+       (set-accum (+ loopy-result i) :init 10))
+
+;; These are equivalent:
+
+;; => 16
+(loopy (array i [1 2 3])
+       (set-accum my-sum (+ my-sum i) :init 10)
+       (finally-return my-sum))
+
+;; => 16
+(loopy (array i [1 2 3])
+       (set my-sum (+ my-sum i) :init 10)
+       (finally-return my-sum))
+@end lisp
+@end table
 
 @findex accumulate
 @findex accumulating
@@ -3832,7 +3872,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org545360e
+@float Listing,orgf6684ec
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

@@ -1968,8 +1968,7 @@ be overridden by using the the =return= and =return-from= loop commands or the
 Unlike in ~cl-loop~, this implied return value is bound to the variable
 ~loopy-result~ after the loop completes, even when the loop is left early.  This
 variable can be used in the =after-do=, =finally-do=, and =finally-return=
-special macro arguments.  You should not attempt to modify or use the value of
-~loopy-result~ during the loop.
+special macro arguments.
 
 #+begin_src emacs-lisp
   ;; => (0 1 2 3 4 5)
@@ -1978,6 +1977,12 @@ special macro arguments.  You should not attempt to modify or use the value of
          (collect i)
          (finally-return (cons 0 loopy-result)))
 #+end_src
+
+In general, you should not attempt to modify or use the value of ~loopy-result~
+during the loop, as it is not guaranteed to have a correct value when
+efficiently building sequences.  For example, it is often faster to build a list
+in reverse instead of appending to its end.  For some commands, such as those in
+[[#accum-numeric]] and [[#accum-generic]], this does not matter.
 
 Be aware that explicitly named accumulation variables do not affect the implied
 return value of a loop.  Such values must be returned explicitly, or they will
@@ -2230,6 +2235,38 @@ knows how to expand efficiently for either case.
 Generic accumulation commands accumulate the output of functions that receive
 the accumulation variable.  They are very similar to updating a variable's value
 using the =set= command.
+
+#+findex: set-accum
+#+findex: setting-accum
+- =(set-accum VAR EXPR &key init)= :: Set the accumulation variable =VAR= to the
+  value of =EXPR=.  =init= sets the initial value of =VAR=, which defaults to
+  ~nil~.
+
+  This command also has the alias =setting-accum=.
+
+  This command is a basic wrapper around =set= for only one value.  Because this
+  command cannot be optimized (as it does not construct a sequence), it is safe
+  to access the implicit variable ~loopy-result~ in =EXPR=, so long as the
+  variable is not being modified by another command for which that would be
+  unsafe.
+
+  #+begin_src emacs-lisp
+    ;; => 16
+    (loopy (array i [1 2 3])
+           (set-accum (+ loopy-result i) :init 10))
+
+    ;; These are equivalent:
+
+    ;; => 16
+    (loopy (array i [1 2 3])
+           (set-accum my-sum (+ my-sum i) :init 10)
+           (finally-return my-sum))
+
+    ;; => 16
+    (loopy (array i [1 2 3])
+           (set my-sum (+ my-sum i) :init 10)
+           (finally-return my-sum))
+  #+end_src
 
 #+findex: accumulate
 #+findex: accumulating

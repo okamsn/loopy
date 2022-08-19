@@ -94,10 +94,16 @@ This document describes the user-facing changes to Loopy.
 - Added `loopy-iter-suppressed-macros` (see breaking changes above).  See
   [#119].
 
+- Added generic accumulation command `set-accum`.  This command is an
+  accumulating version of `set`.  It is a generalization of the other generic
+  accumulation commands `accumulate` and `reduce`.  See [#125] and [#129].
+
 [#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
 [#118]: https://github.com/okamsn/loopy/pull/118
 [#119]: https://github.com/okamsn/loopy/pull/119
+[#125]: https://github.com/okamsn/loopy/issues/125
+[#129]: https://github.com/okamsn/loopy/pull/129
 
 ## 0.10.1
 

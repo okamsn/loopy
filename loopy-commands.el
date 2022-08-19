@@ -1530,6 +1530,7 @@ to increment the count (default 1)."
                                      doc-string
                                      &key
                                      (num-args 2)
+                                     category
                                      keywords
                                      implicit explicit )
   "Produce parsing function for an accumulation command.
@@ -1544,6 +1545,10 @@ to increment the count (default 1)."
   is required.
 - KEYWORDS is the optional key-word parameters.  This macro does
   not automate the processing of these parameters.
+- CATEGORY is the category used by
+  `loopy--check-accumulation-compatibility'.  It is an unquoted
+  symbol or an unquoted plist with the keys `:implicit' and
+  `:explicit'.
 
 Each command automatically accepts an `:into' keyword argument,
 which, in the implicit case, can name the variable into which to
@@ -1589,7 +1594,15 @@ you can use in the instructions:
        ((&whole cmd name &rest parser-args))
      ,doc-string
      ,(let ((explicit-num-args num-args)
-            (implicit-num-args (1- num-args)))
+            (implicit-num-args (1- num-args))
+            (explicit-category)
+            (implicit-category))
+        (when category
+          (if (symbolp category)
+              (setq explicit-category category
+                    implicit-category category)
+            (setq explicit-category (plist-get category :explicit)
+                  implicit-category (plist-get category :implicit))))
         `(let ((args)
                (opts))
            ;; Compare with `loopy' for the equivalent code:
@@ -1636,9 +1649,19 @@ you can use in the instructions:
                            ;; might depend on positions, such as `find'.
                            (let ((args (cons into-var args)))
                              (ignore args)
+                             ,(when category
+                                `(loopy--check-accumulation-compatibility
+                                  loopy--loop-name var (quote ,explicit-category) cmd))
                              ,explicit)
+                         ,(when category
+                            `(loopy--check-accumulation-compatibility
+                              loopy--loop-name var (quote ,implicit-category) cmd))
                          ,implicit)
-                    explicit)))
+                    `(progn
+                       ,(when category
+                          `(loopy--check-accumulation-compatibility
+                            loopy--loop-name var (quote ,explicit-category) cmd))
+                       ,explicit))))
 
               ((= arg-length ,explicit-num-args)
                ,(when keywords
@@ -1656,6 +1679,9 @@ you can use in the instructions:
                                   #'loopy--parse-destructuring-accumulation-command)
                               cmd)
                    ;; Substitute in the instructions.
+                   ,(when category
+                      `(loopy--check-accumulation-compatibility
+                        loopy--loop-name var (quote ,explicit-category) cmd))
                    ,explicit)))
               (t
                (error "Wrong number of arguments or wrong keywords: %s" cmd))))))))
@@ -2118,6 +2144,24 @@ This function is called by `loopy--get-optimized-accum'."
                    `(loopy--accumulation-final-updates
                      (,var . (if ,var nil (setq ,var ,on-failure)))))
                 (loopy--implicit-return   ,var))))
+
+;;;;;;; Set Accum
+(loopy--defaccumulation set-accum
+  "Parse the `set-accum' command as (set-accum VAR EXPR &key init).
+
+EXPR is the value to bind to VAR.  INIT is the initial value of
+VAR."
+  :num-args 2
+  :keywords (:init)
+  :category generic
+  :implicit (loopy--plist-bind (:init init) opts
+              `((loopy--accumulation-vars (,var ,init))
+                (loopy--main-body (setq ,var ,val))
+                (loopy--implicit-return ,var)))
+  :explicit (loopy--plist-bind (:init init) opts
+              `((loopy--accumulation-vars (,var ,init))
+                (loopy--main-body (setq ,var ,val)))))
+
 
 ;;;;;;; Max
 (loopy--defaccumulation max

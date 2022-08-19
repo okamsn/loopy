@@ -140,6 +140,7 @@ Definition must exist.  Neither argument need be quoted."
     (return          . (returning))
     (return-from     . (returning-from))
     (set             . (setting exprs expr))
+    (set-accum       . (setting-accum))
     (set-prev        . (setting-prev prev prev-expr prev-set))
     (seq             . (seqing sequence sequencing elements))
     (seq-index       . ( sequence-index seqing-index sequencing-index
@@ -193,6 +194,7 @@ true names and lists of aliases.
     (cycle        . loopy--parse-cycle-command)
     (do           . loopy--parse-do-command)
     (find         . loopy--parse-find-command)
+    (set-accum    . loopy--parse-set-accum-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)
     (leave        . loopy--parse-leave-command)

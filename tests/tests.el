@@ -13,6 +13,8 @@
 (require 'map "./dependecy-links/map.el" 'no-error)
 (eval-when-compile (require 'loopy "./loopy.el"))
 (require 'loopy "./loopy.el")
+(require 'loopy-vars "./loopy-vars.el")
+(require 'loopy-commands "./loopy-commands.el")
 
 ;; "loopy quote"
 (defmacro lq (&rest body)
@@ -2968,6 +2970,37 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '((1) (2) (3)))
                                      (reducing i #'append)))))))
+
+;;;;; Set Accum
+(ert-deftest set-accum-setup ()
+  (should (eq 'loopy--parse-set-accum-command
+              (loopy--get-command-parser 'set-accum)))
+  (should (eq 'set-accum (loopy--get-true-name 'setting-accum))))
+
+(ert-deftest set-accum ()
+  (should (= 16 (eval (quote (loopy (list i '(1 2 3))
+                                    (set-accum my-sum (+ my-sum i) :init 10)
+                                    (finally-return my-sum))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (set-accum coll (cons i coll))
+                                     (finally-return coll)))))))
+
+(ert-deftest set-accum-implict ()
+  (should (= 16 (eval (quote (loopy (list i '(1 2 3))
+                                    (set-accum (+ loopy-result i) :init 10))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy (list i '(1 2 3))
+                                     (set-accum (cons i loopy-result))))))))
+
+(ert-deftest set-accum-destructuring ()
+  (should (equal '(5 6)
+                 (eval (quote (loopy (array elem [(1 . 2) (3 . 4) (5 . 6)])
+                                     (set-accum (car . cdr) elem)
+                                     (finally-return car cdr)))))))
+
 ;;;;; Sum
 (ert-deftest sum ()
   (should (= 6

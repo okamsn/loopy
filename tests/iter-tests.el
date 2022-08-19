@@ -4064,6 +4064,37 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (equal '(1 2 3)
                  (eval (quote (loopy-iter (listing i '((1) (2) (3)))
                                           (reducing i #'append)))))))
+
+;;;;; Set Accum
+
+(ert-deftest set-accum ()
+  (should (= 16 (eval (quote (loopy-iter (listing i '(1 2 3))
+                                         (setting-accum my-sum (+ my-sum i) :init 10)
+                                         (finally-return my-sum))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy-iter (listing i '(1 2 3))
+                                          (accum set-accum coll (cons i coll))
+                                          (finally-return coll)))))))
+(ert-deftest set-accum-implict ()
+  (should (= 16 (eval (quote (loopy-iter (listing i '(1 2 3))
+                                         (setting-accum (+ loopy-result i) :init 10))))))
+
+  (should (equal '(3 2 1)
+                 (eval (quote (loopy-iter (listing i '(1 2 3))
+                                          (accum set-accum (cons i loopy-result))))))))
+
+(ert-deftest set-accum-recursive ()
+  (should (= 16 (eval (quote
+                       (loopy-iter (listing i '(1 2 3))
+                                   (setting-accum my-sum
+                                                  (progn
+                                                    (setting temp (+ my-sum i))
+                                                    temp)
+                                                  :init 10)
+                                   (finally-return my-sum)))))))
+
+
 ;;;;; Sum
 (ert-deftest sum ()
   (should (= 6
