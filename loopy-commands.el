@@ -204,6 +204,10 @@ These commands affect other loops higher up in the call list."
         ,@(loopy--parse-loop-commands commands))))))
 
 ;;;;;; Sub-Loop
+(make-obsolete 'loopy--parse-sub-loop-command
+               (concat "use the `loopy' or `loopy-iter' commands instead."
+                       "  See the manual and change log.")
+               "2022-08")
 (cl-defun loopy--parse-sub-loop-command ((_ &rest body))
   "Parse the `sub-loop' command as (sub-loop BODY).
 
@@ -212,6 +216,9 @@ special macro arguments.  In `loopy-iter', it is specially
 handled to use `loopy-iter' instead.
 
 The sub-loop is specially handled."
+  (warn (concat "The command `sub-loop' is deprecated."
+                "  Use the commands `loopy' or `loopy-iter' instead."
+                "  See the Info documentation and change log."))
   `((loopy--main-body ,(macroexpand `(loopy ,@body)))))
 
 ;;;;;; Loopy

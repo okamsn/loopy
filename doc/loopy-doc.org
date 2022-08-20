@@ -1052,7 +1052,8 @@ can be exited by using early-exit commands ([[#exiting-the-loop-early]]) or bool
 commands ([[#boolean-commands]]).
 
 Iteration commands must occur in the top level of the ~loopy~ form or in a
-=sub-loop= command.  Trying to do something like the below will signal an error.
+sub-loop command ([[#sub-loops]]).  Trying to do something like the below will
+signal an error.
 
 #+begin_src emacs-lisp
   ;; Signals an error:
@@ -3197,10 +3198,10 @@ in their respective examples.
     ;; => ([2 4] [6 8])
     (loopy outer
            (list i '([2 4] [6 8] [7 10]))
-           (sub-loop (array j i)
-                     (when (cl-oddp j)
-                       ;; Equivalent to `(at outer (leave))'
-                       (leave-from outer)))
+           (loopy (array j i)
+                  (when (cl-oddp j)
+                    ;; Equivalent to `(at outer (leave))'
+                    (leave-from outer)))
            (collect i))
   #+end_src
 
@@ -3225,9 +3226,9 @@ in their respective examples.
     ;; => 'bad-val?
     (loopy outer-loop
            (list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
-           (sub-loop (list i inner-list)
-                     (when (eq i 'bad-val?)
-                       (return-from outer-loop 'bad-val?))))
+           (loopy (list i inner-list)
+                  (when (eq i 'bad-val?)
+                    (return-from outer-loop 'bad-val?))))
   #+END_SRC
 
 #+findex: while
@@ -3280,90 +3281,15 @@ processed during the expansion of the top-level macro.
   ;; => ((1 2) (3 4))
   (loopy outer
          (list i '((1 2) (3 4) (5 6)))
-         (sub-loop (list j i)
-                   (when (= j 5)
-                     (leave-from outer)))
+         (loopy (list j i)
+                (when (= j 5)
+                  (leave-from outer)))
          (collect i))
 #+end_src
 
-
-#+findex: sub-loop
-#+findex: subloop
-#+findex: loop
-#+findex: sub-looping
-#+findex: sublooping
-#+findex: looping
-- =(sub-loop|subloop|loop [SPECIAL-MACRO-ARGUMENTS] [CMDS])= :: Create a
-  sub-loop in the same lexical environment as the top-level loop, processing
-  sub-commands during the top-level loop's expansion.
-
-  When using ~loopy~, this command is a wrapped form of the ~loopy~ macro, and
-  so supports all of its features, including special macro arguments.  When
-  using ~loopy-iter~ ([[#loopy-iter]]), this command wraps the ~loopy-iter~ macro
-  instead.
-
-  #+begin_src emacs-lisp
-    ;; => ((2 4) (6 8) (10 12))
-    (loopy outer
-           (array i [(2 4) (6 8) (1 3) (10 12)])
-           (sub-loop (list j i)
-                     (when (cl-oddp j)
-                       (skip-from outer)))
-           (collect i))
-  #+end_src
-
-#+findex: at
-- =(at LOOP-NAME [CMDS])= :: Parse commands with respect to =LOOP-NAME=.  For
-  example, a =leave= subcommand would exit the loop =LOOP-NAME=, and an
-  accumulation command would create a variable in that super-loop.
-
-  If one did not use =at= in the below example, then the accumulation would
-  be local to the sub-loop and the macro's return value would be ~nil~.
-
-  #+begin_src emacs-lisp
-    ;; => (4 5 10 11 16 17)
-    (loopy outer
-           (array i [(1 2) (3 4) (5 6)])
-           (sub-loop (with (sum (apply #'+ i)))
-                     (list j i)
-                     (at outer (collect (+ sum j)))))
-  #+end_src
-
-  Keep in mind that the effects of flags ([[#flags]]) are local to the loops in
-  which they are used, even when using the =at= command.
-
-  #+begin_src emacs-lisp
-    ;; => ((1 2 11 12)
-    ;;     ((2) (3) (12) (13)))
-    (loopy outer
-           (flag pcase)
-           (array elem [(1 2) (11 12)])
-           (collect `(,first . ,rest) elem)
-           ;; NOTE: The sub-loop uses the default destructuring style.
-           ;;       The `pcase' style only affects the surrounding loop.
-           (sub-loop (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
-                     (leave))
-           (finally-return first rest))
-
-    ;; => (((1 2) (3 4))
-    ;;     (cat cat)
-    ;;     (1 dog 2 dog 3 dog 4 dog))
-    (loopy outer
-           (flag split)
-           (list i '((1 2) (3 4)))
-           (collect i)
-           (collect 'cat)
-           (loop (list j i)
-                 ;; NOTE: These variables not split.
-                 (at outer
-                     (collect j)
-                     (collect 'dog))))
-  #+end_src
-
 #+findex: loopy command
 - =(loopy [SPECIAL-MACRO-ARGUMENTS or CMDS])= :: Specifically wrap a call to
-  the ~loopy~ macro.  Unlike the =sub-loop= command, the behavior of this
-  command never changes.
+  the ~loopy~ macro.
 
   Don't confuse using this command with using calls to the macro ~loopy~.
   For example, the =EXPR= parameter to loop commands is used literally, and
@@ -3382,10 +3308,57 @@ processed during the expansion of the top-level macro.
              (do nil)))
   #+end_src
 
+#+findex: at
+- =(at LOOP-NAME [CMDS])= :: Parse commands with respect to =LOOP-NAME=.  For
+  example, a =leave= subcommand would exit the loop =LOOP-NAME=, and an
+  accumulation command would create a variable in that super-loop.
+
+  If one did not use =at= in the below example, then the accumulation would
+  be local to the sub-loop and the macro's return value would be ~nil~.
+
+  #+begin_src emacs-lisp
+    ;; => (4 5 10 11 16 17)
+    (loopy outer
+           (array i [(1 2) (3 4) (5 6)])
+           (loopy (with (sum (apply #'+ i)))
+                  (list j i)
+                  (at outer (collect (+ sum j)))))
+  #+end_src
+
+  Keep in mind that the effects of flags ([[#flags]]) are local to the loops in
+  which they are used, even when using the =at= command.
+
+  #+begin_src emacs-lisp
+    ;; => ((1 2 11 12)
+    ;;     ((2) (3) (12) (13)))
+    (loopy outer
+           (flag pcase)
+           (array elem [(1 2) (11 12)])
+           (collect `(,first . ,rest) elem)
+           ;; NOTE: The sub-loop uses the default destructuring style.
+           ;;       The `pcase' style only affects the surrounding loop.
+           (loopy (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
+                  (leave))
+           (finally-return first rest))
+
+    ;; => (((1 2) (3 4))
+    ;;     (cat cat)
+    ;;     (1 dog 2 dog 3 dog 4 dog))
+    (loopy outer
+           (flag split)
+           (list i '((1 2) (3 4)))
+           (collect i)
+           (collect 'cat)
+           (loopy (list j i)
+                  ;; NOTE: These variables not split.
+                  (at outer
+                      (collect j)
+                      (collect 'dog))))
+  #+end_src
+
 #+findex: loopy-iter command
-- =(loopy-iter [SPECIAL-MACRO-ARGUMENTS or COMMANDS or LISP EXPRESSIONS])= :: Specifically
-  wrap a call to the ~loopy-iter~ macro ([[#loopy-iter]]).  Unlike the =sub-loop=
-  command, the behavior of this command never changes.
+- =(loopy-iter [SPECIAL-MACRO-ARGUMENTS or CMDS or LISP-EXPRS])= :: Specifically
+  wrap a call to the ~loopy-iter~ macro ([[#loopy-iter]]).
 
   This feature can only be used after first loading the library =loopy-iter=.
 
@@ -3636,25 +3609,25 @@ at the top level of ~loopy-iter~ or a sub-loop.
                 (collecting a)))
 #+end_src
 
-In ~loopy~, the =sub-loop= command is a full ~loopy~ loop ([[#sub-loops]]).  In
-~loopy-iter~, it is a full ~loopy-iter~ loop.  If you do not want this, you can
-just use the ~loopy~ macro or ~loopy~ command (as in =(for loopy)=) instead of
-the =sub-loop= command.
+In the macro ~loopy~, the commands =loopy= and =loopy-iter= are needed to
+correctly handle sub-loops.  Those commands are not needed in the macro
+~loopy-iter~, since the macro expands any macros in its argument while
+processing them.
 
 #+begin_src emacs-lisp
   ;; => (2 3 4 5)
   (loopy-iter outer
               (listing i '([1 2] [3 4]))
-              ;; NOTE: `loopy-iter' style, not `loopy' style
-              (sub-looping (arraying j i)
-                           (at outer
-                               (let ((val (1+ j)))
-                                 (collecting val)))))
+              ;; NOTE: `loopy-iter' macro, not command
+              (loopy-iter (arraying j i)
+                          (at outer
+                              (let ((val (1+ j)))
+                                (collecting val)))))
 
   ;; => (2 3 4 5)
   (loopy-iter outer
               (listing i '([1 2] [3 4]))
-              ;; NOTE: `loopy' style, not `loopy-iter' style
+              ;; NOTE: `loopy' macro, not command
               (loopy (array j i)
                      (set val (1+ j))
                      (at outer (collect val))))
@@ -3712,25 +3685,6 @@ create a list if enough return values are given.
   (loopy-iter (numbering n :from 0 :to 10)
               (when (> n 5)
                 (cl-return (list n (1+ n) (+ 2 n)))))
-#+end_src
-
-
-The command named =looping= and =sub-looping= isn't technically needed, as
-~loopy-iter~ can be used to make a sub-loop directly.
-
-#+begin_src emacs-lisp
-  ;; => (1 2 3 4 5 6)
-  (loopy-iter outer
-              (listing sublist '((1 2 3) (4 5 6)))
-              (looping (listing elem sublist)
-                       (at outer (collecting elem))))
-
-  ;; => (1 2 3 4 5 6)
-  (loopy-iter outer
-              (listing sublist '((1 2 3) (4 5 6)))
-              ;; This is just the macro, not some `loopy-iter' command:
-              (loopy-iter (listing elem sublist)
-                          (at outer (collecting elem))))
 #+end_src
 
 - Special Macro Argument Names
@@ -3822,9 +3776,6 @@ The command named =looping= and =sub-looping= isn't technically needed, as
     - =returning-from=
   - Sub-loop Commands
     - =at=
-    - =looping= (not really needed)
-    - =sub-looping= (not really needed)
-
 
 * Using Flags
 :PROPERTIES:

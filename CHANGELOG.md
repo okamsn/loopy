@@ -53,6 +53,18 @@ This document describes the user-facing changes to Loopy.
     `loopy-iter-suppressed-macros`.  Defaults include `cl-return`, `cl-block`,
     and `cl-return-from`.
 
+- The command `sub-loop` is deprecated.  Use the commands `loopy` or
+  `loopy-iter` instead.  Currently, the `sub-loop` command, depending on the
+  macro in which it's used, just behaves as one or the other.  See [#130] and
+  [#127].
+
+  The `sub-loop` command was added before the commands `loopy` and `loopy-iter`.
+  Previously, it was not a fully featured loop like the macro `loopy`.  Now that
+  sub-loops can use special macro arguments, and now that the macros `loopy` and
+  `loopy-iter` both have command versions of themselves, we no longer need this
+  command.
+
+
 ### Other Changes
 
 - Improvements to destructuring ([#117]):
@@ -103,7 +115,9 @@ This document describes the user-facing changes to Loopy.
 [#118]: https://github.com/okamsn/loopy/pull/118
 [#119]: https://github.com/okamsn/loopy/pull/119
 [#125]: https://github.com/okamsn/loopy/issues/125
+[#127]: https://github.com/okamsn/loopy/issues/127
 [#129]: https://github.com/okamsn/loopy/pull/129
+[#130]: https://github.com/okamsn/loopy/pull/130
 
 ## 0.10.1
 

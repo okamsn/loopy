@@ -640,6 +640,25 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                               (repeating 1)
                               (setting j (1+ i))
                               (at outer
+                                  (collecting j)))))))
+
+(ert-deftest loopy-iter-sub-loop ()
+  (should (equal '(2 3 4 5 6)
+                 (loopy-iter outer
+                             (for list i '(1 2 3 4 5))
+                             (loopy-iter
+                              (for repeat 1)
+                              (for set j (1+ i))
+                              (for at outer
+                                   (accum collect j))))))
+
+  (should (equal '(2 3 4 5 6)
+                 (loopy-iter outer
+                             (listing i '(1 2 3 4 5))
+                             (loopy-iter
+                              (repeating 1)
+                              (setting j (1+ i))
+                              (at outer
                                   (collecting j))))))
 
   (should (equal '(2 3 4 5 6)
@@ -659,7 +678,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                               (setting j (1+ i))
                               (at outer
                                   (collecting j)))))))
-
 
 (ert-deftest collect-coercion ()
   (should (equal [1 2 3]
@@ -739,7 +757,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                  (let ((test-eshell-visual-subcommands))
                    (loopy-iter
                     (listing (cmd &rest subcmds) '(("git" "log" "diff" "show")))
-                    (looping
+                    (loopy-iter
                      (listing subcmd subcmds)
                      (push subcmd (alist-get cmd test-eshell-visual-subcommands
                                              nil nil #'equal))))
@@ -804,10 +822,10 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                  my-loop
                                  (arraying i [(1 2) (3 4)])
                                  (collecting i :at start)
-                                 (looping inner
-                                          (listing j i)
-                                          (at my-loop
-                                              (collecting j :at end))))))))
+                                 (loopy-iter inner
+                                             (listing j i)
+                                             (at my-loop
+                                                 (collecting j :at end))))))))
     (should-not (or loopy--known-loop-names
                     loopy--accumulation-places
                     loopy--at-instructions
@@ -827,10 +845,10 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                    (loopy-let* ((key (pop clause))
                                 ((key-fn take-fn transform-fn) (--first (funcall (car it) key)
                                                                         oo-bind-processers))
-                                (taken (loop (while (and clause
-                                                         (not (keywordp it))
-                                                         (funcall take-fn it)))
-                                             (collecting (pop clause)))))
+                                (taken (loopy (while (and clause
+                                                          (not (keywordp it))
+                                                          (funcall take-fn it)))
+                                              (collecting (pop clause)))))
                      (collecting (funcall transform-fn (list (cons key taken) rest))
                                  :at start))))
     (should-not (or loopy--known-loop-names
@@ -852,10 +870,10 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                    (loopy-let* ((key (pop clause))
                                 ((key-fn take-fn transform-fn) (--first (funcall (car it) key)
                                                                         oo-bind-processers))
-                                (taken (loop (while (and clause
-                                                         (not (keywordp it))
-                                                         (funcall take-fn it)))
-                                             (collecting (pop clause)))))
+                                (taken (loopy (while (and clause
+                                                          (not (keywordp it))
+                                                          (funcall take-fn it)))
+                                              (collecting (pop clause)))))
                      (for collect (funcall transform-fn (list (cons key taken) rest))
                           :at start))))
     (should-not (or loopy--known-loop-names
@@ -1804,8 +1822,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should-error (loopy-iter outer
                             (listing i '([1 2] [3]))
                             (collecting i)
-                            (looping (arraying j i)
-                                     (at outer (maximizing j)))))
+                            (loopy-iter (arraying j i)
+                                        (at outer (maximizing j)))))
 
   (should-error (loopy-iter outer
                             (listing i '([1 2] [3]))
@@ -1816,20 +1834,20 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
                  (eval (quote (loopy-iter outer
                                           (listing i '(1 2))
-                                          (looping (listing j '(4 5))
-                                                   (at outer (collecting (cons i j)))))))))
+                                          (loopy-iter (listing j '(4 5))
+                                                      (at outer (collecting (cons i j)))))))))
 
   (should (equal "14152425"
                  (eval (quote (loopy-iter outer
                                           (listing i '("1" "2"))
-                                          (looping (listing j '("4" "5"))
-                                                   (at outer (concating (concat i j)))))))))
+                                          (loopy-iter (listing j '("4" "5"))
+                                                      (at outer (concating (concat i j)))))))))
 
   (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
                  (eval (quote (loopy-iter outer
                                           (listing i '(1 2))
-                                          (looping (listing j '(4 5))
-                                                   (at outer (collecting (cons i j))))
+                                          (loopy-iter (listing j '(4 5))
+                                                      (at outer (collecting (cons i j))))
                                           (finally-return (cons 0 loopy-result))))))))
 
 (ert-deftest sub-loop-explicit-accum-in-loop ()
@@ -1838,8 +1856,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                   (quote
                    (loopy-iter outer
                                (listing i '(1 2))
-                               (looping (listing j '(4 5))
-                                        (at outer (collecting my-coll (cons i j))))
+                               (loopy-iter (listing j '(4 5))
+                                           (at outer (collecting my-coll (cons i j))))
                                (finally-return (cons 0 my-coll)))))))
 
   (should (equal "014152425"
@@ -1847,8 +1865,8 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                   (quote
                    (loopy-iter outer
                                (listing i '("1" "2"))
-                               (looping (listing j '("4" "5"))
-                                        (at outer (concating my-str (concat i j))))
+                               (loopy-iter (listing j '("4" "5"))
+                                           (at outer (concating my-str (concat i j))))
                                (finally-return (concat "0" my-str))))))))
 ;;
 (ert-deftest sub-loop-leave-early ()
@@ -1856,9 +1874,9 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (equal '(1 2 3)
                  (eval (quote (loopy-iter outer
                                           (listing i '(1 2 3))
-                                          (looping (listing j '(4 5 6))
-                                                   (leaving)
-                                                   (at outer (collecting j)))
+                                          (loopy-iter (listing j '(4 5 6))
+                                                      (leaving)
+                                                      (at outer (collecting j)))
                                           (collecting i)))))))
 
 (ert-deftest sub-loop-skip ()
@@ -1866,18 +1884,18 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (equal '(5 7 1 5 7 2 5 7 3)
                  (eval (quote (loopy-iter  outer
                                            (listing i '(1 2 3))
-                                           (looping (listing j '(4 5 6 7 8))
-                                                    (when (cl-evenp j)
-                                                      (continuing))
-                                                    (at outer (collecting j)))
+                                           (loopy-iter (listing j '(4 5 6 7 8))
+                                                       (when (cl-evenp j)
+                                                         (continuing))
+                                                       (at outer (collecting j)))
                                            (collecting i)))))))
 
 (ert-deftest sub-loop-return-from-outer ()
   (should (= 3 (eval (quote (loopy-iter outer
                                         (listing i '(1 2 3))
-                                        (looping (listing j '(4 5 6 3))
-                                                 (when (= j i)
-                                                   (returning-from outer j)))))))))
+                                        (loopy-iter (listing j '(4 5 6 3))
+                                                    (when (= j i)
+                                                      (returning-from outer j)))))))))
 
 (ert-deftest sub-loop-named ()
   (should
@@ -1885,13 +1903,13 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
     '((3 5) (3 5))
     (eval (quote (loopy-iter outer
                              (cycling 2)
-                             (looping inner1
-                                      (listing j '(3 4))
-                                      (looping (listing k '(5 6 7))
-                                               (if (= k 6)
-                                                   ;; Return from inner1 so never reach 4.
-                                                   (returning-from inner1)
-                                                 (at outer (collecting (list j k))))))))))))
+                             (loopy-iter inner1
+                                         (listing j '(3 4))
+                                         (loopy-iter (listing k '(5 6 7))
+                                                     (if (= k 6)
+                                                         ;; Return from inner1 so never reach 4.
+                                                         (returning-from inner1)
+                                                       (at outer (collecting (list j k))))))))))))
 
 ;;;; Generic Evaluation
 
@@ -4568,9 +4586,9 @@ Not multiple of 3: 7")))
   (should (equal '([1 2 3])
                  (eval (quote (loopy-iter outer
                                           (listing i '([1 2 3] [4 5 6]))
-                                          (looping (arraying j i)
-                                                   (when (= j 5)
-                                                     (leaving-from outer)))
+                                          (loopy-iter (arraying j i)
+                                                      (when (= j 5)
+                                                        (leaving-from outer)))
                                           (collecting i)))))))
 
 ;;;;; Return
@@ -4621,9 +4639,9 @@ Not multiple of 3: 7")))
   (should (equal '((1 2 3) (7 8 9))
                  (loopy-iter outer
                              (arraying i [(1 2 3) (4 5 6) (7 8 9)])
-                             (looping (listing j i)
-                                      (if (= 5 j)
-                                          (skipping-from outer)))
+                             (loopy-iter (listing j i)
+                                         (if (= 5 j)
+                                             (skipping-from outer)))
                              (collecting i)))))
 
 ;;;;; Always
@@ -4884,9 +4902,9 @@ This assumes that you're on guix."
                    (eval (quote (loopy-iter my-loop
                                             (arraying i [(1 2) (3 4)])
                                             (collecting i :at start)
-                                            (looping inner
-                                                     (listing j i)
-                                                     (at my-loop (collecting j :at end))))))))
+                                            (loopy-iter inner
+                                                        (listing j i)
+                                                        (at my-loop (collecting j :at end))))))))
     (should-not (or loopy--known-loop-names
                     loopy--accumulation-places
                     loopy--at-instructions

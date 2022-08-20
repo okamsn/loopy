@@ -485,42 +485,9 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                      (finally-return coll)))))))
 
 ;;; Loop Commands
-;;;; Miscellaneous
+;;;; Sub-loop Commands
 ;;;;; At and sub-loop
-;; TODO: Test error checking for accumulations of different types in separate
-;; loops.
-
-(ert-deftest at-accum ()
-  (should (equal '(1 2 3 4 5 6)
-                 (loopy outer
-                        (list i '((1 2) (3 4) (5 6)))
-                        (sub-loop (list j i)
-                                  (at outer
-                                      (collect j)))))))
-
-(ert-deftest at-leave ()
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (flags split)
-                     (list i '((1 2) (3 4) (5 6)))
-                     (sub-loop (list j i)
-                               (at outer
-                                   (if (> j 3)
-                                       (leave)
-                                     (collect j))))))))
-
-(ert-deftest at-disagreeing-accum-types ()
-  (should-error (loopy outer
-                       (list i '([1 2] [3]))
-                       (collect i)
-                       (loop (array j i)
-                             (at outer (max j)))))
-
-  (should-error (loopy outer
-                       (list i '([1 2] [3]))
-                       (collect i)
-                       (at outer (max j)))))
-
+;; NOTE: `sub-loop' is deprecated.
 (ert-deftest sub-loop-implicit-accum-in-loop ()
   (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
                  (lq outer
@@ -559,23 +526,23 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 (ert-deftest sub-loop-leave-early ()
   "A `leave' in a sub-loop should not affect the outer loop."
   (should (equal '(1 2 3)
-                  (lq outer
-                      (list i '(1 2 3))
-                      (loop (list j '(4 5 6))
-                            (leave)
-                            (at outer (collect j)))
-                      (collect i)))))
+                 (lq outer
+                     (list i '(1 2 3))
+                     (loop (list j '(4 5 6))
+                           (leave)
+                           (at outer (collect j)))
+                     (collect i)))))
 
 (ert-deftest sub-loop-skip ()
   "A `skip' in a sub-loop should not affect the outer loop."
   (should (equal '(5 7 1 5 7 2 5 7 3)
-                  (lq  outer
-                       (list i '(1 2 3))
-                       (loop (list j '(4 5 6 7 8))
-                             (when (cl-evenp j)
-                               (continue))
-                             (at outer (collect j)))
-                       (collect i)))))
+                 (lq  outer
+                      (list i '(1 2 3))
+                      (loop (list j '(4 5 6 7 8))
+                            (when (cl-evenp j)
+                              (continue))
+                            (at outer (collect j)))
+                      (collect i)))))
 
 (ert-deftest sub-loop-return-from-outer ()
   (should (= 3 (lq outer
@@ -598,6 +565,10 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                         (return-from inner1)
                       (at outer (collect (list j k))))))))))
 
+;;;;; loopy command
+;; NOTE: This duplicates the tests from the `sub-loop' command, which will be
+;;       removed.
+
 (ert-deftest loopy-command ()
   (should (equal '(1 2 3 4)
                  (lq outer
@@ -605,6 +576,113 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                      (loopy (list j i)
                             (at outer (collect j)))))))
 
+(ert-deftest at-accum ()
+  (should (equal '(1 2 3 4 5 6)
+                 (loopy outer
+                        (list i '((1 2) (3 4) (5 6)))
+                        (loopy (list j i)
+                               (at outer
+                                   (collect j)))))))
+
+(ert-deftest at-leave ()
+  (should (equal '(1 2 3)
+                 (lq outer
+                     (flags split)
+                     (list i '((1 2) (3 4) (5 6)))
+                     (loopy (list j i)
+                            (at outer
+                                (if (> j 3)
+                                    (leave)
+                                  (collect j))))))))
+
+(ert-deftest at-disagreeing-accum-types ()
+  (should-error (macroexpand '(loopy outer
+                                     (list i '([1 2] [3]))
+                                     (collect i)
+                                     (loopy (array j i)
+                                            (at outer (max j))))))
+
+  (should-error (macroexpand '(loopy outer
+                                     (list i '([1 2] [3]))
+                                     (collect i)
+                                     (at outer (max j))))))
+
+(ert-deftest loopy-cmd-implicit-accum-in-loop ()
+  (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (lq outer
+                     (list i '(1 2))
+                     (loopy (list j '(4 5))
+                            (at outer (collect (cons i j)))))))
+
+  (should (equal "14152425"
+                 (lq outer
+                     (list i '("1" "2"))
+                     (loopy (list j '("4" "5"))
+                            (at outer (concat (concat i j)))))))
+
+  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (lq outer
+                     (list i '(1 2))
+                     (loopy (list j '(4 5))
+                            (at outer (collect (cons i j))))
+                     (finally-return (cons 0 loopy-result))))))
+
+(ert-deftest loopy-cmd-explicit-accum-in-loop ()
+  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+                 (lq outer
+                     (list i '(1 2))
+                     (loopy (list j '(4 5))
+                            (at outer (collect my-coll (cons i j))))
+                     (finally-return (cons 0 my-coll)))))
+
+  (should (equal "014152425"
+                 (lq outer
+                     (list i '("1" "2"))
+                     (loopy (list j '("4" "5"))
+                            (at outer (concat my-str (concat i j))))
+                     (finally-return (concat "0" my-str))))))
+;;
+(ert-deftest loopy-cmd-leave-early ()
+  "A `leave' in a sub-loop should not affect the outer loop."
+  (should (equal '(1 2 3)
+                 (lq outer
+                     (list i '(1 2 3))
+                     (loopy (list j '(4 5 6))
+                            (leave)
+                            (at outer (collect j)))
+                     (collect i)))))
+
+(ert-deftest loopy-cmd-skip ()
+  "A `skip' in a sub-loop should not affect the outer loop."
+  (should (equal '(5 7 1 5 7 2 5 7 3)
+                 (lq  outer
+                      (list i '(1 2 3))
+                      (loopy (list j '(4 5 6 7 8))
+                             (when (cl-evenp j)
+                               (continue))
+                             (at outer (collect j)))
+                      (collect i)))))
+
+(ert-deftest loopy-cmd-return-from-outer ()
+  (should (= 3 (lq outer
+                   (list i '(1 2 3))
+                   (loopy (list j '(4 5 6 3))
+                          (when (= j i)
+                            (return-from outer j)))))))
+
+(ert-deftest loopy-cmd-named ()
+  (should
+   (equal
+    '((3 5) (3 5))
+    (lq outer
+        (repeat 2)
+        (loopy inner1
+               (list j '(3 4))
+               (loopy (list k '(5 6 7))
+                      (if (= k 6)
+                          ;; Return from inner1 so never reach 4.
+                          (return-from inner1)
+                        (at outer (collect (list j k))))))))))
 ;;;; Generic Evaluation
 ;;;;; Do
 (ert-deftest do ()
@@ -3369,18 +3447,18 @@ Not multiple of 3: 7")))
 ;;;;; Leave
 (ert-deftest leave ()
   (should (equal '(1)
-                  (eval (quote (loopy (list i '(1 2))
-                                      (collect i)
-                                      (leave)))))))
+                 (eval (quote (loopy (list i '(1 2))
+                                     (collect i)
+                                     (leave)))))))
 
 ;;;;; Leave From
 (ert-deftest leave-from ()
   (should (equal '([1 2 3])
                  (eval (quote (loopy outer
                                      (list i '([1 2 3] [4 5 6]))
-                                     (loop (array j i)
-                                           (when (= j 5)
-                                             (leave-from outer)))
+                                     (loopy (array j i)
+                                            (when (= j 5)
+                                              (leave-from outer)))
                                      (collect i)))))))
 
 ;;;;; Return
@@ -3431,9 +3509,9 @@ Not multiple of 3: 7")))
   (should (equal '((1 2 3) (7 8 9))
                  (loopy outer
                         (array i [(1 2 3) (4 5 6) (7 8 9)])
-                        (loop (list j i)
-                              (if (= 5 j)
-                                  (skip-from outer)))
+                        (loopy (list j i)
+                               (if (= 5 j)
+                                   (skip-from outer)))
                         (collect i)))))
 
 ;;;;; While
@@ -3447,8 +3525,8 @@ Not multiple of 3: 7")))
 (ert-deftest until ()
   (should (equal '(1 2 3)
                  (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                               (until (> i 3))
-                               (collect i)))))))
+                                     (until (> i 3))
+                                     (collect i)))))))
 
 ;;;;; Always
 (ert-deftest always ()
@@ -3682,9 +3760,9 @@ This assumes that you're on guix."
                    (eval (quote (loopy my-loop
                                        (array i [(1 2) (3 4)])
                                        (collect i :at start)
-                                       (loop inner
-                                             (list j i)
-                                             (at my-loop (collect j :at end))))))))
+                                       (loopy inner
+                                              (list j i)
+                                              (at my-loop (collect j :at end))))))))
     (should-not (or loopy--known-loop-names
                     loopy--accumulation-places
                     loopy--at-instructions

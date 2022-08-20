@@ -208,6 +208,8 @@ Without these keywords, one must use one of the names given in
     listing
     listing-index
     listing-ref
+    ;; TODO: Remove once we move to a new version number.
+    ;;       The `sub-loop' command has been deprecated.
     looping
     mapping
     mapping-pairs
@@ -244,6 +246,8 @@ Without these keywords, one must use one of the names given in
     stringing
     stringing-index
     stringing-ref
+    ;; TODO: Remove once we move to a new version number.
+    ;;       The `sub-loop' command has been deprecated.
     sub-looping
     thereis
     summing
