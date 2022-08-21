@@ -11,6 +11,14 @@
 (eval-when-compile (require 'loopy "./loopy.el"))
 (require 'loopy "./loopy.el")
 
+(defmacro loopy-test-structure (input output-pattern)
+  "Use `pcase' to check a destructurings bindings.
+INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
+  `(pcase ,input
+     (,output-pattern
+      t)
+     (_ nil)))
+
 ;;; Minor Functions
 (ert-deftest split-off-last-var ()
   (should (equal '((a b c) d)

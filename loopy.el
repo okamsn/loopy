@@ -131,20 +131,32 @@
 
 ;;;; Built-in flags
 ;;;;; Split
+(make-obsolete 'loopy--enable-flag-split
+               (concat "use the `accum-opt' special macro argument."
+                       "  See the Info documentation.")
+               "2022-08")
 (defun loopy--enable-flag-split ()
   "Set `loopy-split-implied-accumulation-results' to t inside the loop."
+  (warn "The flag `split' is deprecated.  Use `accum-opt' instead.")
   (setq loopy--split-implied-accumulation-results t))
 
+(make-obsolete 'loopy--disable-flag-split
+               (concat "use the `accum-opt' special macro argument."
+                       "  See the Info documentation.")
+               "2022-08")
 (defun loopy--disable-flag-split ()
   "Set `loopy-split-implied-accumulation-results' to t inside the loop."
+  (warn "The flag `split' is deprecated.  Use `accum-opt' instead.")
   ;; Currently redundant, but leaves room for possibilities.
   (if loopy--split-implied-accumulation-results
       (setq loopy--split-implied-accumulation-results nil)))
 
-(dolist (flag '(split +split))
-  (cl-callf map-insert loopy--flag-settings flag #'loopy--enable-flag-split))
+(with-suppressed-warnings ((obsolete loopy--enable-flag-split
+                                     loopy--disable-flag-split))
+  (dolist (flag '(split +split))
+    (cl-callf map-insert loopy--flag-settings flag #'loopy--enable-flag-split))
 
-(cl-callf map-insert loopy--flag-settings '-split #'loopy--disable-flag-split)
+  (cl-callf map-insert loopy--flag-settings '-split #'loopy--disable-flag-split))
 
 ;;;;;; Default
 ;; It doesn't make sense to allow the disabling of this one.

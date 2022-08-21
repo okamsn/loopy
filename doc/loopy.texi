@@ -529,14 +529,6 @@ information.
 (loopy (flag seq)
        (with ([a &rest b] [1 2 3]))
        (return a b))
-
-;; Automatically split accumulations into separate variables:
-;;
-;; => ((1 3) (2 4))
-(loopy (flag split)
-       (list (i j) '((1 2) (3 4)))
-       (collect i)
-       (collect j))
 @end lisp
 @end table
 
@@ -675,7 +667,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgbb2667d
+@float Listing,org52084a8
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -797,7 +789,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org6ead120
+@float Listing,orgf3bb3a1
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -812,7 +804,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org80f1530
+@float Listing,org1a24ff9
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1164,7 +1156,8 @@ can be exited by using early-exit commands (@ref{Early Exit}) or boolean
 commands (@ref{Checking Conditions}).
 
 Iteration commands must occur in the top level of the @code{loopy} form or in a
-@samp{sub-loop} command.  Trying to do something like the below will signal an error.
+sub-loop command (@ref{Sub-Loops}).  Trying to do something like the below will
+signal an error.
 
 @lisp
 ;; Signals an error:
@@ -2286,38 +2279,6 @@ returning a value, does not affect the correctness of implied results.
 
 @end quotation
 
-@cindex split vs. accum-opt
-Instead of explicitly optimizing accumulation variables, another approach is to
-use the @samp{split} flag (@ref{Using Flags}), which behaves like a more limited version of the
-@samp{accum-opt} special macro argument.  When enabled, every accumulation command
-with an implied accumulation variable will use a separate variable.  When the
-loop ends, the values of these separate variables are gathered in the variable
-@code{loopy-result}, in the order that their respective commands appeared in the
-macro's arguments.  In the example below, note that the result of @code{(collect i)}
-is the first element of @code{loopy-result}, even though the collection happens
-@emph{after} the first summation when the loop runs.
-
-@lisp
-;; => ((2 4) 15)
-(loopy (flag split)
-       (numbers i :from 1 :to 5)
-       (when (cl-evenp i)
-         (collect i))
-       (sum i)
-       ;; NOTE: This `finally-return' isn't needed, as `loopy-result'
-       ;; is already the implied return value.
-       (finally-return loopy-result))
-
-;; Using `accum-opt':
-;; => ((2 4) 15)
-(loopy (accum-opt coll sum)
-       (numbers i :from 1 :to 5)
-       (when (cl-evenp i)
-         (collect coll i))
-       (sum sum i)
-       (finally-return coll sum))
-@end lisp
-
 @menu
 * Common Properties of Accumulation Commands::
 * Generic Accumulation::         Accumulating function output.
@@ -2381,9 +2342,7 @@ A function of one argument, used to transform the inputs of
 @table @asis
 @item @samp{init}
 The initial value of @samp{VAR}.  For explicitly named variables, one
-can use this argument or the @samp{with} special macro argument.  When using the
-@samp{split} flag, this argument is the only way to specify a non-default
-initial value.
+can use this argument or the @samp{with} special macro argument.
 @end table
 
 @cindex accumulation keyword result-type
@@ -3111,7 +3070,6 @@ Because accumulation into @code{coll} has been optimized, the order of values in
        (finally-return coll intermediate-values))
 @end lisp
 
-@cindex accum-opt vs. split
 The @samp{accump-opt} special macro argument can also be used with destructuring.
 Because destructuring requires using named variables, such variables are by
 default required to be ordered correctly during the loop.  If you do not require
@@ -3128,27 +3086,6 @@ that, you are recommended to use @samp{accum-opt} on those variables.
        (collect intermediate-a (copy-sequence a))
        (collect intermediate-b (copy-sequence b))
        (finally-return a b intermediate-a intermediate-b))
-@end lisp
-
-The other option, though not exactly the same, is to destructure in iteration
-commands and use the @samp{split} flag with accumulations (@ref{Using Flags}).  Both options
-remove the sorting requirements on the accumulations variables.
-
-@lisp
-;; The following two loops are approximately equivalent.
-
-;; => ((1 4 7) (2 5 8) (3 6 9))
-(loopy (accum-opt i j k)
-       (array elem [(1 2 3) (4 5 6) (7 8 9)])
-       (collect (i j k) elem)
-       (finally-return i j k))
-
-;; => ((1 4 7) (2 5 8) (3 6 9))
-(loopy (flag split)
-       (array (i j k) [(1 2 3) (4 5 6) (7 8 9)])
-       (collect i)
-       (collect j)
-       (collect k))
 @end lisp
 
 @node Checking Conditions
@@ -3444,10 +3381,10 @@ return value.  This command is equivalent to @samp{(at NAME (leave))} (@ref{Sub-
 ;; => ([2 4] [6 8])
 (loopy outer
        (list i '([2 4] [6 8] [7 10]))
-       (sub-loop (array j i)
-                 (when (cl-oddp j)
-                   ;; Equivalent to `(at outer (leave))'
-                   (leave-from outer)))
+       (loopy (array j i)
+              (when (cl-oddp j)
+                ;; Equivalent to `(at outer (leave))'
+                (leave-from outer)))
        (collect i))
 @end lisp
 @end table
@@ -3478,9 +3415,9 @@ returning @samp{[EXPRS]}.
 ;; => 'bad-val?
 (loopy outer-loop
        (list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
-       (sub-loop (list i inner-list)
-                 (when (eq i 'bad-val?)
-                   (return-from outer-loop 'bad-val?))))
+       (loopy (list i inner-list)
+              (when (eq i 'bad-val?)
+                (return-from outer-loop 'bad-val?))))
 @end lisp
 @end table
 
@@ -3537,98 +3474,17 @@ processed during the expansion of the top-level macro.
 ;; => ((1 2) (3 4))
 (loopy outer
        (list i '((1 2) (3 4) (5 6)))
-       (sub-loop (list j i)
-                 (when (= j 5)
-                   (leave-from outer)))
+       (loopy (list j i)
+              (when (= j 5)
+                (leave-from outer)))
        (collect i))
 @end lisp
-
-
-@findex sub-loop
-@findex subloop
-@findex loop
-@findex sub-looping
-@findex sublooping
-@findex looping
-@table @asis
-@item @samp{(sub-loop|subloop|loop [SPECIAL-MACRO-ARGUMENTS] [CMDS])}
-Create a
-sub-loop in the same lexical environment as the top-level loop, processing
-sub-commands during the top-level loop's expansion.
-
-When using @code{loopy}, this command is a wrapped form of the @code{loopy} macro, and
-so supports all of its features, including special macro arguments.  When
-using @code{loopy-iter} (@ref{The @code{loopy-iter} Macro}), this command wraps the @code{loopy-iter} macro
-instead.
-
-@lisp
-;; => ((2 4) (6 8) (10 12))
-(loopy outer
-       (array i [(2 4) (6 8) (1 3) (10 12)])
-       (sub-loop (list j i)
-                 (when (cl-oddp j)
-                   (skip-from outer)))
-       (collect i))
-@end lisp
-@end table
-
-@findex at
-@table @asis
-@item @samp{(at LOOP-NAME [CMDS])}
-Parse commands with respect to @samp{LOOP-NAME}.  For
-example, a @samp{leave} subcommand would exit the loop @samp{LOOP-NAME}, and an
-accumulation command would create a variable in that super-loop.
-
-If one did not use @samp{at} in the below example, then the accumulation would
-be local to the sub-loop and the macro's return value would be @code{nil}.
-
-@lisp
-;; => (4 5 10 11 16 17)
-(loopy outer
-       (array i [(1 2) (3 4) (5 6)])
-       (sub-loop (with (sum (apply #'+ i)))
-                 (list j i)
-                 (at outer (collect (+ sum j)))))
-@end lisp
-
-Keep in mind that the effects of flags (@ref{Using Flags}) are local to the loops in
-which they are used, even when using the @samp{at} command.
-
-@lisp
-;; => ((1 2 11 12)
-;;     ((2) (3) (12) (13)))
-(loopy outer
-       (flag pcase)
-       (array elem [(1 2) (11 12)])
-       (collect `(,first . ,rest) elem)
-       ;; NOTE: The sub-loop uses the default destructuring style.
-       ;;       The `pcase' style only affects the surrounding loop.
-       (sub-loop (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
-                 (leave))
-       (finally-return first rest))
-
-;; => (((1 2) (3 4))
-;;     (cat cat)
-;;     (1 dog 2 dog 3 dog 4 dog))
-(loopy outer
-       (flag split)
-       (list i '((1 2) (3 4)))
-       (collect i)
-       (collect 'cat)
-       (loop (list j i)
-             ;; NOTE: These variables not split.
-             (at outer
-                 (collect j)
-                 (collect 'dog))))
-@end lisp
-@end table
 
 @findex loopy command
 @table @asis
 @item @samp{(loopy [SPECIAL-MACRO-ARGUMENTS or CMDS])}
 Specifically wrap a call to
-the @code{loopy} macro.  Unlike the @samp{sub-loop} command, the behavior of this
-command never changes.
+the @code{loopy} macro.
 
 Don't confuse using this command with using calls to the macro @code{loopy}.
 For example, the @samp{EXPR} parameter to loop commands is used literally, and
@@ -3648,12 +3504,48 @@ in the example below.
 @end lisp
 @end table
 
+@findex at
+@table @asis
+@item @samp{(at LOOP-NAME [CMDS])}
+Parse commands with respect to @samp{LOOP-NAME}.  For
+example, a @samp{leave} subcommand would exit the loop @samp{LOOP-NAME}, and an
+accumulation command would create a variable in that super-loop.
+
+If one did not use @samp{at} in the below example, then the accumulation would
+be local to the sub-loop and the macro's return value would be @code{nil}.
+
+@lisp
+;; => (4 5 10 11 16 17)
+(loopy outer
+       (array i [(1 2) (3 4) (5 6)])
+       (loopy (with (sum (apply #'+ i)))
+              (list j i)
+              (at outer (collect (+ sum j)))))
+@end lisp
+
+Keep in mind that the effects of flags (@ref{Using Flags}) are local to the loops in
+which they are used, even when using the @samp{at} command.
+
+@lisp
+;; => ((1 2 11 12)
+;;     ((2) (3) (12) (13)))
+(loopy outer
+       (flag pcase)
+       (array elem [(1 2) (11 12)])
+       (collect `(,first . ,rest) elem)
+       ;; NOTE: The sub-loop uses the default destructuring style.
+       ;;       The `pcase' style only affects the surrounding loop.
+       (loopy (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
+              (leave))
+       (finally-return first rest))
+@end lisp
+@end table
+
 @findex loopy-iter command
 @table @asis
-@item @samp{(loopy-iter [SPECIAL-MACRO-ARGUMENTS or COMMANDS or LISP EXPRESSIONS])}
+@item @samp{(loopy-iter [SPECIAL-MACRO-ARGUMENTS or CMDS or LISP-EXPRS])}
 Specifically
-wrap a call to the @code{loopy-iter} macro (@ref{The @code{loopy-iter} Macro}).  Unlike the @samp{sub-loop}
-command, the behavior of this command never changes.
+wrap a call to the @code{loopy-iter} macro (@ref{The @code{loopy-iter} Macro}).
 
 This feature can only be used after first loading the library @samp{loopy-iter}.
 
@@ -3872,7 +3764,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgf6684ec
+@float Listing,orgc3b0083
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -3916,25 +3808,25 @@ at the top level of @code{loopy-iter} or a sub-loop.
               (collecting a)))
 @end lisp
 
-In @code{loopy}, the @samp{sub-loop} command is a full @code{loopy} loop (@ref{Sub-Loops}).  In
-@code{loopy-iter}, it is a full @code{loopy-iter} loop.  If you do not want this, you can
-just use the @code{loopy} macro or @code{loopy} command (as in @samp{(for loopy)}) instead of
-the @samp{sub-loop} command.
+In the macro @code{loopy}, the commands @samp{loopy} and @samp{loopy-iter} are needed to
+correctly handle sub-loops.  Those commands are not needed in the macro
+@code{loopy-iter}, since the macro expands any macros in its argument while
+processing them.
 
 @lisp
 ;; => (2 3 4 5)
 (loopy-iter outer
             (listing i '([1 2] [3 4]))
-            ;; NOTE: `loopy-iter' style, not `loopy' style
-            (sub-looping (arraying j i)
-                         (at outer
-                             (let ((val (1+ j)))
-                               (collecting val)))))
+            ;; NOTE: `loopy-iter' macro, not command
+            (loopy-iter (arraying j i)
+                        (at outer
+                            (let ((val (1+ j)))
+                              (collecting val)))))
 
 ;; => (2 3 4 5)
 (loopy-iter outer
             (listing i '([1 2] [3 4]))
-            ;; NOTE: `loopy' style, not `loopy-iter' style
+            ;; NOTE: `loopy' macro, not command
             (loopy (array j i)
                    (set val (1+ j))
                    (at outer (collect val))))
@@ -4005,25 +3897,6 @@ create a list if enough return values are given.
 (loopy-iter (numbering n :from 0 :to 10)
             (when (> n 5)
               (cl-return (list n (1+ n) (+ 2 n)))))
-@end lisp
-
-
-The command named @samp{looping} and @samp{sub-looping} isn't technically needed, as
-@code{loopy-iter} can be used to make a sub-loop directly.
-
-@lisp
-;; => (1 2 3 4 5 6)
-(loopy-iter outer
-            (listing sublist '((1 2 3) (4 5 6)))
-            (looping (listing elem sublist)
-                     (at outer (collecting elem))))
-
-;; => (1 2 3 4 5 6)
-(loopy-iter outer
-            (listing sublist '((1 2 3) (4 5 6)))
-            ;; This is just the macro, not some `loopy-iter' command:
-            (loopy-iter (listing elem sublist)
-                        (at outer (collecting elem))))
 @end lisp
 
 @itemize
@@ -4229,10 +4102,6 @@ Sub-loop Commands
 @itemize
 @item
 @samp{at}
-@item
-@samp{looping} (not really needed)
-@item
-@samp{sub-looping} (not really needed)
 @end itemize
 @end itemize
 @end itemize
@@ -4274,13 +4143,6 @@ Use @code{seq-let} for destructuring (@ref{seq-let,,,elisp,}).
 Use the style of destructuring found in the @samp{dash} library
 (@ref{-let,,,dash,}).
 @end table
-@cindex split flag
-@table @asis
-@item @samp{split}
-Make accumulation commands with implicit variables accumulate into
-separate variables, which are then collected into @code{loopy-result}.  This flag
-is described more in @ref{Accumulation}.
-@end table
 @cindex default flag
 @table @asis
 @item @samp{default}
@@ -4291,15 +4153,15 @@ Use the default behavior for all options.
 For convenience, all flags (except @samp{default}) can be undone by prefixing them
 with @samp{-} (a dash or minus sign), which reverts @code{loopy} to its default behavior.
 
-For example, if you have set @code{loopy-default-flags} to @samp{(dash split)} and wish to
-only use the @samp{split} flag for a loop, you can use either @samp{(flags default split)}
-or, more simply, @samp{(flag -dash)}.  These prefixed flags only apply when the
-unprefixed version is active.  That is, @samp{(flags pcase -dash)} is the same as
-just @samp{(flags pcase)}, regardless of the value of @code{loopy-default-flags}, as
-@samp{pcase} destructuring will override all uses of @samp{dash} destructuring as it comes
-later in the list.  Similarly, @samp{(flags -dash dash)} and @samp{(flags -dash +dash)}
-leave @samp{dash} destructuring enabled, and @samp{(flags +dash -dash)} disables @samp{dash}
-destructuring and uses the default behavior.
+For example, if you have set @code{loopy-default-flags} to @samp{(dash)} and wish to use
+the default destructuring method, you can use @samp{(flags default)} or @samp{(flags
+-dash)}.  These prefixed flags only apply when the unprefixed version is active.
+That is, @samp{(flags pcase -dash)} is the same as just @samp{(flags pcase)}, regardless
+of the value of @code{loopy-default-flags}, as @samp{pcase} destructuring will override
+all uses of @samp{dash} destructuring as it comes later in the list.  Similarly,
+@samp{(flags -dash dash)} and @samp{(flags -dash +dash)} leave @samp{dash} destructuring
+enabled, and @samp{(flags +dash -dash)} disables @samp{dash} destructuring and uses the
+default behavior.
 
 @cindex loopy-dash
 @cindex loopy-pcase
@@ -4355,53 +4217,6 @@ yet provide the required functionality.
        (sum sum1 i)
        (sum sum2 j)
        (finally-return (+ sum1 v1) (+ sum2 v2)))
-@end lisp
-
-As noted in previous sections, the @samp{split} flag can be used to generate more
-efficient code for accumulation commands (@ref{Accumulation}).  By making
-stronger guarantees about how accumulation variables can be used, @code{loopy} can
-produce results fasters.
-
-@lisp
-;; Both of these example give the same result, but the latter
-;; can expand into more efficient code.
-;;
-;; There is also the `push-into' command, which avoids this problem when
-;; used with `nreverse'.
-
-;; => ((1 4) (2 5) (3 6))
-(loopy (list elem '((1 2 3) (4 5 6)))
-       (collect (i j k) elem)
-       (finally-return i j k))
-
-;; => ((1 4) (2 5) (3 6))
-(loopy (flag split) ; Don't accumulate into same implicit variable.
-       (list (i j k) '((1 2 3) (4 5 6)))
-       (collect i)
-       (collect j)
-       (collect k))
-@end lisp
-
-Below is an example of the @samp{split} flag.
-
-@lisp
-;; => (1 2 3 4 5)
-(loopy (flag -split)
-       (list i '(1 2 3 4 5))
-       (if (cl-oddp i)
-           (collect i)
-         (collect i))
-       ;; This `finally-return' is unneeded.
-       (finally-return loopy-result))
-
-;; => ((1 3 5) (2 4))
-(loopy (flag split)
-       (list i '(1 2 3 4 5))
-       (if (cl-oddp i)
-           (collect i)
-         (collect i))
-       ;; This `finally-return' is unneeded.
-       (finally-return loopy-result))
 @end lisp
 
 @node Custom Aliases
@@ -4755,8 +4570,7 @@ an accumulation command does not specify an accumulation variable, and in some
 special other cases.
 
 By default, the implicit return value is @code{loopy-result}, and so this variable
-is usually just a list of the symbol @samp{loopy-result}.  When the @samp{split} flag is
-enabled, this is a list of values to which @code{loopy-result} is bound.
+is usually just a list of the symbol @samp{loopy-result}.
 @end table
 
 @vindex loopy--accumulation-final-updates
@@ -5402,9 +5216,7 @@ command @samp{map-pairs}, which works generically on hash tables, association li
 @section Accumulation Clauses
 
 Like with @code{cl-loop}, in @code{loopy}, accumulation commands accumulate into the same
-variable when no @samp{VAR} is given (by default, @code{loopy-result}).  If you would like
-accumulation commands to accumulate into separate variables, simple provide
-@samp{VAR} to the command or use the @samp{split} flag (@ref{Using Flags}).
+variable when no @samp{VAR} is given (by default, @code{loopy-result}).
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaa}
 @headitem @code{cl-loop}

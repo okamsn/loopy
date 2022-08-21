@@ -64,6 +64,14 @@ This document describes the user-facing changes to Loopy.
   `loopy-iter` both have command versions of themselves, we no longer need this
   command.
 
+- The `split` flag is deprecated.  Use the more general and controllable
+  `accum-opt` flag instead.  See [#124] and [#131].
+
+  The `split` flag makes all accumulation commands with an implicit variable use
+  separate, optimized variables.  There is no way to use splitting with some
+  commands and not others using the `split` flag alone, but this can
+  equivalently be done using the `accum-opt` flag.  Since `split` is just a
+  specific usage of `accum-opt`, it is fine to remove `split`.
 
 ### Other Changes
 
@@ -114,10 +122,12 @@ This document describes the user-facing changes to Loopy.
 [#117]: https://github.com/okamsn/loopy/pull/117
 [#118]: https://github.com/okamsn/loopy/pull/118
 [#119]: https://github.com/okamsn/loopy/pull/119
+[#124]: https://github.com/okamsn/loopy/issues/124
 [#125]: https://github.com/okamsn/loopy/issues/125
 [#127]: https://github.com/okamsn/loopy/issues/127
 [#129]: https://github.com/okamsn/loopy/pull/129
 [#130]: https://github.com/okamsn/loopy/pull/130
+[#131]: https://github.com/okamsn/loopy/pull/131
 
 ## 0.10.1
 

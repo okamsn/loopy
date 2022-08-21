@@ -477,14 +477,6 @@ regardless of the order of the arguments passed to ~loopy~.
     (loopy (flag seq)
            (with ([a &rest b] [1 2 3]))
            (return a b))
-
-    ;; Automatically split accumulations into separate variables:
-    ;;
-    ;; => ((1 3) (2 4))
-    (loopy (flag split)
-           (list (i j) '((1 2) (3 4)))
-           (collect i)
-           (collect j))
   #+end_src
 
 #+findex: accum-opt
@@ -2137,38 +2129,6 @@ from being finalized.  Using the =leave= command, which exits the loop without
 returning a value, does not affect the correctness of implied results.
 #+end_quote
 
-#+cindex: split vs. accum-opt
-Instead of explicitly optimizing accumulation variables, another approach is to
-use the =split= flag ([[#flags]]), which behaves like a more limited version of the
-=accum-opt= special macro argument.  When enabled, every accumulation command
-with an implied accumulation variable will use a separate variable.  When the
-loop ends, the values of these separate variables are gathered in the variable
-~loopy-result~, in the order that their respective commands appeared in the
-macro's arguments.  In the example below, note that the result of ~(collect i)~
-is the first element of ~loopy-result~, even though the collection happens
-/after/ the first summation when the loop runs.
-
-#+begin_src emacs-lisp
-  ;; => ((2 4) 15)
-  (loopy (flag split)
-         (numbers i :from 1 :to 5)
-         (when (cl-evenp i)
-           (collect i))
-         (sum i)
-         ;; NOTE: This `finally-return' isn't needed, as `loopy-result'
-         ;; is already the implied return value.
-         (finally-return loopy-result))
-
-  ;; Using `accum-opt':
-  ;; => ((2 4) 15)
-  (loopy (accum-opt coll sum)
-         (numbers i :from 1 :to 5)
-         (when (cl-evenp i)
-           (collect coll i))
-         (sum sum i)
-         (finally-return coll sum))
-#+end_src
-
 *** Common Properties of Accumulation Commands
 :PROPERTIES:
 :END:
@@ -2210,9 +2170,7 @@ all described below.
 
 #+cindex: accumulation keyword init
 - =init= :: The initial value of =VAR=.  For explicitly named variables, one
-  can use this argument or the =with= special macro argument.  When using the
-  =split= flag, this argument is the only way to specify a non-default
-  initial value.
+  can use this argument or the =with= special macro argument.
 
 #+cindex: accumulation keyword result-type
 - =result-type= :: A sequence type into which =VAR= is converted /after the
@@ -2886,7 +2844,6 @@ In the example below, see that
          (finally-return coll intermediate-values))
 #+end_src
 
-#+cindex: accum-opt vs. split
 The =accump-opt= special macro argument can also be used with destructuring.
 Because destructuring requires using named variables, such variables are by
 default required to be ordered correctly during the loop.  If you do not require
@@ -2903,27 +2860,6 @@ that, you are recommended to use =accum-opt= on those variables.
          (collect intermediate-a (copy-sequence a))
          (collect intermediate-b (copy-sequence b))
          (finally-return a b intermediate-a intermediate-b))
-#+end_src
-
-The other option, though not exactly the same, is to destructure in iteration
-commands and use the =split= flag with accumulations ([[#flags]]).  Both options
-remove the sorting requirements on the accumulations variables.
-
-#+begin_src emacs-lisp
-  ;; The following two loops are approximately equivalent.
-
-  ;; => ((1 4 7) (2 5 8) (3 6 9))
-  (loopy (accum-opt i j k)
-         (array elem [(1 2 3) (4 5 6) (7 8 9)])
-         (collect (i j k) elem)
-         (finally-return i j k))
-
-  ;; => ((1 4 7) (2 5 8) (3 6 9))
-  (loopy (flag split)
-         (array (i j k) [(1 2 3) (4 5 6) (7 8 9)])
-         (collect i)
-         (collect j)
-         (collect k))
 #+end_src
 
 ** Checking Conditions
@@ -3340,20 +3276,6 @@ processed during the expansion of the top-level macro.
            (loopy (at outer (collect (first &rest rest) (mapcar #'1+ elem)))
                   (leave))
            (finally-return first rest))
-
-    ;; => (((1 2) (3 4))
-    ;;     (cat cat)
-    ;;     (1 dog 2 dog 3 dog 4 dog))
-    (loopy outer
-           (flag split)
-           (list i '((1 2) (3 4)))
-           (collect i)
-           (collect 'cat)
-           (loopy (list j i)
-                  ;; NOTE: These variables not split.
-                  (at outer
-                      (collect j)
-                      (collect 'dog))))
   #+end_src
 
 #+findex: loopy-iter command
@@ -3808,10 +3730,6 @@ The following flags are currently supported:
 #+cindex: dash flag
 - =dash= :: Use the style of destructuring found in the =dash= library
  ([[info:dash#-let]]).
-#+cindex: split flag
-- =split= :: Make accumulation commands with implicit variables accumulate into
-  separate variables, which are then collected into ~loopy-result~.  This flag
-  is described more in [[#accumulation-commands]].
 #+cindex: default flag
 - =default= :: Use the default behavior for all options.
 
@@ -3819,15 +3737,15 @@ The following flags are currently supported:
 For convenience, all flags (except =default=) can be undone by prefixing them
 with =-= (a dash or minus sign), which reverts ~loopy~ to its default behavior.
 
-For example, if you have set ~loopy-default-flags~ to =(dash split)= and wish to
-only use the =split= flag for a loop, you can use either =(flags default split)=
-or, more simply, =(flag -dash)=.  These prefixed flags only apply when the
-unprefixed version is active.  That is, =(flags pcase -dash)= is the same as
-just =(flags pcase)=, regardless of the value of ~loopy-default-flags~, as
-=pcase= destructuring will override all uses of =dash= destructuring as it comes
-later in the list.  Similarly, =(flags -dash dash)= and =(flags -dash +dash)=
-leave =dash= destructuring enabled, and =(flags +dash -dash)= disables =dash=
-destructuring and uses the default behavior.
+For example, if you have set ~loopy-default-flags~ to =(dash)= and wish to use
+the default destructuring method, you can use =(flags default)= or =(flags
+-dash)=.  These prefixed flags only apply when the unprefixed version is active.
+That is, =(flags pcase -dash)= is the same as just =(flags pcase)=, regardless
+of the value of ~loopy-default-flags~, as =pcase= destructuring will override
+all uses of =dash= destructuring as it comes later in the list.  Similarly,
+=(flags -dash dash)= and =(flags -dash +dash)= leave =dash= destructuring
+enabled, and =(flags +dash -dash)= disables =dash= destructuring and uses the
+default behavior.
 
 #+cindex: loopy-dash
 #+cindex: loopy-pcase
@@ -3879,54 +3797,6 @@ yet provide the required functionality.
          (sum sum2 j)
          (finally-return (+ sum1 v1) (+ sum2 v2)))
 #+end_src
-
-As noted in previous sections, the =split= flag can be used to generate more
-efficient code for accumulation commands ([[#accumulation-commands]]).  By making
-stronger guarantees about how accumulation variables can be used, ~loopy~ can
-produce results fasters.
-
- #+begin_src emacs-lisp
-   ;; Both of these example give the same result, but the latter
-   ;; can expand into more efficient code.
-   ;;
-   ;; There is also the `push-into' command, which avoids this problem when
-   ;; used with `nreverse'.
-
-   ;; => ((1 4) (2 5) (3 6))
-   (loopy (list elem '((1 2 3) (4 5 6)))
-          (collect (i j k) elem)
-          (finally-return i j k))
-
-   ;; => ((1 4) (2 5) (3 6))
-   (loopy (flag split) ; Don't accumulate into same implicit variable.
-          (list (i j k) '((1 2 3) (4 5 6)))
-          (collect i)
-          (collect j)
-          (collect k))
- #+end_src
-
- Below is an example of the =split= flag.
-
- #+begin_src emacs-lisp
-   ;; => (1 2 3 4 5)
-   (loopy (flag -split)
-          (list i '(1 2 3 4 5))
-          (if (cl-oddp i)
-              (collect i)
-            (collect i))
-          ;; This `finally-return' is unneeded.
-          (finally-return loopy-result))
-
-   ;; => ((1 3 5) (2 4))
-   (loopy (flag split)
-          (list i '(1 2 3 4 5))
-          (if (cl-oddp i)
-              (collect i)
-            (collect i))
-          ;; This `finally-return' is unneeded.
-          (finally-return loopy-result))
- #+end_src
-
 
 * Custom Aliases
 :PROPERTIES:
@@ -4238,8 +4108,7 @@ For accumulation commands, you might also wish to place values in the following:
   special other cases.
 
   By default, the implicit return value is ~loopy-result~, and so this variable
-  is usually just a list of the symbol =loopy-result=.  When the =split= flag is
-  enabled, this is a list of values to which ~loopy-result~ is bound.
+  is usually just a list of the symbol =loopy-result=.
 
 #+vindex: loopy--accumulation-final-updates
 - =loopy--accumulation-final-updates= :: Actions to perform on the accumulation
@@ -4816,9 +4685,7 @@ command =map-pairs=, which works generically on hash tables, association lists
 :END:
 
 Like with ~cl-loop~, in ~loopy~, accumulation commands accumulate into the same
-variable when no =VAR= is given (by default, ~loopy-result~).  If you would like
-accumulation commands to accumulate into separate variables, simple provide
-=VAR= to the command or use the =split= flag ([[#flags][Using Flags]]).
+variable when no =VAR= is given (by default, ~loopy-result~).
 
 | ~cl-loop~                | ~loopy~              |
 |--------------------------+----------------------|
