@@ -957,22 +957,23 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                                                    (if decreasing #'>= #'<=)
                                                  (if decreasing #'> #'<))
                                               ,var ,end-val-holder)))
-                  (loopy--iteration-vars
-                   (,increment-val-holder
-                    ,(cond
-                      (explicit-by `(let ((temp ,by))
-                                      (if (or (and (cl-minusp temp)
-                                                   (< ,var ,end-val-holder))
-                                              (and (cl-plusp temp)
-                                                   (> ,var ,end-val-holder)))
-                                          (error "Infinite loop: %s" (quote ,cmd))
-                                        temp)))
-                      (key-by       `(let ((temp ,by))
-                                       (if (cl-minusp temp)
-                                           (error "Wrong value for `by': %s"
-                                                  (quote ,cmd))
-                                         temp)))
-                      (t            by)))))
+                  ,(when (or key-by explicit-by)
+                     `(loopy--iteration-vars
+                       (,increment-val-holder
+                        ,(cond
+                          (explicit-by `(let ((temp ,by))
+                                          (if (or (and (cl-minusp temp)
+                                                       (< ,var ,end-val-holder))
+                                                  (and (cl-plusp temp)
+                                                       (> ,var ,end-val-holder)))
+                                              (error "Infinite loop: %s" (quote ,cmd))
+                                            temp)))
+                          (key-by       `(let ((temp ,by))
+                                           (if (cl-minusp temp)
+                                               (error "Wrong value for `by': %s"
+                                                      (quote ,cmd))
+                                             temp)))
+                          (t            by))))))
               `((loopy--iteration-vars (,increment-val-holder ,by))))
           (loopy--latter-body
            (setq ,var ,(cond (explicit-by `(+ ,var ,increment-val-holder))
