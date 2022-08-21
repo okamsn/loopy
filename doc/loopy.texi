@@ -303,15 +303,36 @@ explained in detail later in this document.
 @chapter Special Macro Arguments
 
 @cindex special macro argument
-There are only a few special macro arguments.  One, an unquoted symbol, is taken
-as the loop's name.  The others, listed below, are parenthesized expressions
-that begin with a keyword or one of their aliases.
-
-If a macro argument does not match one of these special few, @code{loopy} will
-attempt to interpret it as a loop command, and signal an error if that fails.
+There are only a few special macro arguments.  If a macro argument does not
+match one of these special few, @code{loopy} will attempt to interpret it as a loop
+command, and signal an error if that fails.
 
 These special macro arguments are always processed before loop commands,
 regardless of the order of the arguments passed to @code{loopy}.
+
+@findex named
+@table @asis
+@item @samp{named} or just a symbol
+Name the loop.  This also names the @code{cl-block}
+which contains the loop.  This can be of the form @samp{(named NAME)} or just
+@samp{NAME}.
+
+@lisp
+;; => 3
+(loopy outer
+       (array i [(1 2) (3 4) (5 6)])
+       (loopy (list j i)
+              (when (> j 2)
+                (return-from outer j))))
+
+;; => 3
+(loopy (named outer)
+       (array i [(1 2) (3 4) (5 6)])
+       (loopy (list j i)
+              (when (> j 2)
+                (return-from outer j))))
+@end lisp
+@end table
 
 @findex with
 @findex let*
@@ -667,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org52084a8
+@float Listing,org66e50b5
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -789,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgf3bb3a1
+@float Listing,orgb3d4c54
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -804,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org1a24ff9
+@float Listing,org4b66f34
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -3413,7 +3434,7 @@ returning @samp{[EXPRS]}.
 
 @lisp
 ;; => 'bad-val?
-(loopy outer-loop
+(loopy (named outer-loop)
        (list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
        (loopy (list i inner-list)
               (when (eq i 'bad-val?)
@@ -3463,7 +3484,7 @@ processed during the expansion of the top-level macro.
 
 @lisp
 ;; Raises an error:
-(loopy outer
+(loopy (named outer)
        (list i '((1 2) (3 4) (5 6)))
        (do (loopy (list j i)
                   (when (= j 5)
@@ -3712,14 +3733,14 @@ arguments that are recognized by default is given in the section
 @lisp
 ;; In `loopy', `list' is unambiguously a command name.
 ;; => (1 2 3 4)
-(loopy outer
+(loopy (named outer)
        (list i '((1 2) (3 4)))
        (loop (list j i)
              (at outer (collect j))))
 
 ;; In `loopy-iter', `list' would be a function.  `listing' is the command.
 ;; => (1 2 3 4)
-(loopy-iter outer
+(loopy-iter (named outer)
             (listing i '((1 2) (3 4)))
             (loopy-iter (listing j i)
                         ;; Can use `at' instead of `atting':
@@ -3764,7 +3785,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgc3b0083
+@float Listing,org47c4f93
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4607,7 +4628,7 @@ accumulation itself must still occur within the loop @samp{inner}.
 
 @lisp
 ;; => (1 2 3 4)
-(loopy outer
+(loopy (named outer)
        (array i [(1 2) (3 4)])
        (sub-loop inner
                  (list j i)
@@ -5255,7 +5276,7 @@ evaluates to @code{nil}.
 @code{loopy} also provides the command @samp{cond}, which works like the normal Lisp
 special form @code{cond}.
 
-@multitable {aaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@multitable {aaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem @code{cl-loop}
 @tab @code{loopy}
 @item @samp{with var = value}
@@ -5267,7 +5288,7 @@ special form @code{cond}.
 @item @samp{unless COND clause}
 @tab @samp{(unless COND CMDS)} as a loop command
 @item @samp{named NAME}
-@tab @samp{NAME} as a macro argument
+@tab @samp{NAME} or @samp{(named NAME)} as a macro argument
 @item @samp{initially [do] EXPRS}
 @tab @samp{(before-do EXPRS)} as a macro argument
 @item @samp{finally [do] EXPRS}

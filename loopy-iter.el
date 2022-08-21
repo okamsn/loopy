@@ -391,6 +391,7 @@ These commands affect other loops higher up in the call list."
      finally-return
      finally-protect finally-protected
      flag            flags
+     named
      accum-opt       opt-accum
      with            init
      without         no-with no-init
@@ -451,6 +452,41 @@ Returns BODY without the `%s' argument."
                         ,@body))))
       (finally-return
        new-body))))
+
+(defun loopy-iter--process-special-arg-loop-name (body)
+  "Process BODY and the loop name listed therein."
+  (let* ((names)
+         (new-body)
+         (all-sma-names (loopy--get-all-names 'named :from-true t))
+         (all-sma-bare-names
+          (loopy (list name all-sma-names)
+                 (when (memq name loopy-iter-bare-special-macro-arguments)
+                   (collect name)))))
+    (dolist (arg body)
+      (cond ((symbolp arg)
+             (push arg names))
+            ((memq (car-safe arg) all-sma-bare-names)
+             (if (/= 2 (length arg))
+                 (error "Wrong number of arguments for loop name: %s" arg)
+               (push (cl-second arg) names)))
+            ((and (memq (car-safe arg) loopy-iter-keywords)
+                  (memq (cl-second arg) all-sma-names))
+             (if (/= 3 (length arg))
+                 (error "Wrong number of arguments for loop name: %s" arg)
+               (push (cl-third arg) names)))
+            (t (push arg new-body))))
+    (if (> (length names) 1)
+        (error "Conflicting loop names: %s" names)
+      (let ((loop-name (cl-first names))) ; Symbol or `nil'.
+        (setq loopy--loop-name loop-name
+              loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
+              loopy--non-returning-exit-tag-name
+              (loopy--produce-non-returning-exit-tag-name loop-name))
+        ;; Set up the stack-maps.
+        (push loopy--loop-name loopy--known-loop-names)
+        (push (list loopy--loop-name) loopy--accumulation-places)
+        ;; Return non-name args.
+        (nreverse new-body)))))
 
 (loopy-iter--def-special-processor with
   ;; Note: These values don't have to be used literally, due to
@@ -535,7 +571,7 @@ to use `loopy' in general.
 
    (mapc #'loopy--apply-flag loopy-default-flags)
 
-   (setq body (loopy--process-special-arg-loop-name body))
+   (setq body (loopy-iter--process-special-arg-loop-name body))
    (setq body (loopy-iter--process-special-arg-flag body))
    (setq body (loopy-iter--process-special-arg-with body))
    (setq body (loopy-iter--process-special-arg-without body))

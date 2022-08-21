@@ -274,15 +274,33 @@ explained in detail later in this document.
 :END:
 
 #+cindex: special macro argument
-There are only a few special macro arguments.  One, an unquoted symbol, is taken
-as the loop's name.  The others, listed below, are parenthesized expressions
-that begin with a keyword or one of their aliases.
-
-If a macro argument does not match one of these special few, ~loopy~ will
-attempt to interpret it as a loop command, and signal an error if that fails.
+There are only a few special macro arguments.  If a macro argument does not
+match one of these special few, ~loopy~ will attempt to interpret it as a loop
+command, and signal an error if that fails.
 
 These special macro arguments are always processed before loop commands,
 regardless of the order of the arguments passed to ~loopy~.
+
+#+findex: named
+- =named= or just a symbol :: Name the loop.  This also names the ~cl-block~
+  which contains the loop.  This can be of the form =(named NAME)= or just
+  =NAME=.
+
+  #+begin_src emacs-lisp
+    ;; => 3
+    (loopy outer
+           (array i [(1 2) (3 4) (5 6)])
+           (loopy (list j i)
+                  (when (> j 2)
+                    (return-from outer j))))
+
+    ;; => 3
+    (loopy (named outer)
+           (array i [(1 2) (3 4) (5 6)])
+           (loopy (list j i)
+                  (when (> j 2)
+                    (return-from outer j))))
+  #+end_src
 
 #+findex: with
 #+findex: let*
@@ -3160,7 +3178,7 @@ in their respective examples.
 
   #+BEGIN_SRC emacs-lisp
     ;; => 'bad-val?
-    (loopy outer-loop
+    (loopy (named outer-loop)
            (list inner-list '((1 2 3) (1 bad-val? 1) (4 5 6)))
            (loopy (list i inner-list)
                   (when (eq i 'bad-val?)
@@ -3206,7 +3224,7 @@ processed during the expansion of the top-level macro.
 
 #+begin_src emacs-lisp
   ;; Raises an error:
-  (loopy outer
+  (loopy (named outer)
          (list i '((1 2) (3 4) (5 6)))
          (do (loopy (list j i)
                     (when (= j 5)
@@ -3441,14 +3459,14 @@ arguments that are recognized by default is given in the section
 #+begin_src emacs-lisp
   ;; In `loopy', `list' is unambiguously a command name.
   ;; => (1 2 3 4)
-  (loopy outer
+  (loopy (named outer)
          (list i '((1 2) (3 4)))
          (loop (list j i)
                (at outer (collect j))))
 
   ;; In `loopy-iter', `list' would be a function.  `listing' is the command.
   ;; => (1 2 3 4)
-  (loopy-iter outer
+  (loopy-iter (named outer)
               (listing i '((1 2) (3 4)))
               (loopy-iter (listing j i)
                           ;; Can use `at' instead of `atting':
@@ -4137,7 +4155,7 @@ accumulation itself must still occur within the loop =inner=.
 
 #+begin_src emacs-lisp
   ;; => (1 2 3 4)
-  (loopy outer
+  (loopy (named outer)
          (array i [(1 2) (3 4)])
          (sub-loop inner
                    (list j i)
@@ -4715,18 +4733,18 @@ evaluates to ~nil~.
 ~loopy~ also provides the command =cond=, which works like the normal Lisp
 special form ~cond~.
 
-| ~cl-loop~              | ~loopy~                                     |
-|------------------------+---------------------------------------------|
-| =with var = value=     | =(with (VAR VALUE))= as a macro argument    |
-| =if COND clause=       | =(if COND CMDS)= as a loop command          |
-| =when COND clause=     | =(when COND CMDS)= as a loop command        |
-| =unless COND clause=   | =(unless COND CMDS)= as a loop command      |
-| =named NAME=           | =NAME= as a macro argument                  |
-| =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument     |
-| =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument    |
-| =finally return EXPR=  | =(finally-return EXPR)= as a macro argument |
-| =do EXPRS=             | =(do EXPRS)= as a loop command              |
-| =return EXPR=          | =(return EXPR)= as a loop command           |
+| ~cl-loop~              | ~loopy~                                       |
+|------------------------+-----------------------------------------------|
+| =with var = value=     | =(with (VAR VALUE))= as a macro argument      |
+| =if COND clause=       | =(if COND CMDS)= as a loop command            |
+| =when COND clause=     | =(when COND CMDS)= as a loop command          |
+| =unless COND clause=   | =(unless COND CMDS)= as a loop command        |
+| =named NAME=           | =NAME= or =(named NAME)= as a macro argument  |
+| =initially [do] EXPRS= | =(before-do EXPRS)= as a macro argument       |
+| =finally [do] EXPRS=   | =(finally-do EXPRS)= as a macro argument      |
+| =finally return EXPR=  | =(finally-return EXPR)= as a macro argument   |
+| =do EXPRS=             | =(do EXPRS)= as a loop command                |
+| =return EXPR=          | =(return EXPR)= as a loop command             |
 
 * Macro Argument and Loop Command Index
   :PROPERTIES:

@@ -118,16 +118,22 @@ This document describes the user-facing changes to Loopy.
   accumulating version of `set`.  It is a generalization of the other generic
   accumulation commands `accumulate` and `reduce`.  See [#125] and [#129].
 
+- The new special macro argument `named` was added.  It is another way of
+  specifying loop names, instead of just listing a symbol.  This might be useful
+  in `loopy-iter`.  See issue [#123] and PR [#132].
+
 [#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
 [#118]: https://github.com/okamsn/loopy/pull/118
 [#119]: https://github.com/okamsn/loopy/pull/119
+[#123]: https://github.com/okamsn/loopy/issues/123
 [#124]: https://github.com/okamsn/loopy/issues/124
 [#125]: https://github.com/okamsn/loopy/issues/125
 [#127]: https://github.com/okamsn/loopy/issues/127
 [#129]: https://github.com/okamsn/loopy/pull/129
 [#130]: https://github.com/okamsn/loopy/pull/130
 [#131]: https://github.com/okamsn/loopy/pull/131
+[#132]: https://github.com/okamsn/loopy/pull/132
 
 ## 0.10.1
 

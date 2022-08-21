@@ -36,6 +36,14 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 
 ;;; Macro arguments
+;;;; Named (loop Name)
+
+(ert-deftest named ()
+  (should (= 4 (loopy my-loop (return-from my-loop 4))))
+  (should (= 4 (loopy (named my-loop) (return-from my-loop 4))))
+  (should (equal '(4) (loopy my-loop (collect 4) (leave-from my-loop))))
+  (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
+
 ;;;; With
 (ert-deftest with-arg-order ()
   (should (= 4
@@ -496,7 +504,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                            (at outer (collect (cons i j)))))))
 
   (should (equal "14152425"
-                 (lq outer
+                 (lq (named outer)
                      (list i '("1" "2"))
                      (loop (list j '("4" "5"))
                            (at outer (concat (concat i j)))))))
@@ -517,7 +525,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                      (finally-return (cons 0 my-coll)))))
 
   (should (equal "014152425"
-                 (lq outer
+                 (lq (named outer)
                      (list i '("1" "2"))
                      (loop (list j '("4" "5"))
                            (at outer (concat my-str (concat i j))))
@@ -545,7 +553,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                       (collect i)))))
 
 (ert-deftest sub-loop-return-from-outer ()
-  (should (= 3 (lq outer
+  (should (= 3 (lq (named outer)
                    (list i '(1 2 3))
                    (loop (list j '(4 5 6 3))
                          (when (= j i)
@@ -578,11 +586,12 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (ert-deftest at-accum ()
   (should (equal '(1 2 3 4 5 6)
-                 (loopy outer
-                        (list i '((1 2) (3 4) (5 6)))
-                        (loopy (list j i)
-                               (at outer
-                                   (collect j)))))))
+                 (eval (quote (loopy (named outer)
+                                     (list i '((1 2) (3 4) (5 6)))
+                                     (loopy (list j i)
+                                            (at outer
+                                                (collect j)))))
+                       t))))
 
 (ert-deftest at-leave ()
   (should (equal '(1 2 3)
@@ -636,7 +645,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                      (finally-return (cons 0 my-coll)))))
 
   (should (equal "014152425"
-                 (lq outer
+                 (lq (named outer)
                      (list i '("1" "2"))
                      (loopy (list j '("4" "5"))
                             (at outer (concat my-str (concat i j))))
@@ -3507,12 +3516,13 @@ Not multiple of 3: 7")))
 
 (ert-deftest skip-from ()
   (should (equal '((1 2 3) (7 8 9))
-                 (loopy outer
-                        (array i [(1 2 3) (4 5 6) (7 8 9)])
-                        (loopy (list j i)
-                               (if (= 5 j)
-                                   (skip-from outer)))
-                        (collect i)))))
+                 (eval (quote (loopy (named outer)
+                                     (array i [(1 2 3) (4 5 6) (7 8 9)])
+                                     (loopy (list j i)
+                                            (if (= 5 j)
+                                                (skip-from outer)))
+                                     (collect i)))
+                       t))))
 
 ;;;;; While
 (ert-deftest while ()

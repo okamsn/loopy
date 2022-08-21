@@ -634,7 +634,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                        (accum collect j))))))
 
   (should (equal '(2 3 4 5 6)
-                 (loopy-iter outer
+                 (loopy-iter (named outer)
                              (listing i '(1 2 3 4 5))
                              (looping
                               (repeating 1)
@@ -644,7 +644,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
 
 (ert-deftest loopy-iter-sub-loop ()
   (should (equal '(2 3 4 5 6)
-                 (loopy-iter outer
+                 (loopy-iter (named outer)
                              (for list i '(1 2 3 4 5))
                              (loopy-iter
                               (for repeat 1)
@@ -701,12 +701,13 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
 
 (ert-deftest loopy-iter-command ()
   (should (equal '(11 12 13 14 15 16)
-                 (loopy outer
-                        (list i '((1 2) (3 4) (5 6)))
-                        (loopy-iter (for list j i)
-                                    (for at outer
-                                         (let ((val 10))
-                                           (accum collect (+ val j))))))))
+                 (eval (quote (loopy (named outer)
+                                     (list i '((1 2) (3 4) (5 6)))
+                                     (loopy-iter (for list j i)
+                                                 (for at outer
+                                                      (let ((val 10))
+                                                        (accum collect (+ val j)))))))
+                       t)))
 
   (should (equal '(11 12 13 14 15 16)
                  (loopy outer
@@ -898,6 +899,25 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (loopy-iter (arg let* (a 3) ((b c) '(4 5)))
                       (repeating 3)
                       (collecting (list a b c)))))
+
+;;;; Named (loop Name)
+
+(ert-deftest named ()
+  (should (= 4 (eval (quote (loopy-iter my-loop
+                                        (returning-from my-loop 4)))
+                     t)))
+  (should (= 4 (eval (quote (loopy-iter (named my-loop)
+                                        (returning-from my-loop 4)))
+                     t)))
+  (should (equal '(4) (eval (quote (loopy-iter my-loop
+                                               (collecting 4)
+                                               (leaving-from my-loop)))
+                            t)))
+  (should (equal '(4) (eval (quote (loopy-iter (named my-loop)
+                                               (collecting 4)
+                                               (leaving-from my-loop)))
+                            t))))
+
 ;;;; With
 (ert-deftest with-arg-order ()
   (should (= 4
@@ -1854,11 +1874,12 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
   (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
                  (eval
                   (quote
-                   (loopy-iter outer
+                   (loopy-iter (named outer)
                                (listing i '(1 2))
                                (loopy-iter (listing j '(4 5))
                                            (at outer (collecting my-coll (cons i j))))
-                               (finally-return (cons 0 my-coll)))))))
+                               (finally-return (cons 0 my-coll))))
+                  t)))
 
   (should (equal "014152425"
                  (eval
@@ -4609,7 +4630,7 @@ Not multiple of 3: 7")))
 (ert-deftest return-from-outer-loop ()
   (should
    (= 6
-      (eval (quote (loopy-iter outer
+      (eval (quote (loopy-iter (named outer)
                                ;; Could use ‘sum’ command, but don’t want dependencies.
                                (with (sum 0))
                                (listing sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))

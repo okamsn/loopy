@@ -599,10 +599,19 @@ Returns BODY without the `%s' argument."
 
 (defun loopy--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
-  (let ((symbols (seq-filter #'symbolp body)))
-    (if (> (length symbols) 1)
-        (error "Conflicting loop names: %s" symbols)
-      (let ((loop-name (cl-first symbols))) ; Symbol or `nil'.
+  (let ((names)
+        (new-body))
+    (dolist (arg body)
+      (cond ((symbolp arg)
+             (push arg names))
+            ((and (memq (car-safe arg) (loopy--get-all-names 'named :from-true t)))
+             (if (/= 2 (length arg))
+                 (error "Wrong number of arguments for loop name: %s" arg)
+               (push (cl-second arg) names)))
+            (t (push arg new-body))))
+    (if (> (length names) 1)
+        (error "Conflicting loop names: %s" names)
+      (let ((loop-name (cl-first names))) ; Symbol or `nil'.
         (setq loopy--loop-name loop-name
               loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
               loopy--non-returning-exit-tag-name
@@ -610,7 +619,8 @@ Returns BODY without the `%s' argument."
         ;; Set up the stack-maps.
         (push loopy--loop-name loopy--known-loop-names)
         (push (list loopy--loop-name) loopy--accumulation-places)
-        (seq-remove #'symbolp body)))))
+        ;; Return non-name args.
+        (nreverse new-body)))))
 
 (loopy--def-special-processor flag
   ;; Process any flags passed to the macro.  In case of conflicts, the
