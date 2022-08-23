@@ -590,6 +590,16 @@ Certain commands (e.g., `list' or `array') can only occur in the
 top level of a loop.  Sub-loops (those created by the `sub-loop'
 command) create for themselves a new, local top level.")
 
+(defvar loopy--no-while-loop nil
+  "Whether a macro shouldn't create the `while' loop.
+
+`loopy' and `loopy-iter' both work by creating a `while' loop
+into and around which their instructions put code.
+
+When no `while' loop is created, such as in `loopy-env',
+iteration commands and some commands like `skip' can't be used in
+the top-level macro arguments.")
+
 ;;;;; Optimized Accumulations
 (defvar loopy--accumulation-places nil
   "Where some accumulation commands are placing values.
@@ -665,6 +675,7 @@ known to fall into the first group.")
       ;; loopy--accumulation-list-end-vars
       ;; loopy--accumulation-variable-info
       loopy--in-sub-level
+      loopy--no-while-loop
 
       ;; -- Flag Variables --
       loopy--destructuring-for-with-vars-function
