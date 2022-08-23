@@ -45,7 +45,7 @@ please let me know.
    - The command =sub-loop= is deprecated.  Use the commands =loopy= and
      =loopy-iter= instead.
    - The =split= flag is deprecated.  Use the more general and controllable
-     =accum-opt= flag instead.
+     special macro argument =accum-opt= instead.
  - Version 0.10.1 (2022-02-29):
    - The default test function for commands like =adjoin= and =union= is now
      ~equal~.  Previously, ~loopy~ copied ~cl-loop~ and used ~eql~, but it makes

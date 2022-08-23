@@ -65,7 +65,7 @@ This document describes the user-facing changes to Loopy.
   command.
 
 - The `split` flag is deprecated.  Use the more general and controllable
-  `accum-opt` flag instead.  See [#124] and [#131].
+  special macro argument `accum-opt` instead.  See [#124] and [#131].
 
   The `split` flag makes all accumulation commands with an implicit variable use
   separate, optimized variables.  There is no way to use splitting with some
