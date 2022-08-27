@@ -65,6 +65,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 - [[#destructuring-macros][Destructuring Macros]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
   - [[#default-bare-names-in-loopy-iter][Default Bare Names in ~loopy-iter~]]
+- [[#the-loopy-env-macro][The ~loopy-env~ macro]]
 - [[#using-flags][Using Flags]]
 - [[#custom-aliases][Custom Aliases]]
 - [[#custom-commands][Custom Commands]]
@@ -3716,6 +3717,45 @@ create a list if enough return values are given.
     - =returning-from=
   - Sub-loop Commands
     - =at=
+
+* The ~loopy-env~ macro
+:PROPERTIES:
+:CUSTOM_ID: loopy-env
+:DESCRIPTION: Loop commands without a loop template.
+:END:
+
+The ~loopy-env~ macro allows for loop commands in arbitrary code.  Unlike
+the macro ~loopy-iter~, it does not use a template of a ~while~ loop.
+This means that instead of using Loopy's iteration commands, you would instead
+use other Emacs Lisp looping features, such as ~while~ and ~dolist~.
+
+To be more like ~cl-block~, the last expression (that is not a special macro
+argument) of ~loopy-env~ is the return value of the code, unless the special
+macro argument =finally-return= is used.  Unlike in ~loopy~ and ~loopy-iter~,
+there is not an implied return value when using accumulation commands.
+
+# TODO: Improve this paragrah.
+When using optimized accumulations, it is important to use the expression
+~(loopy-finalize)~, which finalizes the optimized variables.  _Normally, this_
+_would be done before returning an implied return value, but since there are
+none in ~loopy-env~, this must be done explicitly._
+
+If the first argument of ~loopy-env~ is a symbol, then that symbol is used to
+name the ~cl-block~ that surround the arguments in the expansion.
+Alternatively, one can use the special macro argument =named=.
+
+#+begin_src emacs-lisp
+  (defmacro loopy-env (&rest args) '(ignore))
+  (defmacro loopy-finalize '(ignore))
+
+  ;; => (1 2 3 4 5)
+  (loopy-env my-loop
+             (let ((my-list (list 1 2 3 4 5)))
+               (while my-list
+                 (collecting (pop my-list))))
+             (loopy-finalize)
+             loopy-result)
+#+end_src
 
 * Using Flags
 :PROPERTIES:
