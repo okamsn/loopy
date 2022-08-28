@@ -591,6 +591,10 @@ instructions:
          ;; Warn with the used name and the true name.
          (loopy--signal-sub-level-iter name (quote ,name)))
 
+       (when loopy--no-while-loop
+         ;; Warn with the used name and the true name.
+         (loopy--signal-no-while-iter name (quote ,name)))
+
        (let* ,(if keywords
                   (if other-vals
                       '((other-vals nil)
