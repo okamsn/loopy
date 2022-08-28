@@ -477,7 +477,9 @@ structure.
   function.  It should describe the arguments of the loop command.
 
 - KEYWORDS is an unquoted list of colon-prefixed keywords used by
-  the command.
+  the command.  The keywords can also be a list of a
+  colon-prefixed keyword and a default value.  If OTHER-VALS is
+  `nil', then the parsing function finds these using `&key'.
 
 - REQUIRED-VALS is the number of required values.  For most
   iteration commands, this is one.  This can be one nil (or
@@ -540,20 +542,10 @@ instructions:
 
   If OTHER-VALS is `nil' (i.e., no other values are allowed),
   then these keyword variables should be referenced directly
-  instead of through the property list `opts'."
+  instead of through the property list `opts', though `opts' is
+  still available."
 
   (declare (indent defun) (doc-string 2))
-
-  ;; Make sure `keywords' is a list.
-  (when (nlistp keywords)
-    (setq keywords (list keywords)))
-
-  ;; Make sure `keywords' are all prefixed with a colon.
-  (setq keywords (mapcar (lambda (x)
-                           (if (eq ?: (aref (symbol-name x) 0))
-                               x
-                             (intern (format ":%s" x))))
-                         keywords))
 
   ;; Check that `instructions' given.
   (unless instructions
@@ -561,10 +553,33 @@ instructions:
 
   ;; Store the variable names of the keyword arguments so we only have to
   ;; compute them one.  E.g., "by" from ":by".
-  ;; Currently, keywords are required to be prefixed by the colon.
-  (let ((var-keys (when keywords
-                    (cl-loop for sym in keywords
-                             collect (intern (substring (symbol-name sym) 1))))))
+  ;; Keywords are required to be prefixed by the colon.
+  (let ((non-prefixed-keywords)
+        (prefixed-keywords)
+        (keyword-arguments-list))
+
+    (when keywords
+      (pcase-dolist ((or `(,symbol ,default)
+                         symbol)
+                     (if (consp keywords) keywords (list keywords)))
+        (let* ((symbol-name (symbol-name symbol))
+               (prefixed (eq ?: (aref symbol-name 0)))
+               (prefixed-sym (if prefixed
+                                 symbol
+                               (intern (concat ":" symbol-name))))
+               (non-prefixed-sym (if prefixed
+                                     (intern (substring symbol-name 1))
+                                   symbol)))
+          (push prefixed-sym prefixed-keywords)
+          (push non-prefixed-sym non-prefixed-keywords)
+          (push (if default
+                    (list non-prefixed-sym default)
+                  non-prefixed-sym)
+                keyword-arguments-list)))
+
+      (setq non-prefixed-keywords (nreverse non-prefixed-keywords)
+            prefixed-keywords (nreverse prefixed-keywords)
+            keyword-arguments-list (nreverse keyword-arguments-list)))
 
     `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
          (( &whole cmd name var
@@ -584,7 +599,7 @@ instructions:
             ,@(if keywords
                   (if other-vals
                       '(&rest args)
-                    `(&key ,@var-keys))
+                    `(&key ,@keyword-arguments-list))
                 (when other-vals
                   '(&rest other-vals)))))
        ,doc-string
@@ -603,8 +618,8 @@ instructions:
                         (opts nil))
                     ;; These can be referred to directly, but we'll keep
                     ;; the option open for using `opts'.
-                    `((opts (list ,@(cl-loop for sym in keywords
-                                             for var in var-keys
+                    `((opts (list ,@(cl-loop for sym in prefixed-keywords
+                                             for var in non-prefixed-keywords
                                              append (list sym var))))))
                 nil)
 
@@ -623,7 +638,7 @@ instructions:
                                          other-vals (nreverse other-val-holding)))
 
                ;; Validate any keyword arguments:
-               (unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
+               (unless (loopy--only-valid-keywords-p (quote ,prefixed-keywords) opts)
                  (error "Wrong number of arguments or wrong keywords: %s" cmd))))
 
          ,(when (consp other-vals)
