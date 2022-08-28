@@ -93,6 +93,7 @@
 (declare-function loopy--process-instructions "loopy")
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
+(defvar loopy--no-while-loop)
 
 ;;;; Errors
 (define-error 'loopy-error
@@ -110,14 +111,33 @@
   "Loopy: Bad command arguments"
   'loopy-error)
 
-(defun loopy--signal-bad-iter (used-name true-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
-              used-name true-name))
+(define-error 'loopy-bad-iter
+  "Loopy: Bad iteration command"
+  'loopy-error)
 
-(defun loopy--signal-must-be-top-level (command-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
+(define-error 'loopy-sub-level-iter
+  "Loopy: Can't use iteration command in sub-level of a loop"
+  'loopy-bad-iter)
+
+(define-error 'loopy-no-while-iter
+  "Loopy: Can't use iteration commands in this macro"
+  'loopy-bad-iter)
+
+(defun loopy--signal-sub-level-iter (command true-name)
+  "Signal that iteration command COMMAND was used in a sub-level.
+
+TRUE-NAME is the true name of the command."
+  (signal 'loopy-sub-level-iter
+          (list (format-message "command `%s' (true name `%s')"
+                                command true-name))))
+
+(defun loopy--signal-no-while-iter (command true-name)
+  "Signal that iteration command COMMAND was used without a `while' loop.
+
+TRUE-NAME is the true name of the command."
+  (signal 'loopy-no-while-iter
+          (list (format-message "command `%s' (true name `%s')"
+                                command true-name))))
 
 ;;;; Helpful Functions
 
@@ -457,7 +477,9 @@ structure.
   function.  It should describe the arguments of the loop command.
 
 - KEYWORDS is an unquoted list of colon-prefixed keywords used by
-  the command.
+  the command.  The keywords can also be a list of a
+  colon-prefixed keyword and a default value.  If OTHER-VALS is
+  `nil', then the parsing function finds these using `&key'.
 
 - REQUIRED-VALS is the number of required values.  For most
   iteration commands, this is one.  This can be one nil (or
@@ -483,7 +505,7 @@ structure.
   REQUIRED-VALS to 0 and OTHER-VALS to a list of 0 and some
   integer.
 
-  If t, no check if performed and the command takes any number of
+  If t, no check is performed and the command takes any number of
   optional additional arguments.
 
 - INSTRUCTIONS are the command's instructions.  This should be a
@@ -518,22 +540,12 @@ instructions:
   The first keyword in `args' determines the start of
   the optional keyword arguments.
 
-  If OTHER-VALS is non-nil (i.e., no other values are allowed),
+  If OTHER-VALS is `nil' (i.e., no other values are allowed),
   then these keyword variables should be referenced directly
-  instead of through the property list `opts'."
+  instead of through the property list `opts', though `opts' is
+  still available."
 
   (declare (indent defun) (doc-string 2))
-
-  ;; Make sure `keywords' is a list.
-  (when (nlistp keywords)
-    (setq keywords (list keywords)))
-
-  ;; Make sure `keywords' are all prefixed with a colon.
-  (setq keywords (mapcar (lambda (x)
-                           (if (eq ?: (aref (symbol-name x) 0))
-                               x
-                             (intern (format ":%s" x))))
-                         keywords))
 
   ;; Check that `instructions' given.
   (unless instructions
@@ -541,10 +553,33 @@ instructions:
 
   ;; Store the variable names of the keyword arguments so we only have to
   ;; compute them one.  E.g., "by" from ":by".
-  ;; Currently, keywords are required to be prefixed by the colon.
-  (let ((var-keys (when keywords
-                    (cl-loop for sym in keywords
-                             collect (intern (substring (symbol-name sym) 1))))))
+  ;; Keywords are required to be prefixed by the colon.
+  (let ((non-prefixed-keywords)
+        (prefixed-keywords)
+        (keyword-arguments-list))
+
+    (when keywords
+      (pcase-dolist ((or `(,symbol ,default)
+                         symbol)
+                     (if (consp keywords) keywords (list keywords)))
+        (let* ((symbol-name (symbol-name symbol))
+               (prefixed (eq ?: (aref symbol-name 0)))
+               (prefixed-sym (if prefixed
+                                 symbol
+                               (intern (concat ":" symbol-name))))
+               (non-prefixed-sym (if prefixed
+                                     (intern (substring symbol-name 1))
+                                   symbol)))
+          (push prefixed-sym prefixed-keywords)
+          (push non-prefixed-sym non-prefixed-keywords)
+          (push (if default
+                    (list non-prefixed-sym default)
+                  non-prefixed-sym)
+                keyword-arguments-list)))
+
+      (setq non-prefixed-keywords (nreverse non-prefixed-keywords)
+            prefixed-keywords (nreverse prefixed-keywords)
+            keyword-arguments-list (nreverse keyword-arguments-list)))
 
     `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
          (( &whole cmd name var
@@ -564,14 +599,18 @@ instructions:
             ,@(if keywords
                   (if other-vals
                       '(&rest args)
-                    `(&key ,@var-keys))
+                    `(&key ,@keyword-arguments-list))
                 (when other-vals
                   '(&rest other-vals)))))
        ,doc-string
 
        (when loopy--in-sub-level
          ;; Warn with the used name and the true name.
-         (loopy--signal-bad-iter name (quote ,name)))
+         (loopy--signal-sub-level-iter cmd (quote ,name)))
+
+       (when loopy--no-while-loop
+         ;; Warn with the used name and the true name.
+         (loopy--signal-no-while-iter cmd (quote ,name)))
 
        (let* ,(if keywords
                   (if other-vals
@@ -579,8 +618,8 @@ instructions:
                         (opts nil))
                     ;; These can be referred to directly, but we'll keep
                     ;; the option open for using `opts'.
-                    `((opts (list ,@(cl-loop for sym in keywords
-                                             for var in var-keys
+                    `((opts (list ,@(cl-loop for sym in prefixed-keywords
+                                             for var in non-prefixed-keywords
                                              append (list sym var))))))
                 nil)
 
@@ -599,7 +638,7 @@ instructions:
                                          other-vals (nreverse other-val-holding)))
 
                ;; Validate any keyword arguments:
-               (unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
+               (unless (loopy--only-valid-keywords-p (quote ,prefixed-keywords) opts)
                  (error "Wrong number of arguments or wrong keywords: %s" cmd))))
 
          ,(when (consp other-vals)
@@ -866,14 +905,14 @@ BY is the function to use to move through the list (default `cdr')."
       (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
-(cl-defun loopy--parse-map-command ((name var val &key (unique t)))
+(loopy--defiteration map
   "Parse the `map' loop command.
 
 Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'map))
+  :keywords ((:unique t))
+  :instructions
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars
        (,value-holder ,(if unique
@@ -884,15 +923,15 @@ vector using the library `map.el'."
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
 ;;;;;; Map-Ref
-(cl-defun loopy--parse-map-ref-command ((name var val &key key (unique t)))
+(loopy--defiteration map-ref
   "Parse the `map-ref' command as (map-ref VAR VAL).
 
 KEY is a variable name in which to store the current key.
 
 Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.  Duplicate keys are ignored."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'map-ref))
+  :keywords (:key (:unique t))
+  :instructions
   (let ((key-list (gensym "map-ref-keys")))
     `((loopy--iteration-vars (,key-list ,(if unique
                                              `(seq-uniq (map-keys ,val))
@@ -1024,21 +1063,22 @@ This is for decreasing indices.
                :by ,(or by (cl-second other-vals))))))
 
 ;;;;;; Repeat
-(cl-defun loopy--parse-cycle-command ((name var-or-count &optional count))
+(loopy--defiteration repeat
   "Parse the `repeat' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
-  (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'cycle))
-  (if count
-      `((loopy--iteration-vars (,var-or-count 0))
-        (loopy--latter-body (setq ,var-or-count (1+ ,var-or-count)))
-        (loopy--pre-conditions (< ,var-or-count ,count)))
+  :required-vals 0
+  :other-vals (0 1)
+  :instructions
+  (if other-vals
+      `((loopy--iteration-vars (,var 0))
+        (loopy--latter-body (setq ,var (1+ ,var)))
+        (loopy--pre-conditions (< ,var ,(car other-vals))))
     (let ((value-holder (gensym "repeat-limit-")))
       `((loopy--iteration-vars (,value-holder 0))
         (loopy--latter-body (setq ,value-holder (1+ ,value-holder)))
-        (loopy--pre-conditions (< ,value-holder ,var-or-count))))))
+        (loopy--pre-conditions (< ,value-holder ,var))))))
 
 ;;;;;; Seq
 (defmacro loopy--distribute-sequence-elements (&rest sequences)
