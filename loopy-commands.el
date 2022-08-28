@@ -137,11 +137,6 @@
            "Loopy: Can only use command `%s' (`%s') in the looping macros"
            used-name true-name)))
 
-
-(defun loopy--signal-must-be-top-level (command-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
-
 ;;;; Helpful Functions
 
 ;;;;; Manipulating Instructions
