@@ -110,7 +110,7 @@
   "Loopy: Bad command arguments"
   'loopy-error)
 
-(defun loopy--signal-bad-iter (used-name true-name)
+(defun loopy--signal-sub-level-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
               used-name true-name))
@@ -571,7 +571,7 @@ instructions:
 
        (when loopy--in-sub-level
          ;; Warn with the used name and the true name.
-         (loopy--signal-bad-iter name (quote ,name)))
+         (loopy--signal-sub-level-iter name (quote ,name)))
 
        (let* ,(if keywords
                   (if other-vals
@@ -873,7 +873,7 @@ Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'map))
+    (loopy--signal-sub-level-iter name 'map))
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars
        (,value-holder ,(if unique
@@ -892,7 +892,7 @@ KEY is a variable name in which to store the current key.
 Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.  Duplicate keys are ignored."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'map-ref))
+    (loopy--signal-sub-level-iter name 'map-ref))
   (let ((key-list (gensym "map-ref-keys")))
     `((loopy--iteration-vars (,key-list ,(if unique
                                              `(seq-uniq (map-keys ,val))
@@ -1030,7 +1030,7 @@ This is for decreasing indices.
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
   (when loopy--in-sub-level
-    (loopy--signal-bad-iter name 'cycle))
+    (loopy--signal-sub-level-iter name 'cycle))
   (if count
       `((loopy--iteration-vars (,var-or-count 0))
         (loopy--latter-body (setq ,var-or-count (1+ ,var-or-count)))
