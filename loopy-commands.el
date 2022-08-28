@@ -505,7 +505,7 @@ structure.
   REQUIRED-VALS to 0 and OTHER-VALS to a list of 0 and some
   integer.
 
-  If t, no check if performed and the command takes any number of
+  If t, no check is performed and the command takes any number of
   optional additional arguments.
 
 - INSTRUCTIONS are the command's instructions.  This should be a
