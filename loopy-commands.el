@@ -93,6 +93,7 @@
 (declare-function loopy--process-instructions "loopy")
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
+(defvar loopy--no-while-loop)
 
 ;;;; Errors
 (define-error 'loopy-error
@@ -122,20 +123,21 @@
   "Loopy: Can't use iteration commands in this macro"
   'loopy-bad-iter)
 
-(defun loopy--signal-sub-level-iter (used-name true-name)
-  "Signal that iteration command COMMAND-NAME was used in a sub-level."
-  (signal
-   'loopy--signal-sub-level-iter
-   (format-message
-    "Loopy: Can only use command `%s' (`%s') in top level of a loop macro"
-    used-name true-name)))
+(defun loopy--signal-sub-level-iter (command true-name)
+  "Signal that iteration command COMMAND was used in a sub-level.
 
-(defun loopy--signal-no-while-iter (used-name true-name)
-  "Signal an error for COMMAND-NAME."
-  (signal 'loopy--signal-no-while-iter
-          (format-message
-           "Loopy: Can only use command `%s' (`%s') in the looping macros"
-           used-name true-name)))
+TRUE-NAME is the true name of the command."
+  (signal 'loopy-sub-level-iter
+          (list (format-message "command `%s' (true name `%s')"
+                                command true-name))))
+
+(defun loopy--signal-no-while-iter (command true-name)
+  "Signal that iteration command COMMAND was used without a `while' loop.
+
+TRUE-NAME is the true name of the command."
+  (signal 'loopy-no-while-iter
+          (list (format-message "command `%s' (true name `%s')"
+                                command true-name))))
 
 ;;;; Helpful Functions
 
@@ -589,11 +591,11 @@ instructions:
 
        (when loopy--in-sub-level
          ;; Warn with the used name and the true name.
-         (loopy--signal-sub-level-iter name (quote ,name)))
+         (loopy--signal-sub-level-iter cmd (quote ,name)))
 
        (when loopy--no-while-loop
          ;; Warn with the used name and the true name.
-         (loopy--signal-no-while-iter name (quote ,name)))
+         (loopy--signal-no-while-iter cmd (quote ,name)))
 
        (let* ,(if keywords
                   (if other-vals
