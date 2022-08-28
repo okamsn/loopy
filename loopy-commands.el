@@ -905,14 +905,14 @@ BY is the function to use to move through the list (default `cdr')."
       (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
-(cl-defun loopy--parse-map-command ((name var val &key (unique t)))
+(loopy--defiteration map
   "Parse the `map' loop command.
 
 Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
-  (when loopy--in-sub-level
-    (loopy--signal-sub-level-iter name 'map))
+  :keywords ((:unique t))
+  :instructions
   (let ((value-holder (gensym "map-")))
     `((loopy--iteration-vars
        (,value-holder ,(if unique
@@ -923,15 +923,15 @@ vector using the library `map.el'."
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
 ;;;;;; Map-Ref
-(cl-defun loopy--parse-map-ref-command ((name var val &key key (unique t)))
+(loopy--defiteration map-ref
   "Parse the `map-ref' command as (map-ref VAR VAL).
 
 KEY is a variable name in which to store the current key.
 
 Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.  Duplicate keys are ignored."
-  (when loopy--in-sub-level
-    (loopy--signal-sub-level-iter name 'map-ref))
+  :keywords (:key (:unique t))
+  :instructions
   (let ((key-list (gensym "map-ref-keys")))
     `((loopy--iteration-vars (,key-list ,(if unique
                                              `(seq-uniq (map-keys ,val))
@@ -1063,21 +1063,22 @@ This is for decreasing indices.
                :by ,(or by (cl-second other-vals))))))
 
 ;;;;;; Repeat
-(cl-defun loopy--parse-cycle-command ((name var-or-count &optional count))
+(loopy--defiteration repeat
   "Parse the `repeat' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided."
-  (when loopy--in-sub-level
-    (loopy--signal-sub-level-iter name 'cycle))
-  (if count
-      `((loopy--iteration-vars (,var-or-count 0))
-        (loopy--latter-body (setq ,var-or-count (1+ ,var-or-count)))
-        (loopy--pre-conditions (< ,var-or-count ,count)))
+  :required-vals 0
+  :other-vals (0 1)
+  :instructions
+  (if other-vals
+      `((loopy--iteration-vars (,var 0))
+        (loopy--latter-body (setq ,var (1+ ,var)))
+        (loopy--pre-conditions (< ,var ,(car other-vals))))
     (let ((value-holder (gensym "repeat-limit-")))
       `((loopy--iteration-vars (,value-holder 0))
         (loopy--latter-body (setq ,value-holder (1+ ,value-holder)))
-        (loopy--pre-conditions (< ,value-holder ,var-or-count))))))
+        (loopy--pre-conditions (< ,value-holder ,var))))))
 
 ;;;;;; Seq
 (defmacro loopy--distribute-sequence-elements (&rest sequences)
