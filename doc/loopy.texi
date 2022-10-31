@@ -4594,9 +4594,9 @@ By default, the implicit return value is @code{loopy-result}, and so this variab
 is usually just a list of the symbol @samp{loopy-result}.
 @end table
 
-@vindex loopy--accumulation-final-updates
+@vindex loopy--vars-final-updates
 @table @asis
-@item @samp{loopy--accumulation-final-updates}
+@item @samp{loopy--vars-final-updates}
 Actions to perform on the accumulation
 variable after the loop ends.  Some implied accumulation commands need to
 update the variable one final time after ending the loop.  Some examples are:
@@ -4725,7 +4725,7 @@ will work similar to the below example.
                       (unless ,loopy--post-conditions
                         (cl-return-from ,loopy--loop-name
                           ,loopy--implicit-return)))
-                    ,loopy--accumulation-final-updates
+                    ,loopy--vars-final-updates
                     ,@@loopy--after-do))
                 ,loopy--implicit-return))
            ,@@loopy--final-do

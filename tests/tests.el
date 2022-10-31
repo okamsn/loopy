@@ -9,6 +9,7 @@
 (require 'cl-lib)
 (require 'map)
 (require 'ert)
+(require 'generator)
 (require 'pcase)
 (require 'map "./dependecy-links/map.el" 'no-error)
 (eval-when-compile (require 'loopy "./loopy.el"))
@@ -19,7 +20,7 @@
 ;; "loopy quote"
 (defmacro lq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
-  `(eval (quote (loopy ,@body))))
+  `(eval (quote (loopy ,@body)) t))
 
 (defmacro loopy-test-structure (input output-pattern)
   "Use `pcase' to check a destructurings bindings.
@@ -1146,6 +1147,46 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                      (collect coll (list i j))
                                      (finally-return coll)))))))
 
+;;;;; Iter
+(ert-deftest iter-with-single-var ()
+  (should (equal '(1 2 3)
+                 (lq (with (iter-maker (iter-lambda ()
+                                         (iter-yield 1)
+                                         (iter-yield 2)
+                                         (iter-yield 3))))
+                     (iter i (funcall iter-maker))
+                     (collect i)))))
+
+(ert-deftest iter-with-no-var ()
+  (should (equal '(1 2 3)
+                 (lq (with (iter-maker (iter-lambda ()
+                                         (iter-yield 1)
+                                         (iter-yield 2)
+                                         (iter-yield 3))))
+                     (iter (funcall iter-maker))
+                     (set i 1 (1+ i))
+                     (collect i)))))
+
+(ert-deftest iter-close-twice ()
+  (should (equal '(1 2) (lq (with (iter-maker (iter-lambda ()
+                                                (iter-yield 1)
+                                                (iter-yield 2)
+                                                (iter-yield 3)))
+                                  (gen (funcall iter-maker)))
+                            (iter i gen :close t)
+                            (iter j gen :close t)
+                            (leave)
+                            (finally-return i j)))))
+
+(ert-deftest iter-same-gen ()
+  (should (equal '((1 . 2) (3 . 4))
+                 (lq (with (iter-maker (iter-lambda (x)
+                                         (while x
+                                           (iter-yield (pop x)))))
+                           (gen (funcall iter-maker (list 1 2 3 4))))
+                     (iter i gen :close nil)
+                     (iter j gen :close nil)
+                     (collect (cons i j))))))
 
 ;;;;; List
 (ert-deftest list ()

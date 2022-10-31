@@ -80,6 +80,7 @@
 
 ;; Can't require `loopy', as that would be recursive.
 (require 'cl-lib)
+(require 'generator)
 (require 'gv)
 (require 'loopy-misc)
 (require 'loopy-vars)
@@ -801,8 +802,47 @@ is a function by which to update VAR (default `cdr')."
       ,@(loopy--destructure-for-iteration-command var value-holder)
       (loopy--latter-body
        (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
-                                                     value-holder)))
+                                                   value-holder)))
       (loopy--pre-conditions (consp ,value-holder)))))
+
+;;;;;; Iter
+(loopy--defiteration iter
+  "Parse the `iter' command as (iter [VAR] VAL &key yield-result (close t)).
+
+VAR is the variable.  VAL is an generator-producing function, as
+from `iter-defun' or `iter-lambda'.  YIELD-RESULT is the optional
+value of `iter-next'. CLOSE is whether the iterator should be
+closed after the loop completes."
+  :required-vals 0
+  :other-vals (0 1)
+  :keywords (:yield-result :close)
+  :instructions
+  (let ((obj-holder (gensym "iter-obj"))
+        (val-holder (gensym "iter-val")))
+    (loopy--plist-bind ( :yield-result (yield-result (quote nil))
+                         :close (close t))
+        opts
+      ;; If `other-vals', then we specified an iteration variable.
+      ;; Otherwise, don't bother saving anything.
+      `((loopy--iteration-vars (,obj-holder ,(if other-vals
+                                                 (cl-first other-vals)
+                                               var)))
+        ,@(when other-vals
+            `((loopy--iteration-vars (,val-holder nil))
+              (loopy--iteration-vars (,var nil))))
+        (loopy--pre-conditions (condition-case nil
+                                   ,(if other-vals
+                                        `(setq ,val-holder
+                                               (iter-next ,obj-holder ,yield-result))
+                                      `(iter-next ,obj-holder ,yield-result))
+                                 (iter-end-of-sequence nil)
+                                 (:success t)))
+        ,(when other-vals
+           `(loopy--main-body (setq ,var ,val-holder)))
+        ,(when close
+           `(loopy--vars-final-updates (,obj-holder . (iter-close ,obj-holder))))))))
+
+
 
 ;;;;;; List
 (defmacro loopy--distribute-list-elements (&rest lists)
@@ -1759,7 +1799,7 @@ you can use in the instructions:
                                                    :test ,test :key ,key))))
                         (loopy--produce-adjoin-end-tracking var value-holder
                                                             membership-test))
-                    (loopy--accumulation-final-updates
+                    (loopy--vars-final-updates
                      (,var . ,(if (eq 'list result-type)
                                   nil
                                 `(setq ,var (cl-coerce ,var (quote ,result-type))))))))
@@ -1772,7 +1812,7 @@ you can use in the instructions:
                     `((loopy--main-body (if ,membership-test
                                             nil
                                           (setq ,var (cons ,value-holder ,var))))))
-                (loopy--accumulation-final-updates
+                (loopy--vars-final-updates
                  (,var . (setq ,var  ,(if (eq 'list result-type)
                                           `(nreverse ,var)
                                         `(cl-coerce (nreverse ,var)
@@ -1836,7 +1876,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                                                       membership-test))))
            (t
             (error "Bad `:at' position: %s" cmd)))
-        (loopy--accumulation-final-updates
+        (loopy--vars-final-updates
          (,var . ,(if (eq result-type 'list)
                       nil
                     `(setq ,var (cl-coerce ,var
@@ -1880,14 +1920,14 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     ;; `append' doesn't copy the last argument.
                     `((loopy--main-body (setq ,var (append ,val ,var))))
                   (loopy--produce-multi-item-end-tracking var val))
-              (loopy--accumulation-final-updates (,var . nil))))
+              (loopy--vars-final-updates (,var . nil))))
 
         ;; Create list in reverse order.
         (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
         `(,@(if (eq pos 'end)
                 `((loopy--main-body (setq ,var (nconc (reverse ,val) ,var))))
               (loopy--produce-multi-item-end-tracking var `(reverse ,val)))
-          (loopy--accumulation-final-updates
+          (loopy--vars-final-updates
            (,var . (setq ,var (nreverse ,var)))))))))
 
 (loopy--defaccumulation append
@@ -1920,7 +1960,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
             (loopy--produce-multi-item-end-tracking var val))
            (t
             (error "Bad `:at' position: %s" cmd)))
-        (loopy--accumulation-final-updates (,var . nil)))))
+        (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end))
       opts
@@ -1954,7 +1994,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 `(,@(if (eq pos 'start)
                         `((loopy--main-body (setq ,var (cons ,val ,var))))
                       (loopy--produce-collect-end-tracking var val))
-                  (loopy--accumulation-final-updates
+                  (loopy--vars-final-updates
                    (,var . ,(if (eq result-type 'list)
                                 nil
                               `(setq ,var
@@ -1967,7 +2007,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
             `(,@(if (eq pos 'end)
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
-              (loopy--accumulation-final-updates
+              (loopy--vars-final-updates
                (,var . (setq ,var
                              ,(if (eq result-type 'list)
                                   `(nreverse ,var)
@@ -2004,7 +2044,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                       (loopy--produce-collect-end-tracking var val))
                      (t
                       (error "Bad `:at' position: %s" cmd)))
-                  (loopy--accumulation-final-updates
+                  (loopy--vars-final-updates
                    (,var . ,(if (eq result-type 'list)
                                 nil
                               `(setq ,var
@@ -2046,14 +2086,14 @@ This function is called by `loopy--get-optimized-accum'."
             `(,@(if (eq pos 'start)
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
-              (loopy--accumulation-final-updates
+              (loopy--vars-final-updates
                (,var . (setq ,var (apply #'concat ,var))))))
         ;; Reverse list order.
         (loopy--check-accumulation-compatibility loop var 'reverse-string cmd)
         `(,@(if (eq pos 'start)
                 (loopy--produce-collect-end-tracking var val)
               `((loopy--main-body (setq ,var (cons ,val ,var)))))
-          (loopy--accumulation-final-updates
+          (loopy--vars-final-updates
            (,var . (setq ,var (apply #'concat (nreverse ,var))))))))))
 
 (loopy--defaccumulation concat
@@ -2082,7 +2122,7 @@ This function is called by `loopy--get-optimized-accum'."
                             `(concat ,var ,val))
                            (t
                             (error "Bad `:at' position: %s" cmd)))))
-                  (loopy--accumulation-final-updates (,var . nil)))))
+                  (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))
@@ -2133,7 +2173,7 @@ This function is called by `loopy--get-optimized-accum'."
                                     (throw (quote ,tag-name) t)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
-                   `(loopy--accumulation-final-updates
+                   `(loopy--vars-final-updates
                      (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
                    (test-form (if (loopy--quoted-symbol-p test-arg)
@@ -2149,7 +2189,7 @@ This function is called by `loopy--get-optimized-accum'."
                                     (throw (quote ,tag-name) t)))
                 ;; If VAR nil, bind to ON-FAILURE.
                 ,(when on-failure
-                   `(loopy--accumulation-final-updates
+                   `(loopy--vars-final-updates
                      (,var . (if ,var nil (setq ,var ,on-failure)))))
                 (loopy--implicit-return   ,var))))
 
@@ -2232,13 +2272,13 @@ VAR."
             `(,@(if (eq pos 'start)
                     `((loopy--main-body (setq ,var (nconc ,val ,var))))
                   (loopy--produce-multi-item-end-tracking var val 'destructive))
-              (loopy--accumulation-final-updates (,var . nil))))
+              (loopy--vars-final-updates (,var . nil))))
         ;; Reverse list order.
         (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
         `(,@(if (eq pos 'start)
                 (loopy--produce-multi-item-end-tracking var val 'destructive)
               `((loopy--main-body (setq ,var (nconc (nreverse  ,val) ,var)))))
-          (loopy--accumulation-final-updates
+          (loopy--vars-final-updates
            (,var . (setq ,var (nreverse ,var)))))))))
 
 (loopy--defaccumulation nconc
@@ -2267,7 +2307,7 @@ VAR."
                       (loopy--produce-multi-item-end-tracking var val 'destructive))
                      (t
                       (error "Bad `:at' position: %s" cmd)))
-                  (loopy--accumulation-final-updates (,var . nil)))))
+                  (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))
@@ -2303,7 +2343,7 @@ This function is used by `loopy--get-optimized-accum'."
                       `((loopy--main-body
                          (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var))))
                     (loopy--produce-union-end-tracking var val test-method 'destructive))
-                (loopy--accumulation-final-updates (,var . nil))))
+                (loopy--vars-final-updates (,var . nil))))
           ;; Reverse list order.
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
@@ -2312,7 +2352,7 @@ This function is used by `loopy--get-optimized-accum'."
                 `((loopy--main-body
                    (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
                                      ,var)))))
-            (loopy--accumulation-final-updates
+            (loopy--vars-final-updates
              (,var . (setq ,var (nreverse ,var))))))))))
 
 (loopy--defaccumulation nunion
@@ -2344,7 +2384,7 @@ This function is used by `loopy--get-optimized-accum'."
               (loopy--produce-union-end-tracking var val test-method 'destructive))
              (t
               (error "Bad `:at' position: %s" cmd))))
-        (loopy--accumulation-final-updates (,var . nil)))))
+        (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
@@ -2454,7 +2494,7 @@ This function is used by `loopy--get-optimized-accum'."
                                (nconc (cl-delete-if ,test-method (copy-sequence ,val))
                                       ,var))))
                     (loopy--produce-union-end-tracking var val test-method))
-                (loopy--accumulation-final-updates (,var . nil))))
+                (loopy--vars-final-updates (,var . nil))))
           ;; Reverse list order.
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
@@ -2464,7 +2504,7 @@ This function is used by `loopy--get-optimized-accum'."
                    (setq ,var (nconc (nreverse (cl-delete-if ,test-method
                                                              (copy-sequence ,val)))
                                      ,var)))))
-            (loopy--accumulation-final-updates
+            (loopy--vars-final-updates
              (,var . (setq ,var (nreverse ,var))))))))))
 
 (loopy--defaccumulation union
@@ -2493,7 +2533,7 @@ This function is used by `loopy--get-optimized-accum'."
               (loopy--produce-union-end-tracking var val test-method))
              (t
               (error "Bad `:at' position: %s" cmd))))
-        (loopy--accumulation-final-updates (,var . nil)))))
+        (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
@@ -2527,14 +2567,14 @@ This function is called by `loopy--get-optimized-accum'."
             `(,@(if (eq pos 'start)
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
-              (loopy--accumulation-final-updates
+              (loopy--vars-final-updates
                (,var . (setq ,var (apply #'vconcat ,var))))))
         ;; Reverse list order.
         (loopy--check-accumulation-compatibility loop var 'reverse-vector cmd)
         `(,@(if (eq pos 'start)
                 (loopy--produce-collect-end-tracking var val)
               `((loopy--main-body (setq ,var (cons ,val ,var)))))
-          (loopy--accumulation-final-updates
+          (loopy--vars-final-updates
            (,var . (setq ,var (apply #'vconcat (nreverse ,var))))))))))
 
 (loopy--defaccumulation vconcat
@@ -2566,7 +2606,7 @@ This function is called by `loopy--get-optimized-accum'."
                             `(vconcat ,var ,val))
                            (t
                             (error "Bad `:at' position: %s" cmd)))))
-                  (loopy--accumulation-final-updates (,var . nil)))))
+                  (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))

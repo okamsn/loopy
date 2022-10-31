@@ -8,6 +8,9 @@
 # Some parsers require this option to export footnotes.
 #+options: f:t
 
+# Example settings
+#+PROPERTY: header-args:emacs-lisp :lexical t
+
 # Texinfo settings.
 #+TEXINFO_FILENAME: loopy.info
 #+TEXINFO_DIR_CATEGORY: Emacs
@@ -1112,6 +1115,58 @@ and lists, respectively.
     (loopy (cycle 0)
            (return 'return-command-ran))
   #+END_SRC
+
+#+findex: iter
+#+findex: iterating
+- =(iter [VAR] EXPR &key close yield-result)= :: Iterate through the values
+  returned by an Emacs Lisp iterator ([[info:elisp#Generators]]).  =EXPR= is an
+  iterator object produced by a calling a generator function.  If given, =VAR=
+  holds the value yielded by the iterator. The loop ends when the iterator
+  finishes.
+
+  =yield-result= is the optional second argument to the function ~iter-next~,
+  which is the value of ~iter-yield~ in the iterator (not to be confused with
+  the value yielded by calling ~iter-next~).
+
+  =close= is whether the generator should be  closed via ~iter-close~ after the
+  loop ends.  The default is ~t~.  Note that Emacs will eventually close
+  un-closed, un-reachable generators during garbage collection.
+
+  This command also has the name =iterating=.
+
+  #+ATTR_TEXINFO: :tag Warning
+  #+begin_quote
+  The loop ends when the iterator finishes, which must be checked before the
+  code in loop body is run. To check whether a iterator is finished, ~loopy~
+  checks whether it signals an error when trying to yield a value.
+
+  Because values are yielded before the next iteration step of the loop, trying
+  to yield more values from the iterator after the loop ends will result in lost
+  values.  One option for working around this is to use the generic command
+  =set= with the function ~iter-next~ directly.
+  #+end_quote
+
+  #+begin_src emacs-lisp
+    ;; With var:
+    ;; => ((1 . 4) (2 . 5) (3 . 6))
+    (loopy (with (iter-maker (iter-lambda (x)
+                               (while x
+                                 (iter-yield (pop x))))))
+           (iter i (funcall iter-maker (list 1 2 3)))
+           (iter j (funcall iter-maker (list 4 5 6)))
+           (collect (cons i j)))
+
+    ;; Without var:
+    ;; => (1 2 3)
+    (loopy (with (iter-maker (iter-lambda ()
+                               ;; These yielded values are all ignored.
+                               (iter-yield 'first-yield)
+                               (iter-yield 'second-yield)
+                               (iter-yield 'third-yield))))
+           (iter (funcall iter-maker))
+           (set i 1 (1+ i))
+           (collect i))
+  #+end_src
 
 
 *** Numeric Iteration
@@ -4128,10 +4183,11 @@ For accumulation commands, you might also wish to place values in the following:
   By default, the implicit return value is ~loopy-result~, and so this variable
   is usually just a list of the symbol =loopy-result=.
 
-#+vindex: loopy--accumulation-final-updates
-- =loopy--accumulation-final-updates= :: Actions to perform on the accumulation
-  variable after the loop ends.  Some implied accumulation commands need to
-  update the variable one final time after ending the loop.  Some examples are:
+#+vindex: loopy--vars-final-updates
+- =loopy--vars-final-updates= :: Actions to perform on the variable (usually an
+  accumulation variable) after the loop ends.  Some implied accumulation
+  commands need to update the variable one final time after ending the loop.
+  Some examples are:
   1. Correcting the order of elements in a list that was constructed in reverse.
   2. Coercing the variable into a new sequence type, for commands with the
      ~:result-type~ argument.
@@ -4237,7 +4293,7 @@ will work similar to the below example.
                         (unless ,loopy--post-conditions
                           (cl-return-from ,loopy--loop-name
                             ,loopy--implicit-return)))
-                      ,loopy--accumulation-final-updates
+                      ,loopy--vars-final-updates
                       ,@loopy--after-do))
                   ,loopy--implicit-return))
              ,@loopy--final-do
@@ -4773,10 +4829,12 @@ for more.
 
 [fn:sel-wiki]
 [[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
+
 # Local Variables:
 # toc-org-max-depth: 20
 # sentence-end-double-space: t
 # org-adapt-indentation: nil
+# lexical-binding: t
 # End:
 
 #  LocalWords:  alists plists Loopy's

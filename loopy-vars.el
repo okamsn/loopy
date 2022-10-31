@@ -114,6 +114,7 @@ Definition must exist.  Neither argument need be quoted."
     (finally-protect . (finally-protected))
     (find            . (finding))
     (flag            . (flags))
+    (iter            . (iterating))
     (leave           . (leaving))
     (leave-from      . (leaving-from))
     (list            . (listing each in))
@@ -197,6 +198,7 @@ true names and lists of aliases.
     (set-accum    . loopy--parse-set-accum-command)
     (group        . loopy--parse-group-command)
     (if           . loopy--parse-if-command)
+    (iter         . loopy--parse-iter-command)
     (leave        . loopy--parse-leave-command)
     (leave-from   . loopy--parse-leave-from-command)
     (list         . loopy--parse-list-command)
@@ -423,7 +425,7 @@ These instructions are removed when that loop expansion is complete.")
   ;; TODO: We should probably change what the variables are named
   '( loopy--iteration-vars
      loopy--accumulation-vars
-     loopy--accumulation-final-updates
+     loopy--vars-final-updates
      loopy--skip-used
      loopy--non-returning-exit-used
      loopy--implicit-return)
@@ -558,8 +560,10 @@ list much easier.  When using multiple accumulation commands, it
 is important that such commands use the same variable to keep
 track of the end of the list.")
 
-(defvar loopy--accumulation-final-updates nil
-  "Alist of actions to perform on accumulation variables after the loop ends.
+(define-obsolete-variable-alias 'loopy--accumulation-final-updates
+  'loopy--vars-final-updates "2022-11")
+(defvar loopy--vars-final-updates nil
+  "Alist of actions to perform on variables after the loop ends.
 
 This variable's instructions are of the form `(VAR . ACTION)'.
 To avoid accidentally updating a variable multiple times (such as
@@ -579,7 +583,7 @@ onto this stack while processing the loop, and are popped off
 after the current loop is processed.
 
 These entries are not instructions.  They are derived from
-`loopy--accumulation-final-updates' while processing instructions
+`loopy--vars-final-updates' while processing instructions
 during macro expansion.  See
 `loopy--check-accumulation-compatibility' for more.")
 
@@ -661,7 +665,7 @@ known to fall into the first group.")
       loopy--skip-used
       loopy--non-returning-exit-tag-name
       loopy--non-returning-exit-used
-      loopy--accumulation-final-updates
+      loopy--vars-final-updates
       ;; loopy--accumulation-list-end-vars
       ;; loopy--accumulation-variable-info
       loopy--in-sub-level

@@ -349,7 +349,7 @@ The function creates quoted code that should be used by a macro."
   ;;                         (unless ,loopy--post-conditions
   ;;                           (cl-return-from ,loopy--loop-name
   ;;                             ,loopy--implicit-return)))
-  ;;                      ,loopy--accumulation-final-updates
+  ;;                      ,loopy--vars-final-updates
   ;;                      ,@loopy--after-do))
   ;;                 ,loopy--implicit-return))
   ;;            ,@loopy--final-do
@@ -362,7 +362,7 @@ The function creates quoted code that should be used by a macro."
          ;; `(progn (thing1) (thing2))' vs `((thing1) (thing2))'
          (result-is-one-expression)
          (actual-accumulation-updates
-          (cl-loop for (_ . update) in loopy--accumulation-final-updates
+          (cl-loop for (_ . update) in loopy--vars-final-updates
                    when update
                    collect update))
          (accum-updates-exist (car actual-accumulation-updates)))
@@ -736,18 +736,18 @@ macro `loopy' itself."
       (loopy--implicit-return
        (unless (loopy--already-implicit-return instruction-value)
          (push instruction-value loopy--implicit-return)))
-      (loopy--accumulation-final-updates
+      (loopy--vars-final-updates
        ;; These instructions are of the form `(l--a-f-u (var . update))'
        (let ((var-to-update (car instruction-value))
              (update-code (cdr instruction-value)))
-         (if (map-contains-key loopy--accumulation-final-updates var-to-update)
-             (let ((existing-update (map-elt loopy--accumulation-final-updates
+         (if (map-contains-key loopy--vars-final-updates var-to-update)
+             (let ((existing-update (map-elt loopy--vars-final-updates
                                              var-to-update)))
                (unless (equal existing-update update-code)
                  (error "Incompatible final update for %s:\n\t%s\n\t%s"
                         var-to-update existing-update update-code)))
            (push instruction-value
-                 loopy--accumulation-final-updates))))
+                 loopy--vars-final-updates))))
 
       ;; Code for conditionally constructing the loop body.
       (loopy--skip-used
@@ -900,6 +900,30 @@ In `loopy', processing instructions is stateful."
    ;; `skip', `leave'
    (symbolp)])
 
+(cl-defun loopy--correct-var-structure (&key exclude-main-body)
+  "Correct the structure of some variables.
+
+- If list order-dependent, make it in the correct order.
+- Make `loopy--implicit-return' a list value if needed.
+
+When EXCLUDE-MAIN-BODY is non-nil, don't reverse `loopy--main-body'."
+  (unless exclude-main-body
+    (setq loopy--main-body (nreverse loopy--main-body)))
+  (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
+        loopy--accumulation-vars (nreverse loopy--accumulation-vars)
+        ;; Correct conditions for things like `iter', which generates
+        ;; values to check whether all values are yielded.
+        loopy--pre-conditions (nreverse loopy--pre-conditions)
+        loopy--post-conditions (nreverse loopy--post-conditions)
+        loopy--implicit-return (when (consp loopy--implicit-return)
+                                 (if (= 1 (length loopy--implicit-return))
+                                     ;; If implicit return is just a single thing,
+                                     ;; don't use a list.
+                                     (car loopy--implicit-return)
+                                   ;; If multiple items, be sure to use a list
+                                   ;; in the correct order.
+                                   `(list ,@(nreverse loopy--implicit-return))))))
+
 ;;;###autoload
 (cl-defmacro loopy (&rest body)
   "A looping macro.
@@ -1002,17 +1026,8 @@ see the Info node `(loopy)' distributed with this package."
 
    ;; Now that instructions processed, make sure the order-dependent lists are
    ;; in the correct order.
-   (setq loopy--main-body (nreverse loopy--main-body)
-         loopy--iteration-vars (nreverse loopy--iteration-vars)
-         loopy--accumulation-vars (nreverse loopy--accumulation-vars)
-         loopy--implicit-return (when (consp loopy--implicit-return)
-                                  (if (= 1 (length loopy--implicit-return))
-                                      ;; If implicit return is just a single thing,
-                                      ;; don't use a list.
-                                      (car loopy--implicit-return)
-                                    ;; If multiple items, be sure to use a list
-                                    ;; in the correct order.
-                                    `(list ,@(nreverse loopy--implicit-return)))))
+   (loopy--correct-var-structure)
+
 
    ;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))

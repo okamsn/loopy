@@ -73,6 +73,11 @@ This document describes the user-facing changes to Loopy.
   equivalently be done using the `accum-opt` flag.  Since `split` is just a
   specific usage of `accum-opt`, it is fine to remove `split`.
 
+- Renamed `loopy--accumulation-final-updates` to `loopy--vars-final-updates`.
+  The old name is now an obsolete alias.  The feature still works the same,
+  but has been generalized to support the `close` argument of the new `iter`
+  command.  See PR [#135].
+
 ### Other Changes
 
 - Improvements to destructuring ([#117]):
@@ -122,6 +127,11 @@ This document describes the user-facing changes to Loopy.
   specifying loop names, instead of just listing a symbol.  This might be useful
   in `loopy-iter`.  See issue [#123] and PR [#132].
 
+- Add the command `iter` for iterating through iterator objects, such as
+  those created by using the output of functions defined with `iter-lambda`.
+  This is not to be confused with the macro `loopy-iter`, which is named for
+  Common Lisp's `iter` macro. See issues [#134] and [#136] and PR [#135].
+
 [#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
 [#118]: https://github.com/okamsn/loopy/pull/118
@@ -134,6 +144,10 @@ This document describes the user-facing changes to Loopy.
 [#130]: https://github.com/okamsn/loopy/pull/130
 [#131]: https://github.com/okamsn/loopy/pull/131
 [#132]: https://github.com/okamsn/loopy/pull/132
+[#134]: https://github.com/okamsn/loopy/issues/134
+[#135]: https://github.com/okamsn/loopy/pull/135
+[#136]: https://github.com/okamsn/loopy/issues/136
+
 
 ## 0.10.1
 

@@ -9,10 +9,11 @@
 (require 'loopy-iter "./loopy-iter.el")
 (require 'ert)
 (require 'cl-lib)
+(require 'generator)
 
 (defmacro liq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
-  `(eval (quote (loopy-iter ,@body))))
+  `(eval (quote (loopy-iter ,@body)) t))
 
 ;; A list of special-form code walkers in Iterate. In Emacs Lisp, many of these
 ;; are macros, and so we should not need to test them, as they expand to simpler
@@ -2349,6 +2350,46 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                           (collecting coll (list i j))
                                           (finally-return coll)))))))
 
+;;;;; Iter
+(ert-deftest iter-with-single-var ()
+  (should (equal '(1 2 3)
+                 (liq (with (iter-maker (iter-lambda ()
+                                          (iter-yield 1)
+                                          (iter-yield 2)
+                                          (iter-yield 3))))
+                      (iterating i (funcall iter-maker))
+                      (collecting i)))))
+
+(ert-deftest iter-with-no-var ()
+  (should (equal '(1 2 3)
+                 (liq (with (iter-maker (iter-lambda ()
+                                          (iter-yield 1)
+                                          (iter-yield 2)
+                                          (iter-yield 3))))
+                      (iterating (funcall iter-maker))
+                      (setting i 1 (1+ i))
+                      (collecting i)))))
+
+(ert-deftest iter-close-twice ()
+  (should (equal '(1 2) (liq (with (iter-maker (iter-lambda ()
+                                                 (iter-yield 1)
+                                                 (iter-yield 2)
+                                                 (iter-yield 3)))
+                                   (gen (funcall iter-maker)))
+                             (iterating i gen :close t)
+                             (iterating j gen :close t)
+                             (leaving)
+                             (finally-return i j)))))
+
+(ert-deftest iter-same-gen ()
+  (should (equal '((1 . 2) (3 . 4))
+                 (liq (with (iter-maker (iter-lambda (x)
+                                          (while x
+                                            (iter-yield (pop x)))))
+                            (gen (funcall iter-maker (list 1 2 3 4))))
+                      (iterating i gen :close nil)
+                      (iterating j gen :close nil)
+                      (collecting (cons i j))))))
 
 ;;;;; List
 (ert-deftest list ()

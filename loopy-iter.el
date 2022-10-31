@@ -203,6 +203,7 @@ Without these keywords, one must use one of the names given in
     counting
     cycling
     finding
+    iterating
     leaving
     leaving-from
     listing
@@ -684,16 +685,17 @@ to use `loopy' in general.
      (loopy--clean-up-stack-vars))
 
    ;; Make sure the order-dependent lists are in the correct order.
-   (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
-         loopy--accumulation-vars (nreverse loopy--accumulation-vars)
-         loopy--implicit-return (when (consp loopy--implicit-return)
-                                  (if (= 1 (length loopy--implicit-return))
-                                      ;; If implicit return is just a single thing,
-                                      ;; don't use a list.
-                                      (car loopy--implicit-return)
-                                    ;; If multiple items, be sure to use a list
-                                    ;; in the correct order.
-                                    `(list ,@(nreverse loopy--implicit-return)))))
+   (loopy--correct-var-structure :exclude-main-body t)
+   ;; (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
+   ;;       loopy--accumulation-vars (nreverse loopy--accumulation-vars)
+   ;;       loopy--implicit-return (when (consp loopy--implicit-return)
+   ;;                                (if (= 1 (length loopy--implicit-return))
+   ;;                                    ;; If implicit return is just a single thing,
+   ;;                                    ;; don't use a list.
+   ;;                                    (car loopy--implicit-return)
+   ;;                                  ;; If multiple items, be sure to use a list
+   ;;                                  ;; in the correct order.
+   ;;                                  `(list ,@(nreverse loopy--implicit-return)))))
 
    ;; Produce the expanded code, based on the `let'-bound variables.
    (loopy--expand-to-loop)))
