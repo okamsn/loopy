@@ -518,7 +518,7 @@ instructions:
   The first keyword in `args' determines the start of
   the optional keyword arguments.
 
-  If OTHER-VALS is non-nil (i.e., no other values are allowed),
+  If OTHER-VALS is nil (i.e., no other values are allowed),
   then these keyword variables should be referenced directly
   instead of through the property list `opts'."
 
