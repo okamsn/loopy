@@ -4198,7 +4198,9 @@ For accumulation commands, you might also wish to place values in the following:
   example, a variable cannot be reversed according to the needs of one command
   and then coerced into a new type according to the needs of another.  Commands
   acting on the same accumulation variable must require the same final update,
-  if they require any final update.
+  including if they require no final update.  For example, a command that uses
+  =:result-type= to coerce ~loopy-result~ into a vector is incompatible with a
+  command that does not require (and so does not expect) a final update.
 
 
 Loopy will attempt to produce efficient code, and will not attempt to set up
