@@ -715,30 +715,30 @@ using the function `loopy--distribute-array-elements'."
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars (,increment-holder ,by))
-        (loopy--iteration-vars
-         (,value-holder ,(if (null other-vals)
-                               val
-                             `(loopy--distribute-array-elements
-                               ,val ,@other-vals))))
+      `((loopy--iteration-vars (,value-holder ,(if (null other-vals)
+                                                   val
+                                                 `(loopy--distribute-array-elements
+                                                   ,val ,@other-vals))))
         (loopy--iteration-vars (,end-holder ,(or key-end
-                                                   (if decreasing
-                                                       -1
-                                                     `(length ,value-holder)))))
+                                                 (if decreasing
+                                                     -1
+                                                   `(length ,value-holder)))))
         (loopy--iteration-vars (,index-holder ,(or key-start
-                                                     (if decreasing
-                                                         `(1- (length ,value-holder))
-                                                       0))))
+                                                   (if decreasing
+                                                       `(1- (length ,value-holder))
+                                                     0))))
         ,@(loopy--destructure-for-iteration-command
            var `(aref ,value-holder ,index-holder))
-        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
-                                                      ,index-holder
-                                                      ,increment-holder)))
+
+        ,@(loopy--generate-inc-idx-instructions
+           index-holder increment-holder by decreasing)
+
         (loopy--pre-conditions (,(if (or (null key-end)
-                                           (not inclusive))
-                                       (if decreasing #'> #'<)
-                                     (if decreasing #'>= #'<=))
-                                  ,index-holder ,end-holder))))))
+                                         (not inclusive))
+                                     (if decreasing #'> #'<)
+                                   (if decreasing #'>= #'<=))
+                                ,index-holder
+                                ,end-holder))))))
 
 ;;;;;; Array Ref
 (loopy--defiteration array-ref
@@ -768,26 +768,29 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars (,increment-holder ,by))
-        (loopy--iteration-vars (,value-holder ,val))
+      `((loopy--iteration-vars (,value-holder ,val))
+
         (loopy--iteration-vars (,end-holder ,(or key-end
-                                                   (if decreasing
-                                                       -1
-                                                     `(length ,value-holder)))))
+                                                 (if decreasing
+                                                     -1
+                                                   `(length ,value-holder)))))
+
         (loopy--iteration-vars (,index-holder ,(or key-start
-                                                     (if decreasing
-                                                         `(1- (length ,value-holder))
-                                                       0))))
+                                                   (if decreasing
+                                                       `(1- (length ,value-holder))
+                                                     0))))
+
         ,@(loopy--destructure-for-generalized-command
            var `(aref ,value-holder ,index-holder))
-        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
-                                                      ,index-holder
-                                                      ,increment-holder)))
+
+        ,@(loopy--generate-inc-idx-instructions
+           index-holder increment-holder by decreasing)
+
         (loopy--pre-conditions (,(if (or (null key-end)
-                                           (not inclusive))
-                                       (if decreasing #'> #'<)
-                                     (if decreasing #'>= #'<=))
-                                  ,index-holder ,end-holder))))))
+                                         (not inclusive))
+                                     (if decreasing #'> #'<)
+                                   (if decreasing #'>= #'<=))
+                                ,index-holder ,end-holder))))))
 
 ;;;;;; Cons
 (loopy--defiteration cons
@@ -803,6 +806,8 @@ is a function by which to update VAR (default `cdr')."
       (loopy--latter-body
        (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
                                                    value-holder)))
+      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+      ;;       at least for some commands.
       (loopy--pre-conditions (consp ,value-holder)))))
 
 ;;;;;; Iter
@@ -885,6 +890,8 @@ using the function `loopy--distribute-list-elements'."
                              ,val ,@other-vals))))
         (loopy--latter-body
          (setq ,value-holder ,(loopy--apply-function by-func value-holder)))
+        ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+        ;;       at least for some commands.
         (loopy--pre-conditions (consp ,value-holder))
         ,@(loopy--destructure-for-iteration-command
            var `(car ,value-holder))))))
@@ -903,6 +910,8 @@ BY is the function to use to move through the list (default `cdr')."
       ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
       (loopy--latter-body
        (setq ,val-holder ,(loopy--apply-function by-func val-holder)))
+      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+      ;;       at least for some commands.
       (loopy--pre-conditions (consp ,val-holder)))))
 
 ;;;;;; Map
@@ -920,6 +929,8 @@ vector using the library `map.el'."
                            `(seq-uniq (map-pairs ,val) #'loopy--car-equal-car)
                          `(map-pairs ,val))))
       ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
+      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+      ;;       at least for some commands.
       (loopy--pre-conditions (consp ,value-holder))
       (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
 
@@ -942,6 +953,8 @@ map's keys.  Duplicate keys are ignored."
             (loopy--main-body (setq ,key (car ,key-list)))))
       ,@(loopy--destructure-for-generalized-command
          var `(map-elt ,val ,(or key `(car ,key-list))))
+      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+      ;;       at least for some commands.
       (loopy--pre-conditions (consp ,key-list))
       (loopy--latter-body (setq ,key-list (cdr ,key-list))))))
 
@@ -980,47 +993,73 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
         (error "Conflicting command options given: %s" cmd))
 
-      (let ((increment-val-holder (gensym "nums-increment"))
-            (end (or explicit-end key-end))
-            (end-val-holder (gensym "nums-end"))
-            (start (or explicit-start key-start 0))
-            (by (or explicit-by key-by 1)))
+      (let* ((temp (gensym "nums-temp"))
+             (end (or explicit-end key-end))
+             (end-val-holder (gensym "nums-end"))
+             (start (or explicit-start key-start 0))
+             (by (or explicit-by key-by 1))
+             (number-by (numberp by))
+             (number-by-and-end (and number-by (numberp end)))
+             (increment-val-holder (gensym "nums-increment")))
 
-        `((loopy--iteration-vars (,var ,start))
-          ,@(if end
-                `((loopy--iteration-vars (,end-val-holder ,end))
-                  (loopy--pre-conditions ,(if explicit-by
-                                              `(if (cl-plusp ,increment-val-holder)
-                                                   (<= ,var ,end-val-holder)
-                                                 (>= ,var ,end-val-holder))
-                                            `(,(if inclusive
-                                                   (if decreasing #'>= #'<=)
-                                                 (if decreasing #'> #'<))
-                                              ,var ,end-val-holder)))
-                  ,(when (or key-by explicit-by)
-                     `(loopy--iteration-vars
-                       (,increment-val-holder
-                        ,(cond
-                          (explicit-by `(let ((temp ,by))
-                                          (if (or (and (cl-minusp temp)
-                                                       (< ,var ,end-val-holder))
-                                                  (and (cl-plusp temp)
-                                                       (> ,var ,end-val-holder)))
-                                              (error "Infinite loop: %s" (quote ,cmd))
-                                            temp)))
-                          (key-by       `(let ((temp ,by))
-                                           (if (cl-minusp temp)
-                                               (error "Wrong value for `by': %s"
-                                                      (quote ,cmd))
-                                             temp)))
-                          (t            by))))))
-              `((loopy--iteration-vars (,increment-val-holder ,by))))
-          (loopy--latter-body
-           (setq ,var ,(cond (explicit-by `(+ ,var ,increment-val-holder))
-                             (key-by      `(,(if decreasing #'- #'+)
-                                            ,var ,increment-val-holder))
-                             (decreasing  `(1- ,var))
-                             (t           `(1+ ,var))))))))))
+        `((loopy--latter-body
+           (setq ,var ,(let ((inc (if number-by by increment-val-holder)))
+                         (cond (explicit-by `(+ ,var ,inc))
+                               (key-by      `(,(if decreasing #'- #'+)
+                                              ,var ,inc))
+                               (decreasing  `(1- ,var))
+                               (t           `(1+ ,var))))))
+
+          (loopy--iteration-vars (,var ,start))
+
+          ,@(cond
+             (number-by-and-end
+              `((loopy--pre-conditions (,(if explicit-by
+                                             (if (cl-plusp by) #'<= #'>=)
+                                           (if inclusive
+                                               (if decreasing #'>= #'<=)
+                                             (if decreasing #'> #'<)))
+                                        ,var ,end))))
+             ;; `end' is not a number.  `by' might be a number.
+             (end
+              `((loopy--iteration-vars (,end-val-holder ,end))
+                (loopy--pre-conditions ,(cond
+                                         ((not explicit-by) ; `key-by' or default
+                                          `(,(if inclusive
+                                                 (if decreasing #'>= #'<=)
+                                               (if decreasing #'> #'<))
+                                            ,var ,end-val-holder))
+                                         (number-by
+                                          `(,(if (cl-plusp by) #'<= #'>=)
+                                            ,var ,end-val-holder))
+                                         ;; Ambiguous, so need to check
+                                         (t
+                                          `(if (cl-plusp ,increment-val-holder)
+                                               (<= ,var ,end-val-holder)
+                                             (>= ,var ,end-val-holder)))))
+                ,(when (and (not number-by)
+                            (or key-by explicit-by))
+                   `(loopy--iteration-vars
+                     (,increment-val-holder
+                      ,(cond
+                        (explicit-by `(let ((,temp ,by))
+                                        (if (or (and (cl-minusp temp)
+                                                     (< ,var ,end-val-holder))
+                                                (and (cl-plusp temp)
+                                                     (> ,var ,end-val-holder)))
+                                            (error "Infinite loop: %s" (quote ,cmd))
+                                          ,temp)))
+                        (key-by       `(let ((,temp ,by))
+                                         (if (cl-minusp temp)
+                                             (error "Wrong value for `by': %s"
+                                                    (quote ,cmd))
+                                           ,temp)))
+                        (t            by)))))))
+
+             ;; No `end'. We gave a non-number as `by', so we need a holding var.
+             ((and by (not number-by))
+              `((loopy--iteration-vars (,increment-val-holder ,by))))))))))
+
 
 ;;;;;; Numbers Up
 (loopy--defiteration numbers-up
@@ -1133,23 +1172,25 @@ distributed using the function `loopy--distribute-sequence-elements'."
         (loopy--find-start-by-end-dir-vals opts)
 
 
-      `((loopy--iteration-vars (,increment-holder ,by))
-        (loopy--iteration-vars
+      `((loopy--iteration-vars
          (,value-holder ,(if other-vals
-                               `(loopy--distribute-sequence-elements
-                                 ,val ,@other-vals)
-                             val)))
+                             `(loopy--distribute-sequence-elements
+                               ,val ,@other-vals)
+                           val)))
         (loopy--iteration-vars
          (,index-holder ,(or starting-index (if going-down
-                                                  `(1- (length ,value-holder))
-                                                0))))
+                                                `(1- (length ,value-holder))
+                                              0))))
         (loopy--iteration-vars
          (,end-index-holder ,(or ending-index (if going-down
-                                                    -1
-                                                  `(length ,value-holder)))))
-        (loopy--latter-body (setq ,index-holder (,(if going-down '- '+)
-                                                   ,index-holder
-                                                   ,increment-holder)))
+                                                  -1
+                                                ;; Only calculate length when
+                                                ;; actually needed.
+                                                `(when (arrayp ,value-holder)
+                                                   (length ,value-holder))))))
+
+        ,@(loopy--generate-inc-idx-instructions
+           index-holder increment-holder by going-down)
 
         ;; Optimize for the case of traversing from start to end, as done in
         ;; `cl-loop'.  Currently, all other case use `elt'.
@@ -1165,21 +1206,21 @@ distributed using the function `loopy--distribute-sequence-elements'."
                         (aref ,value-holder ,index-holder)))
               (loopy--pre-conditions
                (and ,value-holder
-                      ,(if ending-index
-                           `(,(if inclusive #'<= #'<)
-                             ,index-holder ,end-index-holder)
-                         `(or (consp ,value-holder)
-                              (< ,index-holder ,end-index-holder)))))))
+                    ,(if ending-index
+                         `(,(if inclusive #'<= #'<)
+                           ,index-holder ,end-index-holder)
+                       `(or (consp ,value-holder)
+                            (< ,index-holder ,end-index-holder)))))))
 
            (t
             `(,@(loopy--destructure-for-iteration-command
                  var `(elt ,value-holder ,index-holder))
               (loopy--pre-conditions (,(if (or (null ending-index)
-                                                 (not inclusive))
-                                             (if going-down '> '<)
-                                           (if going-down '>= '<=))
-                                        ,index-holder
-                                        ,end-index-holder)))))))))
+                                               (not inclusive))
+                                           (if going-down '> '<)
+                                         (if going-down '>= '<=))
+                                      ,index-holder
+                                      ,end-index-holder)))))))))
 
 ;;;;;; Seq Index
 (loopy--defiteration seq-index
@@ -1208,25 +1249,24 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
         (loopy--find-start-by-end-dir-vals opts)
 
       `((loopy--iteration-vars (,var nil))
-        (loopy--iteration-vars (,increment-holder ,by))
         (loopy--iteration-vars (,value-holder ,val))
         (loopy--iteration-vars (,end-holder ,(or key-end
-                                                   (if decreasing
-                                                       -1
-                                                     `(length ,value-holder)))))
+                                                 (if decreasing
+                                                     -1
+                                                   `(length ,value-holder)))))
         (loopy--iteration-vars (,index-holder ,(or key-start
-                                                     (if decreasing
-                                                         `(1- (length ,value-holder))
-                                                       0))))
+                                                   (if decreasing
+                                                       `(1- (length ,value-holder))
+                                                     0))))
+        ,@(loopy--generate-inc-idx-instructions
+           index-holder increment-holder by decreasing)
         (loopy--main-body      (setq ,var ,index-holder))
-        (loopy--latter-body    (setq ,index-holder (,(if decreasing #'- #'+)
-                                                      ,index-holder
-                                                      ,increment-holder)))
+
         (loopy--pre-conditions (,(if (or (null key-end)
-                                           (not inclusive))
-                                       (if decreasing #'> #'<)
-                                     (if decreasing #'>= #'<=))
-                                  ,index-holder ,end-holder))))))
+                                         (not inclusive))
+                                     (if decreasing #'> #'<)
+                                   (if decreasing #'>= #'<=))
+                                ,index-holder ,end-holder))))))
 
 ;;;;;; Seq Ref
 (loopy--defiteration seq-ref
@@ -1256,8 +1296,7 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
         (loopy--find-start-by-end-dir-vals opts)
 
-      `((loopy--iteration-vars (,increment-holder ,by))
-        (loopy--iteration-vars (,value-holder ,val))
+      `((loopy--iteration-vars (,value-holder ,val))
         (loopy--iteration-vars
          (,index-holder ,(or starting-index (if going-down
                                                 `(1- (length ,value-holder))
@@ -1266,9 +1305,9 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
          (,end-index-holder ,(or ending-index (if going-down
                                                   -1
                                                 `(length ,value-holder)))))
-        (loopy--latter-body (setq ,index-holder (,(if going-down '- '+)
-                                                 ,index-holder
-                                                 ,increment-holder)))
+        ,@(loopy--generate-inc-idx-instructions
+           index-holder increment-holder by going-down)
+
         ,@(loopy--destructure-for-generalized-command
            var `(elt ,value-holder ,index-holder))
         (loopy--pre-conditions (,(if (or (null ending-index)

@@ -1003,5 +1003,29 @@ This expansion can apply FUNC directly or via `funcall'."
       `(,(loopy--get-function-symbol func) ,@args)
     `(funcall ,func ,@args)))
 
+;;;; Indexing
+
+(defun loopy--generate-inc-idx-instructions
+    (index-holder increment-holder by decreasing)
+  "Generate instructions for incrementing an index variable.
+
+If possible, directly use a number in the code instead of storing
+it in a variable, since that seems to be faster.
+
+INDEX-HOLDER is the variable use for index.
+INCREMENT-HOLDER is the variable to store the increment.
+BY is the increment passed in the parsing function.
+DECREASING is whether the increment should be decreasing.
+
+Returns a list of instructions."
+  (if (numberp by)
+      `((loopy--latter-body
+         (setq ,index-holder (,(if decreasing #'- #'+)
+                              ,index-holder ,by))))
+    `((loopy--iteration-vars (,increment-holder ,by))
+      (loopy--latter-body
+       (setq ,index-holder (,(if decreasing #'- #'+)
+                            ,index-holder ,increment-holder))))))
+
 (provide 'loopy-misc)
 ;;; loopy-misc.el ends here
