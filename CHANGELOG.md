@@ -12,6 +12,8 @@ This document describes the user-facing changes to Loopy.
 
 ### Breaking Changes
 
+#### Removals
+
 - Remove the variable `loopy-first-iteration`.  This was added to be more like
   CL's Iterate, but it has little utility and was not being created
   conditionally.  To achieve similar behavior, simply create a variable like in
@@ -27,31 +29,10 @@ This document describes the user-facing changes to Loopy.
          (finally-return first rest))
   ```
 
-- `loopy-iter` has been changed to rely on Emacs's macro expansion facilities
-  instead of trying to use custom code-walking functions.  This should make the
-  macro more robust. See [#119].  User options were added, updated, or obsoleted
-  to allow this.  See the manual for more details.
-  - The flag `lax-naming` is deprecated.  Its behavior is now the default for
-    command aliases listed in `loopy-iter-bare-commands`.
-  - The user option `loopy-ignored-names` is now deprecated.  Instead of an
-    exclusive approach, it is replaced by an inclusive approach using the new
-    user options `loopy-iter-bare-commands` and
-    `loopy-iter-bare-special-marco-arguments`.
+- Remove obsolete aliases for the variables `loopy-aliases` and
+  `loopy-command-parsers`.
 
-    ```elisp
-    ;; No need for flag `lax-naming' anymore:
-    (loopy-iter (listing i '(1 2 3))
-                (collecting i))
-    ```
-
-  - Using keywords will continue to work.  See the variable
-    `loopy-iter-keywords`, renamed from `loopy-iter-command-keywords`.  The
-    old name is now an obsolete alias.  These keywords now work for special
-    macro arguments too.
-
-  - This change required better suppressing some macros, now in
-    `loopy-iter-suppressed-macros`.  Defaults include `cl-return`, `cl-block`,
-    and `cl-return-from`.
+#### Feature Deprecations and Renaming Variables
 
 - The command `sub-loop` is deprecated.  Use the commands `loopy` or
   `loopy-iter` instead.  Currently, the `sub-loop` command, depending on the
@@ -78,8 +59,35 @@ This document describes the user-facing changes to Loopy.
   but has been generalized to support the `close` argument of the new `iter`
   command.  See PR [#135].
 
-- Remove obsolete aliases for the variables `loopy-aliases` and
-  `loopy-command-parsers`.
+#### For improving `loopy-iter`
+
+- `loopy-iter` has been changed to rely on Emacs's macro expansion facilities
+  instead of trying to use custom code-walking functions.  This should make the
+  macro more robust. See [#119].  User options were added, updated, or obsoleted
+  to allow this.  See the manual for more details.
+
+  - The flag `lax-naming` is deprecated.  Its behavior is now the default for
+    command aliases listed in `loopy-iter-bare-commands`.
+
+    ```elisp
+    ;; No need for flag `lax-naming' anymore:
+    (loopy-iter (listing i '(1 2 3))
+                (collecting i))
+    ```
+
+  - The user option `loopy-ignored-names` is now deprecated.  Instead of an
+    exclusive approach, it is replaced by an inclusive approach using the new
+    user options `loopy-iter-bare-commands` and
+    `loopy-iter-bare-special-marco-arguments`.
+
+  - Using keywords will continue to work.  See the variable
+    `loopy-iter-keywords`, renamed from `loopy-iter-command-keywords`.  The
+    old name is now an obsolete alias.  These keywords now work for special
+    macro arguments too.
+
+  - This change required better suppressing some macros, now in
+    `loopy-iter-suppressed-macros`.  Defaults include `cl-return`, `cl-block`,
+    and `cl-return-from`.
 
 ### Other Changes
 
@@ -92,18 +100,40 @@ This document describes the user-facing changes to Loopy.
   - Add slight optimizations for common uses, such as for `(car . _)` and
     `(_ . cdr)`.
 
+#### New Commands
+
+- Added generic accumulation command `set-accum`.  This command is an
+  accumulating version of `set`.  It is a generalization of the other generic
+  accumulation commands `accumulate` and `reduce`.  See [#125] and [#129].
+
+- Add the command `iter` for iterating through iterator objects, such as
+  those created by using the output of functions defined with `iter-lambda`.
+  This is not to be confused with the macro `loopy-iter`, which is named for
+  Common Lisp's `iter` macro. See issues [#134] and [#136] and PR [#135].
+
+#### Aliases
+
+- Added the remaining present participle aliases to `loopy` and `loopy-iter`.
+  They are now the default bare forms (see breaking changes above) for
+  `loopy-iter`.  See [#119].
+
 - Present-participle aliases (the "-ing" form) have been added for more
   commands, such as `listing` for `list` and `setting` for `set`.  They already
   existed for accumulation commands, such as `collecting` for `collect`.  See
   [#118] and [#104].
-  - Aliases from `cl-loop`, such as `across` for the command `array` and `in` for
-    the command `list`, have been de-emphasized.  The present-participle aliases
-    are preferred when using the `lax-naming` flag.
+
+  - Aliases from `cl-loop`, such as `across` for the command `array` and `in`
+    for the command `list`, have been de-emphasized.  The present-participle
+    aliases should be used when not using the keywords in `loopy-iter`.
+
     ```elisp
-    (loopy-iter (flag +lax-naming)
-                (listing i '(1 2 3 4))
-                (collecting i))
+    ;; => ((1 . 6) (2 . 7) (3 . 8) (4 . 9))
+    (loopy-iter (listing i '(1 2 3 4))
+                (for list j '(6 7 8 9))
+                (collecting (cons i j)))
     ```
+
+#### Other Changes to `loopy-iter`
 
 - `loopy-iter` can now use keywords for naming special macro arguments, as done
   with commands.  This can help to avoid naming conflicts.  Added the keyword
@@ -115,25 +145,14 @@ This document describes the user-facing changes to Loopy.
               (returning a))
   ```
 
-- Added the remaining present participle aliases to `loopy` and `loopy-iter`.
-  They are now the default bare forms (see breaking changes above) for
-  `loopy-iter`.  See [#119].
 
 - Added `loopy-iter-suppressed-macros` (see breaking changes above).  See
   [#119].
-
-- Added generic accumulation command `set-accum`.  This command is an
-  accumulating version of `set`.  It is a generalization of the other generic
-  accumulation commands `accumulate` and `reduce`.  See [#125] and [#129].
 
 - The new special macro argument `named` was added.  It is another way of
   specifying loop names, instead of just listing a symbol.  This might be useful
   in `loopy-iter`.  See issue [#123] and PR [#132].
 
-- Add the command `iter` for iterating through iterator objects, such as
-  those created by using the output of functions defined with `iter-lambda`.
-  This is not to be confused with the macro `loopy-iter`, which is named for
-  Common Lisp's `iter` macro. See issues [#134] and [#136] and PR [#135].
 
 [#104]: https://github.com/okamsn/loopy/issues/104
 [#117]: https://github.com/okamsn/loopy/pull/117
