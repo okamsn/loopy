@@ -83,12 +83,6 @@ Definition must exist.  Neither argument need be quoted."
          (push alias (map-elt loopy-aliases true-name)))))))
 
 ;;;###autoload
-(define-obsolete-variable-alias 'loopy-custom-command-aliases
-  'loopy-aliases "2021-10")
-;;;###autoload
-(define-obsolete-variable-alias 'loopy-command-aliases
-  'loopy-aliases "2021-10")
-;;;###autoload
 (defcustom loopy-aliases
   ;; TODO: Is there a faster way to search for aliases?
   ;;       Would using a hash table with a flatter structure be better?
@@ -170,10 +164,6 @@ true names and lists of aliases.
 `loopy-command-parsers' when the command parser is unknown."
   :group 'loopy
   :type '(alist :key-type symbol :value-type (repeat symbol)))
-
-;;;###autoload
-(define-obsolete-variable-alias 'loopy-custom-command-parsers
-  'loopy-command-parsers "2021-10")
 
 ;;;###autoload
 (defcustom loopy-command-parsers

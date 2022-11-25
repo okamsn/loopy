@@ -78,6 +78,9 @@ This document describes the user-facing changes to Loopy.
   but has been generalized to support the `close` argument of the new `iter`
   command.  See PR [#135].
 
+- Remove obsolete aliases for the variables `loopy-aliases` and
+  `loopy-command-parsers`.
+
 ### Other Changes
 
 - Improvements to destructuring ([#117]):
