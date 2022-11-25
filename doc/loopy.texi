@@ -688,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org66e50b5
+@float Listing,orgcf3cc32
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -810,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgb3d4c54
+@float Listing,org210993e
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -825,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org4b66f34
+@float Listing,orgbca192e
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1233,6 +1233,61 @@ This command also has the aliases @samp{cycling} and @samp{repeating}.
 ;; => nil
 (loopy (cycle 0)
        (return 'return-command-ran))
+@end lisp
+@end table
+
+@findex iter
+@findex iterating
+@table @asis
+@item @samp{(iter [VAR] EXPR &key close yield-result)}
+Iterate through the values
+returned by an Emacs Lisp iterator (@ref{Generators,,,elisp,}).  @samp{EXPR} is an
+iterator object produced by a calling a generator function.  If given, @samp{VAR}
+holds the value yielded by the iterator. The loop ends when the iterator
+finishes.
+
+@samp{yield-result} is the optional second argument to the function @code{iter-next},
+which is the value of @code{iter-yield} in the iterator (not to be confused with
+the value yielded by calling @code{iter-next}).
+
+@samp{close} is whether the generator should be  closed via @code{iter-close} after the
+loop ends.  The default is @code{t}.  Note that Emacs will eventually close
+un-closed, un-reachable generators during garbage collection.
+
+This command also has the name @samp{iterating}.
+
+@quotation Warning
+The loop ends when the iterator finishes, which must be checked before the
+code in loop body is run. To check whether a iterator is finished, @code{loopy}
+checks whether it signals an error when trying to yield a value.
+
+Because values are yielded before the next iteration step of the loop, trying
+to yield more values from the iterator after the loop ends will result in lost
+values.  One option for working around this is to use the generic command
+@samp{set} with the function @code{iter-next} directly.
+
+@end quotation
+
+@lisp
+;; With var:
+;; => ((1 . 4) (2 . 5) (3 . 6))
+(loopy (with (iter-maker (iter-lambda (x)
+                           (while x
+                             (iter-yield (pop x))))))
+       (iter i (funcall iter-maker (list 1 2 3)))
+       (iter j (funcall iter-maker (list 4 5 6)))
+       (collect (cons i j)))
+
+;; Without var:
+;; => (1 2 3)
+(loopy (with (iter-maker (iter-lambda ()
+                           ;; These yielded values are all ignored.
+                           (iter-yield 'first-yield)
+                           (iter-yield 'second-yield)
+                           (iter-yield 'third-yield))))
+       (iter (funcall iter-maker))
+       (set i 1 (1+ i))
+       (collect i))
 @end lisp
 @end table
 
@@ -3785,7 +3840,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org47c4f93
+@float Listing,orge2777cb
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4597,9 +4652,10 @@ is usually just a list of the symbol @samp{loopy-result}.
 @vindex loopy--vars-final-updates
 @table @asis
 @item @samp{loopy--vars-final-updates}
-Actions to perform on the accumulation
-variable after the loop ends.  Some implied accumulation commands need to
-update the variable one final time after ending the loop.  Some examples are:
+Actions to perform on the variable (usually an
+accumulation variable) after the loop ends.  Some implied accumulation
+commands need to update the variable one final time after ending the loop.
+Some examples are:
 @enumerate
 @item
 Correcting the order of elements in a list that was constructed in reverse.
@@ -4612,7 +4668,9 @@ Each accumulation variable can only be updated once, in a single way.  For
 example, a variable cannot be reversed according to the needs of one command
 and then coerced into a new type according to the needs of another.  Commands
 acting on the same accumulation variable must require the same final update,
-if they require any final update.
+including if they require no final update.  For example, a command that uses
+@samp{:result-type} to coerce @code{loopy-result} into a vector is incompatible with a
+command that does not require (and so does not expect) a final update.
 @end table
 
 
