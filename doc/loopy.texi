@@ -688,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgcf3cc32
+@float Listing,org0bb29db
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -810,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org210993e
+@float Listing,orga8033ad
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -825,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgbca192e
+@float Listing,org8c468d7
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1313,6 +1313,9 @@ This command also has the aliases @samp{num}, @samp{number}, and @samp{numbering
 The command @samp{numbers} is used to iterate through numbers.  For example,
 @samp{(numbers i :from 1 :to 10)} is similar to @samp{(list i (number-sequence 1 10))},
 and @samp{(numbers i 3)} is similar to @samp{(set i 3 (1+ i))}.
+
+Unlike most other iteration commands, @samp{VAR} is initialized to the passed-in
+starting value, not @code{nil}.
 
 To balance convenience and similarity to other commands, @samp{numbers} has a
 flexible argument list.  In its most basic form, it uses no keywords and takes
@@ -3840,7 +3843,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orge2777cb
+@float Listing,org2010f58
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
