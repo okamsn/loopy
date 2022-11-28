@@ -990,11 +990,9 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
       (when (or (and explicit-start key-start)
                 (and explicit-end key-end)
                 (and explicit-by key-by))
-
         (error "Conflicting command options given: %s" cmd))
 
-      (let* ((temp (gensym "nums-temp"))
-             (end (or explicit-end key-end))
+      (let* ((end (or explicit-end key-end))
              (end-val-holder (gensym "nums-end"))
              (start (or explicit-start key-start 0))
              (by (or explicit-by key-by 1))
@@ -1025,22 +1023,7 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
               `((loopy--iteration-vars (,end-val-holder ,end))
                 ,(when (and (not number-by)
                             (or key-by explicit-by))
-                   `(loopy--iteration-vars
-                     (,increment-val-holder
-                      ,(cond
-                        (explicit-by `(let ((,temp ,by))
-                                        (if (or (and (cl-minusp ,temp)
-                                                     (< ,var ,end-val-holder))
-                                                (and (cl-plusp ,temp)
-                                                     (> ,var ,end-val-holder)))
-                                            (error "Infinite loop: %s" (quote ,cmd))
-                                          ,temp)))
-                        (key-by       `(let ((,temp ,by))
-                                         (if (cl-minusp ,temp)
-                                             (error "Wrong value for `by': %s"
-                                                    (quote ,cmd))
-                                           ,temp)))
-                        (t            by)))))
+                   `(loopy--iteration-vars (,increment-val-holder ,by)))
                 ,@(cond
                    ((not explicit-by) ; `key-by' or default
                     `((loopy--pre-conditions (,(if inclusive

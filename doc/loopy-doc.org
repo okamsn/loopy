@@ -1195,6 +1195,9 @@ variants =numbers-up= and =numbers-down=.
   =(numbers i :from 1 :to 10)= is similar to =(list i (number-sequence 1 10))=,
   and =(numbers i 3)= is similar to =(set i 3 (1+ i))=.
 
+  Unlike most other iteration commands, =VAR= is initialized to the passed-in
+  starting value, not ~nil~.
+
   To balance convenience and similarity to other commands, =numbers= has a
   flexible argument list.  In its most basic form, it uses no keywords and takes
   a starting value and an ending value.  The ending value is inclusive.
