@@ -911,6 +911,19 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                       (collect coll i)
                                       (finally-return coll)))))))
 
+(ert-deftest array-vars ()
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (array i arr :from start :to end :by 2)
+                     (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8) (step 2)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (array i arr :from start :to end :by step)
+                     (collect i)))))
+
 (ert-deftest array-destructuring ()
   (should (and (equal '(5 6)
                       (eval (quote (loopy (array (a . b)
@@ -1107,6 +1120,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                      (array-ref i my-str :upfrom 1 :by 2 )
                                      (do (setf i ?a))
                                      (finally-return my-str)))))))
+
+(ert-deftest array-ref-vars ()
+  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
+                 (lq (with (start 2) (end 8)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (array-ref i arr :from start :to end :by 2)
+                     (do (setf i 22))
+                     (finally-return arr))))
+
+  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
+                 (lq (with (start 2) (end 8) (step 2)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (array-ref i arr :from start :to end :by step)
+                     (do (setf i 22))
+                     (finally-return arr)))))
 
 ;;;;; Cons
 (ert-deftest cons ()
@@ -1553,6 +1581,33 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                                 :by 0.2)
                                           (collect i))))))))
 
+;;;;; Nums With Vars
+(ert-deftest nums-vars ()
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8) (step 2))
+                     (numbers i start end step)
+                     (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8))
+                     (numbers i start end 2)
+                     (collect i))))
+
+  (should (equal '(8 6 4 2)
+                 (lq (with (start 8) (end 2) (step -2))
+                     (numbers i start end step)
+                     (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8))
+                     (numbers i :from start :to end :by 2)
+                     (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8) (step 2))
+                     (numbers i :from start :to end :by step)
+                     (collect i)))))
+
 ;;;;; Nums-Down
 (ert-deftest nums-down ()
   (should (equal '(10 8 6 4 2)
@@ -1697,6 +1752,25 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                               (setf k 9))
                                           (finally-return my-seq))))))))
 
+(ert-deftest seq-vars ()
+  (should (equal '(2 3 4 5 6 7 8 9 10)
+                 (loopy (with (start 2) (end 8)
+                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                        (sequence i arr :from start :by 1)
+                        (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (loopy (with (start 2) (end 8)
+                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                        (sequence i arr :from start :to end :by 2)
+                        (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (loopy (with (start 2) (end 8) (step 2)
+                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                        (sequence i arr :from start :to end :by step)
+                        (collect i)))))
+
 (ert-deftest seq-keywords ()
   (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
                  (eval (quote (loopy (seq i [4 3 2 1 0] :index cat)
@@ -1795,6 +1869,19 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                 (loopy (seq-index i my-seq :below 3)
                                        (collect (elt my-seq i)))))))))
 
+(ert-deftest seq-index-vars ()
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (seq-index i arr :from start :to end :by 2)
+                     (collect i))))
+
+  (should (equal '(2 4 6 8)
+                 (lq (with (start 2) (end 8) (step 2)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (seq-index i arr :from start :to end :by step)
+                     (collect i)))))
+
 ;;;;; Seq Ref
 (ert-deftest seq-ref ()
   (should
@@ -1864,6 +1951,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                      (seq-ref i my-list :upfrom 1 :by 2)
                                      (do (setf i 'cat))
                                      (finally-return my-list)))))))
+
+(ert-deftest seq-ref-vars ()
+  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
+                 (lq (with (start 2) (end 8)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (seq-ref i arr :from start :to end :by 2)
+                     (do (setf i 22))
+                     (finally-return arr))))
+
+  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
+                 (lq (with (start 2) (end 8) (step 2)
+                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
+                     (seq-ref i arr :from start :to end :by step)
+                     (do (setf i 22))
+                     (finally-return arr)))))
 
 ;;;; Accumulation Commands
 ;;;;; Final updates

@@ -1023,38 +1023,39 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
              ;; `end' is not a number.  `by' might be a number.
              (end
               `((loopy--iteration-vars (,end-val-holder ,end))
-                (loopy--pre-conditions ,(cond
-                                         ((not explicit-by) ; `key-by' or default
-                                          `(,(if inclusive
-                                                 (if decreasing #'>= #'<=)
-                                               (if decreasing #'> #'<))
-                                            ,var ,end-val-holder))
-                                         (number-by
-                                          `(,(if (cl-plusp by) #'<= #'>=)
-                                            ,var ,end-val-holder))
-                                         ;; Ambiguous, so need to check
-                                         (t
-                                          `(if (cl-plusp ,increment-val-holder)
-                                               (<= ,var ,end-val-holder)
-                                             (>= ,var ,end-val-holder)))))
                 ,(when (and (not number-by)
                             (or key-by explicit-by))
                    `(loopy--iteration-vars
                      (,increment-val-holder
                       ,(cond
                         (explicit-by `(let ((,temp ,by))
-                                        (if (or (and (cl-minusp temp)
+                                        (if (or (and (cl-minusp ,temp)
                                                      (< ,var ,end-val-holder))
-                                                (and (cl-plusp temp)
+                                                (and (cl-plusp ,temp)
                                                      (> ,var ,end-val-holder)))
                                             (error "Infinite loop: %s" (quote ,cmd))
                                           ,temp)))
                         (key-by       `(let ((,temp ,by))
-                                         (if (cl-minusp temp)
+                                         (if (cl-minusp ,temp)
                                              (error "Wrong value for `by': %s"
                                                     (quote ,cmd))
                                            ,temp)))
-                        (t            by)))))))
+                        (t            by)))))
+                ,@(cond
+                   ((not explicit-by) ; `key-by' or default
+                    `((loopy--pre-conditions (,(if inclusive
+                                                   (if decreasing #'>= #'<=)
+                                                 (if decreasing #'> #'<))
+                                              ,var ,end-val-holder))))
+                   (number-by
+                    `((loopy--pre-conditions (,(if (cl-plusp by) #'<= #'>=)
+                                              ,var ,end-val-holder))))
+                   ;; Ambiguous, so need to check
+                   (t
+                    (let ((fn (gensym "nums-fn")))
+                      `((loopy--iteration-vars
+                         (,fn (if (cl-plusp ,increment-val-holder) #'<= #'>=)))
+                        (loopy--pre-conditions (funcall ,fn ,var ,end-val-holder))))))))
 
              ;; No `end'. We gave a non-number as `by', so we need a holding var.
              ((and by (not number-by))
@@ -1171,56 +1172,61 @@ distributed using the function `loopy--distribute-sequence-elements'."
 
         (loopy--find-start-by-end-dir-vals opts)
 
+      ;; Optimize for the case of traversing from start to end, as done in
+      ;; `cl-loop'.  Currently, all other case use `elt'.
+      (let ((optimize (and (not going-down)
+                           (and (numberp by) (= 1 by))
+                           (or (and (numberp starting-index)
+                                    (zerop starting-index))
+                               (null starting-index)))))
 
-      `((loopy--iteration-vars
-         (,value-holder ,(if other-vals
-                             `(loopy--distribute-sequence-elements
-                               ,val ,@other-vals)
-                           val)))
-        (loopy--iteration-vars
-         (,index-holder ,(or starting-index (if going-down
-                                                `(1- (length ,value-holder))
-                                              0))))
-        (loopy--iteration-vars
-         (,end-index-holder ,(or ending-index (if going-down
-                                                  -1
-                                                ;; Only calculate length when
-                                                ;; actually needed.
-                                                `(when (arrayp ,value-holder)
-                                                   (length ,value-holder))))))
+        `((loopy--iteration-vars
+           (,value-holder ,(if other-vals
+                               `(loopy--distribute-sequence-elements
+                                 ,val ,@other-vals)
+                             val)))
 
-        ,@(loopy--generate-inc-idx-instructions
-           index-holder increment-holder by going-down)
+          (loopy--iteration-vars
+           (,index-holder ,(cond
+                            (starting-index)
+                            (going-down `(1- (length ,value-holder)))
+                            (t 0))))
 
-        ;; Optimize for the case of traversing from start to end, as done in
-        ;; `cl-loop'.  Currently, all other case use `elt'.
-        ,@(cond
-           ((and (not going-down)
-                 (= 1 by)
-                 (or (eql 0 starting-index)
-                     (null starting-index)))
+          (loopy--iteration-vars
+           (,end-index-holder ,(cond
+                                (ending-index)
+                                (going-down -1)
+                                ;; Only calculate length when actually needed.
+                                (optimize `(when (arrayp ,value-holder)
+                                             (length ,value-holder)))
+                                (t `(length ,value-holder)))))
 
-            `(,@(loopy--destructure-for-iteration-command
-                 var `(if (consp ,value-holder)
-                          (pop ,value-holder)
-                        (aref ,value-holder ,index-holder)))
-              (loopy--pre-conditions
-               (and ,value-holder
-                    ,(if ending-index
-                         `(,(if inclusive #'<= #'<)
-                           ,index-holder ,end-index-holder)
-                       `(or (consp ,value-holder)
-                            (< ,index-holder ,end-index-holder)))))))
+          ,@(loopy--generate-inc-idx-instructions
+             index-holder increment-holder by going-down)
 
-           (t
-            `(,@(loopy--destructure-for-iteration-command
-                 var `(elt ,value-holder ,index-holder))
-              (loopy--pre-conditions (,(if (or (null ending-index)
-                                               (not inclusive))
-                                           (if going-down '> '<)
-                                         (if going-down '>= '<=))
-                                      ,index-holder
-                                      ,end-index-holder)))))))))
+          ,@(cond
+             (optimize
+              `(,@(loopy--destructure-for-iteration-command
+                   var `(if (consp ,value-holder)
+                            (pop ,value-holder)
+                          (aref ,value-holder ,index-holder)))
+                (loopy--pre-conditions
+                 (and ,value-holder
+                      ,(if ending-index
+                           `(,(if inclusive #'<= #'<)
+                             ,index-holder ,end-index-holder)
+                         `(or (consp ,value-holder)
+                              (< ,index-holder ,end-index-holder)))))))
+
+             (t
+              `(,@(loopy--destructure-for-iteration-command
+                   var `(elt ,value-holder ,index-holder))
+                (loopy--pre-conditions (,(if (or (null ending-index)
+                                                 (not inclusive))
+                                             (if going-down '> '<)
+                                           (if going-down '>= '<=))
+                                        ,index-holder
+                                        ,end-index-holder))))))))))
 
 ;;;;;; Seq Index
 (loopy--defiteration seq-index
@@ -1305,6 +1311,7 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
          (,end-index-holder ,(or ending-index (if going-down
                                                   -1
                                                 `(length ,value-holder)))))
+
         ,@(loopy--generate-inc-idx-instructions
            index-holder increment-holder by going-down)
 
