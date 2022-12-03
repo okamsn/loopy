@@ -657,7 +657,7 @@ participle form (the "-ing" form).  A few examples are seen in the table below.
 
 Some commands take optional keyword arguments.  For example, the command =list=
 can take a function argument following the keyword =:by=, which affects how that
-iterates through the elements in the list.
+command iterates through the elements in the list.
 
 For simplicity, the commands are described using the following notation:
 
@@ -772,8 +772,8 @@ An element in the sequence =VAR= can be one of the following:
            (collect (list i j k)))
   #+end_src
 
-- The symbol =_=: The symbol =_= means to avoid creating a variable.  This can
-  be more efficient.
+- The symbol =_=: The symbol =_= (an underscore) means to avoid creating a
+  variable.  This can be more efficient.
 
   #+begin_src emacs-lisp
     ;; Only create the variables `a' and `c'.
@@ -857,8 +857,8 @@ An element in the sequence =VAR= can be one of the following:
 
   If the key is not in the list, a default value can be provided by using a
   two-item list of the variable and the default value.  If a default value is
-  provided, then keys are sought using ~plist-member~ so that a value of ~nil~
-  for a key is not the same as a missing key.
+  provided, then keys are sought using ~plist-member~. That way, a value of
+  ~nil~ for a key is not the same as a missing key.
 
   #+begin_src emacs-lisp
     ;; Note that `nil' is not the same as a missing value.
@@ -1085,6 +1085,14 @@ In ~loopy~, iteration commands are named after what they iterate through.  For
 example, the =array= and =list= commands iterate through the elements of arrays
 and lists, respectively.
 
+#+ATTR_TEXINFO: :tag Note
+#+begin_quote
+In general, iteration variables (such as the ~i~ and ~j~ above) are initialized
+to ~nil~.  For efficiency, some commands do not do this.  In such cases, the
+initial value of an iteration variable can be set using the =with= special macro
+argument, but this can result in less efficient code.
+#+end_quote
+
 *** Generic Iteration
 :PROPERTIES:
 :CUSTOM_ID: generic-iteration
@@ -1096,8 +1104,11 @@ and lists, respectively.
 #+findex: repeat
 #+findex: repeating
 - =(cycle|repeat [VAR] EXPR)= :: Run the loop for =EXPR= iterations.  If
-  specified, =VAR= starts at 0, and is incremented by 1 at the end of the loop.
-  If =EXPR= is 0, then the loop isn't run.
+  specified, =VAR= starts at 0, and is incremented by 1 at the end of each step
+  in the loop.  If =EXPR= is 0, then the loop isn't run.
+
+  For efficiency, =VAR= is not initialized to ~nil~.  This can be overridden
+  using the =with= special macro argument, which can result in slower code.
 
   This command also has the aliases =cycling= and =repeating=.
 
@@ -1107,10 +1118,11 @@ and lists, respectively.
            (cycle 3)
            (collect i))
 
-    ;; => (10 10 10)
+    ;; => (10 0 10 1 10 2)
     (loopy (with (i 10))
-           (repeat 3)
-           (collect i))
+           (repeat j 3)
+           (collect i)
+           (collect j))
 
     ;; An argument of 0 stops the loop from running:
     ;; => nil
@@ -1133,6 +1145,13 @@ and lists, respectively.
   =close= is whether the generator should be  closed via ~iter-close~ after the
   loop ends.  The default is ~t~.  Note that Emacs will eventually close
   un-closed, un-reachable generators during garbage collection.
+
+  For efficiency, when possible, =VAR= is bound to the yielded value before each
+  step of the loop, which is used to detect whether the iterator signals that it
+  is finished.  This is not possible when destructuring.  You can override this
+  behavior by using the =with= special macro argument, which can result in
+  slower code and tells the macro that the initial value of =VAR= is meaningful
+  and to update =VAR= during the loop.
 
   This command also has the name =iterating=.
 
@@ -1195,8 +1214,9 @@ variants =numbers-up= and =numbers-down=.
   =(numbers i :from 1 :to 10)= is similar to =(list i (number-sequence 1 10))=,
   and =(numbers i 3)= is similar to =(set i 3 (1+ i))=.
 
-  Unlike most other iteration commands, =VAR= is initialized to the passed-in
-  starting value, not ~nil~.
+  For efficiency, =VAR= is initialized to the starting numeric value, not ~nil~,
+  and is updated at the end of each step of the loop.  This can be overridden
+  using the =with= special macro argument, which can result in slower code.
 
   To balance convenience and similarity to other commands, =numbers= has a
   flexible argument list.  In its most basic form, it uses no keywords and takes
@@ -1385,12 +1405,11 @@ similar to that of nested loops.
                                            collect (list i j k))))
 #+end_src
 
-
 The =array= and =sequence= commands can use the same keywords as the =numbers=
 command ([[#numeric-iteration]]) for working with the index and choosing a range of
-the sequence elements through which to iterate.  In addition to those keywords,
-they also have an =index= keyword, which names the variable used to store the
-accessed index during the loop.
+the sequence's elements through which to iterate.  In addition to those
+keywords, they also have an =index= keyword, which names the variable used to
+store the accessed index during the loop.
 
 #+begin_src emacs-lisp
   ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
@@ -1466,6 +1485,11 @@ source sequences.
 #+findex: consing
 - =(cons|conses VAR EXPR &key by)= :: Loop through the cons cells of =EXPR=.
   Optionally, find the cons cells via the function =by= instead of =cdr=.
+
+  For efficiency, when possible, =VAR= is initialized to the value of =EXPR=,
+  not ~nil~, and is updated at the end of each step in the loop.  This is not
+  possible when destructuring.  Such initialization can be overridden by using
+  the =with= special macro argument, which can result in slower code.
 
   This command also has the alias =consing=.
 
@@ -1692,6 +1716,7 @@ iterate.
   - =string-index=, =stringing-index=, =stringi=
   - =sequence-index=, =sequenceing-index=, =sequencei=, =seqi=, =seqing-index=
 
+
   The aliases =seqi=, =arrayi=, =listi=, and =stringi= are similar to the
   aliases =seqf=, =arrayf=, =listf=, and =stringf= of the =seq-ref= command.
 
@@ -1701,6 +1726,11 @@ iterate.
   automatically end the loop when the final element is reached.  With
   =numbers=, one would first need to explicitly calculate the length of the
   sequence.
+
+  Similar to =numbers=, for efficiency, =VAR= is initialized to the starting
+  index value, not ~nil~, and is updated at the end of each step of the loop.
+  This can be overridden using the =with= special macro argument, which can
+  result in slower code.
 
   #+begin_src emacs-lisp
     ;; => (97 98 99 100 101 102)
@@ -2947,23 +2977,76 @@ that, you are recommended to use =accum-opt= on those variables.
 :END:
 
 {{{dfn(Boolean commands)}}} are used to test whether a condition holds true
-during the loop.  Under certain conditions, they cause the loop to exit and
-return a value.  Like accumulation commands, they have an implicit return value
-which is used if these commands do not cause the loop to exit.
+during the loop.  They work like a combination of iteration and accumulation
+commands, in that values are stored in ~loopy-result~ and that can terminate the
+loop.
 
-For convenience, these commands can be passed multiple conditions.
+In boolean commands, ~loopy-result~ is used as the implicit return value of the
+loop.  These commands exit the loop without forcing a value
+([[#exiting-the-loop-early]]).  In other words, their exiting the loop does not
+prevent optimized accumulations from optimizing their values.  Note, though,
+that because such need is infrequent and the boolean commands already use
+~loopy-result~, such optimized accumulation variables must be created with
+the special macro argument =accum-opt= and must be used explicitly.
 
-#+attr_texinfo: :tag Note
+#+begin_src emacs-lisp
+  ;; A maybe unidiomatic example:
+  ;; => (nil (1 3 5))
+  (loopy (accum-opt coll)
+         (list i '(1 3 5 6 9))
+         (always (cl-oddp i))
+         (collect coll i)
+         (finally-return loopy-result coll))
+
+  ;; Same as above, but maybe more idiomatic:
+  ;; => (nil (1 3 5))
+  (loopy (with (succes t))
+         (list i '(1 3 5 6 9))
+         (if (cl-oddp i)
+             (collect i)
+           (set success nil)
+           (leave))
+         (finally-return success loopy-result))
+
+  ;; Works similarly, but forces the `nil' return value.
+  ;; Returns the collection if `always' doesn't trigger an exit.
+  ;; Attempting similar with CL's `iterate' will signal an error.
+  ;; => nil
+  (cl-loop for i in '(1 3 5 6 9)
+           always (cl-oddp i)
+           collect i)
+#+end_src
+
+
+#+attr_texinfo: :tag Warn
 #+begin_quote
-It is incorrect to use both the command =thereis= and the command =always= or
-=never= in the same loop, as this leads to conflicting implicit return values.
+Using the command =thereis= is incompatible with using the commands =always= and
+=never=, as this would create conflicting initial values for the implicit return
+value (both using ~loopy-result~).
 #+end_quote
+
+Like accumulation commands, these boolean commands support the keyword =:into=,
+which changes the variable used to store the implicit return value.  Unlike
+accumulation commands, and as in ~cl-loop~ and Common Lisp's ~iterate~, there is
+no non-keyword way to specify the receiving variable.  Note that it is expected
+that the commands =always= and =never= use the same variable.
 
 
 #+findex: always
-- =(always COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
-  ~nil~.  Otherwise, the loop returns the final value of the last =COND= or
-  ~t~ if no =COND= is ever evaluated.
+- =(always EXPR [EXPRS] &key into)= :: Check the result of each condition
+  =EXPR=.  If any condition evaluates to ~nil~, end the loop.  Otherwise, the
+  loop returns the final value of conditions or ~t~ if the command is never run.
+
+  The steps are thus:
+  1. The variable (by default, ~loopy-result~) is initially bound to ~t~, using
+     it as the implicit return value of the loop.
+  2. When the conditions are checked, the variable is bound to the value of
+     the ~and~-ed conditions.
+  3. If the variable is ~nil~, the loop is exited.
+  4. If the loop completes successfully, then the variable is the final value
+     of the conditions.  If the command is never run, then the variable will
+     remain ~t~.
+
 
   #+BEGIN_SRC emacs-lisp
     ;; => t
@@ -2980,10 +3063,11 @@ It is incorrect to use both the command =thereis= and the command =always= or
            ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
            (always (< i 2) (>= i 0)))
 
-    ;; => "hello"
+    ;; => "hello there"
     (loopy (list i '(1 1 1 1))
            ;; The return value of `(and (< i 2) "hello")' is "hello".
-           (always (< i 2) "hello"))
+           (always (< i 2) "hello")
+           (finally-return (concat loopy-result " there")))
 
     ;; NOTE: Here, the implicit return value is `t' because an
     ;;       `always' command was used, and that return value
@@ -2997,8 +3081,28 @@ It is incorrect to use both the command =thereis= and the command =always= or
   #+END_SRC
 
 #+findex: never
-- =(never COND [CONDS])= :: Immediately return ~nil~ if any =COND= is ever
-  non-nil.  Otherwise, the loop returns ~t~.
+- =(never EXPR [EXPRS] &key into)= :: Check each condition =EXPR=.  If any
+  condition is ever non-nil, then the loop is exited and returns ~nil~.
+  Otherwise the loop returns ~t~.
+
+  The steps are thus:
+  1. The variable (by default, ~loopy-result~) is initialized to ~t~ and used as
+     the loop's implicit return value.
+  2. The values of the condition are checked.
+  3. If any of the conditions are non-nil, then the variable is set to ~nil~
+     and the loop is ended via the =leave= command.
+
+
+  #+attr_texinfo: :tag Note
+  #+begin_quote
+  Unlike the =always= command, =never= does not store any information in the
+  variable until it ends the loop.  Therefore, =never= does not affect the
+  loop's implicit return value when using the =always= command so long as the
+  conditions of =never= are always ~nil~.
+
+  Be aware, though, that this behavior depends on =always= and =never= using
+  the same variable.
+  #+end_quote
 
   #+BEGIN_SRC emacs-lisp
     ;; => t
@@ -3016,12 +3120,7 @@ It is incorrect to use both the command =thereis= and the command =always= or
     (loopy (list i '(1 0 1 0 1))
            ;; equivalent to `(never (or (= i 3) (= i 4)))'.
            (never (= i 3) (= i 4)))
-  #+END_SRC
 
-  =never= does not affect the loop's implicit return value when using the
-  =always= command.
-
-  #+begin_src emacs-lisp
     ;; This example taken from the documentation of CL's Iterate package.
     ;;
     ;; => 2, not t
@@ -3031,10 +3130,16 @@ It is incorrect to use both the command =thereis= and the command =always= or
   #+end_src
 
 #+findex: thereis
-- =(thereis COND [CONDS])= :: Immediately return the value of =COND= if said
-  value is ever non-nil.  Otherwise, the loop returns ~nil~.  If more than
-  one condition is specified, then they are treated as one condition joined
-  by ~and~.
+- =(thereis EXPR [EXPRS] &key into)= :: Check the result of each condition
+  =EXPR=.  If all conditions evaluate to a non-~nil~ value, the loop returns
+  that value.  Otherwise, the loop returns nil.
+
+  The steps are thus:
+  1. The variable (by default, ~loopy-result~) is initialized to ~nil~ and used
+     as the implicit return value of the loop.
+  2. The value of the conditions are stored in the variable.
+  3. If the value of the variable is non-nil, the loop exits.
+
 
   #+BEGIN_SRC emacs-lisp
     ;; => 3
@@ -3051,9 +3156,10 @@ It is incorrect to use both the command =thereis= and the command =always= or
            ;; Same as above.  Like `always' uses an explicit `and'.
            (thereis (> i 2) i))
 
-    ;; => 3
+    ;; => 7
     (loopy (list i '(nil nil 3 nil))
-           (thereis i))
+           (thereis i)
+           (finally-return (+ loopy-result 4)))
   #+END_SRC
 
 
@@ -4151,13 +4257,23 @@ A loop command has 7 main places to put code:
   given to ~let*~.  This is used for initializing variables needed for iteration
   commands, such as the =i= in =(list i '(1 2 3))= or to store the list ='(1 2
   3)= in =(list i '(1 2 3))=.  This also includes variables needed for
-  destructuring.
+  destructuring for said commands.
+
+  =loopy= will signal an error if iteration variables would be initialized
+  multiple times, as that would arise from expanding into incorrect code which
+  would fail during runtime.
 
 #+vindex: loopy--accumulation-vars
 - =loopy--accumulation-vars= :: Lists of a symbol and an expression that will be
   given to ~let*~.  This is used for initializing variables needed for
   accumulation commands, such as the =coll= in =(collect coll my-val)= or any
-  variables needed for destructuring.
+  variables needed for destructuring for said commands.
+
+#+vindex: loopy--other-vars
+- =loopy--other-vars= :: Lists of a symbol and an expression that will be
+  given to ~let*~.  This is used for initializing variables needed for
+  generic commands, such as the =my-var= in =(set my-var 2)= or any
+  variables needed for destructuring for said command.
 
 #+vindex: loopy--pre-conditions
 - =loopy--pre-conditions= :: Expressions that determine if the =while= loop

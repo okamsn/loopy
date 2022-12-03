@@ -502,6 +502,10 @@ The function creates quoted code that should be used by a macro."
         (setq result `(let* ,loopy--iteration-vars ,@(get-result))
               result-is-one-expression t))
 
+      (when loopy--other-vars
+        (setq result `(let* ,loopy--other-vars ,@(get-result))
+              result-is-one-expression t))
+
       ;; Declare accumulation variables.
       (when loopy--accumulation-vars
         (setq result `(let* ,loopy--accumulation-vars ,@(get-result))
@@ -708,34 +712,53 @@ macro `loopy' itself."
   ;; about void variables.
   (let ((instruction-type (cl-first instruction))
         (instruction-value (cl-second instruction)))
+
     (when (memq instruction-type erroring-instructions)
-      (error "Attempted to process should-error instruction: %s"
-             instruction))
+      (error "Attempted to process should-error instruction: %s" instruction))
+
     (cl-case (cl-first instruction)
       (loopy--generalized-vars
        (loopy--validate-binding instruction-value)
        (push instruction-value loopy--generalized-vars))
+
       (loopy--iteration-vars
        (loopy--validate-binding instruction-value)
        ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cl-first instruction-value))
-         (push instruction-value loopy--iteration-vars)))
+       (let ((var (cl-first instruction-value)))
+         (cond
+          ((loopy--with-bound-p var)) ; Do nothing.
+          ((loopy--command-bound-p var)
+           (error "Re-initializing iteration variable: %s" instruction-value))
+          (t (push instruction-value loopy--iteration-vars)))))
+
       (loopy--accumulation-vars
        (loopy--validate-binding instruction-value)
        ;; Don't want to accidentally rebind variables to `nil'.
        (unless (loopy--bound-p (cl-first instruction-value))
          (push instruction-value loopy--accumulation-vars)))
+
+      (loopy--other-vars
+       (loopy--validate-binding instruction-value)
+       ;; Don't want to accidentally rebind variables to `nil'.
+       (unless (loopy--bound-p (cl-first instruction-value))
+         (push instruction-value loopy--accumulation-vars)))
+
       (loopy--pre-conditions
        (push instruction-value loopy--pre-conditions))
+
       (loopy--main-body
        (push instruction-value loopy--main-body))
+
       (loopy--latter-body
        (push instruction-value loopy--latter-body))
+
       (loopy--post-conditions
        (push instruction-value loopy--post-conditions))
+
       (loopy--implicit-return
        (unless (loopy--already-implicit-return instruction-value)
          (push instruction-value loopy--implicit-return)))
+
       (loopy--vars-final-updates
        ;; These instructions are of the form `(l--a-f-u (var . update))'
        (let ((var-to-update (car instruction-value))
@@ -752,6 +775,7 @@ macro `loopy' itself."
       ;; Code for conditionally constructing the loop body.
       (loopy--skip-used
        (setq loopy--skip-used instruction-value))
+
       (loopy--non-returning-exit-used
        (setq loopy--non-returning-exit-used instruction-value))
 
@@ -777,12 +801,16 @@ macro `loopy' itself."
       ;; Places users probably shouldn't push to, but can if they want:
       (loopy--before-do
        (push instruction-value loopy--before-do))
+
       (loopy--after-do
        (push instruction-value loopy--after-do))
+
       (loopy--final-do
        (push instruction-value loopy--final-do))
+
       (loopy--final-return
        (push instruction-value loopy--final-return))
+
       (t
        (error "Loopy: Unknown body instruction: %s" instruction)))))
 
@@ -911,6 +939,9 @@ When EXCLUDE-MAIN-BODY is non-nil, don't reverse `loopy--main-body'."
     (setq loopy--main-body (nreverse loopy--main-body)))
   (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
         loopy--accumulation-vars (nreverse loopy--accumulation-vars)
+        ;; This one technically isn't needed yet, but it might be in the
+        ;; future.
+        loopy--other-vars (nreverse loopy--other-vars)
         ;; Correct conditions for things like `iter', which generates
         ;; values to check whether all values are yielded.
         loopy--pre-conditions (nreverse loopy--pre-conditions)

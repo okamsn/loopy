@@ -36,6 +36,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                    never (string-match-p "\\.elc\\'" f))))
 
 
+
 ;;; Macro arguments
 ;;;; Named (loop Name)
 
@@ -899,6 +900,11 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
      (loopy (group (repeat 1))) (finally-return t))
    :type 'user-error))
 
+;; Can't bind the same iteration variable with multiple commands.
+(ert-deftest iteration-same-var-multiple-cmd ()
+  (should-error (eval (quote (loopy (list i '(1 2 3))
+                                    (list i '(1 2 3)))))))
+
 ;;;;; Array
 (ert-deftest array ()
   (should (equal '(1 2 3)
@@ -1175,6 +1181,21 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                                      (collect coll (list i j))
                                      (finally-return coll)))))))
 
+(ert-deftest cons-init ()
+  (equal '((1 2 3 4) (2 3 4) (3 4) (4))
+         (lq (cons l '(1 2 3 4))
+             (collect l)))
+
+  (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
+         (lq (cons (car . cdr) '(1 2 3 4))
+             (collect (list car cdr))))
+
+  (equal '(25 (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
+         (lq (with (l 25))
+             (collect l)
+             (cons l '(1 2 3 4))
+             (collect l))))
+
 ;;;;; Iter
 (ert-deftest iter-with-single-var ()
   (should (equal '(1 2 3)
@@ -1215,6 +1236,34 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                      (iter i gen :close nil)
                      (iter j gen :close nil)
                      (collect (cons i j))))))
+
+(ert-deftest iter-init ()
+  (should (equal '(1 2 3)
+                 (lq (with (iter-maker (iter-lambda ()
+                                         (iter-yield 1)
+                                         (iter-yield 2)
+                                         (iter-yield 3))))
+                     (iter i (funcall iter-maker))
+                     (collect i))))
+
+  (should (equal '(27 1 1 2 2 3)
+                 (lq (with (iter-maker (iter-lambda ()
+                                         (iter-yield 1)
+                                         (iter-yield 2)
+                                         (iter-yield 3)))
+                           (i 27))
+                     (collect i)
+                     (iter i (funcall iter-maker))
+                     (collect i))))
+
+  (should (equal '((nil nil) (1 2) (1 2) (3 4) (3 4) (5 6))
+                 (lq (with (iter-maker (iter-lambda ()
+                                         (iter-yield (list 1 2))
+                                         (iter-yield (list 3 4))
+                                         (iter-yield (list 5 6)))))
+                     (collect (list i j))
+                     (iter (i j) (funcall iter-maker))
+                     (collect (list i j))))))
 
 ;;;;; List
 (ert-deftest list ()
@@ -1608,6 +1657,13 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                      (numbers i :from start :to end :by step)
                      (collect i)))))
 
+(ert-deftest nums-with ()
+  (should (equal '(24 1 1 2)
+                 (loopy (with (n 24))
+                        (collect n)
+                        (numbers n :from 1 :to 2)
+                        (collect n)))))
+
 ;;;;; Nums-Down
 (ert-deftest nums-down ()
   (should (equal '(10 8 6 4 2)
@@ -1626,7 +1682,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                  (eval (quote (loopy (numbers-down i 10 1 :by 2)
                                      (collect i)))))))
 
-;;;;;; Nums-Up
+;;;;; Nums-Up
 (ert-deftest nums-up ()
   (should (equal '(1 3 5 7 9)
                  (eval (quote (loopy (nums-up i 1 10 :by 2)
@@ -1667,6 +1723,13 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                  (eval (quote (loopy (collect coll i)
                                      (cycle i 3)
                                      (finally-return coll)))))))
+
+(ert-deftest cycle-init ()
+  (should (equal '(cat 0 0 1 1 2)
+                 (lq (with (my-var 'cat))
+                     (collect my-var)
+                     (cycle my-var 3)
+                     (collect my-var)))))
 
 ;;;;; Seq
 (ert-deftest seq ()
@@ -1880,6 +1943,13 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                  (lq (with (start 2) (end 8) (step 2)
                            (arr (cl-coerce (number-sequence 0 10) 'vector)))
                      (seq-index i arr :from start :to end :by step)
+                     (collect i)))))
+
+(ert-deftest seq-index-init ()
+  (should (equal '(27 0 0 1 1 2 2 3)
+                 (lq (with (i 27))
+                     (collect i)
+                     (seq-index i [1 2 3 4])
                      (collect i)))))
 
 ;;;;; Seq Ref
@@ -3695,6 +3765,11 @@ Not multiple of 3: 7")))
                                        (always (cl-oddp i))
                                        (always (< i 10))))))))
 
+(ert-deftest always-var ()
+  (should (equal 4 (lq (list i '(1 2 3))
+                       (always i (numberp i) (1+ i) :into test-var)
+                       (finally-return test-var)))))
+
 ;;;;; Never
 (ert-deftest never ()
   (should (equal nil
@@ -3718,7 +3793,10 @@ Not multiple of 3: 7")))
                                  (always 2)
                                  (never nil)))))))
 
-
+(ert-deftest never-var ()
+  (should (equal t (lq (list i '(1 2 3))
+                       (never (not (numberp i)) nil :into test-var)
+                       (finally-return test-var)))))
 
 ;;;;; Thereis
 (ert-deftest thereis ()
@@ -3730,6 +3808,34 @@ Not multiple of 3: 7")))
 
   (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
 			            (thereis (> i 7))))))))
+
+(ert-deftest thereis-incompatiblility ()
+  (should-error (lq (list i '(1 2 3))
+                    (always i)
+                    (thereis i)))
+
+  (should-error (lq (list i '(1 2 3))
+                    (never i)
+                    (thereis i)))
+
+  (should-error (lq (list i '(1 2 3))
+                    (always i :into test)
+                    (thereis i :into test)))
+
+  (should-error (lq (list i '(1 2 3))
+                    (never i :into test)
+                    (thereis i :into test))))
+
+(ert-deftest thereis-diff-var-compatibility ()
+  (should (equal '(1 11)
+                 (lq (list i '(1 2 3))
+                     (always i :into test1)
+                     (thereis (+ i 10) :into test2))))
+
+  (should (equal '(t 11)
+                 (lq (list i '(1 2 3))
+                     (never (not (numberp i)) :into test1)
+                     (thereis (+ i 10) :into test2)))))
 
 ;; finding
 (ert-deftest find ()
@@ -3902,7 +4008,7 @@ This assumes that you're on guix."
                                        (a j [4 5 6])
                                        (collect (cons i j)))))))))
 
-;;; Clean Stack Variables
+;;; Clean Up Variables
 (ert-deftest clean-stack-variables ()
   (let (loopy--known-loop-names
         loopy--accumulation-places
@@ -3922,8 +4028,19 @@ This assumes that you're on guix."
                     loopy--accumulation-list-end-vars
                     loopy--accumulation-variable-info))))
 
+(ert-deftest clean-var-variables ()
+  (eval (quote (let ((i  'good))
+                 (loopy (list i '(1 2 3)))
+                 (eq i 'good)))
+        t)
+
+  (eval (quote (let ((i  'good))
+                 (loopy (cycle 1)
+                        (set i 'bad))
+                 (eq i 'good)))
+        t))
+
 
 ;; Local Variables:
 ;; End:
-
-; LocalWords:  destructurings
+;; LocalWords:  destructurings
