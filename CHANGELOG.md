@@ -10,6 +10,58 @@ This document describes the user-facing changes to Loopy.
   `collect`.  This change makes these commands work with the new system for
   optimized accumulation variables.
 
+### Breaking Changes
+
+- Make it an error to re-use iteration variables with multiple iteration
+  commands.  The resulting code shouldn't have worked anyway, but we now report
+  it as an error during macro expansion.
+
+  ```elisp
+  ;; Will now signal an error during expansion:
+  (loopy (list i '(1 2 3))
+         (list i '(4 5 6)))
+  ```
+
+### Command Improvements
+
+- To produce faster code, some commands now avoid creating an intermediate
+  variable by initializing iteration variables to their first value.  This
+  initialization can be controlled using the `with` special macro argument,
+  which can result in slower code.  Previously, these iteration variables were
+  always initialized to `nil` and updated to the first value at the location of
+  the command.
+  - `cycle` already has this behavior, but can now be slower.
+  - `cons` will initialize to the list value.
+  - `nums` and `seq-index` will initialize to the first numeric value.
+
+- The behavior of `always`, `never`, and `thereis` has been slightly changed to
+  be more convenient and consistent with other commands.
+  - The commands now exit the loop without forcing a return value, which allows
+    implicit return values to be finalized.
+  - The commands now use variables to store the implicit return values of the
+    loop, defaulting to `loopy-result` and which can be specified via `:into`,
+    similar to accumulation commands.
+    ```elisp
+    ;; => "hello there"
+    (loopy (list i '(1 1 1 1))
+           ;; The return value of `(and (< i 2) "hello")' is "hello".
+           (always (< i 2) "hello")
+           (finally-return (concat loopy-result " there")))
+
+    ;; => 7
+    (loopy (list i '(nil nil 3 nil))
+           (thereis i)
+           (finally-return (+ loopy-result 4)))
+    ```
+  - As with other incompatible commands, an error is now signaled when trying to
+    use `thereis` with `always` or `never` **when using the same variable**
+
+### Other Changes
+
+- Add `loopy--other-vars`, given the more explicit restriction on
+  `loopy--iteration-vars`.  For example, these are the variables bound by the
+  `set` command, which are allowed to occur in more than one command.
+
 ## 0.11.2
 
 ### Bugs Fixed
@@ -26,7 +78,6 @@ This document describes the user-facing changes to Loopy.
                (nunion coll (mapcar #'1+ i) :at start)
                (finally-return coll))
   ```
-
 
 ## 0.11.1
 
