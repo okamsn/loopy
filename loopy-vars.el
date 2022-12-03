@@ -458,6 +458,10 @@ returning a value.")
 (defvar loopy--non-returning-exit-tag-name nil
   "The tag used by the `leave', `while', and `until' commands.")
 
+(defvar loopy--always-command-used nil
+  "Whether an `always' command was used.
+When an `always' command is used, the behavior of the `never' command changes.")
+
 (defvar loopy--after-do nil
   "Expressions to run (in order) after the loop successfully completes.
 These run in a `progn'.")
@@ -518,6 +522,13 @@ required for destructuring in accumulation commands.
 Unlike in `loopy--iteration-vars', these variables should be
 accessible from anywhere in the macro, and should not be reset
 for sub-loops.")
+
+(defvar loopy--other-vars nil
+  "Variables that don't fit with others (or have their restrictions).
+
+These are variables that are not from iteration commands and
+accumulation commands.  For example, variables bound by
+the `set' command.")
 
 (defvar loopy--accumulation-list-end-vars nil
   "Associations of accumulation variables and variables pointing to their ends.
@@ -638,6 +649,7 @@ known to fall into the first group.")
       loopy--optimized-accum-vars
       loopy--accumulation-vars
       loopy--generalized-vars
+      loopy--other-vars
       loopy--pre-conditions
       loopy--main-body
       loopy--latter-body
@@ -665,20 +677,32 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 
 ;;;; Functions to for macro expansion
 
+(defun loopy--with-bound-p (var-name)
+  "Whether VAR-NAME is bound in `loopy--with-vars' or `loopy--without-vars'.
+
+Some iteration commands can produce more efficient code if there
+is no request for a specific initialization value."
+  (or (memq var-name (mapcar #'car loopy--with-vars))
+      (memq var-name loopy--without-vars)))
+
+(defun loopy--command-bound-p (var-name)
+  "Whether VAR-NAME was bound by a command (and not a special macro argument).
+
+The variable can exist in `loopy--iteration-vars',
+`loopy--accumulation-vars', or `loopy--generalized-vars'."
+  (or (memq var-name (mapcar #'car loopy--iteration-vars))
+      (memq var-name (mapcar #'car loopy--accumulation-vars))
+      (memq var-name (mapcar #'car loopy--generalized-vars))))
+
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
 
 This can happen when multiple loop commands refer to the same
 variable, or when a variable is introduced via `with'.
 
-The variable can exist in `loopy--with-vars',
-`loopy--iteration-vars', `loopy--accumulation-vars', or
-`loopy--generalized-vars'."
-  (or (memq var-name (mapcar #'car loopy--with-vars))
-      (memq var-name (mapcar #'car loopy--iteration-vars))
-      (memq var-name (mapcar #'car loopy--accumulation-vars))
-      (memq var-name (mapcar #'car loopy--generalized-vars))
-      (memq var-name loopy--without-vars)))
+See also `loopy--with-bound-p' and `loopy--command-bound-p'."
+  (or (loopy--with-bound-p var-name)
+      (loopy--command-bound-p var-name)))
 
 (defun loopy--already-implicit-return (expression)
   "Check whether EXPRESSION is in the list of implied return values.
