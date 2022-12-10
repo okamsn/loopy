@@ -67,7 +67,9 @@ so we must make multiple bodies."
 
 (cl-defmacro loopy-deftest
     ( name args
-      &key repeat body loopy loopy-iter multi-body
+      &key repeat body multi-body repeat-loopy repeat-loopy-iter
+      (loopy nil loopy-provided)
+      (loopy-iter nil loopy-iter-provided)
       (result nil result-provided)
       (error nil error-provided))
   "Create test for `loopy' and `loopy-iter'.
@@ -81,24 +83,35 @@ so we must make multiple bodies."
 - RESULT is compared using `equal' and `should'.
 - ERROR is the list of signals for `should-error'.
 - REPEAT is the temp name in LOOPY and ITER for which we
-  test multiple names."
+  test multiple names.
+- REPEAT-LOOPY is the temp name in LOOPY for which we
+  test multiple names.
+- REPEAT-LOOPY-ITER is the temp name in LOOPY-ITER for which we
+  test multiple names.
+
+LOOPY and LOOPY-ITER can be `t' instead of an alist,
+which will run those tests without substitution."
   (declare (indent 2))
   (unless (or result-provided error-provided) (error "Must include `result' or `error'"))
   (unless (or loopy loopy-iter) (error "Must include `loopy' or `loopy-iter'"))
   (unless body (error "Must include `body'"))
+  (when (eq loopy t) (setq loopy nil))
+  (when (eq loopy-iter t) (setq loopy-iter nil))
   (cl-labels ((eval-wrap (name body)
                          `(eval (quote (,name ,@body)) t))
               (output-wrap (x)
                            (cond
                             (result-provided `(should (equal ,result ,x)))
                             (error-provided  `(should-error ,x :type ,error))))
-              (build (name alist)
-                     (when alist
+              (build (name &key alist provided repeat)
+                     (when provided
                        (mapcar (lambda (x) (output-wrap (eval-wrap name x)))
                                (loopy--deftest1 alist body repeat multi-body)))))
     `(ert-deftest ,name ,args
-       ,@(build 'loopy loopy)
-       ,@(build 'loopy-iter loopy-iter))))
+       ,@(build 'loopy :alist loopy :provided loopy-provided
+                :repeat (or repeat repeat-loopy))
+       ,@(build 'loopy-iter :alist loopy-iter :provided loopy-iter-provided
+                :repeat (or repeat repeat-loopy-iter)))))
 
 
 ;;; Macro arguments
