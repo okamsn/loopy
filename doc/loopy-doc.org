@@ -2820,18 +2820,39 @@ Sequence accumulation commands are used to join lists (such as =union= and
     (loopy (list i '(1 2 3))
            (finding i (> i 2)))
 
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (> i 2) (return i)))
+
     ;; => nil
     (loopy (list i '(1 2 3))
            (finding i (> i 4)))
+
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (> i 4) (return i)))
 
     ;; => "not found"
     (loopy (list i '(1 2 3))
            (finding i (> i 4) :on-failure "not found"))
 
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (> i 4) (return i))
+           (else-do (cl-return "not found")))
+
     ;; Does not display message.
     ;; => 2
     (loopy (list i '(1 2 3))
            (finding i (= i 2) :into found)
+           (after-do (message "found: %s" found))
+           (finally-return found))
+
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (= i 2)
+             (set found i)
+             (leave))
            (after-do (message "found: %s" found))
            (finally-return found))
 
@@ -2842,9 +2863,25 @@ Sequence accumulation commands are used to join lists (such as =union= and
            (finally-do (message "found: %s" found))
            (finally-return found))
 
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (= i 2)
+             (set found i)
+             (leave))
+           (finally-do (message "found: %s" found))
+           (finally-return found))
+
     ;; => "not found"
     (loopy (list i '(1 2 3))
            (finding whether-found i (> i 4) :on-failure "not found")
+           (finally-return whether-found))
+
+    ;; Equivalent to above.
+    (loopy (list i '(1 2 3))
+           (when (> i 4)
+             (set whether-found i)
+             (leave))
+           (else-do (setq whether-found "not found"))
            (finally-return whether-found))
   #+END_SRC
 
@@ -2983,13 +3020,32 @@ during the loop.  They work like a combination of iteration and accumulation
 commands, in that values are stored in ~loopy-result~ and that can terminate the
 loop.
 
-In boolean commands, ~loopy-result~ is used as the implicit return value of the
-loop.  These commands exit the loop without forcing a value
-([[#exiting-the-loop-early]]).  In other words, their exiting the loop does not
-prevent optimized accumulations from optimizing their values.  Note, though,
-that because such need is infrequent and the boolean commands already use
-~loopy-result~, such optimized accumulation variables must be created with
-the special macro argument =accum-opt= and must be used explicitly.
+The behavior and use of the boolean commands is a compromise between consistency
+with other commands, similarity to how similar features are used in other
+libraries, and convenience for how they are commonly used.  This gives us the
+following:
+
+- ~loopy-result~ is used as the implicit return value of the loop.
+
+- Like accumulation commands, the keyword =:into= can be used the specify a
+  variable other than ~loopy-result~.
+
+  - Unlike accumulation commands, there is no non-keyword way to specify a
+    variable.  The first argument (the only required argument) of each boolean
+    command is a condition to check.
+
+  - The =always= and =never= commands must use the same variable to work
+    together correctly.  By default, the both use ~loopy-result~.
+
+- These commands exit the loop without forcing a value ([[#exiting-the-loop-early]]).
+
+  - Therefore, optimized accumulation variables can be finalized even when the
+    loop ends, as happens with the =leave= command.
+
+  - However, because the boolean commands already use ~loopy-result~, such
+    optimized accumulation variables must be created with the special macro
+    argument =accum-opt= and must be used explicitly, as in the below example.
+
 
 #+begin_src emacs-lisp
   ;; A maybe unidiomatic example:
@@ -3019,20 +3075,12 @@ the special macro argument =accum-opt= and must be used explicitly.
            collect i)
 #+end_src
 
-
 #+attr_texinfo: :tag Warn
 #+begin_quote
 Using the command =thereis= is incompatible with using the commands =always= and
 =never=, as this would create conflicting initial values for the implicit return
 value (both using ~loopy-result~).
 #+end_quote
-
-Like accumulation commands, these boolean commands support the keyword =:into=,
-which changes the variable used to store the implicit return value.  Unlike
-accumulation commands, and as in ~cl-loop~ and Common Lisp's ~iterate~, there is
-no non-keyword way to specify the receiving variable.  Note that it is expected
-that the commands =always= and =never= use the same variable.
-
 
 #+findex: always
 - =(always EXPR [EXPRS] &key into)= :: Check the result of each condition

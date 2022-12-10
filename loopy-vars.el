@@ -598,6 +598,12 @@ kinds accumulations.
 Generally, this is used with commands that produce lists, such as
 `collect' and `append'.")
 
+(defun loopy--get-accum-counts (loop var cmd-name)
+  "Get the count of accumulation places for VAR in LOOP.
+CMD-NAME is used for signaling errors."
+  (or (map-nested-elt loopy--accumulation-places (list loop var))
+      (signal 'loopy-missing-accum-counters (list cmd-name))))
+
 (defvar loopy--accumulation-constructors
   '((adjoin .  loopy--construct-accum-adjoin)
     (append .  loopy--construct-accum-append)
@@ -682,17 +688,27 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 
 Some iteration commands can produce more efficient code if there
 is no request for a specific initialization value."
-  (or (memq var-name (mapcar #'car loopy--with-vars))
-      (memq var-name loopy--without-vars)))
+  (or (cl-loop for (var val) in loopy--with-vars
+               when (eq var var-name)
+               return (cons 'with val))
+      (cl-loop for x in loopy--without-vars
+               when (eq x var-name)
+               return (cons 'without nil))))
 
 (defun loopy--command-bound-p (var-name)
   "Whether VAR-NAME was bound by a command (and not a special macro argument).
 
 The variable can exist in `loopy--iteration-vars',
 `loopy--accumulation-vars', or `loopy--generalized-vars'."
-  (or (memq var-name (mapcar #'car loopy--iteration-vars))
-      (memq var-name (mapcar #'car loopy--accumulation-vars))
-      (memq var-name (mapcar #'car loopy--generalized-vars))))
+  (or (cl-loop for (var val) in loopy--iteration-vars
+               when (eq var var-name)
+               return (cons 'iteration val))
+      (cl-loop for (var val) in loopy--accumulation-vars
+               when (eq var var-name)
+               return (cons 'accumulation val))
+      (cl-loop for (var val) in loopy--generalized-vars
+               when (eq var var-name)
+               return (cons 'generalized val))))
 
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
@@ -730,7 +746,11 @@ or `loopy-aliases'."
 (defun loopy--check-target-loop-name (target)
   "Signal an error whether TARGET is not a valid loop name."
   (unless (loopy--known-loop-name-p target)
-    (error "Unknown loop target: %s" target)))
+    (signal 'loopy-unknown-loop-target (list target))))
+
+(defun loopy--check-position-name (pos)
+  (unless (member pos '(start end beginning))
+    (signal 'loopy-bad-position-command-argument (list pos))))
 
 (defmacro loopy--wrap-variables-around-body (&rest body)
   "Wrap variables in `loopy--variables' in `let*' bindings around BODY."
