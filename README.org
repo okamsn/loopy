@@ -30,6 +30,15 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - The boolean commands =always=, =never=, and =thereis= now behave more like
+     accumulation commands and use ~loopy-result~ by default.
+   - Re-using iteration variables in multiple iteration commands now signals
+     an error.
+   - By default, the commands =cons=, =iter=, =nums=, and =seq-index=
+     /can/ update named iteration variables outside of the main loop body
+     and initialize variables to non-nil values, producing faster code.
+     This can be overridden via the special macro argument =with=.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.
    - Removed the variable ~loopy-first-iteration~.  This can be replaced by just
