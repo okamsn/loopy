@@ -137,28 +137,47 @@ which will run those tests without substitution."
 ;;   (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
 
 ;;;; With
-(ert-deftest with-arg-order ()
-  (should (= 4
-             (eval (quote (loopy (with (a 2)
-                                       (b (+ a 2)))
-                                 (return b))))))
+(loopy-deftest with-arg-order ()
+  :result 4
+  :body ((_with (a 2) (b (+ a 2)))
+         (_return b))
+  :loopy ((_with . (with let* init))
+          (_return . return))
+  :loopy-iter ((_with . (with init))
+               (_return . returning))
+  :repeat _with)
 
-  (should (= 4
-             (eval (quote (loopy (let* (a 2)
-                                   (b (+ a 2)))
-                                 (return b))))))
+;; (ert-deftest with-arg-order ()
+;;   (should (= 4
+;;              (eval (quote (loopy (with (a 2)
+;;                                        (b (+ a 2)))
+;;                                  (return b))))))
+;;
+;;   (should (= 4
+;;              (eval (quote (loopy (let* (a 2)
+;;                                    (b (+ a 2)))
+;;                                  (return b))))))
+;;
+;;   (should (= 4
+;;              (eval (quote (loopy (init (a 2)
+;;                                        (b (+ a 2)))
+;;                                  (return b)))))))
 
-  (should (= 4
-             (eval (quote (loopy (init (a 2)
-                                       (b (+ a 2)))
-                                 (return b)))))))
+(loopy-deftest with-destructuring ()
+  :result -2
+  :body ((with ((a b) '(1 2))
+               ([c d] `[,(1+ a) ,(1+ b)]))
+         (return (+ (- a b)
+                    (- c d))))
+  :loopy t
+  :loopy-iter ((return . returning)))
 
-(ert-deftest with-destructuring ()
-  (should (= -2
-             (eval (quote (loopy (with ((a b) '(1 2))
-                                       ([c d] `[,(1+ a) ,(1+ b)]))
-                                 (return (+ (- a b)
-                                            (- c d)))))))))
+;; (ert-deftest with-destructuring ()
+;;   (should (= -2
+;;              (eval (quote (loopy (with ((a b) '(1 2))
+;;                                        ([c d] `[,(1+ a) ,(1+ b)]))
+;;                                  (return (+ (- a b)
+;;                                             (- c d)))))))))
 
 ;;;; Without
 (ert-deftest without ()
