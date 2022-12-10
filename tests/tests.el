@@ -43,89 +43,124 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (cl-loop for f in (directory-files ".")
                    never (string-match-p "\\.elc\\'" f))))
 
-;; Put these into `eval-and-compile' to silence byte compiler errors.
-(eval-and-compile
-  (defun loopy--test-translate (alist body)
-    "Replace items in ALIST as the cars of BODY."
-    (mapcar (lambda (sexp)
-              (pcase sexp
-                (`(,first . ,rest)
-                 (cons (if-let ((trans (map-elt alist first))) trans first)
-                       (loopy--test-translate alist rest)))
-                (_ sexp)))
-            body))
-
-  (defun loopy--deftest1 (alist body repeat multi-body)
-    "Return a list of translated bodies.
-ALIST is the translations.  BODY is the untranslated body.
-REPEAT is the symbol is ALIST which has multiple translations,
-so we must make multiple bodies."
-    ;; Use `mapcan' to turn list of lists of bodies into list of bodies.
-    (mapcan (lambda (x)
-              (if repeat
-                  (let ((names (map-elt alist repeat)))
-                    (mapcar (lambda (name)
-                              (loopy--test-translate (cons `(,repeat . ,name) alist)
-                                                     x))
-                            names))
-                (list (loopy--test-translate alist x))))
-            (if multi-body body (list body)))))
-
 (cl-defmacro loopy-deftest
     ( name args
-      &key repeat body multi-body repeat-loopy repeat-loopy-iter wrap
+      &key repeat body multi-body
+      repeat-loopy repeat-iter-bare repeat-iter-keyword
+      wrap
       (loopy nil loopy-provided)
-      (loopy-iter nil loopy-iter-provided)
+      (iter-bare nil iter-bare-provided)
+      (iter-keyword nil iter-keyword-provided)
       (result nil result-provided)
       (error nil error-provided))
   "Create test for `loopy' and `loopy-iter'.
 
 - NAME is the name of the test.
+
 - ARGS is the list of test arguments.
+
 - BODY is the test.
+
 - MULTI-BODY means there are multiple bodies in BODY.
+
 - LOOPY are the `loopy' names.
-- ITER are the `loopy-iter' names.
+
+- ITER-BARE are the `loopy-iter' names.
+
+- ITER-KEYWORD are the `loopy-iter' names after keywords.
+
 - RESULT is compared using `equal' and `should'.
+
 - ERROR is the list of signals for `should-error'.
+
 - REPEAT is the temp name in LOOPY and ITER for which we
   test multiple names.
+
 - REPEAT-LOOPY is the temp name in LOOPY for which we
   test multiple names.
-- REPEAT-LOOPY-ITER is the temp name in LOOPY-ITER for which we
+
+- REPEAT-ITER-BARE is the temp name in ITER-BARE for which we
   test multiple names.
+
+- REPEAT-ITER-KEYWORD is the temp name in ITER-KEYWORD for which we
+  test multiple names.
+
 - WRAP is an alist of (VAR . EXPANSION-TO-BE-QUOTE).
   E.g., (x . (backquote (let ((a 2)) ,x))).
 
-LOOPY and LOOPY-ITER can be `t' instead of an alist,
-which will run those tests without substitution."
+LOOPY and ITER-BARE can be `t' instead of an alist, which will
+run those tests without substitution.  If ITER-KEYWORD is `t', we
+prefix the items in LOOPY or ITER-BARE."
   (declare (indent 2))
   (unless (or result-provided error-provided) (error "Must include `result' or `error'"))
-  (unless (or loopy loopy-iter) (error "Must include `loopy' or `loopy-iter'"))
+  (unless (or loopy iter-bare) (error "Must include `loopy' or `iter-bare'"))
   (unless body (error "Must include `body'"))
+
   (when (eq loopy t) (setq loopy nil))
-  (when (eq loopy-iter t) (setq loopy-iter nil))
-  (cl-labels ((surround-wrap (sexp wraps)
-                             (let ((result sexp))
-                               (pcase-dolist (`(,var . ,exp) wraps)
-                                 (setq result (funcall `(lambda (,var) ,exp)
-                                                       result)))
-                               result))
-              (eval-wrap (sexp) `(eval (quote ,sexp) t))
-              (output-wrap (x) (cond (result-provided `(should (equal ,result ,x)))
-                                     (error-provided  `(should-error ,x :type ,error))))
-              (build (name &key alist provided repeat)
-                     (when provided
-                       (mapcar (lambda (x) (thread-first `(,name ,@x)
-                                                         (surround-wrap wrap)
-                                                         eval-wrap
-                                                         output-wrap))
-                               (loopy--deftest1 alist body repeat multi-body)))))
+  (when (eq iter-bare t) (setq iter-bare nil))
+  (when (eq iter-keyword t) (setq iter-keyword (or loopy iter-bare)))
+
+  (cl-labels
+      (;; Wrap body into other forms.
+       (surround-wrap (sexp wraps)
+                      (let ((result sexp))
+                        (pcase-dolist (`(,var . ,exp) wraps)
+                          (setq result (funcall `(lambda (,var) ,exp)
+                                                result)))
+                        result))
+       ;; Want to evaluate quoted form lexically.
+       (eval-wrap (sexp) `(eval (quote ,sexp) t))
+       ;; What output should be.
+       (output-wrap (x) (cond (result-provided `(should (equal ,result ,x)))
+                              (error-provided  `(should-error ,x :type ,error))))
+       ;; Replace given placeholder command names with actual names,
+       ;; maybe including the `for' keyword for `loopy-iter'.
+       (translate (group-alist this-body &optional keyword)
+                  (mapcar (lambda (sexp)
+                            (pcase sexp
+                              (`(,first . ,rest)
+                               (if keyword
+                                   (if-let ((trans (map-elt group-alist first)))
+                                       `(for ,trans ,@rest)
+                                     sexp)
+                                 (cons (map-elt group-alist first first)
+                                       (translate group-alist rest))))
+                              (_ sexp)))
+                          this-body))
+       (make-bodies (alist group-repeat &optional keyword)
+                    ;; Use `mapcan' to turn list of lists of bodies into list of
+                    ;; bodies.
+                    (mapcan (lambda (x)
+                              (if group-repeat
+                                  (let ((names (map-elt alist repeat)))
+                                    (mapcar (lambda (name)
+                                              (translate `((,group-repeat . ,name)
+                                                           ,@alist)
+                                                         x keyword))
+                                            names))
+                                (list (translate alist x keyword))))
+                            (if multi-body body (list body))))
+       (build (name &key alist provided repeat keyword)
+              (when provided
+                (mapcar (lambda (x) (thread-first `(,name ,@x)
+                                                  (surround-wrap wrap)
+                                                  eval-wrap
+                                                  output-wrap))
+                        (make-bodies alist repeat keyword)))))
     `(ert-deftest ,name ,args
-       ,@(build 'loopy :alist loopy :provided loopy-provided
+       ,@(build 'loopy
+                :alist loopy
+                :provided loopy-provided
                 :repeat (or repeat repeat-loopy))
-       ,@(build 'loopy-iter :alist loopy-iter :provided loopy-iter-provided
-                :repeat (or repeat repeat-loopy-iter)))))
+       ,@(build 'loopy-iter
+                :alist iter-bare
+                :provided iter-bare-provided
+                :repeat (or repeat repeat-iter-bare))
+       ,@(build 'loopy-iter
+                :alist iter-keyword
+                :provided iter-keyword-provided
+                :repeat (or repeat repeat-iter-keyword)
+                :keyword t))))
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
@@ -133,15 +168,17 @@ which will run those tests without substitution."
 (loopy-deftest named ()
   :result 4
   :multi-body t
-  :body (((named my-loop) (_return-from my-loop 4))
-         ( my-loop (_collect 4) (_leave-from my-loop)
-           (finally-return (car loopy-result))))
-  :loopy ((_collect . collect)
-          (_return-from . return-from)
-          (_leave-from . leave-from))
-  :loopy-iter ((_collect . collecting)
-               (_return-from . returning-from)
-               (_leave-from . leaving-from)))
+  :body (((named my-loop)
+          (return-from my-loop 4))
+         (my-loop
+          (collect 4)
+          (leave-from my-loop)
+          (finally-return (car loopy-result))))
+  :loopy t
+  :iter-bare ((collect . collecting)
+              (return-from . returning-from)
+              (leave-from . leaving-from))
+  :iter-keyword t)
 
 ;; (ert-deftest named ()
 ;;   (should (= 4 (loopy my-loop (return-from my-loop 4))))
@@ -156,8 +193,9 @@ which will run those tests without substitution."
          (_return b))
   :loopy ((_with . (with let* init))
           (_return . return))
-  :loopy-iter ((_with . (with init))
-               (_return . returning))
+  :iter-bare ((_with . (with init))
+              (_return . returning))
+  :iter-keyword t
   :repeat _with)
 
 ;; (ert-deftest with-arg-order ()
