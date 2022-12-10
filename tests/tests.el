@@ -73,7 +73,7 @@ so we must make multiple bodies."
 
 (cl-defmacro loopy-deftest
     ( name args
-      &key repeat body multi-body repeat-loopy repeat-loopy-iter
+      &key repeat body multi-body repeat-loopy repeat-loopy-iter wrap
       (loopy nil loopy-provided)
       (loopy-iter nil loopy-iter-provided)
       (result nil result-provided)
@@ -94,6 +94,8 @@ so we must make multiple bodies."
   test multiple names.
 - REPEAT-LOOPY-ITER is the temp name in LOOPY-ITER for which we
   test multiple names.
+- WRAP is an alist of (VAR . EXPANSION-TO-BE-QUOTE).
+  E.g., (x . (backquote (let ((a 2)) ,x))).
 
 LOOPY and LOOPY-ITER can be `t' instead of an alist,
 which will run those tests without substitution."
@@ -103,15 +105,21 @@ which will run those tests without substitution."
   (unless body (error "Must include `body'"))
   (when (eq loopy t) (setq loopy nil))
   (when (eq loopy-iter t) (setq loopy-iter nil))
-  (cl-labels ((eval-wrap (name body)
-                         `(eval (quote (,name ,@body)) t))
-              (output-wrap (x)
-                           (cond
-                            (result-provided `(should (equal ,result ,x)))
-                            (error-provided  `(should-error ,x :type ,error))))
+  (cl-labels ((surround-wrap (sexp wraps)
+                             (let ((result sexp))
+                               (pcase-dolist (`(,var . ,exp) wraps)
+                                 (setq result (funcall `(lambda (,var) ,exp)
+                                                       result)))
+                               result))
+              (eval-wrap (sexp) `(eval (quote ,sexp) t))
+              (output-wrap (x) (cond (result-provided `(should (equal ,result ,x)))
+                                     (error-provided  `(should-error ,x :type ,error))))
               (build (name &key alist provided repeat)
                      (when provided
-                       (mapcar (lambda (x) (output-wrap (eval-wrap name x)))
+                       (mapcar (lambda (x) (thread-first `(,name ,@x)
+                                                         (surround-wrap wrap)
+                                                         eval-wrap
+                                                         output-wrap))
                                (loopy--deftest1 alist body repeat multi-body)))))
     `(ert-deftest ,name ,args
        ,@(build 'loopy :alist loopy :provided loopy-provided
@@ -4158,4 +4166,4 @@ This assumes that you're on guix."
 
 ;; Local Variables:
 ;; End:
-;; LocalWords:  destructurings
+;; LocalWords:  destructurings backquote
