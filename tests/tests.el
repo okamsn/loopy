@@ -221,7 +221,7 @@ prefix the items in LOOPY or ITER-BARE."
          (return (+ (- a b)
                     (- c d))))
   :loopy t
-  :loopy-iter ((return . returning)))
+  :iter-bare ((return . returning)))
 
 ;; (ert-deftest with-destructuring ()
 ;;   (should (= -2
@@ -240,9 +240,9 @@ prefix the items in LOOPY or ITER-BARE."
          (set b (+ b c))
          (return a b))
   :loopy ((_without . (without no-init no-with)))
-  :loopy-iter ((_without . (without no-init no-with))
-               (set . setting)
-               (return . returning))
+  :iter-bare ((_without . (without no-init no-with))
+              (set . setting)
+              (return . returning))
   :repeat _without)
 
 ;; (ert-deftest without ()
@@ -308,25 +308,33 @@ prefix the items in LOOPY or ITER-BARE."
          (after-do (setq my-ret t))
          (finally-return my-ret))
   :loopy t
-  :loopy-iter ((list . listing)))
+  :iter-bare ((list . listing)))
 
 (loopy-deftest basic-after-does-not-run ()
   :result nil
   :multi-body t
   :body (((with (my-ret nil))
-          (list i '(1 2 3 4))
-          (return nil)
+          (_list i '(1 2 3 4))
+          (_return nil)
           (_after (setq my-ret t))
           (finally-return my-ret))
          ((with (my-ret nil))
-          (list i '(1 2 3 4))
-          (leave)
+          (_list i '(1 2 3 4))
+          (_leave)
           (_after (setq my-ret t))
           (finally-return my-ret)))
-  :loopy ((_after . (after-do after else-do else)))
-  :loopy-iter ((_after . (after-do after else-do else))
-               (return . returning)
-               (leave . leaving))
+  :loopy ((_after . (after-do after else-do else))
+          (_leave . leave)
+          (_return . return)
+          (_list . list))
+  :iter-bare ((_after . (after-do after else-do else))
+              (_list . listing)
+              (_return . returning)
+              (_leave . leaving))
+  :iter-keyword ((_after . (after-do after else-do else))
+                 (_list . listing)
+                 (_return . returning)
+                 (_leave . leaving))
   :repeat _after)
 
 ;; (ert-deftest basic-after-do ()
@@ -356,55 +364,116 @@ prefix the items in LOOPY or ITER-BARE."
 ;;                                            (finally-return my-ret))))))))
 
 ;;;; Before and After
-(loopy-deftest )
-(ert-deftest basic-before-and-after-test ()
-  (should (= 3 (eval (quote (loopy (with (i 1))
-                                   (before-do (cl-incf i))
-                                   (repeat 1)
-                                   (after-do (cl-incf i))
-                                   (finally-return i)))))))
+(loopy-deftest basic-before-and-after-test ()
+  :result 3
+  :body ((with (i 1))
+         (before-do (cl-incf i))
+         (cycle 1)
+         (after-do (cl-incf i))
+         (finally-return i))
+  :loopy t
+  :iter-bare ((cycle . cycling))
+  :iter-keyword ((cycle . cycle)))
+
+;; (ert-deftest basic-before-and-after-test ()
+;;   (should (= 3 (eval (quote (loopy (with (i 1))
+;;                                    (before-do (cl-incf i))
+;;                                    (repeat 1)
+;;                                    (after-do (cl-incf i))
+;;                                    (finally-return i)))))))
 
 ;;;; Wrap
-
-(ert-deftest wrap ()
+(loopy-deftest wrap ()
   ;; Test saving match data
-  (should
-   (save-match-data
-     (let ((original-data (set-match-data nil)))
-       (equal original-data
-              (eval (quote (loopy (wrap save-match-data)
-                                  (repeat 1)
-                                  (do (string-match (make-string 100 ?a)
-                                                    (make-string 100 ?a)))
-                                  (finally-return (match-data)))))))))
+  :result t
+  :wrap ((x . `(let ((original-data (set-match-data nil)))
+                 (equal original-data ,x))))
+  :body ((wrap save-match-data)
+         (_cycle 1)
+         (_do (string-match (make-string 100 ?a)
+                            (make-string 100 ?a)))
+         (finally-return (match-data)))
+  :loopy ((_cycle . cycle)
+          (_do . do))
+  :iter-bare ((_cycle . cycling)
+              ;; Use `ignore' to eval arguments without doing anything.
+              (_do . ignore))
+  :iter-keyword ((_cycle . cycle)
+                 (_do . do)))
 
+(loopy-deftest wrap-order ()
   ;; Test order things wrapped in.
-  (should (= 3 (eval (quote (loopy (wrap (let ((a 1)))
-                                         (let ((b (1+ a)))))
-                                   (return (+ a b)))))))
+  :result 3
+  :body ((wrap (let ((a 1)))
+               (let ((b (1+ a)))))
+         (return (+ a b)))
+  :loopy t
+  :iter-bare ((return . returning)))
 
-  ;; Ensure wrapping effects don't linger.
-  (should-not
-   (save-match-data
-     (let ((original-data (set-match-data nil)))
-       (equal original-data
-              (eval (quote (loopy (cycle 1)
-                                  (do (string-match (make-string 100 ?a)
-                                                    (make-string 100 ?a)))
-                                  (finally-return (match-data))))))))))
+(loopy-deftest wrap-not-linger ()
+  :result nil
+  :wrap ((x . `(let ((original-data (set-match-data nil)))
+                 (equal original-data ,x))))
+  :body ((_cycle 1)
+         (_do (string-match (make-string 100 ?a)
+                            (make-string 100 ?a)))
+         (finally-return (match-data)))
+  :loopy ((_cycle . cycle)
+          (_do . do))
+  :iter-bare ((_cycle . cycling)
+              ;; Use `ignore' to eval arguments without doing anything.
+              (_do . ignore))
+  :iter-keyword ((_cycle . cycle)
+                 (_do . do)))
+
+;; (ert-deftest wrap ()
+;;   ;; Test saving match data
+;;   (should
+;;    (save-match-data
+;;      (let ((original-data (set-match-data nil)))
+;;        (equal original-data
+;;               (eval (quote (loopy (wrap save-match-data)
+;;                                   (repeat 1)
+;;                                   (do (string-match (make-string 100 ?a)
+;;                                                     (make-string 100 ?a)))
+;;                                   (finally-return (match-data)))))))))
+;;
+;;   ;; Test order things wrapped in.
+;;   (should (= 3 (eval (quote (loopy (wrap (let ((a 1)))
+;;                                          (let ((b (1+ a)))))
+;;                                    (return (+ a b)))))))
+;;
+;;   ;; Ensure wrapping effects don't linger.
+;;   (should-not
+;;    (save-match-data
+;;      (let ((original-data (set-match-data nil)))
+;;        (equal original-data
+;;               (eval (quote (loopy (cycle 1)
+;;                                   (do (string-match (make-string 100 ?a)
+;;                                                     (make-string 100 ?a)))
+;;                                   (finally-return (match-data))))))))))
 
 ;;;; Final Instructions
-(ert-deftest finally-do ()
-  (should (and (= 10
-                  (let ((my-var))
-                    (loopy (list i (number-sequence 1 10))
-                           (finally-do (setq my-var i)))
-                    my-var))
-               (= 10
-                  (let ((my-var))
-                    (loopy (list i (number-sequence 1 10))
-                           (finally (setq my-var i)))
-                    my-var)))))
+(loopy-deftest finally-do ()
+  :result 10
+  :wrap ((x . `(let ((my-var)) ,x my-var)))
+  :body ((_list i (number-sequence 1 10))
+         (finally-do (setq my-var i)))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
+
+;; (ert-deftest finally-do ()
+;;   (should (and (= 10
+;;                   (let ((my-var))
+;;                     (loopy (list i (number-sequence 1 10))
+;;                            (finally-do (setq my-var i)))
+;;                     my-var))
+;;                (= 10
+;;                   (let ((my-var))
+;;                     (loopy (list i (number-sequence 1 10))
+;;                            (finally (setq my-var i)))
+;;                     my-var)))))
 
 (ert-deftest finally-do-not-affect-return ()
   (should (eq nil
