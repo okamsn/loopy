@@ -19,6 +19,12 @@
 (require 'loopy-commands "./loopy-commands.el")
 (require 'loopy-iter "./loopy-iter.el")
 
+(push (list "Loopy Tests"
+            (rx (0+ blank) "(loopy-deftest" (0+ blank)
+                (group-n 1 (1+ (or word (syntax symbol)))))
+            1)
+      imenu-generic-expression)
+
 ;; "loopy quote"
 (defmacro lq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
