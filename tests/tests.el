@@ -12,10 +12,12 @@
 (require 'generator)
 (require 'pcase)
 (require 'map "./dependecy-links/map.el" 'no-error)
-(eval-when-compile (require 'loopy "./loopy.el"))
+(eval-when-compile (require 'loopy "./loopy.el")
+                   (require 'loopy-iter "./loopy-iter.el"))
 (require 'loopy "./loopy.el")
 (require 'loopy-vars "./loopy-vars.el")
 (require 'loopy-commands "./loopy-commands.el")
+(require 'loopy-iter "./loopy-iter.el")
 
 ;; "loopy quote"
 (defmacro lq (&rest body)
@@ -35,16 +37,91 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (cl-loop for f in (directory-files ".")
                    never (string-match-p "\\.elc\\'" f))))
 
+;; Put these into `eval-and-compile' to silence byte compiler errors.
+(eval-and-compile
+  (defun loopy--test-translate (alist body)
+    "Replace items in ALIST as the cars of BODY."
+    (mapcar (lambda (sexp)
+              (pcase sexp
+                (`(,first . ,rest)
+                 (cons (if-let ((trans (map-elt alist first))) trans first)
+                       (loopy--test-translate alist rest)))
+                (_ sexp)))
+            body))
+
+  (defun loopy--deftest1 (alist body repeat multi-body)
+    "Return a list of translated bodies.
+ALIST is the translations.  BODY is the untranslated body.
+REPEAT is the symbol is ALIST which has multiple translations,
+so we must make multiple bodies."
+    ;; Use `mapcan' to turn list of lists of bodies into list of bodies.
+    (mapcan (lambda (x)
+              (if repeat
+                  (let ((names (map-elt alist repeat)))
+                    (mapcar (lambda (name)
+                              (loopy--test-translate (cons `(,repeat . ,name) alist)
+                                                     x))
+                            names))
+                (list (loopy--test-translate alist x))))
+            (if multi-body body (list body)))))
+
+(cl-defmacro loopy-deftest
+    ( name args
+      &key repeat body loopy loopy-iter multi-body
+      (result nil result-provided)
+      (error nil error-provided))
+  "Create test for `loopy' and `loopy-iter'.
+
+- NAME is the name of the test.
+- ARGS is the list of test arguments.
+- BODY is the test.
+- MULTI-BODY means there are multiple bodies in BODY.
+- LOOPY are the `loopy' names.
+- ITER are the `loopy-iter' names.
+- RESULT is compared using `equal' and `should'.
+- ERROR is the list of signals for `should-error'.
+- REPEAT is the temp name in LOOPY and ITER for which we
+  test multiple names."
+  (declare (indent 2))
+  (unless (or result-provided error-provided) (error "Must include `result' or `error'"))
+  (unless (or loopy loopy-iter) (error "Must include `loopy' or `loopy-iter'"))
+  (unless body (error "Must include `body'"))
+  (cl-labels ((eval-wrap (name body)
+                         `(eval (quote (,name ,@body)) t))
+              (output-wrap (x)
+                           (cond
+                            (result-provided `(should (equal ,result ,x)))
+                            (error-provided  `(should-error ,x :type ,error))))
+              (build (name alist)
+                     (when alist
+                       (mapcar (lambda (x) (output-wrap (eval-wrap name x)))
+                               (loopy--deftest1 alist body repeat multi-body)))))
+    `(ert-deftest ,name ,args
+       ,@(build 'loopy loopy)
+       ,@(build 'loopy-iter loopy-iter))))
 
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
 
-(ert-deftest named ()
-  (should (= 4 (loopy my-loop (return-from my-loop 4))))
-  (should (= 4 (loopy (named my-loop) (return-from my-loop 4))))
-  (should (equal '(4) (loopy my-loop (collect 4) (leave-from my-loop))))
-  (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
+(loopy-deftest named ()
+  :result 4
+  :multi-body t
+  :body (((named my-loop) (_return-from my-loop 4))
+         ( my-loop (_collect 4) (_leave-from my-loop)
+           (finally-return (car loopy-result))))
+  :loopy ((_collect . collect)
+          (_return-from . return-from)
+          (_leave-from . leave-from))
+  :loopy-iter ((_collect . collecting)
+               (_return-from . returning-from)
+               (_leave-from . leaving-from)))
+
+;; (ert-deftest named ()
+;;   (should (= 4 (loopy my-loop (return-from my-loop 4))))
+;;   (should (= 4 (loopy (named my-loop) (return-from my-loop 4))))
+;;   (should (equal '(4) (loopy my-loop (collect 4) (leave-from my-loop))))
+;;   (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
 
 ;;;; With
 (ert-deftest with-arg-order ()
