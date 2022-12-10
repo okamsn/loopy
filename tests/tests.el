@@ -2,6 +2,10 @@
 
 ;; Run these tests using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
+;;
+;; NOTE:
+;; - Destructuring tests in `./misc-tests.el'.
+;; - Alternative destructuring systems tested in their own files.
 
 (push (expand-file-name ".")
       load-path)
@@ -12,483 +16,548 @@
 (require 'generator)
 (require 'pcase)
 (require 'loopy)
+(require 'loopy-iter)
+
+(push (list "Loopy Tests"
+            (rx (0+ blank) "(loopy-deftest" (0+ blank)
+                (group-n 1 (1+ (or word (syntax symbol)))))
+            1)
+      imenu-generic-expression)
 
 ;; "loopy quote"
 (defmacro lq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
   `(eval (quote (loopy ,@body)) t))
 
-(defmacro loopy-test-structure (input output-pattern)
-  "Use `pcase' to check a destructurings bindings.
-INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
-  `(pcase ,input
-     (,output-pattern
-      t)
-     (_ nil)))
-
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
   (should (cl-loop for f in (directory-files ".")
                    never (string-match-p "\\.elc\\'" f))))
 
+(cl-defmacro loopy-deftest
+    ( name
+      &key
+      args doc repeat body multi-body
+      repeat-loopy repeat-iter-bare repeat-iter-keyword
+      wrap
+      macroexpand
+      (loopy nil loopy-provided)
+      (iter-bare nil iter-bare-provided)
+      (iter-keyword nil iter-keyword-provided)
+      (should nil should-provided)
+      (result nil result-provided)
+      (error nil error-provided))
+  "Create test for `loopy' and `loopy-iter'.
 
+- NAME is the name of the test.
+
+- ARGS is the list of test arguments.
+
+- DOC is the documentation string of the test.
+
+- BODY is the test.
+
+- MULTI-BODY means there are multiple bodies in BODY.
+
+- LOOPY are the `loopy' names.
+
+- ITER-BARE are the `loopy-iter' names.
+
+- ITER-KEYWORD are the `loopy-iter' names after keywords.
+  This can also be a simple list of command names.
+
+- RESULT is compared using `equal' and `should'.
+
+- SHOULD means just using `should'.  This is better when
+  testing that macro expansion should succeed.
+
+- ERROR is the list of signals for `should-error'.
+
+- REPEAT is the temp name in LOOPY and ITER for which we
+  test multiple names.
+
+- REPEAT-LOOPY is the temp name in LOOPY for which we
+  test multiple names.
+
+- REPEAT-ITER-BARE is the temp name in ITER-BARE for which we
+  test multiple names.
+
+- REPEAT-ITER-KEYWORD is the temp name in ITER-KEYWORD for which we
+  test multiple names.
+
+- WRAP is an alist of (VAR . EXPANSION-TO-BE-QUOTE).
+  E.g., (x . \\=`(let ((a 2)) ,x)).
+
+- If MACROEXPAND is non-nil, then we test using `macroexpand'
+  instead of `eval'.
+
+LOOPY and ITER-BARE can be `t' instead of an alist, which will
+run those tests without substitution.  If ITER-KEYWORD is `t', we
+prefix the items in LOOPY or ITER-BARE."
+  (declare (indent 1))
+
+  (unless (or result-provided error-provided should-provided)
+    (error "Must include `result' or `error'"))
+  (unless (or loopy iter-bare iter-keyword)
+    (error "Must include `loopy' or `iter-bare'"))
+  (unless body
+    (error "Must include `body'"))
+
+  (pcase loopy
+    ((pred (eq t)) (setq loopy nil))
+    ((pred (eq nil)) (setq loopy-provided nil)))
+
+  (pcase iter-bare
+    ((pred (eq t)) (setq iter-bare nil))
+    ((pred (eq nil)) (setq iter-bare-provided nil)))
+
+  (pcase iter-keyword
+    ((pred (eq t)) (setq iter-keyword (or loopy iter-bare)))
+    ((pred (eq nil)) (setq iter-keyword-provided nil))
+    (`(,(pred symbolp) . ,_)
+     (setq iter-keyword (cl-loop for sym in iter-keyword
+                                 collect (cons sym sym)))))
+
+  (when (eq error t)
+    (setq error 'error))
+
+  (cl-labels
+      (;; Wrap body into other forms.
+       (surround-wrap (sexp wraps)
+         (let ((result sexp))
+           (pcase-dolist (`(,var . ,exp) wraps)
+             (setq result (funcall `(lambda (,var) ,exp)
+                                   result)))
+           result))
+       ;; Want to evaluate quoted form lexically.
+       (quote-wrap (sexp) (if macroexpand
+                              `(macroexpand (quote ,sexp))
+                            `(eval (quote ,sexp) t)))
+       ;; What output should be.
+       (output-wrap (x) (cond (should-provided `(should ,x))
+                              (result-provided `(should (equal ,result ,x)))
+                              (error-provided  `(should-error ,x :type
+                                                              (quote ,error)))))
+       ;; Replace given placeholder command names with actual names,
+       ;; maybe including the `for' keyword for `loopy-iter'.
+       (translate (group-alist this-body &optional keyword)
+         (mapcar (lambda (sexp)
+                   (pcase sexp
+                     (`(loopy-test-escape ,form) form)
+                     (`(,first . ,rest)
+                      ;; If not a proper list, then it was probably a
+                      ;; dotted variable list.
+                      (if (not (proper-list-p rest))
+                          sexp
+                        (let ((new-rest (translate group-alist rest keyword))
+                              (new-first (map-elt group-alist first)))
+                          (if new-first
+                              (if keyword
+                                  `(for ,new-first ,@new-rest)
+                                `(,new-first ,@new-rest))
+                            `(,first ,@new-rest)))))
+                     (_ sexp)))
+                 this-body))
+       (make-bodies (alist group-repeat &optional keyword)
+         ;; Use `mapcan' to turn list of lists of bodies into list of
+         ;; bodies.
+         (mapcan (lambda (x)
+                   (if group-repeat
+                       (let ((names (map-elt alist repeat)))
+                         (mapcar (lambda (name)
+                                   (translate `((,group-repeat . ,name)
+                                                ,@alist)
+                                              x keyword))
+                                 names))
+                     (list (translate alist x keyword))))
+                 (if multi-body body (list body))))
+       (build (&key macro prefix alist provided repeat keyword)
+         (when provided
+           `(ert-deftest ,(intern (format "%s/%s" prefix name)) ,args
+              ,doc ; Nil if not given
+              ,@(mapcar (lambda (x) (thread-first `(,macro ,@x)
+                                                  (surround-wrap wrap)
+                                                  quote-wrap
+                                                  output-wrap))
+                        (make-bodies alist repeat keyword))))))
+    `(progn
+       ,(build :macro 'loopy
+               :prefix 'loopy
+               :alist loopy
+               :provided loopy-provided
+               :repeat (or repeat repeat-loopy))
+       ,(build :macro 'loopy-iter
+               :prefix 'iter-bare
+               :alist iter-bare
+               :provided iter-bare-provided
+               :repeat (or repeat repeat-iter-bare))
+       ,(build :macro 'loopy-iter
+               :prefix 'iter-keyword
+               :alist iter-keyword
+               :provided iter-keyword-provided
+               :repeat (or repeat repeat-iter-keyword)
+               :keyword t))))
+
+(defun my-iter-insert (&rest syms-str)
+  "Insert values for `:iter-keyword' and `:iter-bare'.
+SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
+  (interactive (completing-read-multiple "Bare name: "
+                                         loopy-iter-bare-commands))
+  (let* ((true-names-str (mapcar (lambda (x)
+                                   (thread-last x
+                                                intern
+                                                loopy--get-true-name
+                                                symbol-name))
+                                 syms-str)))
+    (insert (format ":iter-keyword (%s)"
+                    (string-join true-names-str " ")))
+    (newline-and-indent)
+    (insert (format ":iter-bare (%s)"
+                    (string-join (cl-loop for true in true-names-str
+                                          for iter in syms-str
+                                          collect (format "(%s . %s)" true iter))
+                                 "\n")))))
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
 
-(ert-deftest named ()
-  (should (= 4 (loopy my-loop (return-from my-loop 4))))
-  (should (= 4 (loopy (named my-loop) (return-from my-loop 4))))
-  (should (equal '(4) (loopy my-loop (collect 4) (leave-from my-loop))))
-  (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
+(loopy-deftest named
+  :result 4
+  :multi-body t
+  :body (((named my-loop)
+          (return-from my-loop 4))
+         (my-loop
+          (collect 4)
+          (leave-from my-loop)
+          (finally-return (car loopy-result))))
+  :loopy t
+  :iter-bare ((collect . collecting)
+              (return-from . returning-from)
+              (leave-from . leaving-from))
+  :iter-keyword t)
 
 ;;;; With
-(ert-deftest with-arg-order ()
-  (should (= 4
-             (eval (quote (loopy (with (a 2)
-                                       (b (+ a 2)))
-                                 (return b))))))
+(loopy-deftest with-arg-order
+  :result 4
+  :body ((_with (a 2) (b (+ a 2)))
+         (_return b))
+  :loopy ((_with . (with let* init))
+          (_return . return))
+  :iter-bare ((_with . (with init))
+              (_return . returning))
+  :iter-keyword t
+  :repeat _with)
 
-  (should (= 4
-             (eval (quote (loopy (let* (a 2)
-                                   (b (+ a 2)))
-                                 (return b))))))
-
-  (should (= 4
-             (eval (quote (loopy (init (a 2)
-                                       (b (+ a 2)))
-                                 (return b)))))))
-
-(ert-deftest with-destructuring ()
-  (should (= -2
-             (eval (quote (loopy (with ((a b) '(1 2))
-                                       ([c d] `[,(1+ a) ,(1+ b)]))
-                                 (return (+ (- a b)
-                                            (- c d)))))))))
+(loopy-deftest with-destructuring
+  :result -2
+  :body ((with ((a b) '(1 2))
+               ([c d] `[,(1+ a) ,(1+ b)]))
+         (return (+ (- a b)
+                    (- c d))))
+  :loopy t
+  :iter-bare ((return . returning)))
 
 ;;;; Without
-(ert-deftest without ()
-  (should (equal '(4 5)
-                 (eval (quote (let ((a 1) (b 2))
-                                (loopy (with (c 3))
-                                       (without a b)
-                                       (expr a (+ a c))
-                                       (expr b (+ b c))
-                                       (return a b)))))))
-
-  (should (equal '(4 5)
-                 (eval (quote (let ((a 1) (b 2))
-                                (loopy (with (c 3))
-                                       (no-init a b)
-                                       (expr a (+ a c))
-                                       (expr b (+ b c))
-                                       (return a b)))))))
-
-  (should (equal '(4 5)
-                 (eval (quote (let ((a 1) (b 2))
-                                (loopy (with (c 3))
-                                       (no-with a b)
-                                       (expr a (+ a c))
-                                       (expr b (+ b c))
-                                       (return a b))))))))
+(loopy-deftest without
+  :result '(4 5)
+  :wrap ((x . `(let ((a 1) (b 2)) ,x)))
+  :body ((with (c 3))
+         (_without a b)
+         (set a (+ a c))
+         (set b (+ b c))
+         (return a b))
+  :loopy ((_without . (without no-init no-with)))
+  :iter-bare ((_without . (without no-init no-with))
+              (set . setting)
+              (return . returning))
+  :repeat _without)
 
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
-(ert-deftest basic-before-do ()
-  (should (and (= 4
-                  (eval (quote (loopy (with (i 3))
-                                      (before-do (setq i (1+ i)))
-                                      (return i)))))
-               (= 4
-                  (eval (quote (loopy (with (i 3))
-                                      (before (setq i (1+ i)))
-                                      (return i)))))
-               (= 4
-                  (eval (quote (loopy (with (i 3))
-                                      (initially-do (setq i (1+ i)))
-                                      (return i)))))
-               (= 4
-                  (eval (quote (loopy (with (i 3))
-                                      (initially (setq i (1+ i)))
-                                      (return i))))))))
+(loopy-deftest basic-before-do
+  :result 4
+  :body ((with (i 3))
+         (_before (setq i (1+ i)))
+         (return i))
+  :loopy ((_before . (before-do before initially-do initially)))
+  :loopy ((_before . (before-do before initially-do initially))
+          (return . returning))
+  :repeat _before)
 
 ;;;; After Do - runs after loop is loop completed successfully
-(ert-deftest basic-after-do ()
-  (should (and (eq t (eval (quote (loopy (with (my-ret nil))
-                                         (list i '(1 2 3 4))
-                                         (after-do (setq my-ret t))
-                                         (finally-return my-ret)))))
-               (eq nil (eval (quote (loopy (with (my-ret nil))
-                                           (list i '(1 2 3 4))
-                                           (return nil)
-                                           (after-do (setq my-ret t))
-                                           (finally-return my-ret)))))
-               (eq nil (eval (quote (loopy (with (my-ret nil))
-                                           (list i '(1 2 3 4))
-                                           (return nil)
-                                           (after (setq my-ret t))
-                                           (finally-return my-ret)))))
-               (eq nil (eval (quote (loopy (with (my-ret nil))
-                                           (list i '(1 2 3 4))
-                                           (return nil)
-                                           (else-do (setq my-ret t))
-                                           (finally-return my-ret)))))
-               (eq nil (eval (quote (loopy (with (my-ret nil))
-                                           (list i '(1 2 3 4))
-                                           (return nil)
-                                           (else (setq my-ret t))
-                                           (finally-return my-ret))))))))
+(loopy-deftest basic-after-do-does-run
+  :result t
+  :body ((with (my-ret nil))
+         (list i '(1 2 3 4))
+         (after-do (setq my-ret t))
+         (finally-return my-ret))
+  :loopy t
+  :iter-bare ((list . listing)))
+
+(loopy-deftest basic-after-does-not-run
+  :result nil
+  :multi-body t
+  :body (((with (my-ret nil))
+          (_list i '(1 2 3 4))
+          (_return nil)
+          (_after (setq my-ret t))
+          (finally-return my-ret))
+         ((with (my-ret nil))
+          (_list i '(1 2 3 4))
+          (_leave)
+          (_after (setq my-ret t))
+          (finally-return my-ret)))
+  :loopy ((_after . (after-do after else-do else))
+          (_leave . leave)
+          (_return . return)
+          (_list . list))
+  :iter-bare ((_after . (after-do after else-do else))
+              (_list . listing)
+              (_return . returning)
+              (_leave . leaving))
+  :iter-keyword t
+  :repeat _after)
 
 ;;;; Before and After
-(ert-deftest basic-before-and-after-test ()
-  (should (= 3 (eval (quote (loopy (with (i 1))
-                                   (before-do (cl-incf i))
-                                   (repeat 1)
-                                   (after-do (cl-incf i))
-                                   (finally-return i)))))))
+(loopy-deftest basic-before-and-after-test
+  :result 3
+  :body ((with (i 1))
+         (before-do (cl-incf i))
+         (cycle 1)
+         (after-do (cl-incf i))
+         (finally-return i))
+  :loopy t
+  :iter-bare ((cycle . cycling))
+  :iter-keyword ((cycle . cycle)))
 
 ;;;; Wrap
-
-(ert-deftest wrap ()
+(loopy-deftest wrap
   ;; Test saving match data
-  (should
-   (save-match-data
-     (let ((original-data (set-match-data nil)))
-       (equal original-data
-              (eval (quote (loopy (wrap save-match-data)
-                                  (repeat 1)
-                                  (do (string-match (make-string 100 ?a)
-                                                    (make-string 100 ?a)))
-                                  (finally-return (match-data)))))))))
+  :result t
+  :wrap ((x . `(let ((original-data (set-match-data nil)))
+                 (equal original-data ,x))))
+  :body ((wrap save-match-data)
+         (_cycle 1)
+         (_do (string-match (make-string 100 ?a)
+                            (make-string 100 ?a)))
+         (finally-return (match-data)))
+  :loopy ((_cycle . cycle)
+          (_do . do))
+  :iter-bare ((_cycle . cycling)
+              ;; Use `ignore' to eval arguments without doing anything.
+              (_do . ignore))
+  :iter-keyword ((_cycle . cycle)
+                 (_do . do)))
 
+(loopy-deftest wrap-order
   ;; Test order things wrapped in.
-  (should (= 3 (eval (quote (loopy (wrap (let ((a 1)))
-                                         (let ((b (1+ a)))))
-                                   (return (+ a b)))))))
+  :result 3
+  :body ((wrap (let ((a 1)))
+               (let ((b (1+ a)))))
+         (return (+ a b)))
+  :loopy t
+  :iter-bare ((return . returning))
+  :iter-keyword ((return . return)))
 
-  ;; Ensure wrapping effects don't linger.
-  (should-not
-   (save-match-data
-     (let ((original-data (set-match-data nil)))
-       (equal original-data
-              (eval (quote (loopy (cycle 1)
-                                  (do (string-match (make-string 100 ?a)
-                                                    (make-string 100 ?a)))
-                                  (finally-return (match-data))))))))))
+(loopy-deftest wrap-not-linger
+  :result nil
+  :wrap ((x . `(let ((original-data (set-match-data nil)))
+                 (equal original-data ,x))))
+  :body ((_cycle 1)
+         (_do (string-match (make-string 100 ?a)
+                            (make-string 100 ?a)))
+         (finally-return (match-data)))
+  :loopy ((_cycle . cycle)
+          (_do . do))
+  :iter-bare ((_cycle . cycling)
+              ;; Use `ignore' to eval arguments without doing anything.
+              (_do . ignore))
+  :iter-keyword ((_cycle . cycle)
+                 (_do . do)))
 
 ;;;; Final Instructions
-(ert-deftest finally-do ()
-  (should (and (= 10
-                  (let ((my-var))
-                    (loopy (list i (number-sequence 1 10))
-                           (finally-do (setq my-var i)))
-                    my-var))
-               (= 10
-                  (let ((my-var))
-                    (loopy (list i (number-sequence 1 10))
-                           (finally (setq my-var i)))
-                    my-var)))))
+(loopy-deftest finally-do
+  :result 10
+  :wrap ((x . `(let ((my-var)) ,x my-var)))
+  :body ((_list i (number-sequence 1 10))
+         (finally-do (setq my-var i)))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest finally-do-not-affect-return ()
-  (should (eq nil
-              (eval (quote (loopy (list i (number-sequence 1 10))
-                                  (finally-do 3)))))))
+(loopy-deftest finally-do-not-affect-return
+  :result nil
+  :body ((_list i (number-sequence 1 10))
+         (finally-do 3))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest finally-return-single-value ()
-  (should (= 10
-             (eval (quote (loopy (list i (number-sequence 1 10))
-                                 (finally-return i)))))))
+(loopy-deftest finally-return-single-value
+  :result 10
+  :body ((_list i (number-sequence 1 10))
+         (finally-return i))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest finally-return-list-of-values ()
-  (should (equal '(10 7)
-                 (eval (quote (loopy (list i (number-sequence 1 10))
-                                     (finally-return i 7)))))))
+(loopy-deftest finally-return-list-of-values
+  :result '(10 7)
+  :body ((_list i (number-sequence 1 10))
+         (finally-return i 7))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
 ;;;; Finally Protect
-(ert-deftest finally-protect ()
-  (should (equal (list 1 4 '(1 2 3 4))
-                 (let ((test-result))
-                   (should-error
-                    (loopy (with (example-var 1))
-                           (list i '(1 2 3 4 5))
-                           (collect my-collection i)
-                           (when (> i 3)
-                             (do (error "%s" (list i))))
-                           (finally-protect
-                            (setq test-result (list example-var i my-collection))))
-                    :type '(error))
-                   test-result)))
-
-  (should (equal (list 1 4 '(1 2 3 4))
-                 (let ((test-result))
-                   (should-error
-                    (loopy (with (example-var 1))
-                           (list i '(1 2 3 4 5))
-                           (collect my-collection i)
-                           (when (> i 3)
-                             (do (error "%s" (list i))))
-                           (finally-protected
-                            (setq test-result (list example-var i my-collection))))
-                    :type '(error))
-                   test-result))))
+(loopy-deftest finally-protect
+  :result (list 1 4 '(1 2 3 4))
+  :wrap ((x . `(let ((test-result))
+                 (should-error ,x :type '(error))
+                 test-result)))
+  :body ((with (example-var 1))
+         (_list i '(1 2 3 4 5))
+         (_collect my-collection i)
+         (when (> i 3) (_do (error "%s" (list i))))
+         (finally-protect (setq test-result (list example-var i my-collection))))
+  :loopy ((_list . list)
+          (_collect . collect)
+          (_do . do))
+  :iter-bare ((_list . listing)
+              (_collect . collecting)
+              (_do . ignore))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)
+                 (_do . do)))
 
 ;;;; Changing the order of macro arguments.
-(ert-deftest change-order-of-commands ()
-  (should (= 7
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (finally-return (+ i a))
-                                 (with (a 4))))))))
+(loopy-deftest change-order-of-commands
+  :result 7
+  :body ((list i '(1 2 3))
+         (finally-return (+ i a))
+         (with (a 4)))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword (list))
 
 ;;;; Default return values.
-(ert-deftest default-return-nil ()
-  (should (not (or (eval (quote (loopy (list i '(1 2 3)))))
-                   (eval (quote (loopy (repeat 1)
-                                       (finally-do (1+ 1)))))))))
+(loopy-deftest default-return-nil
+  :result nil
+  :multi-body t
+  :body (((list i '(1 2 3)))
+         ((cycle 1)
+          (finally-do (1+ 1))))
+  :loopy t
+  :iter-bare ((list . listing)
+              (cycle . cycling))
+  :iter-keyword (list cycle))
 
 ;;;; Optimized Named  Accumulations
-(ert-deftest optimized-named-vars ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
+(defmacro loopy--optimized-vars-tests ()
+  `(progn
+     ,@(cl-loop
+        for var in '(coll (coll end) (coll start) (coll beginning))
+        for suffix in '("" "-with-pos-end" "-with-pos-start" "-with-pos-beginning")
+        collect `(progn
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-adjoin" suffix))
+                     :result '(1 2 3)
+                     :body ((accum-opt ,var)
+                            (array i [1 2 3])
+                            (adjoin coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (adjoin . adjoining))
+                     :iter-keyword (array adjoin))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i [1 2 3])
-                                     (adjoin coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-collect" suffix))
+                     :result '(1 2 3)
+                     :body ((accum-opt ,var)
+                            (array i [1 2 3])
+                            (collect coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (collect . collecting))
+                     :iter-keyword (array collect))
 
-  (should (equal '(1 2 2 3 3 4)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i [(1 2) (2 3) (3 4)])
-                                     (append coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-append" suffix))
+                     :result '(1 2 2 3 3 4)
+                     :body ((accum-opt ,var)
+                            (array i (vector (list 1 2)
+                                             (list 2 3)
+                                             (list 3 4)))
+                            (append coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (append . appending))
+                     :iter-keyword (append array))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-nconc" suffix))
+                     :result '(1 2 2 3 3 4)
+                     :body ((accum-opt ,var)
+                            (array i (vector (list 1 2)
+                                             (list 2 3)
+                                             (list 3 4)))
+                            (nconc coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (nconc . nconcing))
+                     :iter-keyword (nconc array))
 
-  (should (equal "abcdef"
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i ["ab" "cd" "ef"])
-                                     (concat coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-union" suffix))
+                     :result '(1 2 3 4)
+                     :body ((accum-opt ,var)
+                            (array i (vector (list 1 2)
+                                             (list 2 3)
+                                             (list 3 4)))
+                            (union coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (union . unioning))
+                     :iter-keyword (union array))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nconc coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-nunion" suffix))
+                     :result '(1 2 3 4)
+                     :body ((accum-opt ,var)
+                            (array i (vector (list 1 2)
+                                             (list 2 3)
+                                             (list 3 4)))
+                            (nunion coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (nunion . nunioning))
+                     :iter-keyword (nunion array))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nunion coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-concat" suffix))
+                     :result "abcdef"
+                     :body ((accum-opt ,var)
+                            (array i ["ab" "cd" "ef"])
+                            (concat coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (concat . concating))
+                     :iter-keyword (array concat))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt coll)
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (union coll i)
-                                     (finally-return coll))))))
+                   (loopy-deftest ,(intern (concat "optimized-named-vars-vconcat" suffix))
+                     :result [1 2 2 3 3 4]
+                     :body ((accum-opt ,var)
+                            (array i (vector (list 1 2)
+                                             (list 2 3)
+                                             (list 3 4)))
+                            (vconcat coll i)
+                            (finally-return coll))
+                     :loopy t
+                     :iter-bare ((array . arraying)
+                                 (vconcat . vconcating))
+                     :iter-keyword (array vconcat))))))
 
-  (should (equal [1 2 3 4 5 6]
-                 (eval (quote (loopy (accum-opt coll)
-                                     (array i [(1 2) (3 4) (5  6)])
-                                     (vconcat coll i)
-                                     (finally-return coll)))))))
-
-(ert-deftest optimized-named-vars-with-pos-end ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i [1 2 3])
-                                     (adjoin coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 2 3 3 4)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i [(1 2) (2 3) (3 4)])
-                                     (append coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
-
-  (should (equal "abcdef"
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i ["ab" "cd" "ef"])
-                                     (concat coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nconc coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nunion coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (union coll i)
-                                     (finally-return coll))))))
-
-  (should (equal [1 2 3 4 5 6]
-                 (eval (quote (loopy (accum-opt (coll end))
-                                     (array i [(1 2) (3 4) (5  6)])
-                                     (vconcat coll i)
-                                     (finally-return coll)))))))
-
-(ert-deftest optimized-named-vars-with-pos-beginning ()
-  (should (equal '(1 2 3)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (array i [1 2 3])
-                                      (collect coll i)
-                                      (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (array i [1 2 3])
-                                      (adjoin coll i)
-                                      (finally-return coll))))))
-
-  (should (equal '(1 2 2 3 3 4)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (array i [(1 2) (2 3) (3 4)])
-                                      (append coll i)
-                                      (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (array i [1 2 3])
-                                      (collect coll i)
-                                      (finally-return coll))))))
-
-  (should (equal "abcdef"
-                 (eval (quote (loopy (accum-opt (coll beginning))
-                                     (array i ["ab" "cd" "ef"])
-                                     (concat coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (list i (list (list 1 2)
-                                                    (list 3 4)
-                                                    (list 5 6)))
-                                      (nconc coll i)
-                                      (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (list i (list (list 1 2)
-                                                    (list 3 4)
-                                                    (list 5 6)))
-                                      (nunion coll i)
-                                      (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                  (eval (quote (loopy (accum-opt (coll beginning))
-                                      (list i (list (list 1 2)
-                                                    (list 3 4)
-                                                    (list 5 6)))
-                                      (union coll i)
-                                      (finally-return coll))))))
-
-  (should (equal [1 2 3 4 5 6]
-                 (eval (quote (loopy (accum-opt (coll beginning))
-                                     (array i [(1 2) (3 4) (5  6)])
-                                     (vconcat coll i)
-                                     (finally-return coll)))))))
-
-(ert-deftest optimized-named-vars-with-pos-start ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i [1 2 3])
-                                     (adjoin coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 2 3 3 4)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i [(1 2) (2 3) (3 4)])
-                                     (append coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i [1 2 3])
-                                     (collect coll i)
-                                     (finally-return coll))))))
-
-  (should (equal "abcdef"
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i ["ab" "cd" "ef"])
-                                     (concat coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nconc coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (nunion coll i)
-                                     (finally-return coll))))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (list i (list (list 1 2)
-                                                   (list 3 4)
-                                                   (list 5 6)))
-                                     (union coll i)
-                                     (finally-return coll))))))
-
-  (should (equal [1 2 3 4 5 6]
-                 (eval (quote (loopy (accum-opt (coll start))
-                                     (array i [(1 2) (3 4) (5  6)])
-                                     (vconcat coll i)
-                                     (finally-return coll)))))))
+(loopy--optimized-vars-tests)
 
 ;;; Loop Commands
 ;;;; Sub-loop Commands
@@ -575,3077 +644,3921 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 ;; NOTE: This duplicates the tests from the `sub-loop' command, which will be
 ;;       removed.
 
-(ert-deftest loopy-command ()
-  (should (equal '(1 2 3 4)
-                 (lq outer
-                     (array i [(1 2) (3 4)])
-                     (loopy (list j i)
-                            (at outer (collect j)))))))
+(loopy-deftest same-level-at-accum
+  :result '(1 2 3 4)
+  :body (outer
+         (list i '(1 2 3 4))
+         (at outer (collect i)))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting))
+  :iter-keyword (list collect at))
 
-(ert-deftest at-accum ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (named outer)
-                                     (list i '((1 2) (3 4) (5 6)))
-                                     (loopy (list j i)
-                                            (at outer
-                                                (collect j)))))
-                       t))))
+(loopy-deftest loopy-at-accum
+  :result '(1 2 3 4)
+  :multi-body t
+  :body ((outer
+          (array i [(1 2) (3 4)])
+          (loopy (list j i)
+                 (at outer (collect j))))
+         ((named outer)
+          (array i [(1 2) (3 4)])
+          (loopy (list j i)
+                 (at outer (collect j)))))
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((array . arraying))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (array loopy))
 
-(ert-deftest at-leave ()
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (flags split)
-                     (list i '((1 2) (3 4) (5 6)))
-                     (loopy (list j i)
-                            (at outer
-                                (if (> j 3)
-                                    (leave)
-                                  (collect j))))))))
+(loopy-deftest loopy-at-leave
+  :result '(1 2 3)
+  :multi-body t
+  :body ((outer
+          (array i [(1 2) (3 4) (5 6)])
+          (loopy (list j i)
+                 (at outer (if (> j 3)
+                               (leave)
+                             (collect j)))))
+         ((named outer)
+          (array i [(1 2) (3 4) (5 6)])
+          (loopy (list j i)
+                 (at outer (if (> j 3)
+                               (leave)
+                             (collect j))))))
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((array . arraying))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (array loopy))
 
-(ert-deftest at-disagreeing-accum-types ()
-  (should-error (macroexpand '(loopy outer
-                                     (list i '([1 2] [3]))
-                                     (collect i)
-                                     (loopy (array j i)
-                                            (at outer (max j))))))
+(loopy-deftest at-disagreeing-accum-types
+  :error loopy-incompatible-accumulations
+  :macroexpand t
+  :multi-body t
+  :body ((outer
+          (list i '([1 2] [3]))
+          (collect i)
+          (loopy (array j i)
+                 (at outer (max j))))
+         (outer
+          (list i '([1 2] [3]))
+          (collect i)
+          (at outer (_max j))))
+  :loopy ((_max . max))
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (_max . maximizing)
+              (max . maximizing))
+  :iter-keyword ((list . list)
+                 (collect . collect)
+                 (_max . max)))
 
-  (should-error (macroexpand '(loopy outer
-                                     (list i '([1 2] [3]))
-                                     (collect i)
-                                     (at outer (max j))))))
+(loopy-deftest loopy-cmd-implicit-accum-in-loop
+  :result '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+  :multi-body t
+  :body ((outer
+          (list i '(1 2))
+          (loopy (array j [4 5])
+                 (at outer (collect (cons i j))))
+          (after-do (push 0 loopy-result)))
+         ((named outer)
+          (list i '(1 2))
+          (loopy (array j [4 5])
+                 (at outer (collect (cons i j))))
+          (finally-return (cons 0 loopy-result))))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword (list))
 
-(ert-deftest loopy-cmd-implicit-accum-in-loop ()
-  (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect (cons i j)))))))
+(loopy-deftest loopy-cmd-leave-early
+  :result '(1 2 3)
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6))
+                (leave)
+                (at outer (collect j)))
+         (_collect i))
+  :loopy ((_list . list)
+          (_collect . collect))
+  :iter-bare ((_list . listing)
+              (_collect . collecting))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)))
 
-  (should (equal "14152425"
-                 (lq outer
-                     (list i '("1" "2"))
-                     (loopy (list j '("4" "5"))
-                            (at outer (concat (concat i j)))))))
+(loopy-deftest loopy-cmd-skip
+  :doc "A `skip' in a sub-loop should not affect the outer loop."
+  :result '(5 7 1 5 7 2 5 7 3)
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6 7 8))
+                (when (cl-evenp j)
+                  (continue))
+                (at outer (collect j)))
+         (_collect i))
+  :loopy ((_list . list)
+          (_collect . collect))
+  :iter-bare ((_list . listing)
+              (_collect . collecting))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)))
 
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect (cons i j))))
-                     (finally-return (cons 0 loopy-result))))))
+(loopy-deftest loopy-cmd-return-from-outer
+  :result 3
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6 3))
+                (when (= j i)
+                  (return-from outer j))))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest loopy-cmd-explicit-accum-in-loop ()
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect my-coll (cons i j))))
-                     (finally-return (cons 0 my-coll)))))
+(loopy-deftest loopy-cmd-named
+  :result '((3 5) (3 5))
+  :body (outer
+         (_cycle 2)
+         (loopy inner1
+                (list j '(3 4))
+                (loopy (list k '(5 6 7))
+                       (if (= k 6)
+                           ;; Return from inner1 so never reach 4.
+                           (return-from inner1)
+                         (at outer (collect (list j k)))))))
+  :loopy ((_cycle . cycle))
+  :iter-bare ((_cycle . cycling))
+  :iter-keyword ((_cycle . cycle)))
 
-  (should (equal "014152425"
-                 (lq (named outer)
-                     (list i '("1" "2"))
-                     (loopy (list j '("4" "5"))
-                            (at outer (concat my-str (concat i j))))
-                     (finally-return (concat "0" my-str))))))
-;;
-(ert-deftest loopy-cmd-leave-early ()
-  "A `leave' in a sub-loop should not affect the outer loop."
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (list i '(1 2 3))
-                     (loopy (list j '(4 5 6))
-                            (leave)
-                            (at outer (collect j)))
-                     (collect i)))))
-
-(ert-deftest loopy-cmd-skip ()
-  "A `skip' in a sub-loop should not affect the outer loop."
-  (should (equal '(5 7 1 5 7 2 5 7 3)
-                 (lq  outer
-                      (list i '(1 2 3))
-                      (loopy (list j '(4 5 6 7 8))
-                             (when (cl-evenp j)
-                               (continue))
-                             (at outer (collect j)))
-                      (collect i)))))
-
-(ert-deftest loopy-cmd-return-from-outer ()
-  (should (= 3 (lq outer
-                   (list i '(1 2 3))
-                   (loopy (list j '(4 5 6 3))
-                          (when (= j i)
-                            (return-from outer j)))))))
-
-(ert-deftest loopy-cmd-named ()
-  (should
-   (equal
-    '((3 5) (3 5))
-    (lq outer
-        (repeat 2)
-        (loopy inner1
-               (list j '(3 4))
-               (loopy (list k '(5 6 7))
-                      (if (= k 6)
-                          ;; Return from inner1 so never reach 4.
-                          (return-from inner1)
-                        (at outer (collect (list j k))))))))))
 ;;;; Generic Evaluation
 ;;;;; Do
-(ert-deftest do ()
-  (should
-   (equal '(t nil)
-          (eval (quote (loopy (with (my-val nil)
-                                    (this-nil? t))
-                              (do (setq my-val t)
-                                  (setq this-nil? (not my-val)))
-                              (return nil)
-                              (finally-return my-val this-nil?)))))))
+(loopy-deftest do
+  :result '(t nil)
+  :body ((with (my-val nil)
+               (this-nil? t))
+         (do (setq my-val t)
+             (setq this-nil? (not my-val)))
+         (return nil)
+         (finally-return my-val this-nil?))
+  :loopy t
+  :iter-keyword (do return))
 
 ;;;;; Expr
-(ert-deftest expr-init ()
-  (should (= 1 (eval (quote (loopy (repeat 3)
-                                   (expr var 1 :init 'cat)
-                                   (finally-return var))))))
+(loopy-deftest expr-init
+  :result 3
+  :body ((cycle 3)
+         (set var (1+ var) :init 0)
+         (finally-return var))
+  :loopy t
+  :iter-keyword (cycle set)
+  :iter-bare ((cycle . cycling)
+              (set . setting)))
 
-  (should (= 1 (eval (quote (loopy (repeat 3)
-                                   (expr var 1 :init nil)
-                                   (finally-return var))))))
+(loopy-deftest expr-init-destr
+  :doc "Each variable is initialized to `:init', not a destructured part of `:init'."
+  :result '((0 0 0) (1 2 3))
+  :body ((collect (list i j k))
+         (set (i j k) '(1 2 3) :init 0)
+         (collect (list i j k))
+         (leave))
+  :loopy t
+  :iter-keyword (leave set collect)
+  :iter-bare ((collect . collecting)
+              (leave . leaving)
+              (set . setting)))
 
-  (should (= 3 (eval (quote (loopy (repeat 3)
-                                   (expr var (1+ var) :init 0)
-                                   (finally-return var)))))))
+(loopy-deftest expr-when
+  :result '(nil 0 0 1 1 2 2 3)
+  :body ((list i '(1 2 3 4 5 6 7 8))
+         (when (cl-evenp i)
+           (set j 0 (1+ j)))
+         (collect j))
+  :loopy t
+  :iter-keyword (list set collect)
+  :iter-bare ((list . listing)
+              (set . setting)
+              (collect . collecting)))
 
-(ert-deftest expr-one-value ()
-  (should
-   (and (eval (quote (loopy (with (my-val nil))
-                            (expr my-val t)
-                            (return nil)
-                            (finally-return my-val))))
-        (equal '(t t) (eval (quote (loopy (expr (i j) '(t t))
-                                          (return nil) ; TODO: Change to leave.
-                                          (finally-return i j)))))
+(defmacro loopy--set-destr-tests ()
+  "Implementation is different for more than 2 values."
+  (macroexp-progn
+   (cl-loop with list = '((1 2) (3 4) (5 6) (7 8))
+            for num from 1 to (length list)
+            for subseq = (cl-subseq list 0 num)
+            collect `(loopy-deftest ,(intern (format "expr-destr-%d-value" num))
+                       :result (quote ,subseq)
+                       :repeat _set
+                       :body ((cycle ,num)
+                              (_set (i j) ,@(cl-loop for i in subseq
+                                                     collect `(quote ,i)))
+                              (collect coll (list i j))
+                              (finally-return coll))
+                       :loopy ((_set . (set expr)))
+                       :iter-bare ((_set . (setting))
+                                   (collect . collecting)
+                                   (cycle . cycling))
+                       :iter-keyword ((_set . (set expr))
+                                      (collect . collect)
+                                      (cycle . cycle))))))
 
-        (equal '(0 1 1 1)
-               (eval (quote (loopy (repeat 4)
-                                   (collect i)
-                                   (set i 1 :init 0)))))
+(loopy--set-destr-tests)
 
-        (equal '(0 1 1 1)
-               (eval (quote (loopy (repeat 4)
-                                   (collect i)
-                                   (expr i 1 :init 0))))))))
+(defmacro loopy--set-value-tests ()
+  "Implementation is different for more than 2 values."
+  (macroexp-progn
+   (cl-loop with list = '(1 2 3 4 5)
+            and len = 10
+            for num in '(1 2 3 5)
+            for subseq = (cl-subseq list 0 num)
+            for result = (append subseq (make-list (- len num) num))
+            collect `(loopy-deftest ,(intern (format "expr-%d-values" num))
+                       :result (quote ,result)
+                       :repeat _set
+                       :body ((cycle ,len)
+                              (_set i ,@subseq)
+                              (collect coll i)
+                              (finally-return coll))
+                       :loopy ((_set . (set expr)))
+                       :iter-bare ((_set . (setting))
+                                   (collect . collecting)
+                                   (cycle . cycling))
+                       :iter-keyword ((_set . (set expr))
+                                      (collect . collect)
+                                      (cycle . cycle))))))
 
-(ert-deftest expr-two-values ()
-  (should
-   (and
-    (equal '(1 2 2)
-           (eval (quote (loopy  (repeat 3)
-                                (expr my-val 1 2)
-                                (collect my-coll my-val)
-                                (finally-return my-coll)))))
-    (equal '((1 1) (2 2) (2 2))
-           (eval (quote (loopy  (repeat 3)
-                                (expr (i j) '(1 1) '(2 2))
-                                (collect my-coll (list i j))
-                                (finally-return my-coll)))))
+(loopy--set-value-tests)
 
-    (equal '(0 1 2 2)
-           (eval (quote (loopy (repeat 4)
-                               (collect i)
-                               (expr i 1 2 :init 0))))))))
-
-(ert-deftest expr-two-values-when ()
-  (should (equal '(nil 0 0 1 1 2 2 3)
-                 (loopy (list i '(1 2 3 4 5 6 7 8))
-                        (when (cl-evenp i)
-                          (expr j 0 (1+ j)))
-                        (collect j)))))
-
-(ert-deftest expr-three-values-when ()
-  (should (equal '(nil a a 0 0 1 1 2)
-                 (loopy (list i '(1 2 3 4 5 6 7 8))
-                        (when (cl-evenp i)
-                          (expr j 'a 0 (1+ j)))
-                        (collect j)))))
-
-;; Implementation is different for more than 2 values.
-(ert-deftest expr-five-values ()
-  (should
-   (and (equal '(1 2 3 4 5 5 5 5 5 5)
-               (eval (quote (loopy  (repeat 10)
-                                    (expr my-val 1 2 3 4 5)
-                                    (collect my-coll my-val)
-                                    (finally-return my-coll)))))
-        (equal '((1 1) (2 2) (3 3) (4 4) (5 5) (5 5) (5 5) (5 5) (5 5) (5 5))
-               (eval (quote (loopy  (repeat 10)
-                                    (expr (i j) '(1 1) '(2 2)
-                                          '(3 3) '(4 4) '(5 5))
-                                    (collect my-coll (list i j))
-                                    (finally-return my-coll)))))
-
-        (equal '(0 1 2 3 4 5 5 5 5 5)
-               (eval (quote (loopy (repeat 10)
-                                   (collect i)
-                                   (expr i 1 2 3 4 5 :init 0))))))))
-
-(ert-deftest expr-dont-repeat ()
-  "Make sure commands don't repeatedly create/declare the same variable."
-  (should
-   (= 1 (with-temp-buffer
-          (prin1 (macroexpand '(loopy  (expr j 3)
-                                       (expr j 4)
-                                       (return j)))
-                 (current-buffer))
-          (goto-char (point-min))
-          (how-many "(j nil)")))))
+(loopy-deftest expr-dont-repeat
+  :doc "Make sure commands don't repeatedly create/declare the same variable."
+  :result 1
+  :wrap ((x . `(with-temp-buffer
+                 (prin1 (macroexpand (quote ,x))
+                        (current-buffer))
+                 (goto-char (point-min))
+                 (how-many "(j nil)"))))
+  :body ((set j 3)
+         (set j 4)
+         (return j))
+  :loopy t
+  :iter-keyword (set return)
+  :iter-bare ((set . setting)
+              (return . returning)))
 
 ;;;;; Group
-(ert-deftest group ()
-  (should
-   (equal '((2 4 6) (2 4 6))
-          (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                              (if (cl-evenp i)
-                                  (group (collect c1 i)
-                                         (collect c2 i)))
-                              (finally-return c1 c2))))))
-
-  (should
-   (equal '((2 4 6) (2 4 6))
-          (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                              (if (cl-evenp i)
-                                  (command-do (collect c1 i)
-                                              (collect c2 i)))
-                              (finally-return c1 c2)))))))
+(loopy-deftest group
+  :result '((2 4 6) (2 4 6))
+  :body ((list i '(1 2 3 4 5 6))
+         (if (cl-evenp i)
+             (_group (collect c1 i)
+                     (collect c2 i)))
+         (finally-return c1 c2))
+  :repeat _group
+  :loopy ((_group . (group command-do)))
+  ;; Technically don't need to test (and wouldn't work if we used `for' inside,
+  ;; anyway).
+  :iter-keyword ((list . list)
+                 (_group . (group command-do))))
 
 ;;;;; Prev-Expr
-(ert-deftest prev-expr ()
-  (should (equal '(nil 1 2 3 4)
-                 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (set-prev j i)
-                                     (collect j))))))
+(loopy-deftest prev-expr
+  :result '(nil 1 2 3 4)
+  :body ((list i '(1 2 3 4 5))
+         (_set-prev j i)
+         (collect j))
+  :repeat _set-prev
+  :loopy ((_set-prev . (set-prev prev-set prev-expr)))
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (_set-prev . (setting-prev)))
+  :iter-keyword ((list . list)
+                 (collect . collect)
+                 (_set-prev . (set-prev prev-set prev-expr))))
 
-  (should (equal '(nil 1 2 3 4)
-                 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (prev-set j i)
-                                     (collect j))))))
+(loopy-deftest prev-expr-keyword-back
+  :result '(nil nil nil 1 2)
+  :body ((list i '(1 2 3 4 5))
+         (set-prev j i :back 3)
+         (collect j))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (set-prev . setting-prev))
+  :iter-keyword (list set-prev collect))
 
-  (should (equal '(nil 1 2 3 4)
-                 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (prev-expr j i)
-                                     (collect j))))))
+(loopy-deftest prev-expr-keyword-init
+  :result '(first-val first-val 2 2 4 4 6 6 8 8)
+  :body ((numbers i 1 10)
+         (when (cl-oddp i)
+           (set-prev j i :init 'first-val))
+         (collect j))
+  :loopy t
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)
+              (set-prev . setting-prev))
+  :iter-keyword (numbers set-prev collect))
 
-  (should (equal '(nil nil nil 1 2)
-                 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (prev-expr j i :back 3)
-                                     (collect j))))))
-
-  (should (equal '(first-val first-val 2 2 4 4 6 6 8 8)
-                 (eval (quote (loopy (numbers i 1 10)
-                                     (when (cl-oddp i)
-                                       (prev-expr j i :init 'first-val))
-                                     (collect j)))))))
-
-(ert-deftest prev-expr-destructuring ()
-  (should (equal '((7 7 1 3) (7 7 2 4))
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6) (7 8)))
-                                     (prev-expr (a b) i :back 2 :init 7)
-                                     (collect c1 a)
-                                     (collect c2 b)
-                                     (finally-return c1 c2)))))))
+(loopy-deftest prev-expr-destructuring
+  :result '((7 7 1 3) (7 7 2 4))
+  :body ((list i '((1 2) (3 4) (5 6) (7 8)))
+         (set-prev (a b) i :back 2 :init 7)
+         (collect c1 a)
+         (collect c2 b)
+         (finally-return c1 c2))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (set-prev . setting-prev))
+  :iter-keyword (list set-prev collect))
 
 ;;;; Iteration
 ;; Making sure iteration fails in sub-level
-(ert-deftest iteration-sub-level ()
-  (should-error
-   (progn
-     (loopy (if t (list i '(1))) (finally-return t))
-     (loopy (if t (list-ref i '(1))) (finally-return t))
-     (loopy (if t (array i '(1))) (finally-return t))
-     (loopy (if t (array-ref i '(1))) (finally-return t))
-     (loopy (if t (seq i '(1))) (finally-return t))
-     (loopy (if t (seq-ref i '(1))) (finally-return t))
-     (loopy (if t (repeat 1)) (finally-return t))
-     (loopy (when t (list i '(1))) (finally-return t))
-     (loopy (when t (list-ref i '(1))) (finally-return t))
-     (loopy (when t (array i '(1))) (finally-return t))
-     (loopy (when t (array-ref i '(1))) (finally-return t))
-     (loopy (when t (seq i '(1))) (finally-return t))
-     (loopy (when t (seq-ref i '(1))) (finally-return t))
-     (loopy (when t (repeat 1)) (finally-return t))
-     (loopy (unless t (list i '(1))) (finally-return t))
-     (loopy (unless t (list-ref i '(1))) (finally-return t))
-     (loopy (unless t (array i '(1))) (finally-return t))
-     (loopy (unless t (array-ref i '(1))) (finally-return t))
-     (loopy (unless t (seq i '(1))) (finally-return t))
-     (loopy (unless t (seq-ref i '(1))) (finally-return t))
-     (loopy (unless t (repeat 1)) (finally-return t))
-     (loopy (cond (t (list i '(1)))) (finally-return t))
-     (loopy (cond (t (list-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (array i '(1)))) (finally-return t))
-     (loopy (cond (t (array-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (seq i '(1)))) (finally-return t))
-     (loopy (cond (t (seq-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (repeat 1))) (finally-return t))
-     (loopy (group (list i '(1))) (finally-return t))
-     (loopy (group (list-ref i '(1))) (finally-return t))
-     (loopy (group (array i '(1))) (finally-return t))
-     (loopy (group (array-ref i '(1))) (finally-return t))
-     (loopy (group (seq i '(1))) (finally-return t))
-     (loopy (group (seq-ref i '(1))) (finally-return t))
-     (loopy (group (repeat 1))) (finally-return t))
-   :type 'user-error))
+(defmacro test--iteration-sub-level ()
+  (let ((plain-cmds '( list list-ref
+                       cons
+                       array array-ref
+                       seq seq-ref seq-index
+                       cycle
+                       iter
+                       map map-ref
+                       numbers numbers-down numbers-up))
+        (ing-cmds   '( listing listing-ref
+                       consing
+                       arraying arraying-ref
+                       sequencing sequencing-ref sequencing-index
+                       cycling
+                       iterating
+                       mapping mapping-ref
+                       numbering numbering-down numbering-up)))
+    `(progn
+       ,@(cl-loop
+          for body in '(((if t (_cmd i '(1))) (finally-return t))
+                        ((when t (_cmd i '(1))) (finally-return t))
+                        ((unless t (_cmd i '(1))) (finally-return t))
+                        ((cond (t (_cmd i '(1)))) (finally-return t)))
+          for sub-cmd = (car (car body))
+          collect `(loopy-deftest ,(intern (format "iteration-sub-level-%s"
+                                                   sub-cmd))
+                     :error loopy-iteration-in-sub-level
+                     :repeat _cmd
+                     :loopy ((_cmd . ,plain-cmds))
+                     :iter-bare ((_cmd . ,ing-cmds))
+                     :iter-keyword ((_cmd . ,plain-cmds))
+                     :body ,body))
 
-;; Can't bind the same iteration variable with multiple commands.
-(ert-deftest iteration-same-var-multiple-cmd ()
-  (should-error (eval (quote (loopy (list i '(1 2 3))
-                                    (list i '(1 2 3)))))))
+       (loopy-deftest iteration-sub-level-group
+         :doc "Don't test `group' for `iter-bare'."
+         :error loopy-iteration-in-sub-level
+         :repeat _cmd
+         :loopy ((_cmd . ,plain-cmds))
+         :iter-keyword ((_cmd . ,plain-cmds))
+         :body  ((group (_cmd i '(1))) (finally-return t))))))
+
+(test--iteration-sub-level)
+
+(loopy-deftest iteration-same-var-multiple-cmd
+  :doc "Can't bind the same iteration variable with multiple commands."
+  :error loopy-reinitializing-iteration-variable
+  :body ((list i '(1 2 3))
+         (list i '(1 2 3)))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword (list))
 
 ;;;;; Array
-(ert-deftest array ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy  (array i [1 2 3])
-                                      (collect coll i)
-                                      (finally-return coll))))))
+(loopy-deftest array
+  :result '(97 98 99)
+  :multi-body t
+  :body [((array  i [97 98 99]) (collect coll i) (finally-return coll))
+         ((string i "abc")      (collect coll i) (finally-return coll))]
+  :loopy t
+  :iter-keyword (array collect string)
+  :iter-bare ((array . arraying)
+              (string . stringing)
+              (collect . collecting)))
 
-  (should (equal '(97 98 99)
-                 (eval (quote (loopy  (string i "abc")
-                                      (collect coll i)
-                                      (finally-return coll)))))))
+(loopy-deftest array-vars
+  :doc "Test behavior for using numbers stored in variable vs. using numbers directly.
+Using numbers directly will use less variables and more efficient code."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (end 8)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array i arr :from start :to end :by 2)
+          (collect i))
+         ((with (start 2) (end 8) (step 2)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array i arr :from start :to end :by step)
+          (collect i))]
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-vars ()
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array i arr :from start :to end :by 2)
-                     (collect i))))
+(loopy-deftest array-destructuring
+  :doc "Check that `array' implements destructuring, not destructuring itself."
+  :result '(5 6 7 8)
+  :body ((array (a b c . d) [(1 2 3 . 4) (5 6 7 . 8)])
+         (finally-return a b c d))
+  :loopy t
+  :iter-keyword (array)
+  :iter-bare ((array . arraying)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array i arr :from start :to end :by step)
-                     (collect i)))))
+(loopy-deftest array-multi-array
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((array i [1 2] [3 4])
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-destructuring ()
-  (should (and (equal '(5 6)
-                      (eval (quote (loopy (array (a . b)
-                                                 [(1 . 2) (3 . 4) (5 . 6)])
-                                          (finally-return a b)))))
-               (equal '(5 (6))
-                      (eval (quote (loopy (array (a . b)
-                                                 [(1 2) (3 4) (5 6)])
-                                          (finally-return a b)))))
-               (equal '(4 5 6 7)
-                      (eval (quote (loopy (array (a b c d)
-                                                 [(1 2 3 4) (4 5 6 7)])
-                                          (finally-return a b c d)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (array [i j k] [[1 2 3] [4 5 6]])
-                                          (finally-return i j k))))))))
+(loopy-deftest array-multi-array-:by
+  :result '((1 3) (2 3))
+  :body ((array i [1 2] [3 4] :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-multi-array-quote
+  :doc "Just to check how quoting is handled."
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((array i  `[1 ,(1+ 1)] [3 4])
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-keywords-:index
+  :result  '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+  :body ((array i [4 3 2 1 0] :index cat)
+         (collect (cons cat i)))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-keywords-:by
+  :result '(0 2 4 6 8 10)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
 
-(ert-deftest array-recursive-destructuring ()
-  (should
-   (and
-    (equal '(5 5 6)
-           (eval (quote (loopy (array (a [b c]) [(1 [1 2]) (5 [5 6])])
-                               (finally-return (list a b c))))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a [b c]] [[1 [2 3]] [4 [5 6]]])
-                    (finally-return a b c)))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a [b [c]]] [[1 [2 [3]]] [4 [5 [6]]]])
-                    (finally-return a b c)))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a (b c)] [[1 (2 3)] [4 (5 6)]])
-                    (finally-return a b c))))))))
+(loopy-deftest array-keywords-:from-:downto-:by
+  :result  '(8 6 4 2)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10]
+                :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-multi-array ()
-  (should (equal '((1 3) (1 4) (2 3) (2 4))
-                 (loopy (array i [1 2] [3 4])
-                        (collect i))))
+(loopy-deftest array-keywords-:upto
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-  (should (equal '((1 3) (2 3))
-                 (loopy (array i [1 2] [3 4] :by 2)
-                        (collect i))))
 
-  ;; Just to check how quoting is handled.
-  (should (equal '((1 3) (1 4) (2 3) (2 4))
-                 (loopy (array i `[1 ,(1+ 1)] [3 4])
-                        (collect i)))))
+(loopy-deftest array-keywords-:to
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-multi-array-destructuring ()
-  (should (equal '((1 1 2 2) (3 4 3 4))
-                 (eval (quote (loopy (array (i j) [1 2] [3 4])
-                                     (collect c1 i)
-                                     (collect c2 j)
-                                     (finally-return c1 c2)))))))
+(loopy-deftest array-keywords-:downto
+  :result  '(10 9 8 7 6 5 4 3)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-keywords ()
-  (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
-                 (eval (quote (loopy (array i [4 3 2 1 0] :index cat)
-                                     (collect (cons cat i)))))))
 
-  (should (equal '(0 2 4 6 8 10)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
-                                     (collect i))))))
+(loopy-deftest array-keywords-:above
+  :result  '(10 9 8)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-  (should (equal '(8 6 4 2)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10]
-                                            :from 8 :downto 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
-                                     (collect i))))))
-
-  (should (equal '(10 9 8 7 6 5 4 3)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
-                                     (collect i))))))
-
-  (should (equal '(10 9 8)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
-                                     (collect i)))))))
+(loopy-deftest array-keywords-:below
+  :result  '(0 1 2)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
 ;;;;; Array Ref
-(ert-deftest array-ref ()
-  (should (equal "aaa"
-                 (eval (quote (loopy (with (my-str "cat"))
-                                     (array-ref i my-str)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
-  (should (equal "aaa"
-                 (eval (quote (loopy (with (my-str "cat"))
-                                     (stringf i my-str)
-                                     (do (setf i ?a))
-                                     (finally-return my-str)))))))
+(loopy-deftest array-ref
+  :result "aaa"
+  :body ((with (my-str "cat"))
+         (_cmd i my-str)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :repeat _cmd
+  :loopy ((_cmd . (array-ref string-ref arrayf stringf)))
+  :iter-keyword ((_cmd . (array-ref string-ref arrayf stringf))
+                 (do . do))
+  :iter-bare ((_cmd . (arraying-ref stringing-ref))
+              (do . ignore)))
+
+(loopy-deftest array-ref-destructuring
+  :doc  "Check that `array-ref' implements destructuring, not destructuring itself."
+  :result [(7 8 9) (7 8 9)]
+  :body ((with (my-array [(1 2 3) (4 5 6)]))
+         (array-ref (i j k) my-array)
+         (do (setf i 7)
+             (setf j 8)
+             (setf k 9))
+         (finally-return my-array))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
 
-(ert-deftest array-ref-destructuring ()
-  (should (and (equal [(7 8 9) (7 8 9)]
-                      (eval (quote (loopy (with (my-array [(1 2 3) (4 5 6)]))
-                                          (array-ref (i j k) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array)))))
-               (equal [(7 8 9 10) (7 8 9 10)]
-                      (eval (quote (loopy (with (my-array [(1 2 3 4) (4 5 6 8)]))
-                                          (array-ref (i j . k) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k '(9 10)))
-                                          (finally-return my-array)))))
-               (equal [[7 8 9 4] [7 8 9 8]]
-                      (eval (quote (loopy (with (my-array [[1 2 3 4] [4 5 6 8]]))
-                                          (array-ref [i j k] my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array))))))))
+(loopy-deftest array-ref-keywords-:by
+  :result "a1a3a5a7a9"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :by 2)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-(ert-deftest array-ref-recursive-destructuring ()
-  (should (and (equal [(7 [8 9]) (7 [8 9])]
-                      (eval (quote (loopy (with (my-array [(1 [2 3]) (4 [5 6])]))
-                                          (array-ref (i [j k]) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array)))))
-               (equal [[7 [8 9] 4] [7 [8 9] 8]]
-                      (eval (quote (loopy (with (my-array [[1 [2 3] 4] [4 [5 6] 8]]))
-                                          (array-ref [i [j k]] my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array))))))))
+(loopy-deftest array-ref-keywords-:by-:index
+  :result  "a1a3a5a7a9"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :by 2 :index cat)
+          (do (setf (aref my-str cat) ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-(ert-deftest array-ref-keywords ()
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :by 2)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:from-:by
+  :result  "0a2a4a6a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :from 1 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :by 2 :index cat)
-                                     (do (setf (aref my-str cat) ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:downto-:by
+  :result  "0123456a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :downto 6 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "0a2a4a6a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :from 1 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:below
+  :result  "aaaaa56789"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :below 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "0123456a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :downto 6 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:above
+  :result  "012345aaaa"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :above 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaa56789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :below 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:upto
+  :result  "aaaaaa6789"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :upto 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "012345aaaa"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :above 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:upfrom-:by
+  :result  "0a2a4a6a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :upfrom 1 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaaa6789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :upto 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
-
-  (should (equal "0a2a4a6a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :upfrom 1 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str)))))))
-
-(ert-deftest array-ref-vars ()
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array-ref i arr :from start :to end :by 2)
-                     (do (setf i 22))
-                     (finally-return arr))))
-
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array-ref i arr :from start :to end :by step)
-                     (do (setf i 22))
-                     (finally-return arr)))))
+(loopy-deftest array-ref-vars
+  :doc "Test behavior for using numbers stored in variable vs. using numbers directly.
+Using numbers directly will use less variables and more efficient code."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :multi-body t
+  :body [((with (start 2) (end 8) (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array-ref i arr :from start :to end :by 2)
+          (do (setf i 22))
+          (finally-return arr))
+         ((with (start 2) (end 8) (step 2) (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array-ref i arr :from start :to end :by step)
+          (do (setf i 22))
+          (finally-return arr))]
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
 ;;;;; Cons
-(ert-deftest cons ()
-  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-                 (eval (quote (loopy (cons x '(1 2 3 4))
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons
+  :result '((1 2 3 4) (2 3 4) (3 4) (4))
+  :body ((_cmd x '(1 2 3 4))
+         (collect coll x)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cons conses)))
+  :iter-keyword ((_cmd . (cons conses))
+                 (collect . collect))
+  :iter-bare ((_cmd . (consing))
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cdr)
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-:by
+  :result '((1 2 3 4) (3 4))
+  :multi-body t
+  :body [((cons x '(1 2 3 4) :by #'cddr)
+          (collect coll x)
+          (finally-return coll))
+         ((cons x '(1 2 3 4) :by (lambda (y) (cddr y)))
+          (collect coll x)
+          (finally-return coll))
+         ((with (f (lambda (y) (cddr y))))
+          (cons x '(1 2 3 4) :by f)
+          (collect coll x)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cddr)
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-destr
+  :doc  "Check that `cons' implements destructuring, not destructuring itself."
+  :result '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
+  :body ((cons (i . j) '(1 2 3 4))
+         (collect coll (list i j))
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (loopy (cons x '(1 2 3 4)
-                                           :by (lambda (x) (cddr x)))
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-init-direct
+  :doc "Check that `cons' immediately binds the value when possible."
+  :result '((1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4) (4))
+  :body  ((collect l)
+          (cons l '(1 2 3 4))
+          (collect l))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (let ((f (lambda (x) (cddr x))))
-                                (loopy (cons x '(1 2 3 4) :by f)
-                                       (collect coll x)
-                                       (finally-return coll)))))))
-
-  (should (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
-                 (eval (quote (loopy (cons (i . j) '(1 2 3 4))
-                                     (collect coll (list i j))
-                                     (finally-return coll))))))
-
-  (should (equal '((1 (2 3 4)) (3 (4)))
-                 (eval (quote (loopy (cons (i . j) '(1 2 3 4) :by #'cddr)
-                                     (collect coll (list i j))
-                                     (finally-return coll)))))))
-
-(ert-deftest cons-init ()
-  (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-         (lq (cons l '(1 2 3 4))
-             (collect l)))
-
-  (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
-         (lq (cons (car . cdr) '(1 2 3 4))
-             (collect (list car cdr))))
-
-  (equal '(25 (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
-         (lq (with (l 25))
-             (collect l)
-             (cons l '(1 2 3 4))
-             (collect l))))
+(loopy-deftest cons-init-indirect
+  :doc "Check that `cons' doesn't overwrite a with-bound value."
+  :result '(25 (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
+  :body  ((with (l 25))
+          (collect l)
+          (cons l '(1 2 3 4))
+          (collect l))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
 ;;;;; Iter
-(ert-deftest iter-with-single-var ()
-  (should (equal '(1 2 3)
-                 (lq (with (iter-maker (iter-lambda ()
-                                         (iter-yield 1)
-                                         (iter-yield 2)
-                                         (iter-yield 3))))
-                     (iter i (funcall iter-maker))
-                     (collect i)))))
+(loopy-deftest iter-single-var
+  :doc "When single var, `iter' can bind the value directly."
+  :result '(1 1 2 2 3 3)
+  :body ((with (iter-maker (iter-lambda ()
+                             (iter-yield 1)
+                             (iter-yield 2)
+                             (iter-yield 3))))
+         (collect i)
+         (iter i (funcall iter-maker))
+         (collect i))
+  :loopy t
+  :iter-keyword (iter collect)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)))
 
-(ert-deftest iter-with-no-var ()
-  (should (equal '(1 2 3)
-                 (lq (with (iter-maker (iter-lambda ()
-                                         (iter-yield 1)
-                                         (iter-yield 2)
-                                         (iter-yield 3))))
-                     (iter (funcall iter-maker))
-                     (set i 1 (1+ i))
-                     (collect i)))))
+(loopy-deftest iter-single-var-with-bound
+  :doc "When single var is `with'-bound, `iter' must be indirect."
+  :result '(27 1 1 2 2 3)
+  :body (loopy (with (iter-maker (iter-lambda ()
+                                   (iter-yield 1)
+                                   (iter-yield 2)
+                                   (iter-yield 3)))
+                     (i 27))
+               (collect i)
+               (iter i (funcall iter-maker))
+               (collect i))
+  :loopy t
+  :iter-keyword (iter collect)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)))
 
-(ert-deftest iter-close-twice ()
-  (should (equal '(1 2) (lq (with (iter-maker (iter-lambda ()
-                                                (iter-yield 1)
-                                                (iter-yield 2)
-                                                (iter-yield 3)))
-                                  (gen (funcall iter-maker)))
-                            (iter i gen :close t)
-                            (iter j gen :close t)
-                            (leave)
-                            (finally-return i j)))))
+(loopy-deftest iter-no-var
+  :doc "When no var, as in non-with-bound single var, `iter' can bind the value directly."
+  :result  '(1 2 3)
+  :body ((with (iter-maker (iter-lambda ()
+                             (iter-yield 1)
+                             (iter-yield 2)
+                             (iter-yield 3))))
+         (iter (funcall iter-maker))
+         (set i 1 (1+ i))
+         (collect i))
+  :loopy t
+  :iter-keyword (iter collect set)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)
+              (set . setting)))
 
-(ert-deftest iter-same-gen ()
-  (should (equal '((1 . 2) (3 . 4))
-                 (lq (with (iter-maker (iter-lambda (x)
-                                         (while x
-                                           (iter-yield (pop x)))))
-                           (gen (funcall iter-maker (list 1 2 3 4))))
-                     (iter i gen :close nil)
-                     (iter j gen :close nil)
-                     (collect (cons i j))))))
+(loopy-deftest iter-close-twice
+  :doc "Check that trying to close the iterator object twice doesn't signal an error."
+  :result '(1 2)
+  :body ((with (iter-maker (iter-lambda ()
+                             (iter-yield 1)
+                             (iter-yield 2)
+                             (iter-yield 3)))
+               (gen (funcall iter-maker)))
+         (iter i gen :close t)
+         (iter j gen :close t)
+         (leave)
+         (finally-return i j))
+  :loopy t
+  :iter-keyword (iter collect leave)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)
+              (leave . leaving)))
 
-(ert-deftest iter-init ()
-  (should (equal '(1 2 3)
-                 (lq (with (iter-maker (iter-lambda ()
-                                         (iter-yield 1)
-                                         (iter-yield 2)
-                                         (iter-yield 3))))
-                     (iter i (funcall iter-maker))
-                     (collect i))))
+(loopy-deftest iter-same-gen
+  :doc "Check that `iter' doesn't reset iterator objects."
+  :result  '((1 . 2) (3 . 4))
+  :body ((with (iter-maker (iter-lambda (x)
+                             (while x
+                               (iter-yield (pop x)))))
+               (gen (funcall iter-maker (list 1 2 3 4))))
+         (iter i gen :close nil)
+         (iter j gen :close nil)
+         (collect (cons i j)))
+  :loopy t
+  :iter-keyword (iter collect)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)))
 
-  (should (equal '(27 1 1 2 2 3)
-                 (lq (with (iter-maker (iter-lambda ()
-                                         (iter-yield 1)
-                                         (iter-yield 2)
-                                         (iter-yield 3)))
-                           (i 27))
-                     (collect i)
-                     (iter i (funcall iter-maker))
-                     (collect i))))
-
-  (should (equal '((nil nil) (1 2) (1 2) (3 4) (3 4) (5 6))
-                 (lq (with (iter-maker (iter-lambda ()
-                                         (iter-yield (list 1 2))
-                                         (iter-yield (list 3 4))
-                                         (iter-yield (list 5 6)))))
-                     (collect (list i j))
-                     (iter (i j) (funcall iter-maker))
-                     (collect (list i j))))))
+(loopy-deftest iter-destr
+  :doc "`iter' should initialize destructured values to `nil'."
+  :result  '((nil nil) (1 2) (1 2) (3 4) (3 4) (5 6))
+  :body ((with (iter-maker (iter-lambda ()
+                             (iter-yield (list 1 2))
+                             (iter-yield (list 3 4))
+                             (iter-yield (list 5 6)))))
+         (collect (list i j))
+         (iter (i j) (funcall iter-maker))
+         (collect (list i j)))
+  :loopy t
+  :iter-keyword (iter collect)
+  :iter-bare ((iter . iterating)
+              (collect . collecting)))
 
 ;;;;; List
-(ert-deftest list ()
-  (should (= 3 (eval (quote (loopy  (list i '(1 2 3))
-                                    ;; Same thing:
-                                    ;; (after-do (cl-return i))
-                                    (finally-return i))))))
-  (should (equal '(1 3)
-                 (let ((my-cddr (lambda (x)  (cddr x))))
-                   (loopy (list i '(1 2 3 4) :by my-cddr)
-                          (collect i)))))
+(loopy-deftest list-final-val
+  :result 3
+  :body ((list i '(1 2 3))
+         ;; Same thing:
+         ;; (after-do (cl-return i))
+         (finally-return i))
+  :loopy t
+  :iter-keyword (list)
+  :iter-bare ((list . listing)))
 
-  (should (equal '(1 3)
-                 (loopy (list i '(1 2 3 4) :by (lambda (x) (cddr x)))
-                        (collect i))))
+(loopy-deftest list-:by
+  :result '(1 3)
+  :multi-body t
+  :body [((with (my-cddr (lambda (x)  (cddr x))))
+          (list i '(1 2 3 4) :by my-cddr)
+          (collect i) )
+         ((list i '(1 2 3 4) :by (lambda (x) (cddr x)))
+          (collect i))
+         ((list i '(1 2 3 4) :by #'cddr)
+          (collect i))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (should (equal '(1 3)
-                 (loopy (list i '(1 2 3 4) :by #'cddr)
-                        (collect i)))))
+(loopy-deftest list-destructuring
+  :doc  "Check that `list' implements destructuring, not destructuring itself."
+  :result '(5 6)
+  :body (loopy (list (a . b)
+                     '((1 . 2) (3 . 4) (5 . 6)))
+               (finally-return a b))
+  :loopy t
+  :iter-keyword (list)
+  :iter-bare ((list . listing)))
 
-(ert-deftest list-destructuring ()
-  (should (and (equal '(5 6)
-                      (eval (quote (loopy (list (a . b)
-                                                '((1 . 2) (3 . 4) (5 . 6)))
-                                          (finally-return a b)))))
-               (equal '(5 (6))
-                      (eval (quote (loopy (list (a . b)
-                                                '((1 2) (3 4) (5 6)))
-                                          (finally-return a b)))))
-               (equal '(4 5 6 7)
-                      (eval (quote (loopy (list (a b c d)
-                                                '((1 2 3 4) (4 5 6 7)))
-                                          (finally-return a b c d)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (list [i j k] '([1 2 3] [4 5 6]))
-                                          (finally-return i j k))))))))
+(loopy-deftest list-distribution
+  :result '((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+  :body ((list i '(1 2 3) '(4 5 6))
+         (collect i))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-(ert-deftest list-recursive-destructuring ()
-  (should (equal '(4 5 6)
-                 (eval (quote (loopy (list (a (b c)) '((1 (2 3)) (4 (5 6))))
-                                     (finally-return (list a b c)))))))
-  (should (equal '(5 5 6)
-                 ;; This is more of an evaluation-time test.
-                 (eval (quote (loopy (list (a . (b c)) '((1 . (1 2)) (5 . (5 6))))
-                                     (finally-return (list a b c)))))))
-  (should (equal '(4 5 6)
-                 (loopy (list (a . [b c]) '((1 . [2 3]) (4 . [5 6])))
-                        (finally-return a b c))))
-  (should (equal '(5 5 6)
-                 (eval (quote (loopy (list (a (b (c))) '((1 (1 (2))) (5 (5 (6)))))
-                                     (finally-return (list a b c))))))))
+(loopy-deftest list-distribution-:by
+  :result '((1 4)  (1 6) (2 5) (3 4) (3 6))
+  :body ((list i '(1 2 3) '(4 5 6) :by #'cddr)
+         (collect i))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-(ert-deftest list-multi-list ()
-  (should (equal '((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
-                 (eval (quote (loopy (list i '(1 2 3) '(4 5 6))
-                                     (collect i))))))
-
-  (should (equal '((1 7) (1 8) (1 9) (2 7) (2 8) (2 9))
-                 (eval (quote (cl-labels ((fx () '(7 8 9)))
-                                (loopy (list i '(1 2) (fx))
-                                       (collect i)))))))
-
-  (should (equal '((10 13) (10 15) (11 14) (12 13) (12 15))
-                 (eval (quote (loopy (list i '(10 11 12) '(13 14 15) :by #'cddr)
-                                     (collect i)))))))
-
-(ert-deftest list-multi-list-destructuring ()
-  (should (equal '((1 1 2 2) (4 5 4 5))
-                 (eval (quote (loopy (list (i j) '(1 2) '(4 5))
-                                     (collect c1 i)
-                                     (collect c2 j)
-                                     (finally-return c1 c2)))))))
+(loopy-deftest list-distribution-destr
+  :result '((1 1 2 2) (4 5 4 5))
+  :body ((list (i j) '(1 2) '(4 5))
+         (collect c1 i)
+         (collect c2 j)
+         (finally-return c1 c2))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
 ;;;;; List Ref
-(ert-deftest list-ref ()
-  (should (equal  '(7 7 7)
-                  (eval (quote (loopy (with (my-list '(1 2 3)))
-                                      (list-ref i my-list)
-                                      (do (setf i 7))
-                                      (finally-return my-list))))))
+(loopy-deftest list-ref
+  :result '(7 7 7)
+  :body ((with (my-list '(1 2 3)))
+         (list-ref i my-list)
+         (do (setf i 7))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (list-ref do)
+  :iter-bare ((list-ref . listing-ref)
+              (do . ignore)))
 
-  (should (equal  '(7 2 7)
-                  (eval (quote (loopy (with (my-list '(1 2 3)))
-                                      (list-ref i my-list :by #'cddr)
-                                      (do (setf i 7))
-                                      (finally-return my-list))))))
+(loopy-deftest list-ref-:by
+  :result '(7 2 7)
+  :multi-body t
+  :body [((with (my-list '(1 2 3)))
+          (list-ref i my-list :by #'cddr)
+          (do (setf i 7))
+          (finally-return my-list))
+         ((with (my-list '(1 2 3)))
+          (list-ref i my-list :by (lambda (x) (cddr x)))
+          (do (setf i 7))
+          (finally-return my-list))
+         ((with (my-list '(1 2 3)) (f (lambda (x) (cddr x))))
+          (list-ref i my-list :by f)
+          (do (setf i 7))
+          (finally-return my-list))]
+  :loopy t
+  :iter-keyword (list-ref do)
+  :iter-bare ((list-ref . listing-ref)
+              (do . ignore)))
 
-  (should (equal  '(7 2 7)
-                  (eval (quote (loopy (with (my-list '(1 2 3)))
-                                      (list-ref i my-list
-                                                :by (lambda (x) (cddr x)))
-                                      (do (setf i 7))
-                                      (finally-return my-list))))))
-
-  (should (equal  '(7 2 7)
-                  (eval (quote (let ((f (lambda (x) (cddr x))))
-                                 (loopy (with (my-list '(1 2 3)))
-                                        (list-ref i my-list :by f)
-                                        (do (setf i 7))
-                                        (finally-return my-list))))))))
-
-(ert-deftest list-ref-destructuring ()
-  (should (and (equal '((7 8 9) (7 8 9))
-                      (eval (quote (loopy (with (my-list '((1 2 3) (4 5 6))))
-                                          (list-ref (i j k) my-list)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-list)))))
-               (equal '((7 8 9 10) (7 8 9 10))
-                      (eval (quote (loopy (with (my-list '((1 2 3 4) (4 5 6 8))))
-                                          (list-ref (i j . k) my-list)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k '(9 10)))
-                                          (finally-return my-list)))))
-               (equal '([7 8 9 4] [7 8 9 8])
-                      (eval (quote (loopy (with (my-list '([1 2 3 4] [4 5 6 8])))
-                                          (list-ref [i j k] my-list)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-list))))))))
-
-(ert-deftest list-ref-recursive-destructuring ()
-  (should (equal '((7 (8 9)) (7 (8 9)))
-                 (eval (quote (loopy (with (my-list '((1 (2 3)) (4 (5 6)))))
-                                     (list-ref (i (j k)) my-list)
-                                     (do (setf i 7)
-                                         (setf j 8)
-                                         (setf k 9))
-                                     (finally-return my-list))))))
-  (should (equal '([7 (8 9) 4] [7 (8 9) 8])
-                 (eval (quote (loopy (with (my-list '([1 (2 3) 4] [4 (5 6) 8])))
-                                     (list-ref [i (j k) l] my-list)
-                                     (do (setf i 7)
-                                         (setf j 8)
-                                         (setf k 9))
-                                     (finally-return my-list)))))))
+(loopy-deftest list-ref-destructuring
+  :doc  "Check that `list-ref' implements destructuring, not destructuring itself."
+  :result '((7 8 9) (7 8 9))
+  :body ((with (my-list '((1 2 3) (4 5 6))))
+         (list-ref (i j k) my-list)
+         (do (setf i 7)
+             (setf j 8)
+             (setf k 9))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (list-ref do)
+  :iter-bare ((list-ref . listing-ref)
+              (do . ignore)))
 
 ;;;;; Map
-(ert-deftest map ()
-  (should (equal '((a . 1) (b . 2))
-                 (eval (quote (loopy (map pair '((a . 1) (b . 2)))
-                                     (collect coll pair)
-                                     (finally-return coll))))))
+(loopy-deftest map-alist
+  :result '((a . 1) (b . 2))
+  :repeat _map
+  :body ((_map pair '((a . 1) (b . 2)))
+         (collect coll pair)
+         (finally-return coll))
+  :loopy ((_map . (map map-pairs)))
+  :iter-keyword ((_map . (map map-pairs))
+                 (collect . collect))
+  :iter-bare ((_map . (mapping mapping-pairs))
+              (collect . collecting)))
 
-  (should (equal '((a . 1) (b . 2))
-                 (eval (quote (loopy (map-pairs pair '((a . 1) (b . 2)))
-                                     (collect coll pair)
-                                     (finally-return coll))))))
+(loopy-deftest map-plist
+  :result '((a . 1) (b . 2))
+  :repeat _map
+  :body ((_map pair '(a 1 b 2))
+         (collect coll pair)
+         (finally-return coll))
+  :loopy ((_map . (map map-pairs)))
+  :iter-keyword ((_map . (map map-pairs))
+                 (collect . collect))
+  :iter-bare ((_map . (mapping mapping-pairs))
+              (collect . collecting)))
 
-  (should (equal '((0 . a) (1 . b) (2 . c) (3 . d))
-                 (eval (quote (loopy (map pair [a b c d])
-                                     (collect coll pair)
-                                     (finally-return coll))))))
+(loopy-deftest map-vector
+  :result '((0 . a) (1 . b) (2 . c) (3 . d))
+  :repeat _map
+  :body (loopy (_map pair [a b c d])
+               (collect coll pair)
+               (finally-return coll))
+  :loopy ((_map . (map map-pairs)))
+  :iter-keyword ((_map . (map map-pairs))
+                 (collect . collect))
+  :iter-bare ((_map . (mapping mapping-pairs))
+              (collect . collecting)))
 
-  (should (equal '((0 . a) (1 . b) (2 . c) (3 . d))
-                 (eval (quote (loopy (map-pairs pair [a b c d])
-                                     (collect coll pair)
-                                     (finally-return coll))))))
+(loopy-deftest map-hash-table
+  :result '((a . 1) (b . 2))
+  :repeat _map
+  :body ((with (my-hash (let ((h (make-hash-table)))
+                          (puthash 'a 1 h)
+                          (puthash 'b 2 h)
+                          h)))
+         (_map pair my-hash)
+         (collect coll pair)
+         (finally-return coll))
+  :loopy ((_map . (map map-pairs)))
+  :iter-keyword ((_map . (map map-pairs))
+                 (collect . collect))
+  :iter-bare ((_map . (mapping mapping-pairs))
+              (collect . collecting)))
 
-  (let ((my-hash (make-hash-table)))
-    (puthash 'a 1 my-hash)
-    (puthash 'b 2 my-hash)
-    (should (equal '((a . 1) (b . 2))
-                   (loopy (map pair my-hash)
-                          (collect coll pair)
-                          (finally-return coll))))))
+(loopy-deftest map-:unique-t
+  :doc "`:unique' it `t' by default."
+  :result '((a . 1) (b . 2) (c . 3))
+  :multi-body t
+  :body [((map-pairs pair '((a . 1) (a . 27) (b . 2) (c . 3)))
+          (collect coll pair)
+          (finally-return coll))
+         ((map-pairs pair '((a . 1) (a . 27) (b . 2) (c . 3)) :unique t)
+          (collect coll pair)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (map-pairs collect)
+  :iter-bare ((map-pairs . mapping-pairs)
+              (collect . collecting)))
 
-(ert-deftest map-unique ()
-  (should (equal '((a . 1) (b . 2) (c . 3))
-                 (eval (quote (loopy (map-pairs pair '((a . 1)
-                                                       (a . 27)
-                                                       (b . 2)
-                                                       (c . 3)))
-                                     (collect coll pair)
-                                     (finally-return coll))))))
+(loopy-deftest map-:unique-nil
+  :doc "`:unique' it `t' by default.  Test when `nil'."
+  :result '((a . 1) (a . 27) (b . 2) (c . 3))
+  :body ((map-pairs pair '((a . 1) (a . 27) (b . 2) (c . 3)) :unique nil)
+         (collect coll pair)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (map-pairs collect)
+  :iter-bare ((map-pairs . mapping-pairs)
+              (collect . collecting)))
 
-  (should (equal '((a . 1) (b . 2) (c . 3))
-                 (eval (quote (loopy (map-pairs pair '((a . 1)
-                                                       (a . 27)
-                                                       (b . 2)
-                                                       (c . 3))
-                                                :unique t)
-                                     (collect coll pair)
-                                     (finally-return coll))))))
-
-  (should (equal '((a . 1) (a . 27) (b . 2) (c . 3))
-                 (eval (quote (loopy (map-pairs pair '((a . 1)
-                                                       (a . 27)
-                                                       (b . 2)
-                                                       (c . 3))
-                                                :unique nil)
-                                     (collect coll pair)
-                                     (finally-return coll)))))))
-
-(ert-deftest map-destructuring ()
-  (should (equal '((a b) (1 2))
-                 (eval (quote (loopy (map (key . val) '((a . 1) (b . 2)))
-                                     (collect keys key)
-                                     (collect vals val)
-                                     (finally-return keys vals))))))
-
-  (should (equal '((0 1 2 3) (a b c d))
-                 (eval (quote (loopy (map (key . val) [a b c d])
-                                     (collect keys key)
-                                     (collect vals val)
-                                     (finally-return keys vals))))))
-  (let ((my-hash (make-hash-table)))
-    (puthash 'a 1 my-hash)
-    (puthash 'b 2 my-hash)
-    (should (equal '((a b) (1 2))
-                   (loopy (map (key . val) my-hash)
-                          (collect keys key)
-                          (collect vals val)
-                          (finally-return keys vals))))))
+(loopy-deftest map-destructuring
+  :doc  "Check that `map' implements destructuring, not destructuring itself."
+  :result '((a b) (1 2))
+  :body ((map (key . val) '((a . 1) (b . 2)))
+         (collect keys key)
+         (collect vals val)
+         (finally-return keys vals))
+  :loopy t
+  :iter-keyword (map collect)
+  :iter-bare ((map . mapping)
+              (collect . collecting)))
 
 ;;;;; Map Ref
+(loopy-deftest map-ref
+  :result [17 18 19 20 21]
+  :body ((with (map (vector 10 11 12 13 14)))
+         (_cmd i map)
+         (do (cl-incf i 7))
+         (finally-return map))
+  :repeat _cmd
+  :loopy ((_cmd . (map-ref mapf mapping-ref)))
+  :iter-keyword ((_cmd . (map-ref mapf mapping-ref))
+                 (do . do))
+  :iter-bare ((_cmd . (mapping-ref))
+              (do . ignore)))
 
-(ert-deftest map-ref ()
-  (should (equal [17 18 19 20 21]
-                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
-                                     (mapf i map)
-                                     (do (cl-incf i 7))
-                                     (finally-return map))))))
+(loopy-deftest map-ref-:key
+  :result '([17 18 19 20 21] (0 1 2 3 4))
+  :body ((with (map (vector 10 11 12 13 14)))
+         (mapf i map :key my-key)
+         (do (cl-incf i 7))
+         (collect my-key)
+         (finally-return map loopy-result))
+  :loopy t
+  :iter-keyword (mapf do collect)
+  :iter-bare ((mapf . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-  (should (equal '([17 18 19 20 21] (0 1 2 3 4))
-                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
-                                     (mapf i map :key my-key)
-                                     (do (cl-incf i 7))
-                                     (collect my-key)
-                                     (finally-return map loopy-result)))))))
+(loopy-deftest map-ref-:unique-t
+  :doc "`:unique' is `t' by default."
+  :result '(:a 8 :a 2 :b 10)
+  :multi-body t
+  :body [((with (map (list :a 1 :a 2 :b 3)))
+          (map-ref i map)
+          (do (cl-incf i 7))
+          (finally-return map))
+         ((with (map (list :a 1 :a 2 :b 3)))
+          (map-ref i map :unique t)
+          (do (cl-incf i 7))
+          (finally-return map))]
+  :loopy t
+  :iter-keyword (map-ref do collect)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-(ert-deftest map-ref-unique ()
-  (should (equal '(:a 8 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map)
-                          (do (cl-incf i 7))
-                          (finally-return map)))))
+(loopy-deftest map-ref-:unique-nil
+  :doc "Fist `:a' becomes 15 because it gets found twice by `setf'."
+  :result '(:a 15 :a 2 :b 10)
+  :body (loopy (with (map (list :a 1 :a 2 :b 3)))
+               (map-ref i map :unique nil)
+               (do (cl-incf i 7))
+               (finally-return map))
+  :loopy t
+  :iter-keyword (map-ref do collect)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-  (should (equal '(:a 8 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map :unique t)
-                          (do (cl-incf i 7))
-                          (finally-return map)))))
-
-  (should (equal '(:a 15 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map :unique nil)
-                          (do (cl-incf i 7))
-                          (finally-return map))))))
-
-(ert-deftest map-ref-destructuring ()
-  (should (equal [[7 8] [7 8]]
-                 (eval (quote (loopy (with (map (vector (vector 10 11)
-                                                        (vector 12 13))))
-                                     (mapf [i j] map)
-                                     (do (setf i 7)
-                                         (setf j 8))
-                                     (finally-return map))))))
-
-  (should (equal '((a 7 8) (b 7 8))
-                 (eval (quote (loopy (with (map (list (cons 'a (list 1 2))
-                                                      (cons 'b (list 3 4)))))
-                                     (mapf (i j) map)
-                                     (do (setf i 7)
-                                         (setf j 8))
-                                     (finally-return map)))))))
+(loopy-deftest map-ref-destr
+  :doc "Check that `map-ref' implements destructuring, not the destructuring itself."
+  :result [[7 8] [7 8]]
+  :body ((with (map (vector (vector 10 11)
+                            (vector 12 13))))
+         (map-ref [i j] map)
+         (do (setf i 7)
+             (setf j 8))
+         (finally-return map))
+  :loopy t
+  :iter-keyword (map-ref do)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)))
 
 ;;;;; Nums
-(ert-deftest nums ()
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (nums i 1 5)
-                                     (collect i))))))
+;; TODO: Names `num' and `number' aren't listed in the Org doc.
+;;       They should be removed.
+(loopy-deftest numbers
+  :result '(1 2 3 4 5)
+  :repeat _cmd
+  :body ((_cmd i 1 5)
+         (collect i))
+  :loopy ((_cmd . (nums numbers num number)))
+  :iter-keyword ((_cmd . (nums numbers num number))
+                 (collect . collect))
+  :iter-bare ((_cmd . (numbering))
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (numbers i 1 5)
-                                     (collect i))))))
+(loopy-deftest numbers-pos-nokey-step
+  :result '(1 3 5)
+  :body ((numbers i 1 5 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (num i 1 5)
-                                     (collect i))))))
+(loopy-deftest numbers-neg-nokey-step
+  :result '(5 3 1)
+  :body (loopy (numbers i 5 1 -2)
+               (collect i))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (number i 1 5)
-                                     (collect i))))))
+;;;;; Nums Keywords
 
-  (should (equal '(1 3 5)
-                 (eval (quote (loopy (nums i 1 5 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:to-:by
+  :result '(0 2 4 6 8 10)
+  :body ((numbers i :from 0 :to 10 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(5 3 1)
-                 (eval (quote (loopy (nums i 5 1 -2)
-                                     (collect i)))))))
+(loopy-deftest numbers-keywords-:from-:downto-:by
+  :result  '(8 6 4 2)
+  :body ((numbers i :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-(ert-deftest nums-keywords ()
-  (should (equal '(1 3 5)
-                 (eval (quote (loopy (nums i 1 5 :by 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:upto
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((numbers i :upto 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(5 3 1)
-                 (eval (quote (loopy (nums i 5 :downto 1 :by 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:to
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((numbers i :to 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 7 14)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i 0 :by 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:downto
+  :result  '(10 9 8 7 6 5 4 3)
+  :body ((numbers i :from 10 :downto 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 -7 -14 -21 -28 -35 -42)
-                 (eval (quote (loopy (repeat 7)
-                                     (nums i :downfrom 0 :by 7)
-                                     (collect i))))))
-  (should (equal '(7 8 9)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i :upfrom 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:above
+  :result  '(10 9 8)
+  :body ((numbers i :from 10 :above 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(7 8 9)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i :from 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:below
+  :result  '(0 1 2)
+  :body ((numbers i :below 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (nums i :upto 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (nums i :to 7)
-                                     (collect i))))))
-
-  (should (equal '(0 -1 -2 -3 -4 -5 -6 -7)
-                 (eval (quote (loopy (nums i :downto -7)
-                                     (collect i))))))
-
-  (should (equal '(0 -1 -2 -3 -4 -5 -6)
-                 (eval (quote (loopy (nums i :above -7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (nums i :below 3)
-                                     (collect i))))))
-
-  (should (equal nil
-                 (eval (quote (loopy (nums i :above 3)
-                                     (collect i))))))
-  (should (equal '(0 1.5 3.0)
-                 (loopy (nums i 0 3 :by 1.5)
-                        (collect i))))
-
-  (should (equal '(0 1.5 3.0 4.5)
-                 (eval (quote (loopy (nums i 0 5 :by 1.5)
-                                     (collect i))))))
-
-  ;; NOTE: It remains to be seen how well this test works.
-  (progn
-    (cl-float-limits)
-    (should (cl-every (lambda (x y) (> cl-float-epsilon (- x y)))
-                      '(0.5 0.3 0.1 -0.1 -0.3 -0.5)
-                      (eval (quote (loopy (nums i
-                                                :downfrom 0.5
-                                                :above -0.7
-                                                :by 0.2)
-                                          (collect i))))))))
 
 ;;;;; Nums With Vars
-(ert-deftest nums-vars ()
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2))
-                     (numbers i start end step)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-and-literal-end
+  :doc "Check the optimizing for non-variable `:by' and `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2))
+          (numbers i start 8 2)
+          (collect i))
+         ((with (start 2))
+          (numbers i start :to 8 :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8))
-                     (numbers i start end 2)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-with-var-end
+  :doc "Check the optimizing for non-variable `:by' and variable `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (end 8))
+          (numbers i start end 2)
+          (collect i))
+         ((with (start 2) (end 8))
+          (numbers i start :to end :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(8 6 4 2)
-                 (lq (with (start 8) (end 2) (step -2))
-                     (numbers i start end step)
-                     (collect i))))
+(loopy-deftest numbers-var-by-with-var-end
+  :doc "Check the optimizing for variable `:by' and variable `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (by 2) (end 8))
+          (numbers i start end by)
+          (collect i))
+         ((with (start 2) (by 2) (end 8))
+          (numbers i start :to end :by by)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8))
-                     (numbers i :from start :to end :by 2)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-and-no-end
+  :doc "Check the optimizing for literal `:by' and no `:to'."
+  :result '(2 4 6 8)
+  :body ((with (start 2))
+         (cycle 4)
+         (numbers i start :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect cycle)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)
+              (cycle . cycling)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2))
-                     (numbers i :from start :to end :by step)
-                     (collect i)))))
+(loopy-deftest numbers-var-by-and-no-end
+  :doc "Check the optimizing for variable `:by' and no `:to'."
+  :result '(2 4 6 8)
+  :body ((with (start 2) (by 2))
+         (cycle 4)
+         (numbers i start :by by)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect cycle)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)
+              (cycle . cycling)))
 
-(ert-deftest nums-with ()
-  (should (equal '(24 1 1 2)
-                 (loopy (with (n 24))
-                        (collect n)
-                        (numbers n :from 1 :to 2)
-                        (collect n)))))
+(loopy-deftest numbers-no-with
+  :doc "Var should be initialized to the first value."
+  :result '(1 1 2 2)
+  :body ((collect n)
+         (numbers n :from 1 :to 2)
+         (collect n))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
+
+(loopy-deftest numbers-yes-with
+  :doc "Var should be initialized to the first value, unless with given."
+  :result '(24 1 1 2)
+  :body ((with (n 24))
+         (collect n)
+         (numbers n :from 1 :to 2)
+         (collect n))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
+
 
 ;;;;; Nums-Down
-(ert-deftest nums-down ()
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (nums-down i 10 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (nums-down i 10 1 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (numsdown i 10 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (numbers-down i 10 1 :by 2)
-                                     (collect i)))))))
+(loopy-deftest numbers-down
+  :result '(10 8 6 4 2)
+  :multi-body t
+  :body [((_cmd i 10 1 :by 2) (collect i))
+         ((_cmd i 10 1 2) (collect i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nums-down numsdown numbers-down)))
+  :iter-keyword ((_cmd . (nums-down numsdown numbers-down))
+                 (collect . collect))
+  :iter-keyword ((_cmd . (numbering-down))
+                 (collect . collecting)))
 
 ;;;;; Nums-Up
-(ert-deftest nums-up ()
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (nums-up i 1 10 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (nums-up i 1 10 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (numsup i 1 10 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (numbers-up i 1 10 :by 2)
-                                     (collect i)))))))
+(loopy-deftest numbers-up
+  :result '(1 3 5 7 9)
+  :multi-body t
+  :body [((_cmd i 1 10 :by 2) (collect i))
+         ((_cmd i 1 10 2) (collect i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nums-up numsup numbers-up)))
+  :iter-keyword ((_cmd . (nums-up numsup numbers-up))
+                 (collect . collect))
+  :iter-keyword ((_cmd . (numbering-up))
+                 (collect . collecting)))
 
 ;;;;; Repeat
-(ert-deftest repeat-cycle-no-var ()
-  (should (= 3 (length (eval (quote (loopy  (repeat 3)
-                                            (list i (number-sequence 1 10))
-                                            (collect coll i)
-                                            (finally-return coll)))))))
+(loopy-deftest cycle-no-var
+  :result '(1 2 3)
+  :body ((_cmd 3)
+         (list i (number-sequence 1 10))
+         (collect coll i)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cycle repeat)))
+  :iter-keyword ((_cmd . (cycle repeat))
+                 (list . list)
+                 (collect . collect))
+  :iter-bare ((_cmd . (cycling repeating))
+              (list . listing)
+              (collect . collecting)))
 
-  (should (= 3 (length (eval (quote (loopy  (cycle 3)
-                                            (list i (number-sequence 1 10))
-                                            (collect coll i)
-                                            (finally-return coll))))))))
+(loopy-deftest cycle-yes-var
+  :doc "Need to test order of execution and functionality."
+  :result '(0 1 2)
+  :body ((collect coll i)
+         (_cmd i 3)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cycle repeat)))
+  :iter-keyword ((_cmd . (cycle repeat))
+                 (list . list)
+                 (collect . collect))
+  :iter-bare ((_cmd . (cycling repeating))
+              (list . listing)
+              (collect . collecting)))
 
-(ert-deftest repeat-cycle-var ()
-  "Need to test order of execution and functionality."
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (collect coll i)
-                                     (repeat i 3)
-                                     (finally-return coll))))))
+(loopy-deftest cycle-init-no-with
+  :doc "Variable is initialized to 0."
+  :result '(0 0 1 1 2 2)
+  :body ((collect my-var)
+         (cycle my-var 3)
+         (collect my-var))
+  :loopy t
+  :iter-keyword (collect cycle)
+  :iter-bare ((collect . collecting)
+              (cycle . cycling)))
 
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (collect coll i)
-                                     (cycle i 3)
-                                     (finally-return coll)))))))
-
-(ert-deftest cycle-init ()
-  (should (equal '(cat 0 0 1 1 2)
-                 (lq (with (my-var 'cat))
-                     (collect my-var)
-                     (cycle my-var 3)
-                     (collect my-var)))))
+(loopy-deftest cycle-init-yes-with
+  :doc "Variable is initialized to 0, except from `with'."
+  :result '(cat 0 0 1 1 2)
+  :body ((with (my-var 'cat))
+         (collect my-var)
+         (cycle my-var 3)
+         (collect my-var))
+  :loopy t
+  :iter-keyword (collect cycle)
+  :iter-bare ((collect . collecting)
+              (cycle . cycling)))
 
 ;;;;; Seq
-(ert-deftest seq ()
-  (should (eval (quote (loopy (seq l '(1 2 3 4 5))
-                              (seq a [1 2 3 4 5])
-                              (if (/= l a)
-                                  (return nil))
-                              (finally-return t))))))
+(loopy-deftest sequence
+  :result t
+  :body ((_cmd l '(97 98 99 100 101))
+         (_cmd a [97 98 99 100 101])
+         (_cmd s "abcde")
+         (if (not (and (/= l a)
+                       (/= a s)))
+             (return nil))
+         (finally-return t))
+  :repeat _cmd
+  :loopy ((_cmd . (seq sequence seqing sequencing elements)))
+  :iter-keyword ((_cmd . (seq sequence seqing sequencing elements))
+                 (return . return))
+  :iter-bare ((seq . (seqing sequencing))
+              (return . returning)))
 
-(ert-deftest seq-destructuring ()
-  (should (and (equal '(5 6)
-                      (eval (quote (loopy (seq (a . b)
-                                               [(1 . 2) (3 . 4) (5 . 6)])
-                                          (finally-return a b)))))
-               (equal '(5 (6))
-                      (eval (quote (loopy (seq (a . b)
-                                               [(1 2) (3 4) (5 6)])
-                                          (finally-return a b)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (seq (a b c)
-                                               [(1 2 3) (4 5 6)])
-                                          (finally-return a b c)))))
-               (equal '(5 6)
-                      (eval (quote (loopy (seq (a . b)
-                                               '((1 . 2) (3 . 4) (5 . 6)))
-                                          (finally-return a b)))))
-               (equal '(5 (6))
-                      (eval (quote (loopy (seq (a . b)
-                                               '((1 2) (3 4) (5 6)))
-                                          (finally-return a b)))))
-               (equal '(4 5 6 7)
-                      (eval (quote (loopy (seq (a b c d)
-                                               '((1 2 3 4) (4 5 6 7)))
-                                          (finally-return a b c d)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (seq [i j k] '([1 2 3] [4 5 6]))
-                                          (finally-return i j k)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (seq [i j k] [[1 2 3] [4 5 6]])
-                                          (finally-return i j k))))))))
+(loopy-deftest seq-destructuring
+  :doc "Check that `seq' implements destructuring, not the destructuring itself."
+  :result '(97 98)
+  :multi-body t
+  :body [((seq (a . b) [(97 . 98)]) (finally-return a b))
+         ((seq [a b] '([97 98])) (finally-return a b))
+         ((seq [a b] ["ab"]) (finally-return a b))]
+  :loopy t
+  :iter-keyword (seq)
+  :iter-bare ((seq . sequencing)))
 
-(ert-deftest seq-ref-destructuring ()
-  (should (and (equal [(7 8 9) (7 8 9)]
-                      (eval (quote (loopy (with (my-seq [(1 2 3) (4 5 6)]))
-                                          (seq-ref (i j k) my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-seq)))))
-               (equal [(7 8 9 10) (7 8 9 10)]
-                      (eval (quote (loopy (with (my-seq [(1 2 3 4) (4 5 6 8)]))
-                                          (seq-ref (i j . k) my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k '(9 10)))
-                                          (finally-return my-seq)))))
-               (equal '((7 8 9) (7 8 9))
-                      (eval (quote (loopy (with (my-seq '((1 2 3) (4 5 6))))
-                                          (seq-ref (i j k) my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-seq)))))
-               (equal '((7 8 9 10) (7 8 9 10))
-                      (eval (quote (loopy (with (my-seq '((1 2 3 4) (4 5 6 8))))
-                                          (seq-ref (i j . k) my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k '(9 10)))
-                                          (finally-return my-seq)))))
-               (equal '([7 8 9 4] [7 8 9 8])
-                      (eval (quote (loopy (with (my-seq '([1 2 3 4] [4 5 6 8])))
-                                          (seq-ref [i j k] my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-seq)))))
-               (equal [[7 8 9 4] [7 8 9 8]]
-                      (eval (quote (loopy (with (my-seq [[1 2 3 4] [4 5 6 8]]))
-                                          (seq-ref [i j k] my-seq)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-seq))))))))
+(loopy-deftest seq-opt-type-explicit-movement
+  :doc "Use type-specific movement when
+- step is 1
+- start is 0
+- going up
+Othe cases use `elt'."
+  :result '(1 2 3 4 5)
+  :multi-body t
+  :body [((sequence i '(1 2 3 4 5) :from 0 :by 1) (collect i))
+         ((sequence i [1 2 3 4 5] :from 0 :by 1) (collect i))]
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-(ert-deftest seq-vars ()
-  (should (equal '(2 3 4 5 6 7 8 9 10)
-                 (loopy (with (start 2) (end 8)
-                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                        (sequence i arr :from start :by 1)
-                        (collect i))))
+(loopy-deftest seq-vars-literal-:by
+  :doc "Literal `:by' should be used directly, even when not 1."
+  :result '(2 4 6 8 10)
+  :body (loopy (with (start 2) (arr (cl-coerce (number-sequence 0 10) 'vector)))
+               (sequence i arr :from start :by 2)
+               (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (loopy (with (start 2) (end 8)
-                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                        (sequence i arr :from start :to end :by 2)
-                        (collect i))))
+(loopy-deftest seq-vars-literal-:by-variable-:end
+  :result '(2 4 6 8)
+  :body (loopy (with (start 2) (end 8)
+                     (arr (cl-coerce (number-sequence 0 10) 'vector)))
+               (sequence i arr :from start :to end :by 2)
+               (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (loopy (with (start 2) (end 8) (step 2)
-                              (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                        (sequence i arr :from start :to end :by step)
-                        (collect i)))))
+(loopy-deftest seq-vars-variable-:by-variable-:end
+  :result '(2 4 6 8)
+  :body (loopy (with (start 2) (end 8) (by 2)
+                     (arr (cl-coerce (number-sequence 0 10) 'vector)))
+               (sequence i arr :from start :to end :by by)
+               (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-(ert-deftest seq-keywords ()
-  (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
-                 (eval (quote (loopy (seq i [4 3 2 1 0] :index cat)
-                                     (collect (cons cat i)))))))
+(loopy-deftest seq-:by
+  :result '(0 2 4 6 8 10)
+  :body ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(0 2 4 6 8 10)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
-                                     (collect i))))))
+(loopy-deftest seq-:index
+  :result '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+  :body ((sequence i [4 3 2 1 0] :index cat)
+         (collect (cons cat i)))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(8 6 4 2)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10]
-                                          :from 8 :downto 1 :by 2)
-                                     (collect i))))))
+(loopy-deftest seq-:from-:downto-:by
+  :result '(8 6 4 2)
+  :body ((sequence i [0 1 2 3 4 5 6 7 8 9 10]
+                   :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
-                                     (collect i))))))
+(loopy-deftest seq-:upto
+  :result '(0 1 2 3 4 5 6 7)
+  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
-                                     (collect i))))))
+(loopy-deftest seq-:to
+  :result '(0 1 2 3 4 5 6 7)
+  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(10 9 8 7 6 5 4 3)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
-                                     (collect i))))))
+(loopy-deftest seq-:downto
+  :result '(10 9 8 7 6 5 4 3)
+  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(10 9 8)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
-                                     (collect i))))))
+(loopy-deftest seq-:above
+  :result '(10 9 8)
+  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (seq i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
-                                     (collect i)))))))
+(loopy-deftest seq-:below
+  :result '(0 1 2)
+  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-(ert-deftest seq-multi-seq ()
-  (should (equal '((1 3) (1 4) (2 3) (2 4))
-                 (eval (quote (loopy (seq i [1 2] '(3 4))
-                                     (collect i))))))
+(loopy-deftest seq-multi-seq
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((sequence i [1 2] '(3 4))
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
-  (should (equal '((1 3) (2 3))
-                 (eval (quote (loopy (seq i [1 2] '(3 4) :by 2)
-                                     (collect i)))))))
+(loopy-deftest seq-multi-seq-:by
+  :result '((1 3)  (2 3))
+  :body ((sequence i [1 2] '(3 4) :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
 
 ;;;;; Seq Index
-(ert-deftest seq-index ()
-  (should (equal '(0 1 2 3)
-                 (eval (quote (loopy (seq-index i [1 2 3 4])
-                                     (collect i))))))
+(loopy-deftest seq-index
+  :result '(97 98 99)
+  :multi-body t
+  :body [((with (my-seq [97 98 99]))  (_cmd i my-seq) (collect (elt my-seq i)))
+         ((with (my-seq "abc"))       (_cmd i my-seq) (collect (elt my-seq i)))
+         ((with (my-seq '(97 98 99))) (_cmd i my-seq) (collect (elt my-seq i)))]
+  :repeat _cmd
+  :loopy ((_cmd . ( array-index arraying-index arrayi
+                    list-index listing-index listi
+                    string-index stringing-index stringi
+                    sequence-index sequencing-index
+                    sequencei seqi seqing-index))
+          (collect . collect))
+  :iter-keyword ((_cmd . ( array-index arraying-index arrayi
+                           list-index listing-index listi
+                           string-index stringing-index stringi
+                           sequence-index sequencing-index
+                           sequencei seqi seqing-index))
+                 (collect . collect))
+  :iter-bare ((_cmd . ( arraying-index listing-index stringing-index
+                        sequencing-index seqing-index))
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6)
-                 (eval (quote (loopy (array-index i "abcdefg")
-                                     (collect i))))))
+(loopy-deftest seq-index-:by
+  :result '(0 2 4 6 8 10)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :by 2)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6)
-                 (eval (quote (loopy (string-index i "abcdefg")
-                                     (collect i))))))
+(loopy-deftest seq-index-:from-:downto-:by
+  :result '(8 6 4 2)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq
+                    :from 8 :downto 1 :by 2)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4)
-                 (eval (quote (loopy (list-index i '(1 2 3 4 5))
-                                     (collect i)))))))
+(loopy-deftest seq-index-:upto
+  :result '(0 1 2 3 4 5 6 7)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :upto 7)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-(ert-deftest seq-index-keywords ()
-  (should (equal '(0 2 4 6 8 10)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :by 2)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-:to
+  :result '(0 1 2 3 4 5 6 7)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :to 7)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(8 6 4 2)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq
-                                                  :from 8 :downto 1 :by 2)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-:downto
+  :result '(10 9 8 7 6 5 4 3)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :downto 3)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :upto 7)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-:above
+  :result '(10 9 8)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :above 7)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :to 7)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-:below
+  :result '(0 1 2)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
+         (seq-index i my-seq :below 3)
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(10 9 8 7 6 5 4 3)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :downto 3)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-step-var
+  :doc "If `:by' is a numeric literal, `seq-index' can use it directly."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (end 8)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (seq-index i arr :from start :to end :by 2)
+          (collect i))
+         ((with (start 2) (end 8) (step 2)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (seq-index i arr :from start :to end :by step)
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(10 9 8)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :above 7)
-                                       (collect (elt my-seq i))))))))
+(loopy-deftest seq-index-init-with
+  :doc "`seq-index' can default to the starting index if not with-bound."
+  :result '(27 0 0 1 1 2 2 3)
+  :body ((with (i 27))
+         (collect i)
+         (seq-index i [1 2 3 4])
+         (collect i))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
-  (should (equal '(0 1 2)
-                 (eval (quote (let ((my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-                                (loopy (seq-index i my-seq :below 3)
-                                       (collect (elt my-seq i)))))))))
-
-(ert-deftest seq-index-vars ()
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (seq-index i arr :from start :to end :by 2)
-                     (collect i))))
-
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (seq-index i arr :from start :to end :by step)
-                     (collect i)))))
-
-(ert-deftest seq-index-init ()
-  (should (equal '(27 0 0 1 1 2 2 3)
-                 (lq (with (i 27))
-                     (collect i)
-                     (seq-index i [1 2 3 4])
-                     (collect i)))))
+(loopy-deftest seq-index-init-no-with
+  :doc "`seq-index' can default to the starting index if not with-bound."
+  :result '(0 0 1 1 2 2 3 3)
+  :body (loopy (collect i)
+               (seq-index i [1 2 3 4])
+               (collect i))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
 
 ;;;;; Seq Ref
-(ert-deftest seq-ref ()
-  (should
-   (equal '(7 7 7 7)
-          (eval (quote (loopy (with (my-seq '(1 2 3 4)))
-                              (seq-ref i my-seq)
-                              (do (setf i 7))
-                              (finally-return my-seq)))))))
+(loopy-deftest seq-ref
+  :result '(7 7 7 7)
+  :body ((with (my-seq '(1 2 3 4)))
+         (_cmd i my-seq)
+         (do (setf i 7))
+         (finally-return my-seq))
+  :repeat _cmd
+  :loopy ((_cmd . (sequence-ref sequencef seq-ref seqf)))
+  :iter-keyword ((_cmd . (sequence-ref sequencef seq-ref seqf))
+                 (do . do))
+  :iter-bare ((_cmd . (sequencing-ref))
+              (do . ignore)))
 
-(ert-deftest seq-ref-keywords ()
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :by 2)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:by
+  :result "a1a3a5a7a9"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :by 2)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :by 2 :index cat)
-                                     (do (setf (aref my-str cat) ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:by-:index
+  :result  "a1a3a5a7a9"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :by 2 :index cat)
+         (do (setf (aref my-str cat) ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal '(0 cat 2 cat 4 cat 6 cat 8 cat)
-                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
-                                     (seq-ref i my-list :from 1 :by 2 )
-                                     (do (setf i 'cat))
-                                     (finally-return my-list))))))
+(loopy-deftest seq-ref-:from-:by
+  :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
+  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+         (seq-ref i my-list :from 1 :by 2 )
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "0123456a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :downto 6 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:downto-:by
+  :result  "0123456a8a"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :downto 6 :by 2 )
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaa56789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :below 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:below
+  :result  "aaaaa56789"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :below 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "012345aaaa"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :above 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:above
+  :result  "012345aaaa"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :above 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal '(0 1 2 3 4 5 cat cat cat cat)
-                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
-                                     (seq-ref i my-list :above 5)
-                                     (do (setf i 'cat))
-                                     (finally-return my-list))))))
+(loopy-deftest seq-ref-:above-list
+  :result  '(0 1 2 3 4 5 cat cat cat cat)
+  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+         (seq-ref i my-list :above 5)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaaa6789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :upto 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:upto
+  :result  "aaaaaa6789"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :upto 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal "0a2a4a6a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (seq-ref i my-str :upfrom 1 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest seq-ref-:upfrom-:by
+  :result  "0a2a4a6a8a"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :upfrom 1 :by 2 )
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal '(0 cat 2 cat 4 cat 6 cat 8 cat)
-                 (eval (quote (loopy (with (my-list '(0 1 2 3 4 5 6 7 8 9)))
-                                     (seq-ref i my-list :upfrom 1 :by 2)
-                                     (do (setf i 'cat))
-                                     (finally-return my-list)))))))
+(loopy-deftest seq-ref-:upfrom-:by-string
+  :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
+  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+         (seq-ref i my-list :upfrom 1 :by 2)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-(ert-deftest seq-ref-vars ()
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (seq-ref i arr :from start :to end :by 2)
-                     (do (setf i 22))
-                     (finally-return arr))))
+(loopy-deftest seq-ref-:by-literal
+  :doc "`seq-ref' can use literal `:by' directly."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (start 2) (end 8)
+               (arr (cl-coerce (number-sequence 0 10) 'vector)))
+         (seq-ref i arr :from start :to end :by 2)
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (seq-ref i arr :from start :to end :by step)
-                     (do (setf i 22))
-                     (finally-return arr)))))
+(loopy-deftest seq-ref-:by-variable
+  :doc "`seq-ref' can use literal `:by' directly."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (start 2) (end 8) (step 2)
+               (arr (cl-coerce (number-sequence 0 10) 'vector)))
+         (seq-ref i arr :from start :to end :by step)
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-destructuring
+  :doc "Check that `seq-ref' implements destructuring. Not destructuring itself."
+  :result [(7 8 9) (7 8 9)]
+  :body ((with (my-seq [(1 2 3) (4 5 6)]))
+         (seq-ref (i j k) my-seq)
+         (do (setf i 7)
+             (setf j 8)
+             (setf k 9))
+         (finally-return my-seq))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
 
 ;;;; Accumulation Commands
 ;;;;; Final updates
-(ert-deftest accumulation-conflicting-final-updates ()
-  (should-error (eval (quote (loopy (list i '((1) (2) (3)))
-                                    (append i)
-                                    (vconcat i)))))
 
-  (should-error (eval (quote (loopy (list i '((1) (2) (3)))
-                                    (collect i)
-                                    (collect (1+ i) :result-type vector))))))
+
+(loopy-deftest accumulation-conflicting-final-updates
+  :error loopy-incompatible-accumulation-final-updates
+  :multi-body t
+  :body [((list i '((1) (2) (3)))
+          (collect i)
+          (collect (1+ i) :result-type vector))
+
+         ((list i '((1) (2) (3)))
+          (collect coll2 i)
+          (collect (1+ i) :result-type vector :into coll2))]
+  :loopy t
+  :iter-keyword (list append collect vconcat)
+  :iter-bare ((list . listing)
+              (append . appending)
+              (collect . collecting)
+              (vconcat . vconcating)))
 
 ;;;;; Into Argument
-(ert-deftest accumulation-into-argument ()
-  (should (equal '((2 3 4) (2 2 2))
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect (1+ i) :into coll1)
-                                     ;; This should be the same value repeated.
-                                     ;; If not, it means `coll1'  is constructed
-                                     ;; in reverse, instead of being treated as
-                                     ;; explicitly named.
-                                     (collect coll2 (cl-first coll1))
-                                     (finally-return coll1 coll2))))))
+(loopy-deftest accumulation-into-argument
+  :doc "Check `:into' works and variable is treated as explicit."
+  :result '((2 3 4) (2 2 2))
+  :body ((list i '(1 2 3))
+         (collect (1+ i) :into coll1)
+         ;; This should be the same value repeated.
+         ;; If not, it means `coll1'  is constructed
+         ;; in reverse, instead of being treated as
+         ;; explicitly named.
+         (collect coll2 (cl-first coll1))
+         (finally-return coll1 coll2))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (should (= 9 (eval (quote (loopy (list i '(1 2 3))
-                                   (sum (1+ i) :into j)
-                                   (finally-return j)))))))
-
-(ert-deftest accumulation-raise-error-bad-arg ()
-  :expected-result :failed
-  (eval (quote (loopy (list i '(1 2 3))
-                      (collect i :casdfasdf x)))))
+(loopy-deftest accumulation-raise-error-bad-arg
+  :error loopy-wrong-number-of-command-arguments-or-bad-keywords
+  :body ((list i '(1 2 3))
+         (collect i :casdfasdf x))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
 ;;;;; Command Compatibility
-(ert-deftest accumulation-compatibility ()
-  (should (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                              (collect i)
-                              (append i)
-                              (adjoin i)
-                              (union i)
-                              (nunion (copy-sequence i))
-                              (nconc (copy-sequence i))))))
+(loopy-deftest accumulation-compatibility-lists
+  :should t
+  :macroexpand t
+  :body ((list i '((1 2 3) (4 5 6)))
+         (collect i)
+         (append i)
+         (adjoin i)
+         (union i)
+         (nunion (copy-sequence i))
+         (nconc (copy-sequence i))
+         (finally-return t))
+  :loopy t
+  :iter-keyword (list collect append adjoin union nunion nconc)
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (append . appending)
+              (adjoin . adjoining)
+              (union . unioning)
+              (nunion . nunioning)
+              (nconc . nconcing)))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (collect i)
-                                    (concat i)))))
+(loopy-deftest accumulation-compatibility-different-types
+  :error loopy-incompatible-accumulations
+  :macroexpand t
+  :multi-body t
+  :body [((list i '((1 2) (3 4) (5 6)))
+          (collect i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (append i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (append i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (adjoin i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (adjoin i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (union i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (union i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (nunion i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (nunion i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (nconc i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (nconc i)
+          (concat i))
 
-  (should-error (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                    (vconcat i)
-                                    (concat i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (vconcat i)
+          (concat i))]
+  :loopy t
+  :iter-keyword (collect append concat adjoin union nunion nconc vconcat)
+  :iter-bare ((collect . collecting)
+              (append . appending)
+              (concat . concating)
+              (adjoin . adjoining)
+              (union . unioning)
+              (nunion . nunioning)
+              (nconc . nconcing)
+              (vconcat . vconcating)))
 
-  ;; Also check that we don't throw errors for commands of the same type.
-  (should (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                              (vconcat i)
-                              (vconcat i)))))
+(loopy-deftest accumulation-compatibility-same-types
+  :doc "Also check that we don't throw errors for commands of the same type."
+  :should t
+  :macroexpand t
+  :multi-body t
+  :body [((list i '((1 2) (3 4) (5 6)))
+          (vconcat i)
+          (vconcat i))
 
-  (should (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                              (collect i)
-                              (collect i)))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (collect i)
+          (collect i))
 
-  (should (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                              (concat i)
-                              (concat i))))))
-
-;;;;; Order of implicit returns.
-(ert-deftest implicit-collect-order ()
-  (should (equal '((2) (1 3))
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (if (cl-evenp i)
-                                         (collect evens i)
-                                       (collect odds i))
-                                     (finally-return evens odds)))))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (concat i)
+          (concat i))]
+  :loopy t
+  :iter-keyword (vconcat collect concat)
+  :iter-bare ((vconcat . vconcating)
+              (collect . collecting)
+              (concat . concating)))
 
 ;;;;; Name of implicit accumulations
-(ert-deftest implicit-accumulation-name ()
-  (should
-   (and (equal '(1 2 3)
-               (eval (quote (loopy (list i '(1 2 3))
-                                   (collect i)
-                                   (else-do (cl-return loopy-result))))))
-        (equal '(0 1 2 3)
-               (eval (quote (loopy (list i '(1 2 3))
-                                   (collect i)
-                                   (else-do
-                                    (push 0 loopy-result)
-                                    (cl-return loopy-result))))))
-        (equal '(0 1 2 3)
-               (eval (quote (loopy (list i '(1 2 3))
-                                   (collect i)
-                                   (finally-do
-                                    (push 0 loopy-result))
-                                   (finally-return loopy-result)))))
-        (equal '(1 2 3)
-               (eval (quote (loopy (list i '(1 2 3))
-                                   (collect i)
-                                   (finally-return loopy-result))))))))
 
+(loopy-deftest implicit-accumulation-name
+  :doc "Make sure that commands use `loopy-result' and that it's accessible in SMAs."
+  :result '(1 2 3)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect i)
+          (after-do (cl-return loopy-result)))
+         ((list i '(1 2 3))
+          (collect i)
+          (finally-return loopy-result))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
 ;;;;; Accumulate
-(ert-deftest accumulate ()
-  (should (equal '(2 1)
-                 (eval (quote (loopy (list i '(1 2))
-                                     (accumulate my-accum i #'cons
-                                                 :init nil)
-                                     (finally-return my-accum))))))
+(loopy-deftest accumulate
+  :result '(2 1)
+  :body ((list i '(1 2))
+         (_cmd my-accum i #'cons)
+         (finally-return my-accum))
+  :repeat _cmd
+  :loopy ((_cmd . (accumulate accumulating callf2)))
+  :iter-keyword ((list . list)
+                 (_cmd . (accumulate accumulating callf2)))
+  :iter-bare ((list . listing)
+              (_cmd . (accumulating))))
 
-  (should (equal '((3 1) (4 2))
-                 (eval (quote (loopy (list i '((1 2) (3 4)))
-                                     (accumulate (accum1 accum2) i #'cons
-                                                 :init nil)
-                                     (finally-return accum1 accum2))))))
+(loopy-deftest accumulate-:init
+  :result 10
+  :body ((list i '(2 3 4))
+         (accumulate my-accum i #'+ :init 1)
+         (finally-return my-accum))
+  :loopy t
+  :iter-keyword (accumulate list)
+  :iter-bare ((list . listing)
+              (accumulate . accumulating)))
 
-  (should (equal '((3 1) (4 2))
-                 (eval (quote (let ((f #'cons))
-                                (loopy (list i '((1 2) (3 4)))
-                                       (accumulate (accum1 accum2) i f
-                                                   :init nil)
-                                       (finally-return accum1 accum2)))))))
-
-  (should (equal '(2 1)
-                 (eval (quote (loopy (list i '(1 2))
-                                     (callf2 my-accum i #'cons
-                                             :init nil)
-                                     (finally-return my-accum)))))))
+(loopy-deftest accumulate-destr
+  :doc "Test that `accumulate' implements destructuring, not destructuring itself."
+  :result  '((3 1) (4 2))
+  :body ((with (f #'cons))
+         (list i '((1 2) (3 4)))
+         (accumulate (accum1 accum2) i f)
+         (finally-return accum1 accum2))
+  :loopy t
+  :iter-keyword (accumulate list)
+  :iter-bare ((list . listing)
+              (accumulate . accumulating)))
 
 ;;;;; Adjoin
-(ert-deftest adjoin ()
-  (should (equal '((1 . 1) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin a i)
-                                     (finally-return a))))))
+(loopy-deftest adjoin
+  :result '((1 . 1) (1 . 2) (2 . 3))
+  :multi-body t
+  :body [((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (_cmd a i)
+          (finally-return a))
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (adjoin adjoining)))
+  :iter-keyword ((list . listing)
+                 (_cmd . (adjoin adjoining)))
+  :iter-bare ((list . listing)
+              (_cmd . (adjoining))))
 
-  (should (equal '((1 . 1) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin a i :test #'equal)
-                                     (finally-return a))))))
+(loopy-deftest adjoin-:key
+  :doc "If `key' is a quoted function, it should expand to a direct application."
+  :result '((1 . 1) (2 . 3))
+  :multi-body t
+  :body [((with (my-key #'car))
+          (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin a i :key my-key)
+          (finally-return a))
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin a i :key #'car)
+          (finally-return a))
+         ;; Implicit
+         ((with (my-key #'car))
+          (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :key my-key))
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :key #'car))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
-                                               (1 . 2) (2 . 3)))
-                                     (adjoin a i :test #'eql)
-                                     (finally-return a))))))
+(loopy-deftest adjoin-:test-default
+  :doc "Default value of `test' is `equal'."
+  :result t
+  :multi-body t
+  :body [((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin a1 i :test #'equal)
+          (adjoin a2 i)
+          (finally-return (equal a1 a2)))
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i)
+          (finally-return (equal loopy-result '((1 . 1) (1 . 2) (2 . 3)))))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin a i :test #'= :key #'car)
-                                     (finally-return a))))))
+(loopy-deftest adjoin-:test
+  :doc "If `key' is a quoted function, it should expand to a direct application."
+  :result '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
+  :multi-body t
+  :body [((list i '((1 . 1) (1 . 2)
+                    (1 . 2) (2 . 3)))
+          (adjoin a i :test #'eql)
+          (finally-return a))
+         ((with (test #'eql))
+          (list i '((1 . 1) (1 . 2)
+                    (1 . 2) (2 . 3)))
+          (adjoin a i :test test)
+          (finally-return a))
+         ;; Implicit
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :test #'eql))
+         ((with (test #'eql))
+          (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :test test))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (2 . 3))
-                 (let ((my-test #'=)
-                       (my-key #'car))
-                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                          (adjoin a i :test my-test :key my-key)
-                          (finally-return a)))))
+(loopy-deftest adjoin-:test-:key
+  :doc "`test' and `key' applied directly when quoted functions."
+  :result '((1 . 1) (2 . 3))
+  :multi-body t
+  :body [((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin a i :test #'= :key #'car)
+          (finally-return a))
+         ((with (test #'=) (key #'car))
+          (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin a i :test test :key key)
+          (finally-return a))
+         ;; Implicit
+         ((list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :test #'= :key #'car))
+         ((with (test #'=) (key #'car))
+          (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
+          (adjoin i :test test :key key))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (2 . 3))
-                 (let ((my-key #'car))
-                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                          (adjoin a i :key my-key)
-                          (finally-return a)))))
+(loopy-deftest adjoin-destructuring
+  :doc "Test that `adjoin' implements destructuring, not destructuring itself."
+  :result '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3)))
+  :body ((list i '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3))))
+         (adjoin (a1 a2) i)
+         (finally-return a1 a2))
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (1 . 2) (2 . 3))
-                 (let ((my-test #'equal))
-                   (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                          (adjoin a i :test my-test)
-                          (finally-return a))))))
+(loopy-deftest adjoin-coerce-array/vector
+  :result [1 2 3 4 5]
+  :multi-body t
+  :body [((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type 'array))
+         ((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type array))
+         ((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type 'vector))
+         ((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type vector))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-(ert-deftest adjoin-destructuring ()
-  (should (equal '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3)))
-                 (eval (quote (loopy (list i '(((1 . 1) (1 . 2))
-                                               ((1 . 2) (2 . 3))))
-                                     (adjoin (a1 a2) i)
-                                     (finally-return a1 a2))))))
+(loopy-deftest adjoin-coerce-list
+  :result '(1 2 3 4 5)
+  :multi-body t
+  :body [((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type 'list))
+         ((list i '(1 2 2 3 4 4 5))
+          (adjoin i :result-type list))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '(((1 . 2)) ((1 . 1) (2 . 3)))
-                 (eval (quote (loopy (list i '(((1 . 2) (1 . 1))
-                                               ((1 . 2) (2 . 3))))
-                                     (adjoin (a1 a2) i :test #'equal)
-                                     (finally-return a1 a2))))))
+(loopy-deftest adjoin-coerce-string
+  :result "abcd"
+  :multi-body t
+  :body [((list i '(?a ?b ?c ?d))
+          (adjoin i :result-type 'string))
+         ((list i '(?a ?b ?c ?d))
+          (adjoin i :result-type string))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '(((1 . 2)) ((1 . 1) (2 . 3)))
-                 (eval (quote (loopy (with (test #'equal))
-                                     (list i '(((1 . 2) (1 . 1))
-                                               ((1 . 2) (2 . 3))))
-                                     (adjoin (a1 a2) i :test test)
-                                     (finally-return a1 a2))))))
+(loopy-deftest adjoin-:at-end
+  :result '(1 2 3 4 5)
+  :multi-body t
+  :body  [((list i '(1 2 3 4 4 5))
+           (adjoin i :at end))
+          ((list i '(1 2 3 4 4 5))
+           (adjoin i :at 'end))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '(((1 . 1)) ((1 . 2) (2 . 3)))
-                 (eval (quote (loopy (list i '(((1 . 1) (1 . 2))
-                                               ((1 . 2) (2 . 3))))
-                                     (adjoin (a1 a2) i :key #'car)
-                                     (finally-return a1 a2))))))
+(loopy-deftest adjoin-:at-start/beginning
+  :result '(5 4 3 2 1)
+  :multi-body t
+  :body  [((list i '(1 2 3 4 4 5))
+           (adjoin i :at start))
+          ((list i '(1 2 3 4 4 5))
+           (adjoin i :at 'start))
+          ((list i '(1 2 3 4 4 5))
+           (adjoin i :at beginning))
+          ((list i '(1 2 3 4 4 5))
+           (adjoin i :at 'beginning))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '(((1 . 1)) ((1 . 2) (2 . 3)))
-                 (eval (quote (loopy (with (key #'car))
-                                     (list i '(((1 . 1) (1 . 2))
-                                               ((1 . 2) (2 . 3))))
-                                     (adjoin (a1 a2) i :key key)
-                                     (finally-return a1 a2)))))))
+(loopy-deftest adjoin-end-tracking-start-and-end
+  :doc "Make sure multiple uses doesn't overwrite any data.
+Using `start' and `end' in either order should give the same result."
+  :result '(3 2 1 11 12 13)
+  :multi-body t
+  :body [((list i '(1 2 3)) (adjoin i :at start)      (adjoin (+ i 10) :at end))
+         ((list i '(1 2 3)) (adjoin (+ i 10) :at end) (adjoin i :at start))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-(ert-deftest adjoin-implicit ()
-  (should (equal '((1 . 1) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin i))))))
+(loopy-deftest adjoin-end-tracking-end-twice
+  :doc "Make sure multiple uses doesn't overwrite any data."
+  :result '(1 2 3 4 5)
+  :body ((list i '(1 2 2 3 3 4))
+         (adjoin i :at end)
+         (adjoin (1+ i) :at end))
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
-  (should (equal '((1 . 1) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin i :test #'equal))))))
+(loopy-deftest adjoin-not-destructive
+  :doc "Check that `adjoin' doesn't modify item being adjoined."
+  :result t
+  :multi-body t
+  ;; Can't use function `list', since that would naively be replaced by
+  ;; `listing' command.
+  :body [((with (l1 (cl-loop for i from 1 to 9 by 2
+                             collect i
+                             collect (1+ i)
+                             collect (1+ i))))
+          (list i l1) (adjoin coll i :at start)
+          (finally-return
+           (equal l1 (cl-loop for i from 1 to 9 by 2
+                              collect i
+                              collect (1+ i)
+                              collect (1+ i)))))
 
-  (should (equal '((1 . 1) (1 . 2) (1 . 2) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2)
-                                               (1 . 2) (2 . 3)))
-                                     (adjoin i :test #'eql))))))
+         ((with (l1 (cl-loop for i from 1 to 9 by 2
+                             collect i
+                             collect (1+ i)
+                             collect (1+ i))))
+          (list i l1) (adjoin coll i :at end)
+          (finally-return
+           (equal l1 (cl-loop for i from 1 to 9 by 2
+                              collect i
+                              collect (1+ i)
+                              collect (1+ i)))))
 
-  (should (equal '((1 . 1) (2 . 3))
-                 (eval (quote (loopy (list i '((1 . 1) (1 . 2) (1 . 2) (2 . 3)))
-                                     (adjoin i :test #'= :key #'car)))))))
+         ((with (l1 (cl-loop for i from 1 to 9 by 2
+                             collect i
+                             collect (1+ i)
+                             collect (1+ i))))
+          (list i l1) (adjoin i :at start)
+          (finally-return
+           (equal l1 (cl-loop for i from 1 to 9 by 2
+                              collect i
+                              collect (1+ i)
+                              collect (1+ i)))))
 
-(ert-deftest adjoin-coercion ()
-  (should (equal [1 2 3 4 5]
-                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
-                                     (adjoin i :result-type 'array))))))
-
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
-                                     (adjoin i :result-type 'list))))))
-
-  (should (equal "abcd"
-                 (eval (quote (loopy (list i '(?a ?b ?c ?d))
-                                     (adjoin i :result-type 'string))))))
-
-  (should (equal [1 2 3]
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin my-var i :result-type 'vector)
-                                     (finally-return my-var))))))
-
-  (should (equal [1 2 3 4 5]
-                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
-                                     (adjoin i :result-type array))))))
-
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (list i '(1 2 2 3 4 4 5))
-                                     (adjoin i :result-type list))))))
-
-  (should (equal "abcd"
-                 (eval (quote (loopy (list i '(?a ?b ?c ?d))
-                                     (adjoin i :result-type string))))))
-
-  (should (equal [1 2 3]
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin my-var i :result-type vector)
-                                     (finally-return my-var)))))))
-
-(ert-deftest adjoin-at ()
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
-                                     (adjoin i :at end))))))
-
-  (should (equal '(5 4 3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
-                                     (adjoin i :at start))))))
-
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (flag split)
-                                     (list i '(1 2 3 4 4 5))
-                                     (adjoin i :at end))))))
-
-  (should (equal [5 4 3 2 1]
-                 (eval (quote (loopy (list i '(1 2 3 4 4 5))
-                                     (adjoin i :at start :result-type 'array))))))
-
-  (should
-   (= 1
-      (cl-count-if (lambda (x) (= (cl-second x) 4))
-                   (eval (quote (loopy (list i '((1 2) (3 4) (5 4)))
-                                       (adjoin i
-                                               :at start
-                                               :key #'cl-second)))))))
-
-  (should
-   (= 1
-      (cl-count-if (lambda (x) (equal (cl-second x) '(4 0)))
-                   (eval (quote (loopy (list i '((1 2)
-                                                 (3 (4 0))
-                                                 (5 (4 0))))
-                                       (adjoin i :at start
-                                               :key #'cl-second
-                                               :test #'equal))))))))
-
-(ert-deftest adjoin-end-tracking ()
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (list i '(1 2 2 3 3 4))
-                                     (adjoin i :at end)
-                                     (adjoin (1+ i) :at end))))))
-
-  (should (equal '(3 2 1 11 12 13)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin i :at start)
-                                     (adjoin (+ i 10) :at end))))))
-
-  (should (equal '(3 2 1 11 12 13)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (adjoin (+ i 10) :at end)
-                                     (adjoin i :at start)))))))
-
-(ert-deftest adjoin-not-destructive ()
-  (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (loopy (list i l1) (adjoin coll i :at start))
-    (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
-
-  (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (loopy (list i l1) (adjoin coll i :at end))
-    (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
-
-  (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (loopy (list i l1) (adjoin i :at start))
-    (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
-
-  (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (loopy (list i l1) (adjoin i :at end))
-    (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10))))
-
-  (let ((l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))
-    (loopy (flag split) (list i l1) (adjoin i :at end))
-    (should (equal l1 (list 1 2 2 3 4 4 5 6 6 7 8 8 9 10 10)))))
+         ((with (l1 (cl-loop for i from 1 to 9 by 2
+                             collect i
+                             collect (1+ i)
+                             collect (1+ i))))
+          (list i l1) (adjoin i :at end)
+          (finally-return
+           (equal l1 (cl-loop for i from 1 to 9 by 2
+                              collect i
+                              collect (1+ i)
+                              collect (1+ i)))))]
+  :loopy t
+  :iter-keyword (list adjoin)
+  :iter-bare ((list . listing)
+              (adjoin . adjoining)))
 
 ;;;;; Append
-(ert-deftest append ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (append coll i)
-                                     (finally-return coll))))))
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (appending coll i)
-                                     (finally-return coll)))))))
+(loopy-deftest append
+  :result '(1 2 3 4 5 6)
+  :multi-body t
+  :body [((list i '((1 2 3) (4 5 6)))
+          (_cmd coll i)
+          (finally-return coll))
+         ((list i '((1 2 3) (4 5 6)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (append appending)))
+  :iter-keyword ((_cmd . (append appending))
+                 (list . listing))
+  :iter-bare ((list . listing)
+              (_cmd . (appending))))
 
-(ert-deftest append-destructuring ()
-  (should (equal '((1 2 5 6) (3 4 7 8))
-                 (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
-                                     (append (j k) i)
-                                     (finally-return j k))))))
+(loopy-deftest append-destructuring
+  :doc "Check that `append' implements destructuring, not destructing itself."
+  :result '((1 2 5 6) (3 4 7 8))
+  :body ((array i [((1 2) (3 4)) ((5 6) (7 8))])
+         (append (j k) i)
+         (finally-return j k))
+  :loopy t
+  :iter-keyword (array append)
+  :iter-bare ((array . arraying)
+              (append . appending)))
 
-  (should (equal '((1 2 5 6) (3 4 7 8))
-                 (eval (quote (loopy (array i [((1 2) (3 4)) ((5 6) (7 8))])
-                                     (appending (j k) i)
-                                     (finally-return j k)))))))
+(loopy-deftest append-:at-end
+  :result '(1 2 3 4 5 6)
+  :multi-body t
+  :body [((list i '((1 2 3) (4 5 6)))
+          (append i :at end))
+         ((list i '((1 2 3) (4 5 6)))
+          (append coll i :at end)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-(ert-deftest append-implicit ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (append i))))))
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (appending i)))))))
+(loopy-deftest append-:at-start/beginning
+  :result '(4 5 6 1 2 3)
+  :multi-body t
+  :body [((list i '((1 2 3) (4 5 6)))
+          (append i :at start))
+         ((list i '((1 2 3) (4 5 6)))
+          (append coll i :at start)
+          (finally-return coll))
+         ((list i '((1 2 3) (4 5 6)))
+          (append i :at beginning))
+         ((list i '((1 2 3) (4 5 6)))
+          (append coll i :at beginning)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-(ert-deftest append-at ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (append i :at end))))))
+(loopy-deftest append-end-tracking-accum-opt-end
+  :result '(6 7 3 4 1 2)
+  :body ((accum-opt (coll end))
+         (list i '((1 2) (3 4) (6 7)))
+         (append coll i :at start)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (flag split)
-                                     (list i '((1 2 3) (4 5 6)))
-                                     (append i :at end))))))
+(loopy-deftest append-end-tracking-accum-opt-start
+  :result '(1 2 3 4 6 7)
+  :body ((accum-opt (coll start))
+         (list i '((1 2) (3 4) (6 7)))
+         (append coll i :at end)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-  (should (equal '(4 5 6 1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (append i :at start)))))))
+(loopy-deftest append-end-tracking-start-end
+  :result '(5 6 3 4 1 2 11 12 13 14 15 16)
+  :multi-body t
+  :body [((list i '((1 2) (3 4) (5 6)))
+          (append coll i :at start)
+          (append coll (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (finally-return coll))
+         ((list i '((1 2) (3 4) (5 6)))
+          (append coll (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (append coll i :at start)
+          (finally-return coll))
 
-(ert-deftest append-end-tracking ()
-  (should (equal '(1 2 8 9 3 4 10 11 6 7 13 14)
-                 (loopy (list i '((1 2) (3 4) (6 7)))
-                        (append i :at end)
-                        (append (mapcar (lambda (x) (+ x 7)) i)
-                                :at end))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (append i :at start)
+          (append (mapcar (lambda (x) (+ x 10)) i) :at end))
+         ((list i '((1 2) (3 4) (5 6)))
+          (append (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (append i :at start))]
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-  (should (equal '(6 7 3 4 1 2)
-                 (loopy (accum-opt (coll end))
-                        (list i '((1 2) (3 4) (6 7)))
-                        (append coll i :at start)
-                        (finally-return coll))))
+(loopy-deftest append-end-tracking-end-twice
+  :result '(1 2 8 9 3 4 10 11 6 7 13 14)
+  :multi-body t
+  :body [((list i '((1 2) (3 4) (6 7)))
+          (append coll i :at end)
+          (append coll (mapcar (lambda (x) (+ x 7)) i) :at end)
+          (finally-return coll))
+         ((list i '((1 2) (3 4) (6 7)))
+          (append i :at end)
+          (append (mapcar (lambda (x) (+ x 7)) i) :at end))]
+  :loopy t
+  :iter-keyword (list append)
+  :iter-bare ((list . listing)
+              (append . appending)))
 
-  (should (equal '(1 2 3 4 6 7)
-                 (loopy (accum-opt (coll start))
-                        (list i '((1 2) (3 4) (6 7)))
-                        (append coll i :at end)
-                        (finally-return coll))))
+(loopy-deftest append-not-destructive
+  :doc "Check that `append' doesn't modify the list being appended."
+  :result t
+  :multi-body t
+  :body [((with (l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+          (listing i l1)
+          (append coll i :at start)
+          (finally-return (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (loopy (flag split)
-                        (list i '((1 2) (3 4) (5 6)))
-                        (append i :at end))))
+         ((with (l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+          (listing i l1)
+          (append coll i :at end)
+          (finally-return (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (append i :at start)
-                                     (append (mapcar (lambda (x) (+ x 10)) i)
-                                             :at end))))))
+         ((with (l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+          (listing i l1)
+          (append i :at start)
+          (finally-return (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (append (mapcar (lambda (x) (+ x 10)) i)
-                                             :at end)
-                                     (append i :at start)))))))
-
-(ert-deftest append-not-destructive ()
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (append coll i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
-
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (append coll i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
-
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (append i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
-
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (append i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
-
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (flag split) (list i l1) (append i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
+         ((with (l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
+          (listing i l1)
+          (append i :at end)
+          (finally-return (equal l1 '((1 2) (3 4) (5 6) (7 8)))))]
+  :loopy t
+  :iter-keyword (listing append)
+  :iter-bare ((append . appending)))
 
 ;;;;; Collect
-(ert-deftest collect ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collect coll j)
-                                     (finally-return coll))))))
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collecting coll j)
-                                     (finally-return coll)))))))
+(loopy-deftest collect
+  :result '(1 2 3)
+  :multi-body t
+  :body [((list j '(1 2 3))
+          (_cmd coll j)
+          (finally-return coll))
+         ((list j '(1 2 3))
+          (_cmd j))]
+  :repeat _cmd
+  :loopy ((_cmd . (collect collecting)))
+  :iter-keyword ((list . list)
+                 (_cmd . (collect collecting)))
+  :iter-bare ((list . listing)
+              (_cmd . (collecting))))
 
-;; Make sure that adding to end works correctly.
-(ert-deftest collect-end-tracking ()
-  (should (equal '(1 8 2 9 3 10 4 11)
-                 (loopy (list i '(1 2 3 4))
-                        (collect coll i :at end)
-                        (collect coll (+ i 7) :at end)
-                        (finally-return coll))))
+(loopy-deftest collect-end-tracking-end-twice
+  :result '(1 8 2 9 3 10 4 11)
+  :multi-body t
+  :body [((list i '(1 2 3 4))
+          (collect coll i :at end)
+          (collect coll (+ i 7) :at end)
+          (finally-return coll))
 
-  (should (equal '(1 8 2 9 3 10 4 11)
-                 (loopy (list i '(1 2 3 4))
-                        (collect i :at end)
-                        (collect (+ i 7) :at end))))
+         ((list i '(1 2 3 4))
+          (collect i :at end)
+          (collect (+ i 7) :at end))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4)
-                 (loopy (flag split)
-                        (list i '(1 2 3 4))
-                        (collect i :at end))))
+(loopy-deftest collect-end-tracking-start-end
+  :doc "Should be same result in either order."
+  :result '(3 2 1 1 2 3)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect coll i :at end)
+          (collect coll i :at start)
+          (finally-return coll))
 
-  (should (equal '(3 2 1 1 2 3)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect i :at end)
-                                     (collect i :at start))))))
+         ((list i '(1 2 3))
+          (collect i :at end)
+          (collect i :at start))
 
-  (should (equal '(3 2 1 1 2 3)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect i :at start)
-                                     (collect i :at end)))))))
+         ((list i '(1 2 3))
+          (collect coll i :at start)
+          (collect coll i :at end)
+          (finally-return coll))
 
+         ((list i '(1 2 3))
+          (collect i :at start)
+          (collect i :at end))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
+(loopy-deftest collect-destructuring
+  :doc "Check that `collect' implements destructuring, not destructuring itself."
+  :result '((1 4) ((2 3) (5 6)))
+  :body ((list j '((1 2 3) (4 5 6)))
+         (collect (coll1 . coll2) j)
+         (finally-return coll1 coll2))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-(ert-deftest collect-destructuring ()
-  (should (and (equal '((1 4) ((2 3) (5 6)))
-                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
-                                          (collect (coll1 . coll2) j)
-                                          (finally-return coll1 coll2)))))
+(loopy-deftest collect-coercion-vector
+  :result [1 2 3]
+  :multi-body t
+  :body [((list j '(1 2 3))
+          (collect v j :result-type 'vector)
+          (finally-return v))
 
-               (equal '((1 4) (2 5) (3 6))
-                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
-                                          (collect (coll1 coll2 coll3) j)
-                                          (finally-return coll1 coll2 coll3)))))
+         ((list j '(1 2 3))
+          (collect v j :result-type vector)
+          (finally-return v))
 
-               (equal '((1 4) (2 5) (3 6))
-                      (eval (quote (loopy (list j '([1 2 3] [4 5 6]))
-                                          (collect [coll1 coll2 coll3] j)
-                                          (finally-return coll1 coll2 coll3)))))))
-  (should (and (equal '((1 4) ((2 3) (5 6)))
-                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
-                                          (collecting (coll1 . coll2) j)
-                                          (finally-return coll1 coll2)))))
+         ((list j '(1 2 3))
+          (collect j :result-type 'vector))
 
-               (equal '((1 4) (2 5) (3 6))
-                      (eval (quote (loopy (list j '((1 2 3) (4 5 6)))
-                                          (collecting (coll1 coll2 coll3) j)
-                                          (finally-return coll1 coll2 coll3)))))
+         ((list j '(1 2 3))
+          (collect j :result-type vector))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-               (equal '((1 4) (2 5) (3 6))
-                      (eval (quote (loopy (list j '([1 2 3] [4 5 6]))
-                                          (collecting [coll1 coll2 coll3] j)
-                                          (finally-return coll1 coll2 coll3))))))))
-(ert-deftest collect-implicit ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collect j))))))
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collecting j)))))))
+(loopy-deftest collect-coercion-list
+  :result '(1 2 3)
+  :multi-body t
+  :body [((list j '(1 2 3))
+          (collect v j :result-type 'list)
+          (finally-return v))
 
-(ert-deftest collect-coercion ()
-  (should (equal [1 2 3]
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collect v j :result-type 'vector)
-                                     (finally-return v))))))
+         ((list j '(1 2 3))
+          (collect v j :result-type list)
+          (finally-return v))
 
-  (should (equal "abc"
-                 (eval (quote (loopy (list j '(?a ?b ?c))
-                                     (collect j :result-type 'string))))))
+         ((list j '(1 2 3))
+          (collect j :result-type 'list))
 
-  (should (equal [1 2 3]
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (collect v j :result-type vector)
-                                     (finally-return v))))))
+         ((list j '(1 2 3))
+          (collect j :result-type list))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (should (equal "abc"
-                 (eval (quote (loopy (list j '(?a ?b ?c))
-                                     (collect j :result-type string)))))))
+(loopy-deftest collect-coercion-string
+  :result "abc"
+  :multi-body t
+  :body [((list j '(?a ?b ?c))
+          (collect v j :result-type 'string)
+          (finally-return v))
 
-(ert-deftest collect-at ()
-  (should (equal (list '(3 2 1) '(1 2 3))
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect coll1 i :at 'beginning)
-                                     (collect coll2 (cl-first coll1))
-                                     (finally-return coll1 coll2))))))
+         ((list j '(?a ?b ?c))
+          (collect v j :result-type string)
+          (finally-return v))
 
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect i :at beginning))))))
+         ((list j '(?a ?b ?c))
+          (collect j :result-type 'string))
 
-  (should (equal [3 2 1]
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect coll1 i :at 'start :result-type 'array)
-                                     (finally-return coll1))))))
+         ((list j '(?a ?b ?c))
+          (collect j :result-type string))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect i :at start))))))
+(loopy-deftest collect-:at-start/beginning-explicit
+  :result (list (list 3 2 1) (list 1 2 3))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect coll1 i :at 'beginning)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))
 
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect i :at 'start))))))
+         ((list i '(1 2 3))
+          (collect coll1 i :at 'start)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))
 
-  (should (equal '((1 2 3) (1 1 1))
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (collect coll1 i :at 'end)
-                                     (collect coll2 (cl-first coll1))
-                                     (finally-return coll1 coll2)))))))
+         ((list i '(1 2 3))
+          (collect coll1 i :at beginning)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))
 
-;; This shouldn't ever happen, but it's still worth checking.
-(ert-deftest collect-not-destructive ()
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (collect coll i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((list i '(1 2 3))
+          (collect coll1 i :at start)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (collect coll i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+(loopy-deftest collect-:at-start/beginning-implicit
+  :result (list 3 2 1)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect i :at 'beginning))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (collect i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((list i '(1 2 3))
+          (collect i :at 'start))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (collect i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((list i '(1 2 3))
+          (collect i :at beginning))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (flag split) (list i l1) (collect i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
+         ((list i '(1 2 3))
+          (collect i :at start))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest collect-:at-end-implicit
+  :result (list 1 2 3)
+  :multi-body t
+  :body [((list i '(1 2 3)) (collect i :at 'end))
+         ((list i '(1 2 3)) (collect i :at end))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest collect-:at-end-explicit
+  :result (list (list 1 2 3) (list 1 1 1))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect coll1 i :at 'end)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))
+
+         ((list i '(1 2 3))
+          (collect coll1 i :at end)
+          (collect coll2 (cl-first coll1))
+          (finally-return coll1 coll2))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest collect-not-destructive
+  :doc "This shouldn't ever happen, but it's still worth checking."
+  :result t
+  :multi-body t
+  :body [((with (l1 (list (list 1 2) (list 3 4)
+                          (list 5 6) (list 7 8))))
+          (listing i l1)
+          (collect coll i :at start)
+          (finally-return (equal l1 (list (list 1 2) (list 3 4)
+                                          (list 5 6) (list 7 8)))))
+
+         ((with (l1 (list (list 1 2) (list 3 4)
+                          (list 5 6) (list 7 8))))
+          (listing i l1)
+          (collect coll i :at end)
+          (finally-return (equal l1 (list (list 1 2) (list 3 4)
+                                          (list 5 6) (list 7 8)))))
+
+         ((with (l1 (list (list 1 2) (list 3 4)
+                          (list 5 6) (list 7 8))))
+          (listing i l1)
+          (collect i :at start)
+          (finally-return (equal l1 (list (list 1 2) (list 3 4)
+                                          (list 5 6) (list 7 8)))))
+
+         ((with (l1 (list (list 1 2) (list 3 4)
+                          (list 5 6) (list 7 8))))
+          (listing i l1)
+          (collect i :at end)
+          (finally-return (equal l1 (list (list 1 2) (list 3 4)
+                                          (list 5 6) (list 7 8)))))]
+  :loopy t
+  :iter-keyword (listing collect)
+  :iter-bare ((listing . listing)
+              (collect . collecting)))
 
 ;;;;; Concat
-(ert-deftest concat ()
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat coll j)
-                                     (finally-return coll))))))
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concating coll j)
-                                     (finally-return coll)))))))
+(loopy-deftest concat
+  :result "catdog"
+  :multi-body t
+  :body [((list j '("cat" "dog"))
+          (_cmd coll j)
+          (finally-return coll))
 
-(ert-deftest concat-destructuring ()
-  (should (and (equal '("ad" "be" "cf")
-                      (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
-                                          (concat (coll1 coll2 coll3) j)
-                                          (finally-return coll1 coll2 coll3)))))
+         ((list j '("cat" "dog"))
+          (_cmd j))]
+  :repeat _cmd
+  :loopy ((_cmd . (concat concating)))
+  :iter-keyword ((list . list)
+                 (_cmd . (concat concating)))
+  :iter-bare ((list . listing)
+              (_cmd . (concating))))
 
-               (equal '("ad" "be" "cf")
-                      (eval (quote (loopy (list j '(["a" "b" "c"] ["d" "e" "f"]))
-                                          (concat [coll1 coll2 coll3] j)
-                                          (finally-return coll1 coll2 coll3)))))))
-  (should (and (equal '("ad" "be" "cf")
-                      (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
-                                          (concating (coll1 coll2 coll3) j)
-                                          (finally-return coll1 coll2 coll3)))))
+(loopy-deftest concat-destructuring
+  :doc "Check that `concat'  implements destructuring, not the destrucutring itself."
+  :result '("ad" "be" "cf")
+  :body ((list j '(["a" "b" "c"] ["d" "e" "f"]))
+         (concat [coll1 coll2 coll3] j)
+         (finally-return coll1 coll2 coll3))
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-               (equal '("ad" "be" "cf")
-                      (eval (quote (loopy (list j '(["a" "b" "c"] ["d" "e" "f"]))
-                                          (concating [coll1 coll2 coll3] j)
-                                          (finally-return coll1 coll2 coll3))))))))
+(loopy-deftest concat-:at-start/beginning
+  :result "duckdogcat"
+  :multi-body t
+  :body [((list j '("cat" "dog" "duck")) (concat j :at start))
+         ((list j '("cat" "dog" "duck")) (concat j :at 'start))
+         ((list j '("cat" "dog" "duck")) (concat j :at beginning))
+         ((list j '("cat" "dog" "duck")) (concat j :at 'beginning))
 
-(ert-deftest concat-implict ()
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat j))))))
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concating j)))))))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at start)  (finally-return coll))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at 'start) (finally-return coll))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at beginning) (finally-return coll))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at 'beginning) (finally-return coll))]
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-(ert-deftest concat-at ()
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat j :at end))))))
+(loopy-deftest concat-:at-start
+  :result "catdogduck"
+  :multi-body t
+  :body [((list j '("cat" "dog" "duck")) (concat j :at end))
+         ((list j '("cat" "dog" "duck")) (concat j :at 'end))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at end)  (finally-return coll))
+         ((list j '("cat" "dog" "duck")) (concat coll j :at 'end) (finally-return coll))]
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-  (should (equal "dogcat"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat j :at start))))))
+(loopy-deftest concat-:at-end-destr
+  :result '("ad" "be" "cf")
+  :body ((list j '(("a" "b" "c") ("d" "e" "f")))
+         (concat (coll1 coll2 coll3) j :at end)
+         (finally-return coll1 coll2 coll3))
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-  (should (equal "catdog"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat str j :at end)
-                                     (finally-return str))))))
+(loopy-deftest concat-:at-start-destr
+  :result '("da" "eb" "fc")
+  :body ((list j '(("a" "b" "c") ("d" "e" "f")))
+         (concat (coll1 coll2 coll3) j :at start)
+         (finally-return coll1 coll2 coll3))
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-  (should (equal "dogcat"
-                 (eval (quote (loopy (list j '("cat" "dog"))
-                                     (concat str j :at start)
-                                     (finally-return str))))))
+(loopy-deftest concat-end-tracking-end-twice
+  :doc "This only applies to the optimized form."
+  :result "abcdef"
+  :multi-body t
+  :body [((accum-opt (coll end))
+          (list (i j) '(("a" "b") ("c" "d") ("e" "f")))
+          (concat coll i :at end)
+          (concat coll j :at end)
+          (finally-return coll))
 
-  (should (equal '("ad" "be" "cf")
-                 (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
-                                     (concat (coll1 coll2 coll3) j :at end)
-                                     (finally-return coll1 coll2 coll3))))))
+         ((list (i j) '(("a" "b") ("c" "d") ("e" "f")))
+          (concat i :at end)
+          (concat j :at end))]
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 
-  (should (equal '("da" "eb" "fc")
-                 (eval (quote (loopy (list j '(("a" "b" "c") ("d" "e" "f")))
-                                     (concat (coll1 coll2 coll3) j :at start)
-                                     (finally-return coll1 coll2 coll3)))))))
+(loopy-deftest concat-end-tracking-start-end
+  :doc "Should be same result in either order."
+  :result "cbaabc"
+  :multi-body t
+  :body [((list i '("a" "b" "c"))
+          (concat coll i :at end)
+          (concat coll i :at start)
+          (finally-return coll))
 
+         ((list i '("a" "b" "c"))
+          (concat i :at end)
+          (concat i :at start))
+
+         ((list i '("a" "b" "c"))
+          (concat coll i :at start)
+          (concat coll i :at end)
+          (finally-return coll))
+
+         ((list i '("a" "b" "c"))
+          (concat i :at start)
+          (concat i :at end))]
+  :loopy t
+  :iter-keyword (list concat)
+  :iter-bare ((list . listing)
+              (concat . concating)))
 ;;;;; Count
-(ert-deftest count ()
-  (should (= 2
-             (eval (quote (loopy (list i '(t nil t nil))
-                                 (count c i)
-                                 (finally-return c))))))
-  (should (= 2
-             (eval (quote (loopy (list i '(t nil t nil))
-                                 (counting c i)
-                                 (finally-return c)))))))
+(loopy-deftest count
+  :result 2
+  :multi-body t
+  :body [((list i '(t nil t nil))
+          (_cmd c i)
+          (finally-return c))
 
-(ert-deftest count-destructuring ()
-  (should
-   (equal '(2 1)
-          (eval (quote (loopy (list elem '((t nil) (t t)))
-                              (count (c1 c2) elem)
-                              (finally-return c1 c2))))))
-  (should
-   (equal '(2 1)
-          (eval (quote (loopy (list elem '((t nil) (t t)))
-                              (counting (c1 c2) elem)
-                              (finally-return c1 c2)))))))
+         ((list i '(t nil t nil))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (count counting)))
+  :iter-keyword ((list . list)
+                 (_cmd . (count counting)))
+  :iter-keyword ((list . listing)
+                 (_cmd . (count counting))))
 
-(ert-deftest count-implict ()
-  (should (= 2
-             (eval (quote (loopy (list i '(t nil t nil))
-                                 (count i))))))
-  (should (= 2
-             (eval (quote (loopy (list i '(t nil t nil))
-                                 (counting i)))))))
+(loopy-deftest count-destructuring
+  :doc "Check that `count' implements destructuring, not destructuring itself."
+  :result '(2 1)
+  :body ((list elem '((t nil) (t t)))
+         (count (c1 c2) elem)
+         (finally-return c1 c2))
+  :loopy t
+  :iter-keyword (list count)
+  :iter-keyword ((list . listing)
+                 (count . counting)))
 
 ;;;;; Max
-(ert-deftest max ()
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (max my-max i)
-                                 (finally-return my-max))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maxing my-max i)
-                                 (finally-return my-max))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maximize my-max i)
-                                 (finally-return my-max))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maximizing my-max i)
-                                 (finally-return my-max)))))))
+(loopy-deftest max
+  :result 11
+  :multi-body t
+  :body [((list i '(1 11 2 10 3 9 4 8 5 7 6))
+          (_cmd my-max i)
+          (finally-return my-max))
 
-(ert-deftest max-destructuring ()
-  (should
-   (equal '(9 11)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (max (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(9 11)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (maxing (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(9 11)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (maximize (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(9 11)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (maximizing (m1 m2) elem)
-                              (finally-return m1 m2)))))))
+         ((list i '(1 11 2 10 3 9 4 8 5 7 6))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (max maxing maximize maximizing)))
+  :iter-keyword ((list . list)
+                 (_cmd . (max maxing maximize maximizing)))
+  :iter-bare ((list . listing)
+              (_cmd . (maximizing))))
 
-(ert-deftest max-implict ()
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (max i))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maxing i))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maximize i))))))
-  (should (= 11
-             (eval (quote (loopy (list i '(1 11 2 10 3 9 4 8 5 7 6))
-                                 (maximizing i)))))))
+(loopy-deftest max-destructuring
+  :doc "Check that `max' implements destructuring, not destructuring itself."
+  :result '(9 11)
+  :body  ((list elem '((1 11) (9 4)))
+          (max (m1 m2) elem)
+          (finally-return m1 m2))
+  :loopy t
+  :iter-keyword (list max)
+  :iter-bare ((list . listing)
+              (max . maximizing)))
 
 ;;;;; Min
-(ert-deftest min ()
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (min my-min i)
-                          (finally-return my-min))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minimize my-min i)
-                          (finally-return my-min))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minimizing my-min i)
-                          (finally-return my-min))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minning my-min i)
-                          (finally-return my-min)))))))
+(loopy-deftest min
+  :result 0
+  :multi-body t
+  :body [((list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+          (_cmd my-min i)
+          (finally-return my-min))
 
-(ert-deftest min-destructuring ()
-  (should
-   (equal '(1 4)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (min (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(1 4)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (minimize (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(1 4)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (minning (m1 m2) elem)
-                              (finally-return m1 m2))))))
-  (should
-   (equal '(1 4)
-          (eval (quote (loopy (list elem '((1 11) (9 4)))
-                              (minimizing (m1 m2) elem)
-                              (finally-return m1 m2)))))))
+         ((list i '(1 11 2 10 3 0 9 4 8 5 7 6))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (min minning minimize minimizing)))
+  :iter-keyword ((list . list)
+                 (_cmd . (min minning minimize minimizing)))
+  :iter-bare ((list . listing)
+              (_cmd . (minimizing))))
 
-(ert-deftest min-implict ()
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (min i))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minning i))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minimize i))))))
-  (should
-   (= 0
-      (eval (quote (loopy (list i '(1 11 2 10 3 0 9 4 8 5 7 6))
-                          (minimizing i)))))))
+(loopy-deftest min-destructuring
+  :doc "Check that `min' implements destructuring, not destructuring itself."
+  :result '(1 4)
+  :body  ((list elem '((1 11) (9 4)))
+          (min (m1 m2) elem)
+          (finally-return m1 m2))
+  :loopy t
+  :iter-keyword (list min)
+  :iter-bare ((list . listing)
+              (min . minimizing)))
 
 ;;;;; Multiply
-(ert-deftest multiply ()
-  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (multiply product i)
-                                     (finally-return product))))))
+(loopy-deftest multiply
+  :result 120
+  :multi-body t
+  :body [((list i '(1 2 3 4 5))
+          (_cmd product i)
+          (finally-return product))
+         ((list i '(1 2 3 4 5))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (multiply multiplying)))
+  :iter-keyword ((list . listing)
+                 (_cmd . (multiply multiplying)))
+  :iter-bare ((_cmd . (multiplying))
+              (list . listing)))
 
-  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (multiplying product i)
-                                     (finally-return product)))))))
-
-(ert-deftest multiply-destructuring ()
-  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
-                                            (multiply (x y) i)
-                                            (finally-return x y))))))
-
-  (should (equal '(3 8) (eval (quote (loopy (list i '((1 2) (3 4)))
-                                            (multiplying (x y) i)
-                                            (finally-return x y)))))))
-
-(ert-deftest multiply-implicit ()
-  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (multiply i))))))
-
-  (should (= 120 (eval (quote (loopy (list i '(1 2 3 4 5))
-                                     (multiplying i)))))))
+(loopy-deftest multiply-destructuring
+  :doc "Check that `multiply' implements destructuring, not the destructuring itself."
+  :result '(3 8)
+  :body ((list i '((1 2) (3 4)))
+         (multiply (x y) i)
+         (finally-return x y))
+  :loopy t
+  :iter-keyword (list multiply)
+  :iter-bare ((multiply . multiplying)
+              (list . listing)))
 
 ;;;;; Nconc
-(ert-deftest nconc ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc l i)
-                                     (finally-return l))))))
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconcing l i)
-                                     (finally-return l)))))))
+(loopy-deftest nconc
+  :result '(1 2 3 4 5 6)
+  :multi-body t
+  :body [((sequence i (list (list 1 2 3) (list 4 5 6)))
+          (_cmd l i)
+          (finally-return l))
 
-(ert-deftest nconc-destructuring ()
-  (should
-   (equal '((1 4) ((2 3) (5 6)))
-          (eval (quote (loopy (list elem '(((1) (2 3)) ((4) (5 6))))
-                              (nconc (n1 . n2) elem)
-                              (finally-return n1 n2))))))
-  (should
-   (equal '((1 4) ((2 3) (5 6)))
-          (eval (quote (loopy (list elem '(((1) (2 3)) ((4) (5 6))))
-                              (nconcing (n1 . n2) elem)
-                              (finally-return n1 n2)))))))
+         ((sequence i (list (list 1 2 3) (list 4 5 6)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nconc nconcing)))
+  :iter-keyword ((sequence . sequence)
+                 (_cmd . (nconc nconcing)))
+  :iter-bare ((sequence . sequencing)
+              (_cmd . (nconcing))))
 
-(ert-deftest nconc-implict ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc i))))))
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconcing i)))))))
+(loopy-deftest nconc-destructuring
+  :doc "Check that `nconc' implements destructuring, not destructuring itself."
+  :result '((1 4) ((2 3) (5 6)))
+  :body ((array elem (vector (list (list 1) (list 2 3))
+                             (list (list 4) (list 5 6))))
+         (nconc (n1 . n2) elem)
+         (finally-return n1 n2))
+  :loopy t
+  :iter-keyword (array nconc)
+  :iter-bare ((array . arraying)
+              (nconc . nconcing)))
 
-(ert-deftest nconc-at-literal-lists ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc i))))))
+;; TODO: Not sure how this text is supposed to work when Emacs is allowed to
+;; modify he literals.
+;;
+;; (ert-deftest nconc-at-literal-lists ()
+;;   (should (equal '(1 2 3 4 5 6)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc i))))))
+;;
+;;   (should (equal '(1 2 3 4 5 6)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc i :at end))))))
+;;
+;;   (should (equal '(4 5 6 1 2 3)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc i :at start))))))
+;;   (should (equal '(1 2 3 4 5 6)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc c i)
+;;                                      (finally-return c))))))
+;;
+;;   (should (equal '(1 2 3 4 5 6)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc c i :at end)
+;;                                      (finally-return c))))))
+;;
+;;   (should (equal '(4 5 6 1 2 3)
+;;                  (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
+;;                                      (nconc c i :at start)
+;;                                      (finally-return c)))))))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc i :at end))))))
+(loopy-deftest nconc-:at-end
+  :result '(1 2 3 4 5 6)
+  :multi-body t
+  :body [((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc coll i :at end)
+          (finally-return coll))
 
-  (should (equal '(4 5 6 1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc i :at start))))))
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc c i)
-                                     (finally-return c))))))
+         ((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc i :at end))]
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc c i :at end)
-                                     (finally-return c))))))
+(loopy-deftest nconc-:at-start/beginning
+  :result '(4 5 6 1 2 3)
+  :multi-body t
+  :body [((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc coll i :at start)
+          (finally-return coll))
 
-  (should (equal '(4 5 6 1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (4 5 6)))
-                                     (nconc c i :at start)
-                                     (finally-return c)))))))
+         ((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc i :at start))
 
-(ert-deftest nconc-at-new-lists ()
+         ((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc coll i :at beginning)
+          (finally-return coll))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc i)))))))
+         ((with (l1 (list 1 2 3))
+                (l2 (list 4 5 6)))
+          (seq i (list l1 l2))
+          (nconc i :at beginning))]
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc i :at end)))))))
+(loopy-deftest nconc-end-tracking-end-twice
+  :result '(1 2 11 12 3 4 13 14 5 6 15 16)
+  :multi-body t
+  :body [((seq i (list (list 1 2) (list 3 4) (list 5 6)))
+          (seq j (list (list 11 12) (list 13 14) (list 15 16)))
+          (nconc coll i :at end)
+          (nconc coll j :at end)
+          (finally-return coll))
 
-  (should (equal '(4 5 6 1 2 3)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc i :at start)))))))
+         ((seq i (list (list 1 2) (list 3 4) (list 5 6)))
+          (seq j (list (list 11 12) (list 13 14) (list 15 16)))
+          (nconc i :at end)
+          (nconc j :at end))]
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc c i)
-                                       (finally-return c)))))))
+(loopy-deftest nconc-end-tracking-start-and-end
+  :doc "Should get same result in both orders."
+  :result '(5 6 3 4 1 2 11 12 13 14 15 16)
+  :multi-body t
+  :body [((seq i '((1 2) (3 4) (5 6)))
+          (nconc coll (copy-sequence i) :at start)
+          (nconc coll (mapcar (lambda (x) (+ x 10))
+                              (copy-sequence i))
+                 :at end)
+          (finally-return coll))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc c i :at end)
-                                       (finally-return c)))))))
+         ((seq i '((1 2) (3 4) (5 6)))
+          (nconc (copy-sequence i) :at start)
+          (nconc (mapcar (lambda (x) (+ x 10))
+                         (copy-sequence i))
+                 :at end))
 
-  (should (equal '(4 5 6 1 2 3)
-                 (eval (quote (let ((l1 (list 1 2 3))
-                                    (l2 (list 4 5 6)))
-                                (loopy (list i (list l1 l2))
-                                       (nconc c i :at start)
-                                       (finally-return c))))))))
+         ((seq i '((1 2) (3 4) (5 6)))
+          (nconc coll (mapcar (lambda (x) (+ x 10))
+                              (copy-sequence i))
+                 :at end)
+          (nconc coll (copy-sequence i) :at start)
+          (finally-return coll))
 
-(ert-deftest nconc-end-tracking ()
-  (should (equal '(1 2 11 12 3 4 13 14 5 6 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (list j '((11 12) (13 14) (15 16)))
-                                     (nconc coll i :at end)
-                                     (nconc coll j :at end)
-                                     (finally-return coll))))))
+         ((seq i '((1 2) (3 4) (5 6)))
+          (nconc (mapcar (lambda (x) (+ x 10))
+                         (copy-sequence i))
+                 :at end)
+          (nconc (copy-sequence i) :at start))]
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
-  (should (equal '(1 2 11 12 3 4 13 14 5 6 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (list j '((11 12) (13 14) (15 16)))
-                                     (nconc i :at end)
-                                     (nconc j :at end))))))
+(loopy-deftest nconc-end-tracking-opt-end-at-start
+  :result '(5 6 3 4 1 2)
+  :body ((accum-opt (coll end))
+         (seq i (list (list 1 2) (list 3 4) (list 5 6)))
+         (nconc coll i :at start)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (flag split)
-                                     (list i '((1 2) (3 4) (5 6)))
-                                     (nconc i :at end))))))
-
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (nconc (copy-sequence i) :at start)
-                                     (nconc (mapcar (lambda (x) (+ x 10))
-                                                    (copy-sequence i))
-                                            :at end))))))
-
-  (should (equal '(5 6 3 4 1 2)
-                 (loopy (accum-opt (coll end))
-                        (list i (list (list 1 2) (list 3 4) (list 5 6)))
-                        (nconc coll i :at start)
-                        (finally-return coll))))
-
-  (should (equal '(1 2 3 4 5 6)
-                 (loopy (accum-opt (coll start))
-                        (list i (list (list 1 2) (list 3 4) (list 5 6)))
-                        (nconc coll i :at end)
-                        (finally-return coll))))
-
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (nconc (mapcar (lambda (x) (+ x 10))
-                                                    (copy-sequence i))
-                                            :at end)
-                                     (nconc (copy-sequence i) :at start)))))))
+(loopy-deftest nconc-end-tracking-opt-start-at-end
+  :result '(1 2 3 4 5 6)
+  :body ((accum-opt (coll start))
+         (seq i (list (list 1 2) (list 3 4) (list 5 6)))
+         (nconc coll i :at end)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (seq nconc)
+  :iter-bare ((seq . seqing)
+              (nconc . nconcing)))
 
 ;;;;; Nunion
-(ert-deftest nunion ()
-  ;; (should (null (cl-set-difference
-  ;;                '(4 1 2 3)
-  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-  ;;                                    (nunion var i)))))))
-  ;; (should (null (cl-set-difference
-  ;;                '(4 1 2 3)
-  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-  ;;                                    (nunioning var i)
-  ;;                                    (finally-return var)))))))
-  ;;
-  ;; (should (null (cl-set-difference
-  ;;                '(4 2 (1 1) 3)
-  ;;                (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-  ;;                                    (nunioning var i :test #'equal)
-  ;;                                    (finally-return var))))
-  ;;                :test #'equal)))
-  ;;
-  ;; ;; The resulting list should only have one element whose `car' is `a'.
-  ;; (should (= 1 (cl-count-if (lambda (x) (eq (car x) 'a))
-  ;;                           (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
-  ;;                                               (nunioning var i :key #'car)
-  ;;                                               (finally-return var)))))))
+(loopy-deftest nunion
+  :result '(1 2 3 4)
+  :multi-body t
+  :body [((seq i (list (list 1 2) (list 2 3) (list 3 4)))
+          (_cmd var i)
+          (finally-return var))
 
-  (should (equal
-           '(1 2 3 4)
-           (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                               (nunion var i)
-                               (finally-return var))))))
-  (should (equal
-           '(1 2 3 4)
-           (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                               (nunioning var i)
-                               (finally-return var))))))
+         ((seq i (list (list 1 2) (list 2 3) (list 3 4)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nunion nunioning)))
+  :iter-keyword ((seq . seq)
+                 (_cmd . (nunion nunioning)))
+  :iter-bare ((seq . seqing)
+              (_cmd . (nunioning))))
 
-  (should (equal '((1 1) 2 3 4)
-                 (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-                                     (nunioning var i :test #'equal)
-                                     (finally-return var))))))
+(loopy-deftest nunion-:test
+  :result '((1 1) 2 3 4)
+  :multi-body t
+  :body [((seq i (list (list (list 1 1) 2)
+                       (list (list 1 1) 3)
+                       (list 3 4)))
+          (nunion var i :test #'equal)
+          (finally-return var))
 
-  (should (equal '((1 1) 2 3 4)
-                 (eval (quote (let ((test #'equal))
-                                (loopy
-                                 (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-                                 (nunioning var i :test test)
-                                 (finally-return var)))))))
+         ((with (test #'equal))
+          (seq i (list (list (list 1 1) 2)
+                       (list (list 1 1) 3)
+                       (list 3 4)))
+          (nunion var i :test test)
+          (finally-return var))
 
-  ;; The resulting list should only have one element whose `car' is `a'.
-  (should (equal '((a . 1)) (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
-                                                (nunioning var i :key #'car)
-                                                (finally-return var))))))
+         ((seq i (list (list (list 1 1) 2)
+                       (list (list 1 1) 3)
+                       (list 3 4)))
+          (nunion i :test #'equal))
 
-  (should (equal '((a . 1)) (eval (quote (let ((key #'car))
-                                           (loopy (array i [((a . 1)) ((a . 2))])
-                                                  (nunioning var i :key key)
-                                                  (finally-return var))))))))
+         ((with (test #'equal))
+          (seq i (list (list (list 1 1) 2)
+                       (list (list 1 1) 3)
+                       (list 3 4)))
+          (nunion i :test test))]
+  :loopy t
+  :iter-keyword (seq nunion)
+  :iter-bare ((seq . seqing)
+              (nunion . nunioning)))
 
-(ert-deftest nunion-destructuring ()
-  (should (equal '((1 2 3) (2 3 4))
-                 (eval (quote (loopy (array i [((1 2) (2 3))
-                                               ((1 2 3) (3 4))])
-                                     (nunion (var1 var2) i :test #'equal)
-                                     (finally-return var1 var2)))))))
+(loopy-deftest nunion-:key
+  :doc "The resulting list should only have one element whose `car' is `a'."
+  :result '((a . 1))
+  :multi-body t
+  :body [((array i (vector (list '(a . 1)) (list '(a . 2))))
+          (nunioning var i :key #'car)
+          (finally-return var))
 
-(ert-deftest nunion-at ()
-  (should (equal '((1 2) (3 2) (1 1))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (nunion i :at end :key #'cl-second))))))
+         ((with (key #'car))
+          (array i (vector (list '(a . 1)) (list '(a . 2))))
+          (nunioning var i :key key)
+          (finally-return var))
 
-  (should (equal '((1 2) (3 2) (4 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (nunion i :at end :key #'car))))))
+         ((array i (vector (list '(a . 1)) (list '(a . 2))))
+          (nunioning i :key #'car))
 
-  (should (equal '((4 2) (1 2) (3 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (nunion i :at start :key #'car))))))
+         ((with (key #'car))
+          (array i (vector (list '(a . 1)) (list '(a . 2))))
+          (nunioning i :key key))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
-  (should (equal '((4 2) (1 2) (3 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (nunion c i :at start :key #'car)
-                                     (finally-return c))))))
+(loopy-deftest nunion-destructuring
+  :doc "Check that `nunion' implements, not destructuring itself."
+  :result '((1 2 3) (2 3 4))
+  :body ((array i (vector (list (list 1 2) (list 2 3))
+                          (list (list 1 2 3) (list 3 4))))
+         (nunion (var1 var2) i :test #'equal)
+         (finally-return var1 var2))
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
-                                     (nunion i :test #'equal :at start))))))
+(loopy-deftest nunion-:at-end
+  :result '(1 2 3 4 5 6 7 8)
+  :multi-body t
+  :body [((array i (vector (list 1 2 3) (list 3 3 4 5)
+                           (list 5 5 6 7 8)))
+          (nunion coll i :at end)
+          (finally-return coll))
+         ((array i (vector (list 1 2 3) (list 3 3 4 5)
+                           (list 5 5 6 7 8)))
+          (nunion i))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
-                                     (nunion c i :test #'equal :at start)
-                                     (finally-return c)))))))
+(loopy-deftest nunion-:at-start/beginning
+  :result '(8 7 6 5 4 3 2 1)
+  :multi-body t
+  :body [((array i (vector (list 3 2 1) (list 5 4 3 3)
+                           (list 8 7 6 5 5)))
+          (nunion coll i :at start)
+          (finally-return coll))
+         ((array i (vector (list 3 2 1) (list 5 4 3 3)
+                           (list 8 7 6 5 5)))
+          (nunion i :at start))
 
-(ert-deftest nunion-end-tracking ()
-  (should (equal '(1 2 3 4 5 6 7 8 9 10)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
-                                     (nunion coll i)
-                                     (nunion coll (mapcar #'1+ i))
-                                     (finally-return coll))))))
+         ((array i (vector (list 3 2 1) (list 5 4 3 3)
+                           (list 8 7 6 5 5)))
+          (nunion coll i :at beginning)
+          (finally-return coll))
+         ((array i (vector (list 3 2 1) (list 5 4 3 3)
+                           (list 8 7 6 5 5)))
+          (nunion i :at beginning))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
-  (should (equal '(1 2 3 4 5 6 7 8 9)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
-                                     (nunion i :at end))))))
+(loopy-deftest nunion-:at-end-:key-cl-second
+  :result '((1 2) (3 2) (1 1))
+  :multi-body t
+  :body [((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion coll i :at end :key #'cl-second)
+          (finally-return coll))
 
-  (should (equal '(1 2 3 4 5 6 7 8 9)
-                 (eval (quote (loopy (flag split)
-                                     (list i '((1 2 3) (1 2 3) (4 5 6) (7 8 9)))
-                                     (nunion i :at end))))))
+         ((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion i :at end :key #'cl-second))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (loopy (list i '((1 2) (3 4) (5 6)))
-                        (nunion (copy-sequence i) :at start)
-                        (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
-                                :at end))))
+(loopy-deftest nunion-:at-end-:key-car
+  :result '((1 2) (3 2) (4 2))
+  :multi-body t
+  :body [((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion coll i :at end :key #'car)
+          (finally-return coll))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (loopy (list i '((1 2) (3 4) (5 6)))
-                        (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
-                                :at end)
-                        (nunion (copy-sequence i) :at start)))))
+         ((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion i :at end :key #'car))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-:at-start-:key-car
+  :result '((4 2) (1 2) (3 2))
+  :multi-body t
+  :body [((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion coll i :at start :key #'car)
+          (finally-return coll))
+
+         ((array i (vector (list (list 1 2) (list 3 2))
+                           (list (list 1 1) (list 4 2))))
+          (nunion i :at start :key #'car))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-:at-start-:test-equal
+  :result '(1 2 3)
+  :multi-body t
+  :body [((array i (vector (list 1 2 3) (list 1 2 3)))
+          (nunion coll i :at start :test #'equal)
+          (finally-return coll))
+         ((array i (vector (list 1 2 3) (list 1 2 3)))
+          (nunion i :at start :test #'equal))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-end-tracking-:at-end-twice
+  :result '(1 2 3 4 5 6 7 8 9 10)
+  :multi-body t
+  :body [((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion coll (copy-sequence i) :at end)
+          (nunion coll (mapcar #'1+ i) :at end)
+          (finally-return coll))
+
+         ((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion (copy-sequence i) :at end)
+          (nunion (mapcar #'1+ i) :at end))
+
+         ((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion coll (copy-sequence i) :at end)
+          (nunion coll (mapcar #'1+ i) :at end)
+          (finally-return coll))
+
+         ((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion (copy-sequence i) :at end)
+          (nunion (mapcar #'1+ i) :at end))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-end-tracking-:at-start-twice
+  :result '(10 8 9 7 5 6 4 1 2 3)
+  :multi-body t
+  :body [(loopy (array i (vector (list 1 2 3) (list 1 2 3)
+                                 (list 4 5 6) (list 7 8 9)))
+                (nunion coll (copy-sequence i) :at start)
+                (nunion coll (mapcar #'1+ i) :at start)
+                (finally-return coll))
+
+         ((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion (copy-sequence i) :at start)
+          (nunion (mapcar #'1+ i) :at start))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-end-tracking-accum-opt-start-:at-end
+  :result '(1 2 3 4 5 6 7 8 9 10)
+  :body (loopy (accum-opt (coll start))
+               (array i (vector (list 1 2 3) (list 1 2 3)
+                                (list 4 5 6) (list 7 8 9)))
+               (nunion coll (copy-sequence i) :at end)
+               (nunion coll (mapcar #'1+ i) :at end)
+               (finally-return coll))
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+;; TODO: Fail.  Fix in optimized constructor, same as others.
+(loopy-deftest nunion-end-tracking-accum-opt-end-:at-start
+  :result '(10 8 9 7 5 6 4 1 2 3)
+  :body (loopy (accum-opt (coll end))
+               (array i (vector (list 1 2 3) (list 1 2 3)
+                                (list 4 5 6) (list 7 8 9)))
+               (nunion coll (copy-sequence i) :at start)
+               (nunion coll (mapcar #'1+ i) :at start)
+               (finally-return coll))
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
+
+(loopy-deftest nunion-end-tracking-:at-start-and-end
+  :result '(5 6 3 4 1 2 11 12 13 14 15 16)
+  :multi-body t
+  :body [((array i (vector (list 1 2) (list 3 4) (list 5 6)))
+          (nunion (copy-sequence i) :at start)
+          (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                  :at end))
+
+         ((array i (vector (list 1 2) (list 3 4) (list 5 6)))
+          (nunion coll (copy-sequence i) :at start)
+          (nunion coll (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                  :at end)
+          (finally-return coll))
+
+         ((array i (vector (list 1 2) (list 3 4) (list 5 6)))
+          (nunion (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                  :at end)
+          (nunion (copy-sequence i) :at start))
+
+         ((array i (vector (list 1 2) (list 3 4) (list 5 6)))
+          (nunion coll (mapcar (lambda (x) (+ x 10)) (copy-sequence i))
+                  :at end)
+          (nunion coll (copy-sequence i) :at start)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (array nunion)
+  :iter-bare ((array . arraying)
+              (nunion . nunioning)))
 
 ;;;;; Prepend
-(ert-deftest prepend ()
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend my-list i)
-                                     (finally-return my-list))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepending my-list i)
-                                     (finally-return my-list)))))))
+(loopy-deftest prepend
+  :result '(5 6 3 4 1 2)
+  :multi-body t
+  :body [((list i '((1 2) (3 4) (5 6)))
+          (_cmd my-list i)
+          (finally-return my-list))
 
-(ert-deftest prepend-destructuring ()
-  (should (equal '((5 6 1 2) (7 8 3 4))
-                 (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
-                                     (prepend [my-list1 my-list2] i)
-                                     (finally-return my-list1 my-list2))))))
-  (should (equal '((5 6 1 2) (7 8 3 4))
-                 (eval (quote (loopy (list i '([(1 2) (3 4)] [(5 6) (7 8)]))
-                                     (prepending [my-list1 my-list2] i)
-                                     (finally-return my-list1 my-list2)))))))
+         ((list i '((1 2) (3 4) (5 6)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (prepend prepending)))
+  :iter-keyword ((_cmd . (prepend prepending))
+                 (list . list))
+  :iter-bare ((_cmd . (prepending))
+              (list . listing)))
 
-(ert-deftest prepend-implicit ()
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend i)
-                                     (finally-return loopy-result))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepending i)
-                                     (finally-return loopy-result))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepend i))))))
-  (should (equal '(5 6 3 4 1 2)
-                 (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
-                                     (prepending i)))))))
+(loopy-deftest prepend-destructuring
+  :result '((5 6 1 2) (7 8 3 4))
+  :body ((list i '([(1 2) (3 4)] [(5 6) (7 8)]))
+         (prepend [my-list1 my-list2] i)
+         (finally-return my-list1 my-list2))
+  :loopy t
+  :iter-keyword (list prepend)
+  :iter-bare ((list . listing)
+              (prepend . prepending)))
 
-(defun prepend-append-compat ()
-  (should (equal '(7 6 5 4 3 2 1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '((1) (2) (3) (4) (5) (6)))
-                                     (accum-opt (var end))
-                                     (append var i :at end)
-                                     (prepend var (mapcar #'1+ i) :at start)
-                                     (finally-return var)))))))
+
+(loopy-deftest prepend-append-compat
+  :result '(7 6 5 4 3 2 1 2 3 4 5 6)
+  :multi-body t
+  :body [((list i '((1) (2) (3) (4) (5) (6)))
+          (accum-opt (var end))
+          (append var i :at end)
+          (prepend var (mapcar #'1+ i))
+          (finally-return var))
+
+         ((list i '((1) (2) (3) (4) (5) (6)))
+          (accum-opt (var end))
+          (append i :at end)
+          (prepend (mapcar #'1+ i)))]
+  :loopy t
+  :iter-keyword (list prepend append)
+  :iter-bare ((list . listing)
+              (append . appending)
+              (prepend . prepending)))
 
 ;;;;; Push Into
-(ert-deftest push-into ()
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (push-into coll j)
-                                     (finally-return coll))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (pushing-into coll j)
-                                     (finally-return coll))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (push coll j)
-                                     (finally-return coll))))))
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list j '(1 2 3))
-                                     (pushing coll j)
-                                     (finally-return coll)))))))
+(loopy-deftest push-into
+  :result  '(3 2 1)
+  :multi-body t
+  :body [((list j '(1 2 3))
+          (_cmd coll j)
+          (finally-return coll))
 
-(ert-deftest push-into-destructuring ()
-  (should (equal '((5 3 1) (6 4 2))
-                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
-                                     (push-into (p1 p2) elem)
-                                     (finally-return p1 p2))))))
-  (should (equal '((5 3 1) (6 4 2))
-                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
-                                     (pushing-into (p1 p2) elem)
-                                     (finally-return p1 p2))))))
-  (should (equal '((5 3 1) (6 4 2))
-                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
-                                     (push (p1 p2) elem)
-                                     (finally-return p1 p2))))))
-  (should (equal '((5 3 1) (6 4 2))
-                 (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
-                                     (pushing (p1 p2) elem)
-                                     (finally-return p1 p2)))))))
+         ((list j '(1 2 3))
+          (_cmd j))]
+  :repeat _cmd
+  :loopy ((_cmd . (push-into pushing-into push pushing)))
+  :iter-keyword ((list . list)
+                 (_cmd . (push-into pushing-into push pushing)))
+  :iter-bare ((list . listing)
+              (_cmd . (pushing-into pushing))))
 
-(defun push-into-collect-compat ()
-  (should (equal '(7 6 5 4 3 2 1 2 3 4 5 6)
-                 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                                     (accum-opt (var end))
-                                     (collect var i :at end)
-                                     (push var (1+ i) :at start)
-                                     (finally-return var)))))))
+
+(loopy-deftest push-into-destructuring
+  :result '((5 3 1) (6 4 2))
+  :body ((list elem '((1 2) (3 4) (5 6)))
+         (push-into (p1 p2) elem)
+         (finally-return p1 p2))
+  :loopy t
+  :iter-keyword (list push-into)
+  :iter-bare ((list . listing)
+              (push-into . pushing-into)))
+
+(loopy-deftest push-into-collect-compat
+  :result '(7 6 5 4 3 2 1 2 3 4 5 6)
+  :body ((list i '(1 2 3 4 5 6))
+         (accum-opt (var end))
+         (collect var i :at end)
+         (push-into var (1+ i))
+         (finally-return var))
+  :loopy t
+  :iter-keyword (list push-into collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (push-into . pushing-into)))
 
 ;;;;; Reduce
-(ert-deftest reduce ()
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (reduce r i #'+ :init 0)
-                                 (finally-return r))))))
+(loopy-deftest reduce
+  :result 6
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (_cmd r i #'+ :init 0)
+          (finally-return r))
 
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (callf r i #'+ :init 0)
-                                 (finally-return r))))))
+         ((list i '(1 2 3))
+          (_cmd r i #'+ :init 0)
+          (finally-return r))]
+  :repeat _cmd
+  :loopy ((_cmd . (reduce reducing callf)))
+  :iter-keyword ((list . list)
+                 (_cmd . (reduce reducing callf)))
+  :iter-bare ((list . listing)
+              (_cmd . (reducing))))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reduce r i #'append)
-                                     (finally-return r))))))
+(loopy-deftest reduce-append
+  :result '(1 2 3)
+  :multi-body t
+  :body [((list i '((1) (2) (3)))
+          (reduce r i #'append)
+          (finally-return r))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (let ((func #'append))
-                                (loopy (list i '((1) (2) (3)))
-                                       (reduce r i func)
-                                       (finally-return r)))))))
+         ((with (func #'append))
+          (list i '((1) (2) (3)))
+          (reduce r i func)
+          (finally-return r))]
+  :loopy t
+  :iter-keyword (list reduce)
+  :iter-bare ((list . listing)
+              (reduce . reducing)))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reducing r i #'append)
-                                     (finally-return r)))))))
+(loopy-deftest reduce-destructuring-+
+  :result '(4 6)
+  :body ((list i '((1 2) (3 4)))
+         (reduce (r1 r2) i #'+ :init 0)
+         (finally-return r1 r2))
+  :loopy t
+  :iter-keyword (list reduce)
+  :iter-bare ((list . listing)
+              (reduce . reducing)))
 
-(ert-deftest reduce-destructuring ()
-  (should (equal '(4 6)
-                 (eval (quote (loopy (list i '((1 2) (3 4)))
-                                     (reduce (r1 r2) i #'+ :init 0)
-                                     (finally-return r1 r2))))))
-
-  (should (equal '((1 3) (2 4))
-                 (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
-                                     (reduce [r1 r2] i #'append)
-                                     (finally-return r1 r2))))))
-
-  (should (equal '((1 3) (2 4))
-                 (eval (quote (loopy (list i '([(1) (2)] [(3) (4)]))
-                                     (reducing [r1 r2] i #'append)
-                                     (finally-return r1 r2)))))))
-
-(ert-deftest reduce-implicit ()
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (reduce i #'+ :init 0))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reduce i #'append))))))
-
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1) (2) (3)))
-                                     (reducing i #'append)))))))
+(loopy-deftest reduce-destructuring-append
+  :result '((1 3) (2 4))
+  :body ((list i '([(1) (2)] [(3) (4)]))
+         (reduce [r1 r2] i #'append)
+         (finally-return r1 r2))
+  :loopy t
+  :iter-keyword (list reduce)
+  :iter-bare ((list . listing)
+              (reduce . reducing)))
 
 ;;;;; Set Accum
-(ert-deftest set-accum-setup ()
-  (should (eq 'loopy--parse-set-accum-command
-              (loopy--get-command-parser 'set-accum)))
-  (should (eq 'set-accum (loopy--get-true-name 'setting-accum))))
 
-(ert-deftest set-accum ()
-  (should (= 16 (eval (quote (loopy (list i '(1 2 3))
-                                    (set-accum my-sum (+ my-sum i) :init 10)
-                                    (finally-return my-sum))))))
+(loopy-deftest set-accum-+
+  :result 16
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (_cmd my-sum (+ my-sum i) :init 10)
+          (finally-return my-sum))
 
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (set-accum coll (cons i coll))
-                                     (finally-return coll)))))))
+         ((list i '(1 2 3))
+          (_cmd (+ loopy-result i) :init 10))]
+  :repeat _cmd
+  :loopy ((_cmd . (set-accum setting-accum)))
+  :iter-keyword ((list . list)
+                 (_cmd . (set-accum setting-accum)))
+  :iter-bare ((list . listing)
+              (_cmd . (setting-accum))))
 
-(ert-deftest set-accum-implict ()
-  (should (= 16 (eval (quote (loopy (list i '(1 2 3))
-                                    (set-accum (+ loopy-result i) :init 10))))))
+(loopy-deftest set-accum-cons
+  :result '(3 2 1)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (set-accum coll (cons i coll))
+          (finally-return coll))
 
-  (should (equal '(3 2 1)
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (set-accum (cons i loopy-result))))))))
+         ((list i '(1 2 3))
+          (set-accum (cons i loopy-result)))]
+  :loopy t
+  :iter-keyword (list set-accum)
+  :iter-bare ((list . listing)
+              (set-accum . setting-accum)))
 
-(ert-deftest set-accum-destructuring ()
-  (should (equal '(5 6)
-                 (eval (quote (loopy (array elem [(1 . 2) (3 . 4) (5 . 6)])
-                                     (set-accum (car . cdr) elem)
-                                     (finally-return car cdr)))))))
+(loopy-deftest set-accum-destructuring
+  :result '(9 12)
+  :body ((with (car 0) (cdr 0))
+         (array elem [(1 . 2) (3 . 4) (5 . 6)])
+         (set-accum (car . cdr) (cons (+ car (car elem))
+                                      (+ cdr (cdr elem))))
+         (finally-return car cdr))
+  :loopy t
+  :iter-keyword (array set-accum)
+  :iter-bare ((array . arraying)
+              (set-accum . setting-accum)))
 
 ;;;;; Sum
-(ert-deftest sum ()
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (sum s i)
-                                 (finally-return s))))))
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (summing s i)
-                                 (finally-return s)))))))
+(loopy-deftest sum
+  :result 6
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (_cmd s i)
+          (finally-return s))
+         ((list i '(1 2 3))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((list . list)
+          (_cmd . (sum summing)))
+  :iter-keyword ((list . list)
+                 (_cmd . (sum summing)))
+  :iter-bare ((list . listing)
+              (_cmd . (summing))))
 
-(ert-deftest sum-destructuring ()
-  (should (equal '(5 7 9)
-                 (loopy (list elem '((1 2 3) (4 5 6)))
-                        (sum (sum1 sum2 sum3) elem)
-                        (finally-return sum1 sum2 sum3))))
-  (should (equal '(5 7 9)
-                 (loopy (list elem '((1 2 3) (4 5 6)))
-                        (summing (sum1 sum2 sum3) elem)
-                        (finally-return sum1 sum2 sum3)))))
-
-(ert-deftest sum-implict ()
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (sum i))))))
-  (should (= 6
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (summing i)))))))
+(loopy-deftest sum-destructuring
+  :result '(5 7 9)
+  :body ((list elem '((1 2 3) (4 5 6)))
+         (sum (sum1 sum2 sum3) elem)
+         (finally-return sum1 sum2 sum3))
+  :loopy t
+  :iter-keyword (list sum)
+  :iter-bare ((list . listing)
+              (sum . summing)))
 
 ;;;;; Union
-(ert-deftest union ()
-  ;; TODO: `union' currently has predictable behavior due to the `:at' position,
-  ;;       but it might be worthwhile to remove that predictability for speed in
-  ;;       the future.
-  ;;
-  ;; (should (null (cl-set-difference
-  ;;                '(4 1 2 3)
-  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-  ;;                                    (union var i)))))))
-  ;; (should (null (cl-set-difference
-  ;;                '(4 1 2 3)
-  ;;                (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-  ;;                                    (unioning var i)
-  ;;                                    (finally-return var)))))))
-  ;;
-  ;; (should (null (cl-set-difference
-  ;;                '(4 2 (1 1) 3)
-  ;;                (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-  ;;                                    (unioning var i :test #'equal)
-  ;;                                    (finally-return var))))
-  ;;                :test #'equal)))
-  ;;
-  ;; ;; The resulting list should only have one element whose `car' is `a'.
-  ;; (should (= 1 (cl-count-if (lambda (x) (eq (car x) 'a))
-  ;;                           (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
-  ;;                                               (unioning var i :key #'car)
-  ;;                                               (finally-return var)))))))
 
-  (should (equal '(1 2 3 4)
-                 (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                                     (union var i)
-                                     (finally-return var))))))
+(loopy-deftest union
+  :result '(1 2 3 4)
+  :multi-body t
+  :body [((list i '((1 2) (2 3) (3 4)))
+          (_cmd var i)
+          (finally-return var))
 
-  (should (equal '(1 2 3 4)
-                 (eval (quote (loopy (list i '((1 2) (2 3) (3 4)))
-                                     (unioning var i)
-                                     (finally-return var))))))
+         ((list i '((1 2) (2 3) (3 4)))
+          (_cmd i))]
+  :repeat _cmd
+  :loopy ((_cmd . (union unioning)))
+  :iter-keyword ((list . list)
+                 (_cmd . (union unioning)))
+  :iter-bare ((list . listing)
+              (_cmd . (unioning))))
 
-  (should (equal '((1 1) 2 3 4)
-                 (eval (quote (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-                                     (unioning var i :test #'equal)
-                                     (finally-return var))))))
+(loopy-deftest union-:key
+  :result '((a . 1))
+  :multi-body t
+  :body [(loopy (array i [((a . 1)) ((a . 2))])
+                (union var i :key #'car)
+                (finally-return var))
 
-  (should (equal '((1 1) 2 3 4)
-                 (eval (quote (let ((func #'equal ))
-                                (loopy (list i '(((1 1) 2) ((1 1) 3) (3 4)))
-                                       (unioning var i :test func)
-                                       (finally-return var)))))))
+         (loopy (with (func #'car))
+                (array i [((a . 1)) ((a . 2))])
+                (union i :key func))]
+  :loopy t
+  :iter-keyword (union array)
+  :iter-bare ((union . unioning)
+              (array . arraying)))
 
-  (should (equal '((a . 1))
-                 (eval (quote (loopy (array i [((a . 1)) ((a . 2))])
-                                     (unioning var i :key #'car)
-                                     (finally-return var))))))
+(loopy-deftest union-:test
+  :result '((1 1) 2 3 4)
+  :multi-body t
+  :body [((list i '(((1 1) 2) ((1 1) 3) (3 4)))
+          (union var i :test #'equal)
+          (finally-return var))
 
-  (should (equal '((a . 1))
-                 (eval (quote (let ((func #'car))
-                                (loopy (array i [((a . 1)) ((a . 2))])
-                                       (unioning var i :key func)
-                                       (finally-return var))))))))
+         ((with (func #'equal))
+          (list i '(((1 1) 2) ((1 1) 3) (3 4)))
+          (union i :test func))]
+  :loopy t
+  :iter-keyword (union list)
+  :iter-bare ((union . unioning)
+              (list . listing)))
 
-(ert-deftest union-destructuring ()
-  ;; TODO: `union' currently has predictable behavior due to the `:at' position,
-  ;;       but it might be worthwhile to remove that predictability for speed in
-  ;;       the future.
-  ;;
-  ;; (should (null (cl-destructuring-bind (first second)
-  ;;                   (eval (quote (loopy (array i [((1 2) (2 3))
-  ;;                                                 ((1 2 3) (3 4))])
-  ;;                                       (union (var1 var2) i :test #'equal))))
-  ;;                 (or (clsetdifference first '(1 2 3))
-  ;;                     (clsetdifference second '(2 3 4))))))
-  (should (equal '((1 2 3) (2 3 4))
-                 (eval (quote (loopy (array i [((1 2) (2 3))
-                                               ((1 2 3) (3 4))])
-                                     (union (var1 var2) i :test #'=)
-                                     (finally-return var1 var2)))))))
+(loopy-deftest union-destructuring
+  :result '((1 2 3) (2 3 4))
+  :body ((array i [((1 2) (2 3))
+                   ((1 2 3) (3 4))])
+         (union (var1 var2) i :test #'=)
+         (finally-return var1 var2))
+  :loopy t
+  :iter-keyword (array union)
+  :iter-bare ((array . arraying)
+              (union . unioning)))
 
-(ert-deftest union-at ()
-  (should (equal '((1 2) (3 2) (1 1))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (union i :at end :key #'cl-second))))))
+(loopy-deftest union-:at-end
+  :result '(1 2 3 4 5 6)
+  :multi-body t
+  :body [((list i '((1 2 3) (3 4 5 6)))
+          (union i :at end))
 
-  (should (equal '((1 2) (3 2) (4 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (union i :at end :key #'car))))))
+         ((list i '((1 2 3) (4 5 3 6)))
+          (union coll i :at end)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '((4 2) (1 2) (3 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (union i :at start :key #'car))))))
+(loopy-deftest union-:at-start/beginning
+  :result '(4 5 6 1 2 3)
+  :multi-body t
+  :body [((list i '((1 2 3) (3 4 5 6)))
+          (union i :at start))
+         ((list i '((1 2 3) (3 4 5 6)))
+          (union coll i :at start)
+          (finally-return coll))
+         ((list i '((1 2 3) (3 4 5 6)))
+          (union i :at beginning))
+         ((list i '((1 2 3) (3 4 5 6)))
+          (union coll i :at beginning)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '((4 2) (1 2) (3 2))
-                 (eval (quote (loopy (list i '(((1 2) (3 2)) ((1 1) (4 2))))
-                                     (union c i :at start :key #'car)
-                                     (finally-return c))))))
+(loopy-deftest union-end-tracking-accum-opt-end
+  :result '(4 5 6 1 2 3)
+  :body ((accum-opt (coll end))
+         (list i '((1 2 3) (3 4 5 6)))
+         (union coll i :at start)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
-                                     (union i :test #'equal :at start))))))
+(loopy-deftest union-end-tracking-accum-opt-start
+  :result '(1 2 3 4 6 7)
+  :body ((accum-opt (coll start))
+         (list i '((1 2 3 4) (3 6 4 7)))
+         (union coll i :at end)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '((1 2 3) (1 2 3)))
-                                     (union c i :test #'equal :at start)
-                                     (finally-return c)))))))
+(loopy-deftest union-end-tracking-start-end
+  :doc "Don't overlap. Just check that it combines well."
+  :result '(8 7 6 5 1 2 3 4 11 12 13 14 18 17 16 15)
+  :multi-body t
+  :body [((list i '((1 2 3 4) (8 7 6 5)))
+          (union coll i :at start)
+          (union coll (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (finally-return coll))
 
-(ert-deftest union-end-tracking ()
-  (should (equal '(1 2 3 4 5 6 7 8)
-                 (eval (quote
-                        (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                          (loopy (flag split)
-                                 (list i l1)
-                                 (union i :at end)))))))
+         (loopy (list i '((1 2 3 4) (8 7 6 5)))
+                (union coll (mapcar (lambda (x) (+ x 10)) i) :at end)
+                (union coll i :at start)
+                (finally-return coll))
 
-  (should (equal '(1 2 3 4 5 6 7 8)
-                 (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                   (loopy (flag -split)
-                          (list i l1)
-                          (union i :at end)))))
+         ((list i '((1 2 3 4) (8 7 6 5)))
+          (union i :at start)
+          (union (mapcar (lambda (x) (+ x 10)) i) :at end))
 
-  (should (equal '(1 2 3 4 5 6)
-                 (let ((l1 (list (list 1 2) (list 3 4) (list 4 3) (list 5 6))))
-                   (loopy (list i l1)
-                          (union coll i :at end)
-                          (finally-return coll)))))
+         ((list i '((1 2 3 4) (8 7 6 5)))
+          (union (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (union i :at start))]
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '(1 2 3 4 5 6 7)
-                 (let ((l1 (list (list 1 2) (list 3 4) (list 4 3) (list 5 6))))
-                   (loopy (list i l1)
-                          (union coll i :at end)
-                          (union coll (mapcar #'1+ i) :at end)
-                          (finally-return coll)))))
+(loopy-deftest union-end-tracking-end-twice
+  :result '(1 2 3 4 5 7 6 8)
+  :multi-body t
+  :body [((list i '((1 2 3 4) (7 4 6 3)))
+          (union coll i :at end)
+          (union coll (mapcar (lambda (x) (+ x 1)) i) :at end)
+          (finally-return coll))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (loopy (list i '((1 2) (3 4) (5 6)))
-                        (union i :at start)
-                        (union (mapcar (lambda (x) (+ x 10)) i)
-                               :at end))))
+         ((list i '((1 2 3 4) (7 4 6 3)))
+          (union i :at end)
+          (union (mapcar (lambda (x) (+ x 1)) i) :at end))]
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
-  (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
-                 (loopy (list i '((1 2) (3 4) (5 6)))
-                        (union (mapcar (lambda (x) (+ x 10)) i)
-                               :at end)
-                        (union i :at start)))))
+(loopy-deftest union-not-destructive
+  :doc "Check that `union' doesn't modify the list being unioned."
+  :result t
+  :multi-body t
+  :body [((with (l1 (list (list 1 2 3) (list 3 4 5) (list 5 6 7) (list 7 8 9))))
+          (listing i l1)
+          (union coll i :at start)
+          (finally-return (equal l1 '((1 2 3) (3 4 5) (5 6 7) (7 8 9)))))
 
-(ert-deftest union-not-destructive ()
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (union coll i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((with (l1 (list (list 1 2 3) (list 3 4 5) (list 5 6 7) (list 7 8 9))))
+          (listing i l1)
+          (union coll i :at end)
+          (finally-return (equal l1 '((1 2 3) (3 4 5) (5 6 7) (7 8 9)))))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (union coll i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((with (l1 (list (list 1 2 3) (list 3 4 5) (list 5 6 7) (list 7 8 9))))
+          (listing i l1)
+          (union i :at start)
+          (finally-return (equal l1 '((1 2 3) (3 4 5) (5 6 7) (7 8 9)))))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (list i l1) (union i :at start))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8)))))
+         ((with (l1 (list (list 1 2 3) (list 3 4 5) (list 5 6 7) (list 7 8 9))))
+          (listing i l1)
+          (union i :at end)
+          (finally-return (equal l1 '((1 2 3) (3 4 5) (5 6 7) (7 8 9)))))]
+  :loopy t
+  :iter-keyword (listing union)
+  :iter-bare ((union . unioning)))
 
-  (should (equal (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-                   (loopy (list i l1) (union i :at end))
-                   l1)
-                 '((1 2) (3 4) (5 6) (7 8))))
+(loopy-deftest union-:test-:key
+  :result '((4 2) (1 2) (3 2))
+  :multi-body t
+  :body [((list i '(((1 2) (3 2)) ((1 1) (4 2))))
+          (union var i :at 'start :key #'car)
+          (finally-return var))
 
-  (let ((l1 (list (list 1 2) (list 3 4) (list 5 6) (list 7 8))))
-    (loopy (flag split) (list i l1) (union i :at end))
-    (should (equal l1 '((1 2) (3 4) (5 6) (7 8))))))
+         ((list i '(((1 2) (3 2)) ((1 1) (4 2))))
+          (union i :at 'start :key #'car))]
+  :loopy t
+  :iter-keyword (list union)
+  :iter-bare ((list . listing)
+              (union . unioning)))
 
 ;;;;; Vconcat
-(ert-deftest vconcat ()
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat v elem)
-                                     (finally-return v))))))
+(loopy-deftest vconcat
+  :multi-body t
+  :result [1 2 3 4 5 6 7 8 9 10 11 12]
+  :body [((list elem '([1 2 3 4 5 6]
+                       [7 8 9 10 11 12]))
+          (_cmd v elem)
+          (finally-return v))
 
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcating v elem)
-                                     (finally-return v)))))))
+         ((list elem '([1 2 3 4 5 6]
+                       [7 8 9 10 11 12]))
+          (_cmd elem))]
+  :repeat _cmd
+  :loopy ((_cmd . (vconcat vconcating)))
+  :iter-keyword ((list . listing)
+                 (_cmd . (vconcat vconcating)))
+  :iter-bare ((list . listing)
+              (_cmd . (vconcating))))
 
-(ert-deftest vconcat-destructuring ()
-  (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
-                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
-                                                  ([7 8 9] [10 11 12])))
-                                     (vconcat (v1 v2) elem)
-                                     (finally-return v1 v2))))))
+(loopy-deftest vconcat-destructuring
+  :result '([1 2 3 7 8 9] [4 5 6 10 11 12])
+  :body ((list elem '(([1 2 3] [4 5 6])
+                      ([7 8 9] [10 11 12])))
+         (vconcat (v1 v2) elem)
+         (finally-return v1 v2))
+  :loopy t
+  :iter-keyword (list vconcat)
+  :iter-bare ((list . listing)
+              (vconcat . vconcating)))
 
-  (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
-                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
-                                                  ([7 8 9] [10 11 12])))
-                                     (vconcating (v1 v2) elem)
-                                     (finally-return v1 v2)))))))
+(loopy-deftest vconcat-:at-start/beginning
+  :result [7 8 9 10 11 12 1 2 3 4 5 6]
+  :multi-body t
+  :body  [((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat v elem :at start)
+           (finally-return v))
 
-(ert-deftest vconcat-implict ()
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat elem))))))
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcating elem)))))))
+          ((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat v elem :at beginning)
+           (finally-return v))
 
-(ert-deftest vconcat-at ()
-  (should (equal [7 8 9 10 11 12 1 2 3 4 5 6]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat v elem :at start)
-                                     (finally-return v))))))
+          ((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat elem :at start))
 
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat v elem :at end)
-                                     (finally-return v))))))
+          ((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat elem :at beginning))]
+  :loopy t
+  :iter-keyword (list vconcat)
+  :iter-bare ((list . listing)
+              (vconcat . vconcating)))
 
-  (should (equal [7 8 9 10 11 12 1 2 3 4 5 6]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat elem :at start))))))
+(loopy-deftest vconcat-:at-end
+  :result [1 2 3 4 5 6 7 8 9 10 11 12]
+  :multi-body t
+  :body  [((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat v elem :at end)
+           (finally-return v))
 
-  (should (equal [1 2 3 4 5 6 7 8 9 10 11 12]
-                 (eval (quote (loopy (list elem '([1 2 3 4 5 6]
-                                                  [7 8 9 10 11 12]))
-                                     (vconcat elem :at end))))))
+          ((list elem '([1 2 3 4 5 6]
+                        [7 8 9 10 11 12]))
+           (vconcat elem :at end))]
+  :loopy t
+  :iter-keyword (list vconcat)
+  :iter-bare ((list . listing)
+              (vconcat . vconcating)))
 
-  (should (equal '([1 2 3 7 8 9] [4 5 6 10 11 12])
-                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
-                                                  ([7 8 9] [10 11 12])))
-                                     (vconcat (v1 v2) elem :at end)
-                                     (finally-return v1 v2))))))
+(loopy-deftest vconcat-destr-:at-start
+  :result '([7 8 9 1 2 3] [10 11 12 4 5 6])
+  :body  ((list elem '(([1 2 3] [4 5 6])
+                       ([7 8 9] [10 11 12])))
+          (vconcat (v1 v2) elem :at start)
+          (finally-return v1 v2))
+  :loopy t
+  :iter-keyword (list vconcat)
+  :iter-bare ((list . listing)
+              (vconcat . vconcating)))
 
-  (should (equal '([7 8 9 1 2 3] [10 11 12 4 5 6])
-                 (eval (quote (loopy (list elem '(([1 2 3] [4 5 6])
-                                                  ([7 8 9] [10 11 12])))
-                                     (vconcat (v1 v2) elem :at start)
-                                     (finally-return v1 v2)))))))
+(loopy-deftest vconcat-destr-:at-end
+  :result '([1 2 3 7 8 9] [4 5 6 10 11 12])
+  :body  ((list elem '(([1 2 3] [4 5 6])
+                       ([7 8 9] [10 11 12])))
+          (vconcat (v1 v2) elem :at end)
+          (finally-return v1 v2))
+  :loopy t
+  :iter-keyword (list vconcat)
+  :iter-bare ((list . listing)
+              (vconcat . vconcating)))
 
 ;;;;; Miscellaneous
 ;;; Control Flow
 ;;;; Conditionals
 ;;;;; If
-(ert-deftest if ()
-  (should (equal '((2 4) (1 3))
-                 (loopy (list i '(1 2 3 4))
-                        (if (cl-evenp i)
-                            (collect evens i)
-                          (collect odds i))
-                        (finally-return evens odds)))))
+(loopy-deftest if
+  :result '((2 4) (1 3))
+  :body ((list i '(1 2 3 4))
+         (if (cl-evenp i)
+             (collect evens i)
+           (collect odds i))
+         (finally-return evens odds))
+  :loopy t)
 
 ;;;;; When
 ;; (ert-deftest basic-when-parse ()
 ;;   (should (equal (loopy--parse-conditional-forms 'when 't '((do (+ 1 1))))
 ;;                  '((loopy--main-body when t (progn (+ 1 1)))))))
 
-(ert-deftest recursive-when-test ()
-  (should (equal
-           (eval (quote (loopy (list i (number-sequence 1 10))
-                               (list j '(1 2 3 6 7 8))
-                               (when (cl-evenp i)
-                                 (when (> j i)
-                                   (return (cons j i)))))))
-           '(6 . 4))))
+(loopy-deftest recursive-when-test
+  :result  '(6 . 4)
+  :body ((list i (number-sequence 1 10))
+         (list j '(1 2 3 6 7 8))
+         (when (cl-evenp i)
+           (when (> j i)
+             (return (cons j i)))))
+  :loopy t)
 
-(ert-deftest when-multiple-subcommands ()
-  (should (equal '(2 (1 3))
-                 (loopy (with (counter 0))
-                        (list i '(1 2 3))
-                        (when (cl-oddp i)
-                          (collect odds i)
-                          (do (cl-incf counter)))
-                        (finally-return counter odds)))))
+(loopy-deftest when-multiple-subcommands
+  :result '(2 (1 3))
+  :body ((with (counter 0))
+         (list i '(1 2 3))
+         (when (cl-oddp i)
+           (collect odds i)
+           (do (cl-incf counter)))
+         (finally-return counter odds))
+  :loopy t)
 
-(ert-deftest multi-when-prepend-test ()
-  (should
-   (string=
-    (eval (quote (loopy (with (first-var 2)
-                              (second-var 3))
-                        (seq el [1 2 3 4 5 6 7])
-                        ;; Could also use (do (cond ...)).
-                        (when (zerop (mod el first-var))
-                          (push-into msg-coll (format "Multiple of 2: %d" el)))
-                        (when (zerop (mod el second-var))
-                          (push-into msg-coll (format "Multiple of 3: %d" el)))
-                        (finally-return (string-join (nreverse msg-coll) "\n")))))
-    "Multiple of 2: 2
+(loopy-deftest multi-when-prepend-test
+  :result "Multiple of 2: 2
 Multiple of 3: 3
 Multiple of 2: 4
 Multiple of 2: 6
-Multiple of 3: 6")))
+Multiple of 3: 6"
+  :body ((with (first-var 2)
+               (second-var 3))
+         (seq el [1 2 3 4 5 6 7])
+         ;; Could also use (do (cond ...)).
+         (when (zerop (mod el first-var))
+           (push-into msg-coll (format "Multiple of 2: %d" el)))
+         (when (zerop (mod el second-var))
+           (push-into msg-coll (format "Multiple of 3: %d" el)))
+         (finally-return (string-join (nreverse msg-coll) "\n")))
+  :loopy t)
 
 ;;;;; Unless
-(ert-deftest multi-unless-prepend-test ()
-  (should
-   (string=
-    (eval (quote (loopy (with (first-var 2)
-                              (second-var 3))
-                        (seq el [1 2 3 4 5 6 7])
-                        ;; Could also use (do (cond ...)).
-                        (unless (zerop (mod el first-var))
-                          (push-into msg-coll (format "Not multiple of 2: %d" el)))
-                        (unless (zerop (mod el second-var))
-                          (push-into msg-coll (format "Not multiple of 3: %d" el)))
-                        (finally-return (string-join (nreverse msg-coll) "\n")))))
-    "Not multiple of 2: 1
+(loopy-deftest multi-unless-prepend-test
+  :result "Not multiple of 2: 1
 Not multiple of 3: 1
 Not multiple of 3: 2
 Not multiple of 2: 3
@@ -3653,405 +4566,792 @@ Not multiple of 3: 4
 Not multiple of 2: 5
 Not multiple of 3: 5
 Not multiple of 2: 7
-Not multiple of 3: 7")))
+Not multiple of 3: 7"
+  :body ((with (first-var 2)
+               (second-var 3))
+         (seq el [1 2 3 4 5 6 7])
+         ;; Could also use (do (cond ...)).
+         (unless (zerop (mod el first-var))
+           (push-into msg-coll (format "Not multiple of 2: %d" el)))
+         (unless (zerop (mod el second-var))
+           (push-into msg-coll (format "Not multiple of 3: %d" el)))
+         (finally-return (string-join (nreverse msg-coll) "\n")))
+  :loopy t)
 
 ;;;;; Cond FORMS
-;; (ert-deftest parse-cond-form ()
-;;   (should (equal (loopy--parse-cond-form '(((= a 1)
-;;                                             (do (message "hi")))
-;;                                            ((= b 2)
-;;                                             (return 5))))
-;;                  '((loopy--main-body cond
-;;                                      ((= a 1) (progn (message "hi")))
-;;                                      ((= b 2) (cl-return-from nil 5)))))))
 
-(ert-deftest cond ()
-  (should (equal (eval
-                  (quote
-                   (loopy (list i (number-sequence 0 5))
-                          (cond ((cl-evenp i)
-                                 (push-into evens i)
-                                 (push-into holding-list evens))
-                                (t (push-into odds i)))
-                          (finally-return (list evens odds holding-list)))))
-                 '((4 2 0) (5 3 1) ((4 2 0) (2 0) (0))))))
+(loopy-deftest cond
+  :result '((4 2 0) (5 3 1) ((4 2 0) (2 0) (0)))
+  :body ((list i (number-sequence 0 5))
+         (cond ((cl-evenp i)
+                (push-into evens i)
+                (push-into holding-list evens))
+               (t (push-into odds i)))
+         (finally-return (list evens odds holding-list)))
+  :loopy t)
 
 ;;;; Exiting the Loop Early
 ;;;;; Leave
-(ert-deftest leave ()
-  (should (equal '(1)
-                 (eval (quote (loopy (list i '(1 2))
-                                     (collect i)
-                                     (leave)))))))
+(loopy-deftest leave
+  :result '(1)
+  :body ((list i '(1 2))
+         (collect i)
+         (_cmd))
+  :repeat _cmd
+  :loopy ((list . list)
+          (collect . collect)
+          (_cmd . (leave leaving)))
+  :iter-keyword ((list . list)
+                 (collect . collect)
+                 (_cmd . (leave leaving)))
+  :iter-bare ((list . listing )
+              (collect . collecting)
+              (_cmd . (leaving))))
 
 ;;;;; Leave From
-(ert-deftest leave-from ()
-  (should (equal '([1 2 3])
-                 (eval (quote (loopy outer
-                                     (list i '([1 2 3] [4 5 6]))
-                                     (loopy (array j i)
-                                            (when (= j 5)
-                                              (leave-from outer)))
-                                     (collect i)))))))
+(loopy-deftest leave-from-same
+  :result '([1 2 3])
+  :body (outer
+         (list i '([1 2 3] [4 5 6]))
+         (when (= (aref i 1) 5)
+           (_cmd outer))
+         (collect i))
+  :repeat _cmd
+  :loopy ((_cmd . (leave-from leaving-from)))
+  :iter-keyword ((list . list)
+                 (_cmd . (leave-from leaving-from))
+                 (collect . collect))
+  :iter-bare ((list . listing)
+              (_cmd . (leaving-from))
+              (collect . collecting)))
+
+(loopy-deftest leave-from-inner-loopy
+  :result '([1 2 3])
+  :body (outer
+         (list i '([1 2 3] [4 5 6]))
+         (loopy-test-escape
+          (loopy (array j i)
+                 (when (= j 5)
+                   (leave-from outer))))
+         (collect i))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest leave-from-inner-loopy-iter
+  :result '([1 2 3])
+  :body (outer
+         (list i '([1 2 3] [4 5 6]))
+         (loopy-test-escape
+          (loopy-iter (arraying j i)
+                      (when (= j 5)
+                        (leaving-from outer))))
+         (collect i))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
 ;;;;; Return
-(ert-deftest return ()
-  (should (= 6 (eval (quote (loopy (with  (j 0))
-                                   (do (cl-incf j))
-                                   (when (> j 5)
-                                     (return j))))))))
+(loopy-deftest return
+  :result 6
+  :body ((with  (j 0))
+         (do (cl-incf j))
+         (when (> j 5)
+           (_cmd j)))
+  :repeat _cmd
+  :loopy ((_cmd . (return returning)))
+  :iter-keyword ((_cmd . (return returning))
+                 (do . do))
+  :iter-bare ((_cmd . (returning))
+              (do . progn)))
 
 ;;;;; Return From
-(ert-deftest return-from-single-loop ()
-  (should (= 6
-             (eval (quote (loopy my-loop
-                                 (list i (number-sequence 1 10))
-                                 (when (> i 5)
-                                   (return-from my-loop i))))))))
+(loopy-deftest return-from-single-loop
+  :result 6
+  :body (my-loop
+         (list i (number-sequence 1 10))
+         (when (> i 5)
+           (_cmd my-loop i)))
+  :repeat _cmd
+  :loopy ((_cmd . (return-from returning-from)))
+  :iter-keyword ((_cmd . (return-from returning-from))
+                 (list . list))
+  :iter-bare ((_cmd . (returning-from))
+              (list . listing)))
 
-(ert-deftest return-from-outer-loop ()
-  (should
-   (= 6
-      (eval (quote (loopy outer
-                          ;; Could use ‘sum’ command, but don’t want dependencies.
-                          (with (sum 0))
-                          (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
-                          (do (loopy (list i sublist)
-                                     (do (setq sum (+ sum i)))
-                                     (when (> sum 15)
-                                       (return-from outer i))))))))))
+(loopy-deftest return-from-outer-loop
+  :result 6
+  :multi-body t
+  :body [( outer
+           ;; Could use ‘sum’ command, but don’t want dependencies.
+           (with (sum 0))
+           (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
+           (do (loopy-test-escape
+                (loopy (list i sublist)
+                       (do (setq sum (+ sum i)))
+                       (when (> sum 15)
+                         (return-from outer i))))))
 
-(ert-deftest return-commands-multiple-values ()
-  (should
-   (and
-    (equal '(1 2 3 4)
-           (eval (quote (loopy (return 1 2 3 4)))))
-    (equal '(1 2 3 4)
-           (eval (quote (loopy my-loop (return-from my-loop 1 2 3 4))))))))
+         ( outer
+           ;; Could use ‘sum’ command, but don’t want dependencies.
+           (with (sum 0))
+           (list sublist '((1 2 3 4 5) (6 7 8 9) (10 11)))
+           (do (loopy-test-escape
+                (loopy-iter (listing i sublist)
+                            (setq sum (+ sum i))
+                            (when (> sum 15)
+                              (returning-from outer i))))))]
+  :loopy t
+  :iter-keyword (list do)
+  :iter-bare ((list . listing)
+              (do . progn)))
+
+(loopy-deftest return-commands-multiple-values
+  :result  '(1 2 3 4)
+  :multi-body t
+  :body [((return 1 2 3 4))
+         (my-loop (return-from my-loop 1 2 3 4))]
+  :loopy t
+  :iter-keyword (return return-from)
+  :iter-bare ((return . returning)
+              (return-from . returning-from)))
 
 ;;;;; Skip
-(ert-deftest skip ()
-  (should (cl-every #'cl-oddp
-                    (eval (quote (loopy (seq i (number-sequence 1 10))
-                                        (when (cl-evenp i)
-                                          (skip))
-                                        (push-into my-collection i)
-                                        (finally-return (nreverse my-collection))))))))
+(loopy-deftest skip
+  :result t
+  :body ((seq i (number-sequence 1 10))
+         (when (cl-evenp i)
+           (_cmd))
+         (collect my-collection i)
+         (finally-return
+          (cl-every #'cl-oddp my-collection)))
+  :repeat _cmd
+  :loopy ((_cmd . (skip skipping)))
+  :iter-keyword ((_cmd . (skip skipping))
+                 (seq . seq)
+                 (collect . collect))
+  :iter-bare ((skip . skipping)
+              (seq . seqing)
+              (collect . collecting)))
 
-(ert-deftest skip-from ()
-  (should (equal '((1 2 3) (7 8 9))
-                 (eval (quote (loopy (named outer)
-                                     (array i [(1 2 3) (4 5 6) (7 8 9)])
-                                     (loopy (list j i)
-                                            (if (= 5 j)
-                                                (skip-from outer)))
-                                     (collect i)))
-                       t))))
+(loopy-deftest skip-from
+  :result '((1 2 3) (7 8 9))
+  :body ((named outer)
+         (array i [(1 2 3) (4 5 6) (7 8 9)])
+         (if (= 5 (cl-second i)) (_cmd outer))
+         (collect i))
+  :repeat _cmd
+  :loopy ((_cmd . (skip-from skipping-from)))
+  :iter-keyword ((array . array)
+                 (collect . collect)
+                 (_cmd . (skip-from skipping-from)))
+  :iter-bare ((array . arraying)
+              (collect . collecting)
+              (_cmd . (skipping-from))))
+
+(loopy-deftest skip-from-inner-loopy
+  :result '((1 2 3) (7 8 9))
+  :body ((named outer)
+         (array i [(1 2 3) (4 5 6) (7 8 9)])
+         (loopy-test-escape
+          (loopy (list j i)
+                 (if (= 5 j)
+                     (skip-from outer))))
+         (collect i))
+  :loopy t
+  :iter-bare ((array . arraying)
+              (collect . collecting)))
+
+(loopy-deftest skip-from-inner-loopy-iter
+  :result '((1 2 3) (7 8 9))
+  :body ((named outer)
+         (array i [(1 2 3) (4 5 6) (7 8 9)])
+         (loopy-test-escape
+          (loopy-iter (listing j i)
+                      (if (= 5 j)
+                          (skipping-from outer))))
+         (collect i))
+  :loopy t
+  :iter-bare ((array . arraying)
+              (collect . collecting)))
 
 ;;;;; While
-(ert-deftest while ()
-  (should (equal '(1 2)
-                 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                                     (while (< i 3))
-                                     (collect i)))))))
+(loopy-deftest while
+  :result '(1 2)
+  :body ((list i '(1 2 3 4 5 6))
+         (while (< i 3))
+         (collect i))
+  :loopy t
+  :iter-keyword (list while collect)
+  :iter-bare nil)
 
 ;;;;; Until
-(ert-deftest until ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                                     (until (> i 3))
-                                     (collect i)))))))
+(loopy-deftest until
+  :result '(1 2 3)
+  :body ((list i '(1 2 3 4 5 6))
+         (until (> i 3))
+         (collect i))
+  :loopy t
+  :iter-keyword (list until collect)
+  :iter-bare nil)
+
 
 ;;;;; Always
-(ert-deftest always ()
-  (should (equal t (eval (quote (loopy (list i '(1 2 3 4 5 6))
-				       (always (< i 7)))))))
+(loopy-deftest always-pass
+  :result t
+  :body ((list i '(1 2 3 4 5 6))
+	 (always (< i 7)))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
-  (should (null
-	   (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			       (always (> i 7))))))))
+(loopy-deftest always-fail
+  :result nil
+  :body ((list i '(8 9 10 12 0 13))
+	 (always (> i 7)))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
-(ert-deftest multiple-always ()
-  (should (equal t (eval (quote (loopy (list i '(1 3 5 7))
-                                       (always (cl-oddp i))
-                                       (always (< i 10))))))))
+(loopy-deftest always-multiple-commands
+  :result t
+  :body (loopy (list i '(1 3 5 7))
+               (always (cl-oddp i))
+               (always (< i 10)))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
-(ert-deftest always-var ()
-  (should (equal 4 (lq (list i '(1 2 3))
-                       (always i (numberp i) (1+ i) :into test-var)
-                       (finally-return test-var)))))
+(loopy-deftest always-var
+  :result 4
+  :body ((list i '(1 2 3))
+         (always i (numberp i) (1+ i) :into test-var)
+         (finally-return test-var))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
 ;;;;; Never
-(ert-deftest never ()
-  (should (equal nil
-		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			             (never (> i 0)))))))
+(loopy-deftest never-nil
+  :result nil
+  :body ((list i '(1 2 3 4 5 6))
+	 (never (> i 0)))
+  :loopy t
+  :iter-keyword (list never)
+  :iter-bare ((list . listing)
+              (never . never)))
 
-  (should (equal t
-		 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			             (never (< i 0))))))))
+(loopy-deftest never-t
+  :result t
+  :body ((list i '(1 2 3 4 5 6))
+	 (never (< i 0)))
+  :loopy t
+  :iter-keyword (list never)
+  :iter-bare ((list . listing)
+              (never . never)))
 
-(ert-deftest multiple-never ()
-  (should (equal t (eval (quote (loopy (list i '(1 3 5 7))
-                                       (never (cl-evenp i))
-                                       (never (> i 10))))))))
+(loopy-deftest multiple-never
+  :result t
+  :body (loopy (list i '(1 3 5 7))
+               (never (cl-evenp i))
+               (never (> i 10)))
+  :loopy t
+  :iter-keyword (list never)
+  :iter-bare ((list . listing)
+              (never . never)))
 
-(ert-deftest always-and-never ()
-  ;; A `never' command should not stop `always' from ultimately setting the
-  ;; return value to 2.
-  (should (= 2
-             (eval (quote (loopy (repeat 2)
-                                 (always 2)
-                                 (never nil)))))))
+(loopy-deftest always-and-never
+  :doc "A `never' command should not stop `always' from ultimately setting the return value to 2."
+  :result 2
+  :body ((repeat 2)
+         (always 2)
+         (never nil))
+  :loopy t
+  :iter-keyword (list never repeat)
+  :iter-bare ((list . listing)
+              (never . never)
+              (repeat . repeating)))
 
-(ert-deftest never-var ()
-  (should (equal t (lq (list i '(1 2 3))
-                       (never (not (numberp i)) nil :into test-var)
-                       (finally-return test-var)))))
+(loopy-deftest never-var
+  :result t
+  :body ((list i '(1 2 3))
+         (never (not (numberp i)) nil :into test-var)
+         (finally-return test-var))
+  :loopy t
+  :iter-keyword (list never)
+  :iter-bare ((list . listing)
+              (never . never)))
 
 ;;;;; Thereis
-(ert-deftest thereis ()
-  (should (= 6 (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			           (thereis (and (> i 5) i)))))))
+(loopy-deftest thereis-pass
+  :result 6
+  :body ((list i '(1 2 3 4 5 6))
+	 (thereis (and (> i 5) i)))
+  :loopy t
+  :iter-keyword (list thereis)
+  :iter-bare ((list . listing)
+              (thereis . thereis)))
 
-  (should (= 9 (eval (quote (loopy (list i (number-sequence 1 9))
-			           (thereis (and (> i 8) i)))))))
+(loopy-deftest thereis-fail
+  :result nil
+  :body ((list i '(1 2 3 4 5 6))
+	 (thereis (> i 7)))
+  :loopy t
+  :iter-keyword (list thereis)
+  :iter-bare ((list . listing)
+              (thereis . thereis)))
 
-  (should (null (eval (quote (loopy (list i '(1 2 3 4 5 6))
-			            (thereis (> i 7))))))))
+(loopy-deftest thereis-always-same-var
+  :error loopy-incompatible-accumulations
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (always i)
+          (thereis i))
+         ((list i '(1 2 3))
+          (always i :into test)
+          (thereis i :into test))]
+  :loopy t
+  :iter-keyword (list thereis always)
+  :iter-bare ((list . listing)))
 
-(ert-deftest thereis-incompatiblility ()
-  (should-error (lq (list i '(1 2 3))
-                    (always i)
-                    (thereis i)))
+(loopy-deftest thereis-never-same-var
+  :error loopy-incompatible-accumulations
+  :multi-body t
+  :body  [((list i '(1 2 3))
+           (never i)
+           (thereis i))
+          ((list i '(1 2 3))
+           (never i :into test)
+           (thereis i :into test))]
+  :loopy t
+  :iter-keyword (list thereis never)
+  :iter-bare ((list . listing)))
 
-  (should-error (lq (list i '(1 2 3))
-                    (never i)
-                    (thereis i)))
+(loopy-deftest thereis-always-diff-var
+  :result '(1 11)
+  :body ((list i '(1 2 3))
+         (always i :into test1)
+         (thereis (+ i 10) :into test2))
+  :loopy t
+  :iter-keyword (list thereis always)
+  :iter-bare ((list . listing)))
 
-  (should-error (lq (list i '(1 2 3))
-                    (always i :into test)
-                    (thereis i :into test)))
+(loopy-deftest thereis-never-diff-var
+  :result '(t 11)
+  :body ((list i '(1 2 3))
+         (never (not (numberp i)) :into test1)
+         (thereis (+ i 10) :into test2))
+  :loopy t
+  :iter-keyword (list thereis never)
+  :iter-bare ((list . listing)))
 
-  (should-error (lq (list i '(1 2 3))
-                    (never i :into test)
-                    (thereis i :into test))))
+;;;;; finding
+(loopy-deftest find-pass-notest
+  :result 3
+  :body ((list i '(1 2 3))
+	 (_cmd i (> i 2)))
+  :repeat _cmd
+  :loopy ((_cmd . (find finding)))
+  :iter-keyword ((list . list)
+                 (_cmd . (find finding)))
+  :iter-bare ((list . listing)
+              (_cmd . (finding))))
 
-(ert-deftest thereis-diff-var-compatibility ()
-  (should (equal '(1 11)
-                 (lq (list i '(1 2 3))
-                     (always i :into test1)
-                     (thereis (+ i 10) :into test2))))
+(loopy-deftest find-fail-notest
+  :result nil
+  :body ((list i '(1 2 3))
+	 (find i (> i 4)))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-  (should (equal '(t 11)
-                 (lq (list i '(1 2 3))
-                     (never (not (numberp i)) :into test1)
-                     (thereis (+ i 10) :into test2)))))
+(loopy-deftest find-fail-onfail
+  :result 0
+  :body ((list i '(1 2 3))
+	 (find i (> i 4) :on-failure 0))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-;; finding
-(ert-deftest find ()
-  (should (= 3 (eval (quote (loopy (list i '(1 2 3))
-			           (find i (> i 2)))))))
+(loopy-deftest find-pass-onfail
+  :result 2
+  :body ((list i '(1 2 3))
+	 (find i (> i 1) :on-failure 0))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-  (should-not (eval (quote (loopy (list i '(1 2 3))
-			          (find i (> i 4))))))
+(loopy-deftest find-pass-var
+  :result 2
+  :body ((list i '(1 2 3))
+         (find found i (= i 2))
+         (finally-return found))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-  (should (= 0 (eval (quote (loopy (list i '(1 2 3))
-			           (find i (> i 4) :on-failure 0))))))
+(loopy-deftest find-fail-var
+  :result nil
+  :body ((list i '(1 2 3))
+         (find found i (> i 3))
+         (finally-return found))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-  (should (= 3 (eval (quote (loopy (list i '(1 2 3))
-			           (finding i (> i 2)))))))
+(loopy-deftest find-fail-var-onfail
+  :result "not found"
+  :body  ((list i '(1 2 3))
+          (find whether-found i (> i 4)
+                :on-failure "not found")
+          (finally-return whether-found))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
-  (should-not (eval (quote (loopy (list i '(1 2 3))
-			          (finding i (> i 4))))))
-
-  (should (= 0 (eval (quote (loopy (list i '(1 2 3))
-			           (finding i (> i 4) :on-failure 0))))))
-
-  (should (= 2 (eval (quote (loopy (list i '(1 2 3))
-                                   (finding found i (= i 2))
-                                   (finally-return found))))))
-
-  (should (equal "not found"
-                 (eval (quote (loopy (list i '(1 2 3))
-                                     (finding whether-found i (> i 4)
-                                              :on-failure "not found")
-                                     (finally-return whether-found)))))))
+(loopy-deftest find-pass-var-onfail
+  :result 2
+  :body  ((list i '(1 2 3))
+          (find whether-found i (> i 1)
+                :on-failure "not found")
+          (finally-return whether-found))
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
 
 ;;; Custom Commands
-(ert-deftest custom-command-sum ()
-  (let ((loopy-command-parsers
-         (map-insert loopy-command-parsers 'target-sum #'my-loopy-sum-command)))
+(loopy-deftest custom-command-sum
+  :doc "Wrapping with another eval to make sure variables are set by expansion time."
+  :wrap ((x . `(cl-labels ((my-loopy-sum-command ((_ target &rest items))
+                             "Set TARGET to the sum of ITEMS."
+                             `((loopy--iteration-vars (,target nil))
+                               (loopy--main-body (setq ,target (apply #'+ (list ,@items)))))))
+                 (let ((loopy-command-parsers
+                        (map-insert loopy-command-parsers 'target-sum
+                                    #'my-loopy-sum-command))
+                       (loopy-iter-bare-commands (cons 'target-sum
+                                                       loopy-iter-bare-commands)))
+                   (eval (quote ,x) t)))))
+  :result 6
+  :body ((target-sum my-target 1 2 3)
+         (return nil)
+         (finally-return my-target))
+  :loopy t
+  :iter-keyword (target-sum return)
+  :iter-bare ((return . returning)))
 
-    (cl-defun my-loopy-sum-command ((_ target &rest items))
-      "Set TARGET to the sum of ITEMS."
-      `((loopy--iteration-vars (,target nil))
-        (loopy--main-body (setq ,target (apply #'+ (list ,@items))))))
+(loopy-deftest custom-command-always-pass
+  :doc "Wrapping with another eval to make sure variables are set by expansion time.
+Also tests that post-conditions work as expected."
+  :wrap ((x . `(cl-labels ((my--loopy-always-command-parser ((_ &rest conditions))
+                             "Parse a command of the form `(always [CONDITIONS])'.
+If any condition is `nil', `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+                             ;; Return t if loop completes successfully.
+                             `((loopy--after-do (cl-return t))
+                               ;; Check all conditions at the end of the loop
+                               ;; body, forcing an exit if any evaluate to nil.
+                               ;; Since the default return value of the macro is
+                               ;; nil, we don’t need to do anything else.
+                               ;;
+                               ;; NOTE: We must not add anything to
+                               ;;       `loopy--final-return', since that would
+                               ;;       override the value of any early returns.
+                               ,@(cl-loop
+                                  for condition in conditions
+                                  collect `(loopy--post-conditions ,condition)))))
+                 (let ((loopy-command-parsers
+                        (map-insert loopy-command-parsers 'target-sum
+                                    #'my--loopy-always-command-parser))
+                       (loopy-iter-bare-commands (cons 'always
+                                                       loopy-iter-bare-commands)))
+                   (eval (quote ,x) t)))))
+  :result t
+  :body ((list i (number-sequence 1 9))
+         (always (< i 10)))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
-    (should (= 6
-               (eval (quote (loopy  (target-sum my-target 1 2 3)
-                                    (return nil)
-                                    (finally-return my-target))))))))
-
-;; NOTE: Also tests that post-conditions work as expected.
-(ert-deftest custom-command-always ()
-  (let ((loopy-command-parsers
-         (map-insert loopy-command-parsers
-                     'always #'my--loopy-always-command-parser)))
-
-    (cl-defun my--loopy-always-command-parser ((_ &rest conditions))
-      "Parse a command of the form `(always [CONDITIONS])'.
-     If any condition is `nil', `loopy' should immediately return nil.
-     Otherwise, `loopy' should return t."
-      (let (instructions)
-        ;; Return t if loop completes successfully.
-        (push `(loopy--after-do (cl-return t)) instructions)
-        ;; Check all conditions at the end of the loop body, forcing an exit if any
-        ;; evaluate to nil.  Since the default return value of the macro is nil, we
-        ;; don’t need to do anything else.
-        ;;
-        ;; NOTE: We must not add anything to `loopy--final-return', since that
-        ;;       would override the value of any early returns.
-        (dolist (condition conditions)
-          (push `(loopy--post-conditions ,condition) instructions))
-        instructions))
-
-    ;; One condition: => t
-    (should (and
-             (eval (quote
-                    (loopy (list i (number-sequence 1 9)) (always (< i 10)))))
-
-             ;; Two conditions: => nil
-             (not (eval (quote
-                         (loopy (list i (number-sequence 1 9))
-                                (list j '(2 4 6 8 9))
-                                (always (< i 10) (cl-evenp j))))))))))
+(loopy-deftest custom-command-always-fail
+  :doc "Wrapping with another eval to make sure variables are set by expansion time.
+Also tests that post-conditions work as expected."
+  :wrap ((x . `(cl-labels ((my--loopy-always-command-parser ((_ &rest conditions))
+                             "Parse a command of the form `(always [CONDITIONS])'.
+If any condition is `nil', `loopy' should immediately return nil.
+Otherwise, `loopy' should return t."
+                             ;; Return t if loop completes successfully.
+                             `((loopy--after-do (cl-return t))
+                               ;; Check all conditions at the end of the loop
+                               ;; body, forcing an exit if any evaluate to nil.
+                               ;; Since the default return value of the macro is
+                               ;; nil, we don’t need to do anything else.
+                               ;;
+                               ;; NOTE: We must not add anything to
+                               ;;       `loopy--final-return', since that would
+                               ;;       override the value of any early returns.
+                               ,@(cl-loop
+                                  for condition in conditions
+                                  collect `(loopy--post-conditions ,condition)))))
+                 (let ((loopy-command-parsers
+                        (map-insert loopy-command-parsers 'target-sum
+                                    #'my--loopy-always-command-parser))
+                       (loopy-iter-bare-commands (cons 'always
+                                                       loopy-iter-bare-commands)))
+                   (eval (quote ,x) t)))))
+  :result nil
+  :body ((list i (number-sequence 1 9))
+         (list j '(2 4 6 8 9))
+         (always (< i 10) (cl-evenp j)))
+  :loopy t
+  :iter-keyword (list always)
+  :iter-bare ((list . listing)
+              (always . always)))
 
 ;;; Repeated evaluation of macro
 
 ;; This was an odd case reported by a user. See:
 ;; https://github.com/okamsn/loopy/issues/17
 (ert-deftest evaluate-function-twice ()
+  ;; Emacs 27 had a byte-compilation error that was fixed in
+  ;; commit a0f60293d79cda858c033db4ae074e5e5560aab2.
+  ;; See: https://git.savannah.gnu.org/cgit/emacs.git/commit/?id=a0f60293d97cda858c033db4ae074e5e5560aab2.
+  :expected-result (if (= emacs-major-version 27)
+                       :failed
+                     :passed)
   (should
    (progn
      (defun mu4e:other-path ()
        "Return load-path for mu4e.
 This assumes that you're on guix."
-       (loopy (with (regexp "Documents")
-	            (base-dir (expand-file-name "~/")))
-	      (list file (directory-files base-dir))
-	      (expr full-path (expand-file-name file base-dir))))
+       (with-suppressed-warnings ((unused . (regexp base-dir)))
+         (loopy (with (regexp "Documents")
+	              (base-dir (expand-file-name "~/")))
+	        (list file (directory-files base-dir))
+	        (set full-path (expand-file-name file base-dir)))))
      (mu4e:other-path)
      ;; If an `nreverse' goes bad, then the function value of `mu4e:other-path'
      ;; might be changed (somehow), which causes an error.
      (eq nil (mu4e:other-path)))))
 
+(loopy-deftest evaluate-function-twice-2
+  :doc "Not sure if using `cl-labels' woudl prevent the error, so keep original test."
+  :result t
+  :wrap ((x . `(cl-labels ((mu4e:other-path ()
+                             (with-suppressed-warnings
+                                 ((unused . (regexp base-dir)))
+                               ,x)))
+                 (mu4e:other-path)
+                 ;; If an `nreverse' goes bad, then the function value of
+                 ;; `mu4e:other-path' might be changed (somehow), which causes an
+                 ;; error.
+                 (eq nil (mu4e:other-path)))))
+  :body ((with (regexp "Documents")
+	       (base-dir (expand-file-name "~/")))
+	 (list file (directory-files base-dir))
+	 (set full-path (expand-file-name file base-dir)))
+  :loopy t
+  :iter-keyword (list set)
+  :iter-bare ((list . listing)
+              (set . setting)))
+
 ;;; Custom Aliases
-(ert-deftest custom-alias-flag ()
-  (let ((loopy-aliases (map-copy loopy-aliases)))
-    (loopy-defalias f flag)
-    (should (equal '((1) (2))
-                   (eval (quote (loopy (f split)
-                                       (list i '(1))
-                                       (collect i)
-                                       (collect (1+ i)))))))))
+(loopy-deftest custom-alias-flag
+  :result '((1) (2))
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'f loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias f flag)
+                 (eval (quote ,x) t))))
+  :body ((f split)
+         (list i '(1))
+         (collect i)
+         (collect (1+ i)))
+  :loopy t
+  :iter-keyword (list collect f)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
 
-(ert-deftest custom-aliases-with ()
-  (let ((loopy-aliases ))
-    (loopy-defalias as with)
-    (should (= 1
-               (eval (quote (loopy (as (a 1))
-                                   (return a))))))))
+(loopy-deftest custom-alias-with
+  :result 1
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'as loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias as with)
+                 (eval (quote ,x) t))))
+  :body ((as (a 1))
+         (return a))
+  :loopy t
+  :iter-keyword (as return)
+  :iter-bare ((as . as)
+              (return . returning)))
 
-(ert-deftest custom-aliases-without ()
-  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
-                 (loopy-defalias 'ignore 'without)
-                 (should (= 5 (let ((a 1)
-                                    (b 2))
-                                (loopy (ignore a b)
-                                       (repeat 1)
-                                       (expr a 2)
-                                       (expr b 3))
-                                (+ a b))))))))
+(loopy-deftest custom-alias-without
+  :result 5
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'ignore loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias ignore without)
+                 (eval  (quote (let ((a 1)
+                                     (b 2))
+                                 ,x
+                                 (+ a b)))
+                        t))))
+  :body ((ignore a b)
+         (repeat 1)
+         (set a 2)
+         (set b 3))
+  :loopy t
+  :iter-keyword (ignore repeat set)
+  :iter-bare ((ignore . ignore)
+              (repeat . repeating)
+              (set . setting)))
 
-(ert-deftest custom-aliases-before-do ()
-  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
-                 (loopy-defalias 'precode 'before-do)
-                 (should (= 7 (loopy (with (i 2))
-                                     (precode (setq i 7))
-                                     (return i))))))))
+(loopy-deftest custom-alias-before-do
+  :result 7
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'precode loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias precode before-do)
+                 (eval (quote ,x) t))))
+  :body ((with (i 2))
+         (precode (setq i 7))
+         (return i))
+  :loopy t
+  :iter-keyword (precode return)
+  :iter-bare ((precode . precode)
+              (return . returning)))
 
-(ert-deftest custom-aliases-after-do ()
-  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
+(loopy-deftest custom-alias-after-do
+  :result t
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'postcode loopy-iter-bare-special-macro-arguments)))
                  (loopy-defalias postcode after-do)
-                 (should (loopy (with (my-ret nil))
-                                (list i '(1 2 3 4))
-                                (postcode (setq my-ret t))
-                                (finally-return my-ret)))))))
+                 (eval (quote ,x) t))))
+  :body ((with (my-ret nil))
+         (list i '(1 2 3 4))
+         (postcode (setq my-ret t))
+         (finally-return my-ret))
+  :loopy t
+  :iter-keyword (list postcode)
+  :iter-bare ((postcode . postcode)
+              (list . listing)))
 
-(ert-deftest custom-aliases-finally-do ()
-  (eval (quote (let ((loopy-aliases (map-copy loopy-aliases)))
-                 (loopy-defalias 'fd finally-do)
-                 (should
-                  (= 10
-                     (let (my-var)
-                       (loopy (list i (number-sequence 1 10))
-                              (fd (setq my-var i)))
-                       my-var)))))))
+(loopy-deftest custom-alias-finally-do
+  :result 10
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'fd loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias fd finally-do)
+                 (eval (quote (let (my-var)
+                                ,x
+                                my-var))
+                       t))))
+  :body ((list i (number-sequence 1 10))
+         (fd (setq my-var i)))
+  :loopy t
+  :iter-keyword (list fd)
+  :iter-bare ((fd . fd)
+              (list . listing)))
 
-(ert-deftest custom-aliases-finally-return ()
-  (eval (quote (let ((loopy-aliases  (map-copy loopy-aliases)))
-                 (loopy-defalias fr 'finally-return)
-                 (should (= 10
-                            (loopy (list i (number-sequence 1 10))
-                                   (fr i))))))))
+(loopy-deftest custom-alias-finally-return
+  :result 10
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-special-macro-arguments
+                      (cons 'fr loopy-iter-bare-special-macro-arguments)))
+                 (loopy-defalias fr finally-return)
+                 (eval (quote ,x)
+                       t))))
+  :body ((list i (number-sequence 1 10))
+         (fr i))
+  :loopy t
+  :iter-keyword (list fr)
+  :iter-bare ((fr . fr)
+              (list . listing)))
 
-(ert-deftest custom-aliases-list ()
-  (let ((loopy-aliases nil))
-    (should (progn
-              (loopy-defalias l list)
-              t))
-    (should (progn
-              (loopy-defalias a 'array)
-              t))
-    (should (equal '((1 . 4) (2 . 5) (3 . 6))
-                   (eval (quote (loopy (l i '(1 2 3))
-                                       (a j [4 5 6])
-                                       (collect (cons i j)))))))))
+(loopy-deftest custom-alias-list-array
+  :result '((1 . 4) (2 . 5) (3 . 6))
+  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
+                     (loopy-iter-bare-commands
+                      (append (list 'l 'a) loopy-iter-bare-commands)))
+                 (loopy-defalias l list)
+                 (loopy-defalias a 'array)
+                 (eval (quote ,x)
+                       t))))
+  :body ((l i '(1 2 3))
+         (a j [4 5 6])
+         (collect (cons i j)))
+  :loopy t
+  :iter-keyword (l a collect)
+  :iter-bare ((l . l)
+              (a . a)
+              (collect . collecting)))
+
 
 ;;; Clean Up Variables
-(ert-deftest clean-stack-variables ()
-  (let (loopy--known-loop-names
-        loopy--accumulation-places
-        loopy--at-instructions
-        loopy--accumulation-list-end-vars
-        loopy--accumulation-variable-info)
-    (should (equal '((3 4) (1 2) 1 2 3 4)
-                   (eval (quote (loopy my-loop
-                                       (array i [(1 2) (3 4)])
-                                       (collect i :at start)
-                                       (loopy inner
-                                              (list j i)
-                                              (at my-loop (collect j :at end))))))))
-    (should-not (or loopy--known-loop-names
-                    loopy--accumulation-places
-                    loopy--at-instructions
-                    loopy--accumulation-list-end-vars
-                    loopy--accumulation-variable-info))))
+(loopy-deftest clean-stack-variables
+  :result nil
+  :wrap ((x . `(let (loopy--known-loop-names
+                     loopy--accumulation-places
+                     loopy--at-instructions
+                     loopy--accumulation-list-end-vars
+                     loopy--accumulation-variable-info)
+                 (eval (quote ,x) t)
+                 (or loopy--known-loop-names
+                     loopy--accumulation-places
+                     loopy--at-instructions
+                     loopy--accumulation-list-end-vars
+                     loopy--accumulation-variable-info))))
+  :multi-body t
+  :body [(my-loop (array i [(1 2) (3 4)])
+                  (collect i :at start)
+                  (loopy-test-escape
+                   (loopy inner
+                          (list j i)
+                          (at my-loop (collect j :at end)))))
 
-(ert-deftest clean-var-variables ()
-  (eval (quote (let ((i  'good))
-                 (loopy (list i '(1 2 3)))
-                 (eq i 'good)))
-        t)
+         (my-loop (array i [(1 2) (3 4)])
+                  (collect i :at start)
+                  (loopy-test-escape
+                   (loopy-iter inner
+                               (listing j i)
+                               (at my-loop (collecting j :at end)))))]
+  :loopy t
+  :iter-keyword (array collect)
+  :iter-bare ((array . arraying)
+              (collect . collecting)))
 
-  (eval (quote (let ((i  'good))
-                 (loopy (cycle 1)
-                        (set i 'bad))
-                 (eq i 'good)))
-        t))
+(loopy-deftest clean-var-variables-1
+  :result 'good
+  :wrap ((x . `(let ((i 'good)) ,x i)))
+  :body ((list i '(1 2 3)))
+  :loopy t
+  :iter-keyword (list)
+  :iter-bare ((list . listing)))
 
+(loopy-deftest clean-var-variables-2
+  :result 'good
+  :wrap ((x . `(let ((i 'good)) ,x i)))
+  :body ((cycle 1)
+         (set i 'bad))
+  :loopy t
+  :iter-keyword (list cycle)
+  :iter-bare ((list . listing)
+              (cycle . cycling)))
 
 ;; Local Variables:
 ;; End:
-;; LocalWords:  destructurings
+;; LocalWords:  destructurings backquote

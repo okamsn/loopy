@@ -87,31 +87,6 @@
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
-;;;; Errors
-(define-error 'loopy-error
-  "Error in `loopy' macro")
-
-(define-error 'loopy-unknown-command
-  "Loopy: Unknown command"
-  'loopy-error)
-
-(define-error 'loopy-wrong-number-of-command-arguments
-  "Loopy: Wrong number of command arguments"
-  '(loopy-error wrong-number-of-arguments))
-
-(define-error 'loopy-bad-command-arguments
-  "Loopy: Bad command arguments"
-  'loopy-error)
-
-(defun loopy--signal-bad-iter (used-name true-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
-              used-name true-name))
-
-(defun loopy--signal-must-be-top-level (command-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
-
 ;;;; Helpful Functions
 
 ;;;;; Manipulating Instructions
@@ -603,13 +578,15 @@ instructions:
 
                ;; Validate any keyword arguments:
                (unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
-                 (error "Wrong number of arguments or wrong keywords: %s" cmd))))
+                 (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                         (list cmd)))))
 
          ,(when (consp other-vals)
             `(unless (cl-member (length other-vals)
                                 (quote ,other-vals)
                                 :test #'=)
-               (error "Wrong number of arguments or wrong keywords: %s" cmd)))
+               (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                       (list cmd))))
 
          (ignore cmd name
                  ;; We can only ignore variables if they're defined.
@@ -644,7 +621,7 @@ iteration command.  The supported keywords are:
               (< 1 (cl-count-if #'identity (list to upto downto above below)))
               (and downfrom below)
               (and upfrom above))
-      (error "Conflicting arguments: %s" plist))
+      (signal 'loopy-conflicting-command-arguments (list plist)))
 
     (let ((decreasing (or downfrom downto above)))
 
@@ -653,7 +630,7 @@ iteration command.  The supported keywords are:
       ;; :below is only for when the value in increasing.
       (when (or (and below decreasing)
                 (and above (not decreasing)))
-        (error "Conflicting arguments: %s" plist))
+        (signal 'loopy-conflicting-command-arguments (list plist)))
 
       `(,@(when-let ((start (or from upfrom downfrom)))
             `(:start ,start))
@@ -1016,7 +993,7 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
       (when (or (and explicit-start key-start)
                 (and explicit-end key-end)
                 (and explicit-by key-by))
-        (error "Conflicting command options given: %s" cmd))
+        (signal 'loopy-conflicting-command-arguments (list cmd)))
 
       (let* ((end (or explicit-end key-end))
              (end-val-holder (gensym "nums-end"))
@@ -1091,7 +1068,7 @@ This is for increasing indices.
   :instructions
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
-      (error "Conflicting command options given: %s" cmd))
+      (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
      `(numbers ,var ,val
                :upto ,(cl-first other-vals)
@@ -1112,7 +1089,7 @@ This is for decreasing indices.
   :instructions
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
-      (error "Conflicting command options given: %s" cmd))
+      (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
      `(numbers ,var ,val
                :downto ,(cl-first other-vals)
@@ -1388,7 +1365,7 @@ like the `:result-type' keyword argument of commands like
 - `boolean-thereis' is only used by the `thereis' command.
 - `boolean-always-never' is only used by the `always' and `never' commands."
   (unless (memq category loopy--known-accumulation-categories)
-    (error "Bad accumulation description: %s" category))
+    (signal 'loopy-bad-accum-category (list category)))
 
   (let ((key (cons loop-name variable)))
     (if-let ((existing-description
@@ -1397,9 +1374,9 @@ like the `:result-type' keyword argument of commands like
         (seq-let (existing-category existing-command)
             existing-description
           (unless (eq category existing-category)
-            (error "Loopy: Incompatible accumulation commands:\n%s\n%s"
-                   existing-command
-                   command)))
+            (signal 'loopy-incompatible-accumulations
+                    (list existing-command
+                          command))))
       (push (cons key (list category command))
             loopy--accumulation-variable-info))))
 
@@ -1597,40 +1574,7 @@ second pass of macro expansion."
               (loopy--process-instructions
                `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
               (macroexp-progn main-body))
-          (error "No accumulation constructor for command or alias: %s" name))))))
-
-(defun loopy--get-optimized-accum (plist)
-  "Produce accumulation expansion.  Non-main-body instructions are processed.
-
-PLIST is a list with at least the keys `:cmd' and `:loop'.  Then
-entire plist is passed to the constructor found in
-`loopy--accumulation-constructors'."
-  (loopy--plist-bind (:name name :loop loop)
-      plist
-    (let ((true-name (loopy--get-true-name name)))
-      (seq-let (main-body other-instrs)
-          (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
-              (loopy--extract-main-body (funcall func plist))
-            (error "No accumulation constructor for command or alias: %s" name))
-        (loopy--process-instructions
-         `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
-        (macroexp-progn main-body)))))
-
-(defun loopy--accum-code-expansion (form)
-  "Aggressively search for uses of the symbol `loopy--optimized-accum' in FORM.
-
-This symbol is used like a function to mark places where it
-should be replaced by optimized accumulation code.  It is assumed
-that such places are the only possible use of the symbol."
-  (cond
-   ((atom form)
-    form)
-   ((eq (cl-first form) 'loopy--optimized-accum)
-    ;; Get the data list within the single quoted argument.
-    (loopy--get-optimized-accum (cl-second (cl-second form))))
-   (t
-    (cons (cl-first form)
-          (mapcar #'loopy--accum-code-expansion (cl-rest form))))))
+          (signal 'loopy-accum-constructor-missing (list name)))))))
 
 (cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
   "Keep track of where things are being placed.
@@ -1638,16 +1582,14 @@ that such places are the only possible use of the symbol."
 LOOP is the current loop.  VAR is the accumulation variable.
 PLACE is one of `start' or `end'.  VALUE is the integer by which
 to increment the count (default 1)."
-  (unless (memq loop loopy--known-loop-names)
-    (error "Unknown loop name: %s" loop))
+  (loopy--check-target-loop-name loop)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
     (setq place (loopy--normalize-symbol place))
     (when (eq place 'beginning) (setq place 'start))
-    (unless (memq place '(start end beginning))
-      (error "Bad place: %s" place))
+    (loopy--check-position-name place)
     (cl-incf (map-elt (map-elt loop-map var) place) value)))
 
 ;;;;;; Commands
@@ -1755,7 +1697,8 @@ you can use in the instructions:
               ((= arg-length ,implicit-num-args)
                (unless (loopy--only-valid-keywords-p (quote ,(cons :into keywords))
                                                      opts)
-                 (error "Wrong number of arguments or wrong keywords: %s" cmd))
+                 (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                         (list cmd)))
                (let* ((into-var (plist-get opts :into))
                       (var (or into-var
                                (and loopy--split-implied-accumulation-results
@@ -1791,7 +1734,8 @@ you can use in the instructions:
               ((= arg-length ,explicit-num-args)
                ,(when keywords
                   `(unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
-                     (error "Wrong number of arguments or wrong keywords: %s" cmd)))
+                     (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                             (list cmd))))
                (let ((var (cl-first args))
                      (val (cl-second args)))
                  (ignore var val)
@@ -1809,7 +1753,8 @@ you can use in the instructions:
                         loopy--loop-name var (quote ,explicit-category) cmd))
                    ,explicit)))
               (t
-               (error "Wrong number of arguments or wrong keywords: %s" cmd))))))))
+               (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                       (list cmd)))))))))
 
 
 ;;;;;;; Accumulate
@@ -1838,7 +1783,7 @@ you can use in the instructions:
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'adjoin)
       (let* ((val-is-expression (not (symbolp val)))
              (value-holder (if val-is-expression
                                (gensym "adjoin-value")
@@ -1909,7 +1854,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           result-type (loopy--normalize-symbol result-type))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
 
     (if (memq var loopy--optimized-accum-vars)
         (progn
@@ -1952,7 +1897,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 ,@(loopy--produce-adjoin-end-tracking var value-holder
                                                       membership-test))))
            (t
-            (error "Bad `:at' position: %s" cmd)))
+            (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates
          (,var . ,(if (eq result-type 'list)
                       nil
@@ -1967,7 +1912,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           result-type (loopy--normalize-symbol result-type))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
@@ -1986,7 +1931,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     (setq pos (loopy--get-quoted-symbol pos))
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'append)
       (if (>= start end)
           ;; Create list in normal order.
           (progn
@@ -2016,7 +1961,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2036,7 +1981,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
            ((member pos '(end 'end))
             (loopy--produce-multi-item-end-tracking var val))
            (t
-            (error "Bad `:at' position: %s" cmd)))
+            (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end))
@@ -2044,7 +1989,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--main-body
@@ -2063,7 +2008,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     `((loopy--accumulation-vars (,var nil))
       ,@(map-let (('start start)
                   ('end end))
-            (map-nested-elt loopy--accumulation-places (list loop var))
+            (loopy--get-accum-counts loop var 'collect)
           (if (>= start end)
               ;; Create list in normal order.
               (progn
@@ -2102,7 +2047,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     result-type (loopy--normalize-symbol result-type))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2120,7 +2065,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                      ((member pos '(end 'end))
                       (loopy--produce-collect-end-tracking var val))
                      (t
-                      (error "Bad `:at' position: %s" cmd)))
+                      (signal 'loopy-bad-position-command-argument (list pos cmd))))
                   (loopy--vars-final-updates
                    (,var . ,(if (eq result-type 'list)
                                 nil
@@ -2136,7 +2081,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     result-type (loopy--normalize-symbol result-type))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--main-body
                  (loopy--optimized-accum
@@ -2149,13 +2094,13 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 (defun loopy--construct-accum-concat (plist)
   "Create accumulation code for `concat' from PLIST.
 
-This function is called by `loopy--get-optimized-accum'."
+This function is called by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'concat)
       ;; Forward list order.
       (if (>= start end)
           (progn
@@ -2198,14 +2143,14 @@ This function is called by `loopy--get-optimized-accum'."
                            ((member pos '(end 'end))
                             `(concat ,var ,val))
                            (t
-                            (error "Bad `:at' position: %s" cmd)))))
+                            (signal 'loopy-bad-position-command-argument (list pos cmd))))))
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
@@ -2253,7 +2198,7 @@ This function is called by `loopy--get-optimized-accum'."
                    `(loopy--vars-final-updates
                      (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
-                   (test-form (if (loopy--quoted-symbol-p test-arg)
+                   (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
                    (on-failure (plist-get opts :on-failure))
@@ -2340,8 +2285,7 @@ VAR."
       plist
     (map-let (('start start)
               ('end end))
-        (or (map-nested-elt loopy--accumulation-places (list loop var))
-            (error "Failed to set up counters: nconc"))
+        (loopy--get-accum-counts loop var 'nconc)
       ;; Forward list order.
       (if (>= start end)
           (progn
@@ -2366,7 +2310,7 @@ VAR."
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2383,14 +2327,14 @@ VAR."
                      ((member pos '(end 'end))
                       (loopy--produce-multi-item-end-tracking var val 'destructive))
                      (t
-                      (error "Bad `:at' position: %s" cmd)))
+                      (signal 'loopy-bad-position-command-argument (list pos cmd))))
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body (loopy--optimized-accum
@@ -2402,15 +2346,14 @@ VAR."
 (defun loopy--construct-accum-nunion (plist)
   "Create accumulation code for `nunion' from PLIST.
 
-This function is used by `loopy--get-optimized-accum'."
+This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
     (let ((test-method (loopy--get-union-test-method var key test)))
       (map-let (('start start)
                 ('end end))
-          (or (map-nested-elt loopy--accumulation-places (list loop var))
-              (error "Failed to set up counters: nconc"))
+          (loopy--get-accum-counts loop var 'nunion)
         ;; Forward list order.
         (if (>= start end)
             (progn
@@ -2441,7 +2384,7 @@ This function is used by `loopy--get-optimized-accum'."
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2460,7 +2403,7 @@ This function is used by `loopy--get-optimized-accum'."
              ((member pos '(end 'end))
               (loopy--produce-union-end-tracking var val test-method 'destructive))
              (t
-              (error "Bad `:at' position: %s" cmd))))
+              (signal 'loopy-bad-position-command-argument (list pos cmd)))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
@@ -2468,7 +2411,7 @@ This function is used by `loopy--get-optimized-accum'."
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
@@ -2539,15 +2482,14 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
 (defun loopy--construct-accum-union (plist)
   "Create accumulation code for `nunion' from PLIST.
 
-This function is used by `loopy--get-optimized-accum'."
+This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
     (let ((test-method (loopy--get-union-test-method var key test)))
       (map-let (('start start)
                 ('end end))
-          (or (map-nested-elt loopy--accumulation-places (list loop var))
-              (error "Failed to set up counters: nconc"))
+          (loopy--get-accum-counts loop var 'union)
         ;; Forward list order.
         (if (>= start end)
             (progn
@@ -2564,7 +2506,8 @@ This function is used by `loopy--get-optimized-accum'."
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
           `(,@(if (eq pos 'start)
-                  (loopy--produce-union-end-tracking var val test-method)
+                  (loopy--produce-union-end-tracking var `(reverse ,val)
+                                                     test-method)
                 `((loopy--main-body
                    (setq ,var (nconc (nreverse (cl-delete-if ,test-method
                                                              (copy-sequence ,val)))
@@ -2597,7 +2540,7 @@ This function is used by `loopy--get-optimized-accum'."
              ((member pos '(end 'end))
               (loopy--produce-union-end-tracking var val test-method))
              (t
-              (error "Bad `:at' position: %s" cmd))))
+              (signal 'loopy-bad-position-command-argument (list pos cmd)))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
@@ -2605,7 +2548,7 @@ This function is used by `loopy--get-optimized-accum'."
     (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
-      (error "Bad `:at' position: %s" cmd))
+      (signal 'loopy-bad-position-command-argument (list pos cmd)))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
@@ -2618,13 +2561,13 @@ This function is used by `loopy--get-optimized-accum'."
 (defun loopy--construct-accum-vconcat (plist)
   "Create accumulation code for `vconcat' from PLIST.
 
-This function is called by `loopy--get-optimized-accum'."
+This function is called by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'vconcat)
       ;; Forward list order.
       (if (>= start end)
           (progn
@@ -2650,7 +2593,7 @@ This function is called by `loopy--get-optimized-accum'."
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2670,14 +2613,14 @@ This function is called by `loopy--get-optimized-accum'."
                            ((member pos '(end 'end))
                             `(vconcat ,var ,val))
                            (t
-                            (error "Bad `:at' position: %s" cmd)))))
+                            (signal 'loopy-bad-position-command-argument (list pos cmd))))))
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
               (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
-                (error "Bad `:at' position: %s" cmd))
+                (signal 'loopy-bad-position-command-argument (list pos cmd)))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
@@ -2966,7 +2909,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
             ((eq this-var '&rest)
              (setq looking-at-key-vars nil)
              (when var-is-dotted
-               (error "Can't use `&rest' in dotted list: %s" var))
+               (signal 'loopy-&rest-dotted (list var)))
              (dolist (instr (loopy--parse-loop-command
                              `( ,name ,(cl-second remaining-var)
                                 ,value-holder ,@args)))
@@ -3027,8 +2970,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                             (next-var (aref remaining-var next-idx)))
                        ;; Check that the var after `&rest' is the last:
                        (when (> (1- array-length) next-idx)
-                         (error "More than one variable after `&rest': %s"
-                                var))
+                         (signal 'loopy-&rest-multiple (list var)))
 
                        (dolist (instr
                                 (loopy--parse-loop-command
@@ -3055,11 +2997,11 @@ To allow for some flexibility in the command parsers, any nil
 instructions are removed.
 
 This function gets the parser, and passes the command to that parser."
-  (let ((parser (loopy--get-command-parser (cl-first command))))
-    (if-let ((instructions (funcall parser command)))
-        (remq nil instructions)
-      (error "Loopy: No instructions returned by command parser: %s"
-             parser))))
+  (let* ((parser (loopy--get-command-parser (cl-first command)))
+         (instructions (remq nil (funcall parser command))))
+    (or instructions
+        (signal 'loopy-parser-instructions-missing
+                (list command parser)))))
 
 ;; TODO: Allow for commands to return single instructions, instead of requiring
 ;; list of instructions.
@@ -3081,7 +3023,7 @@ Failing that, an error is signaled."
 
   (let ((true-name (loopy--get-true-name command-name)))
     (or (map-elt parsers true-name)
-        (signal 'loopy-unknown-command command-name))))
+        (signal 'loopy-unknown-command (list command-name)))))
 
 (provide 'loopy-commands)
 
