@@ -331,10 +331,7 @@ prefix the items in LOOPY or ITER-BARE."
               (_list . listing)
               (_return . returning)
               (_leave . leaving))
-  :iter-keyword ((_after . (after-do after else-do else))
-                 (_list . listing)
-                 (_return . returning)
-                 (_leave . leaving))
+  :iter-keyword t
   :repeat _after)
 
 ;; (ert-deftest basic-after-do ()
@@ -408,7 +405,8 @@ prefix the items in LOOPY or ITER-BARE."
                (let ((b (1+ a)))))
          (return (+ a b)))
   :loopy t
-  :iter-bare ((return . returning)))
+  :iter-bare ((return . returning))
+  :iter-keyword ((return . return)))
 
 (loopy-deftest wrap-not-linger ()
   :result nil
