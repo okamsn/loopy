@@ -498,39 +498,35 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-keyword ((_list . list)))
 
 ;;;; Finally Protect
-(ert-deftest finally-protect ()
-  (should (equal (list 1 4 '(1 2 3 4))
-                 (let ((test-result))
-                   (should-error
-                    (loopy (with (example-var 1))
-                           (list i '(1 2 3 4 5))
-                           (collect my-collection i)
-                           (when (> i 3)
-                             (do (error "%s" (list i))))
-                           (finally-protect
-                            (setq test-result (list example-var i my-collection))))
-                    :type '(error))
-                   test-result)))
-
-  (should (equal (list 1 4 '(1 2 3 4))
-                 (let ((test-result))
-                   (should-error
-                    (loopy (with (example-var 1))
-                           (list i '(1 2 3 4 5))
-                           (collect my-collection i)
-                           (when (> i 3)
-                             (do (error "%s" (list i))))
-                           (finally-protected
-                            (setq test-result (list example-var i my-collection))))
-                    :type '(error))
-                   test-result))))
+(loopy-deftest finally-protect ()
+  :result (list 1 4 '(1 2 3 4))
+  :wrap ((x . `(let ((test-result))
+                 (should-error ,x :type '(error))
+                 test-result)))
+  :body ((with (example-var 1))
+         (_list i '(1 2 3 4 5))
+         (_collect my-collection i)
+         (when (> i 3) (_do (error "%s" (list i))))
+         (finally-protect (setq test-result (list example-var i my-collection))))
+  :loopy ((_list . list)
+          (_collect . collect)
+          (_do . do))
+  :iter-bare ((_list . listing)
+              (_collect . collecting)
+              (_do . ignore))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)
+                 (_do . do)))
 
 ;;;; Changing the order of macro arguments.
-(ert-deftest change-order-of-commands ()
-  (should (= 7
-             (eval (quote (loopy (list i '(1 2 3))
-                                 (finally-return (+ i a))
-                                 (with (a 4))))))))
+(loopy-deftest change-order-of-commands ()
+  :result 7
+  :body ((list i '(1 2 3))
+         (finally-return (+ i a))
+         (with (a 4)))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword ((list . list)))
 
 ;;;; Default return values.
 (ert-deftest default-return-nil ()
