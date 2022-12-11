@@ -473,20 +473,29 @@ prefix the items in LOOPY or ITER-BARE."
 ;;                            (finally (setq my-var i)))
 ;;                     my-var)))))
 
-(ert-deftest finally-do-not-affect-return ()
-  (should (eq nil
-              (eval (quote (loopy (list i (number-sequence 1 10))
-                                  (finally-do 3)))))))
+(loopy-deftest finally-do-not-affect-return ()
+  :result nil
+  :body ((_list i (number-sequence 1 10))
+         (finally-do 3))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest finally-return-single-value ()
-  (should (= 10
-             (eval (quote (loopy (list i (number-sequence 1 10))
-                                 (finally-return i)))))))
+(loopy-deftest finally-return-single-value ()
+  :result 10
+  :body ((_list i (number-sequence 1 10))
+         (finally-return i))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest finally-return-list-of-values ()
-  (should (equal '(10 7)
-                 (eval (quote (loopy (list i (number-sequence 1 10))
-                                     (finally-return i 7)))))))
+(loopy-deftest finally-return-list-of-values ()
+  :result '(10 7)
+  :body ((_list i (number-sequence 1 10))
+         (finally-return i 7))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
 ;;;; Finally Protect
 (ert-deftest finally-protect ()
