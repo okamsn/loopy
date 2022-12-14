@@ -907,32 +907,54 @@ prefix the items in LOOPY or ITER-BARE."
 ;; NOTE: This duplicates the tests from the `sub-loop' command, which will be
 ;;       removed.
 
-(ert-deftest loopy-command ()
-  (should (equal '(1 2 3 4)
-                 (lq outer
-                     (array i [(1 2) (3 4)])
-                     (loopy (list j i)
-                            (at outer (collect j)))))))
+(loopy-deftest same-level-at-accum ()
+  :result '(1 2 3 4)
+  :body (outer
+         (list i '(1 2 3 4))
+         (at outer (collect i)))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting))
+  :iter-keyword (list collect at))
 
-(ert-deftest at-accum ()
-  (should (equal '(1 2 3 4 5 6)
-                 (eval (quote (loopy (named outer)
-                                     (list i '((1 2) (3 4) (5 6)))
-                                     (loopy (list j i)
-                                            (at outer
-                                                (collect j)))))
-                       t))))
+(loopy-deftest loopy-at-accum ()
+  :result '(1 2 3 4)
+  :multi-body t
+  :body ((outer
+          (array i [(1 2) (3 4)])
+          (loopy (list j i)
+                 (at outer (collect j))))
+         ((named outer)
+          (array i [(1 2) (3 4)])
+          (loopy (list j i)
+                 (at outer (collect j)))))
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((array . arraying))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (array loopy))
 
-(ert-deftest at-leave ()
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (flags split)
-                     (list i '((1 2) (3 4) (5 6)))
-                     (loopy (list j i)
-                            (at outer
-                                (if (> j 3)
-                                    (leave)
-                                  (collect j))))))))
+(loopy-deftest loopy-at-leave ()
+  :result '(1 2 3)
+  :multi-body t
+  :body ((outer
+          (array i [(1 2) (3 4) (5 6)])
+          (loopy (list j i)
+                 (at outer (if (> j 3)
+                               (leave)
+                             (collect j)))))
+         ((named outer)
+          (array i [(1 2) (3 4) (5 6)])
+          (loopy (list j i)
+                 (at outer (if (> j 3)
+                               (leave)
+                             (collect j))))))
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((array . arraying))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (array loopy))
+
 
 (ert-deftest at-disagreeing-accum-types ()
   (should-error (macroexpand '(loopy outer
