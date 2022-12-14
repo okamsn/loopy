@@ -93,9 +93,13 @@ LOOPY and ITER-BARE can be `t' instead of an alist, which will
 run those tests without substitution.  If ITER-KEYWORD is `t', we
 prefix the items in LOOPY or ITER-BARE."
   (declare (indent 2))
-  (unless (or result-provided error-provided) (error "Must include `result' or `error'"))
-  (unless (or loopy iter-bare) (error "Must include `loopy' or `iter-bare'"))
-  (unless body (error "Must include `body'"))
+
+  (unless (or result-provided error-provided)
+    (error "Must include `result' or `error'"))
+  (unless (or loopy iter-bare iter-keyword)
+    (error "Must include `loopy' or `iter-bare'"))
+  (unless body
+    (error "Must include `body'"))
 
   (when (eq loopy t) (setq loopy nil))
 
@@ -127,12 +131,13 @@ prefix the items in LOOPY or ITER-BARE."
                   (mapcar (lambda (sexp)
                             (pcase sexp
                               (`(,first . ,rest)
-                               (if keyword
-                                   (if-let ((trans (map-elt group-alist first)))
-                                       `(for ,trans ,@rest)
-                                     sexp)
-                                 (cons (map-elt group-alist first first)
-                                       (translate group-alist rest))))
+                               (let ((new-rest (translate group-alist rest keyword))
+                                     (new-first (map-elt group-alist first)))
+                                 (if new-first
+                                     (if keyword
+                                         `(for ,new-first ,@new-rest)
+                                       `(,new-first ,@new-rest))
+                                   `(,first ,@new-rest))))
                               (_ sexp)))
                           this-body))
        (make-bodies (alist group-repeat &optional keyword)
@@ -157,18 +162,18 @@ prefix the items in LOOPY or ITER-BARE."
                         (make-bodies alist repeat keyword)))))
     `(ert-deftest ,name ,args
        ,@(build 'loopy
-                :alist loopy
-                :provided loopy-provided
-                :repeat (or repeat repeat-loopy))
+                 :alist loopy
+                 :provided loopy-provided
+                 :repeat (or repeat repeat-loopy))
        ,@(build 'loopy-iter
-                :alist iter-bare
-                :provided iter-bare-provided
-                :repeat (or repeat repeat-iter-bare))
+                 :alist iter-bare
+                 :provided iter-bare-provided
+                 :repeat (or repeat repeat-iter-bare))
        ,@(build 'loopy-iter
-                :alist iter-keyword
-                :provided iter-keyword-provided
-                :repeat (or repeat repeat-iter-keyword)
-                :keyword t))))
+                 :alist iter-keyword
+                 :provided iter-keyword-provided
+                 :repeat (or repeat repeat-iter-keyword)
+                 :keyword t))))
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
