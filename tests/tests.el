@@ -68,6 +68,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 - ITER-BARE are the `loopy-iter' names.
 
 - ITER-KEYWORD are the `loopy-iter' names after keywords.
+  This can also be a simple list of command names.
 
 - RESULT is compared using `equal' and `should'.
 
@@ -97,8 +98,15 @@ prefix the items in LOOPY or ITER-BARE."
   (unless body (error "Must include `body'"))
 
   (when (eq loopy t) (setq loopy nil))
+
   (when (eq iter-bare t) (setq iter-bare nil))
-  (when (eq iter-keyword t) (setq iter-keyword (or loopy iter-bare)))
+
+  (cond ((eq iter-keyword t)
+         (setq iter-keyword (or loopy iter-bare)))
+
+        ((symbolp (car iter-keyword))
+         (setq iter-keyword (cl-loop for sym in iter-keyword
+                                     collect (cons sym sym)))))
 
   (cl-labels
       (;; Wrap body into other forms.
@@ -526,13 +534,19 @@ prefix the items in LOOPY or ITER-BARE."
          (with (a 4)))
   :loopy t
   :iter-bare ((list . listing))
-  :iter-keyword ((list . list)))
+  :iter-keyword (list))
 
 ;;;; Default return values.
-(ert-deftest default-return-nil ()
-  (should (not (or (eval (quote (loopy (list i '(1 2 3)))))
-                   (eval (quote (loopy (repeat 1)
-                                       (finally-do (1+ 1)))))))))
+(loopy-deftest default-return-nil ()
+  :result nil
+  :multi-body t
+  :body (((list i '(1 2 3)))
+         ((cycle 1)
+          (finally-do (1+ 1))))
+  :loopy t
+  :iter-bare ((list . listing)
+              (cycle . cycling))
+  :iter-keyword (list cycle))
 
 ;;;; Optimized Named  Accumulations
 (ert-deftest optimized-named-vars ()
