@@ -153,27 +153,31 @@ prefix the items in LOOPY or ITER-BARE."
                                             names))
                                 (list (translate alist x keyword))))
                             (if multi-body body (list body))))
-       (build (name &key alist provided repeat keyword)
+       (build (&key macro prefix alist provided repeat keyword)
               (when provided
-                (mapcar (lambda (x) (thread-first `(,name ,@x)
-                                                  (surround-wrap wrap)
-                                                  eval-wrap
-                                                  output-wrap))
-                        (make-bodies alist repeat keyword)))))
-    `(ert-deftest ,name ,args
-       ,@(build 'loopy
-                 :alist loopy
-                 :provided loopy-provided
-                 :repeat (or repeat repeat-loopy))
-       ,@(build 'loopy-iter
-                 :alist iter-bare
-                 :provided iter-bare-provided
-                 :repeat (or repeat repeat-iter-bare))
-       ,@(build 'loopy-iter
-                 :alist iter-keyword
-                 :provided iter-keyword-provided
-                 :repeat (or repeat repeat-iter-keyword)
-                 :keyword t))))
+                `(ert-deftest ,(intern (format "%s/%s" prefix name)) ,args
+                   ,@(mapcar (lambda (x) (thread-first `(,macro ,@x)
+                                                       (surround-wrap wrap)
+                                                       eval-wrap
+                                                       output-wrap))
+                             (make-bodies alist repeat keyword))))))
+    `(progn
+       ,(build :macro 'loopy
+               :prefix 'loopy
+               :alist loopy
+               :provided loopy-provided
+               :repeat (or repeat repeat-loopy))
+       ,(build :macro 'loopy-iter
+               :prefix 'iter-bare
+               :alist iter-bare
+               :provided iter-bare-provided
+               :repeat (or repeat repeat-iter-bare))
+       ,(build :macro 'loopy-iter
+               :prefix 'iter-keyword
+               :alist iter-keyword
+               :provided iter-keyword-provided
+               :repeat (or repeat repeat-iter-keyword)
+               :keyword t))))
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
