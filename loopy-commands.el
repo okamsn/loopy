@@ -1380,9 +1380,9 @@ like the `:result-type' keyword argument of commands like
         (seq-let (existing-category existing-command)
             existing-description
           (unless (eq category existing-category)
-            (error "Loopy: Incompatible accumulation commands:\n%s\n%s"
-                   existing-command
-                   command)))
+            (signal 'loopy-incompatible-accumulations
+                    (list existing-command
+                          command))))
       (push (cons key (list category command))
             loopy--accumulation-variable-info))))
 

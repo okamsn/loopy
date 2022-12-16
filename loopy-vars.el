@@ -736,7 +736,7 @@ or `loopy-aliases'."
 (defun loopy--check-target-loop-name (target)
   "Signal an error whether TARGET is not a valid loop name."
   (unless (loopy--known-loop-name-p target)
-    (error "Unknown loop target: %s" target)))
+    (signal 'loopy-unknown-loop-target (list target))))
 
 (defmacro loopy--wrap-variables-around-body (&rest body)
   "Wrap variables in `loopy--variables' in `let*' bindings around BODY."
