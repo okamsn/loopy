@@ -59,6 +59,10 @@
   "Loopy: Bad command arguments"
   'loopy-error)
 
+(define-error 'loopy-bad-position-command-argument
+  "Loopy: Bad `:at' position"
+  '(loopy-error loopy-bad-command-arguments))
+
 (define-error 'loopy-incompatible-accumulations
   "Loopy: Incompatible accumulations"
   'loopy-error)
