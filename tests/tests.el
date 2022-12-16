@@ -48,6 +48,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
       &key repeat body multi-body
       repeat-loopy repeat-iter-bare repeat-iter-keyword
       wrap
+      macroexpand
       (loopy nil loopy-provided)
       (iter-bare nil iter-bare-provided)
       (iter-keyword nil iter-keyword-provided)
@@ -89,6 +90,9 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 - WRAP is an alist of (VAR . EXPANSION-TO-BE-QUOTE).
   E.g., (x . (backquote (let ((a 2)) ,x))).
 
+- If MACROEXPAND is non-nil, then we test using `macroexpand'
+  instead of `eval'.
+
 LOOPY and ITER-BARE can be `t' instead of an alist, which will
 run those tests without substitution.  If ITER-KEYWORD is `t', we
 prefix the items in LOOPY or ITER-BARE."
@@ -112,6 +116,9 @@ prefix the items in LOOPY or ITER-BARE."
          (setq iter-keyword (cl-loop for sym in iter-keyword
                                      collect (cons sym sym)))))
 
+  (when (eq error t)
+    (setq error 'error))
+
   (cl-labels
       (;; Wrap body into other forms.
        (surround-wrap (sexp wraps)
@@ -121,10 +128,13 @@ prefix the items in LOOPY or ITER-BARE."
                                                 result)))
                         result))
        ;; Want to evaluate quoted form lexically.
-       (eval-wrap (sexp) `(eval (quote ,sexp) t))
+       (quote-wrap (sexp) (if macroexpand
+                              `(macroexpand (quote ,sexp))
+                            `(eval (quote ,sexp) t)))
        ;; What output should be.
        (output-wrap (x) (cond (result-provided `(should (equal ,result ,x)))
-                              (error-provided  `(should-error ,x :type ,error))))
+                              (error-provided  `(should-error ,x :type
+                                                              (quote ,error)))))
        ;; Replace given placeholder command names with actual names,
        ;; maybe including the `for' keyword for `loopy-iter'.
        (translate (group-alist this-body &optional keyword)
@@ -158,7 +168,7 @@ prefix the items in LOOPY or ITER-BARE."
                 `(ert-deftest ,(intern (format "%s/%s" prefix name)) ,args
                    ,@(mapcar (lambda (x) (thread-first `(,macro ,@x)
                                                        (surround-wrap wrap)
-                                                       eval-wrap
+                                                       quote-wrap
                                                        output-wrap))
                              (make-bodies alist repeat keyword))))))
     `(progn
