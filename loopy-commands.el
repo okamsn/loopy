@@ -95,31 +95,6 @@
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
-;;;; Errors
-(define-error 'loopy-error
-  "Error in `loopy' macro")
-
-(define-error 'loopy-unknown-command
-  "Loopy: Unknown command"
-  'loopy-error)
-
-(define-error 'loopy-wrong-number-of-command-arguments
-  "Loopy: Wrong number of command arguments"
-  '(loopy-error wrong-number-of-arguments))
-
-(define-error 'loopy-bad-command-arguments
-  "Loopy: Bad command arguments"
-  'loopy-error)
-
-(defun loopy--signal-bad-iter (used-name true-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
-              used-name true-name))
-
-(defun loopy--signal-must-be-top-level (command-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
-
 ;;;; Helpful Functions
 
 ;;;;; Manipulating Instructions
