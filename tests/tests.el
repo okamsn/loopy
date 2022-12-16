@@ -568,7 +568,7 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-keyword (list cycle))
 
 ;;;; Optimized Named  Accumulations
-(defmacro loopy--optmized-vars-tests ()
+(defmacro loopy--optimized-vars-tests ()
   `(progn
      ,@(cl-loop
         for var in '(coll (coll end) (coll start) (coll beginning))
@@ -672,7 +672,7 @@ prefix the items in LOOPY or ITER-BARE."
                                  (vconcat . vconcating))
                      :iter-keyword (array vconcat))))))
 
-(loopy--optmized-vars-tests)
+(loopy--optimized-vars-tests)
 
 ;;; Loop Commands
 ;;;; Sub-loop Commands
