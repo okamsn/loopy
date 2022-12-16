@@ -807,18 +807,27 @@ prefix the items in LOOPY or ITER-BARE."
   ;; "for loopy"" should work, but is redundant and unneeded.
   :iter-keyword (array loopy))
 
-
-(ert-deftest at-disagreeing-accum-types ()
-  (should-error (macroexpand '(loopy outer
-                                     (list i '([1 2] [3]))
-                                     (collect i)
-                                     (loopy (array j i)
-                                            (at outer (max j))))))
-
-  (should-error (macroexpand '(loopy outer
-                                     (list i '([1 2] [3]))
-                                     (collect i)
-                                     (at outer (max j))))))
+(loopy-deftest at-disagreeing-accum-types ()
+  :error loopy-incompatible-accumulations
+  :macroexpand t
+  :multi-body t
+  :body ((outer
+          (list i '([1 2] [3]))
+          (collect i)
+          (loopy (array j i)
+                 (at outer (max j))))
+         (outer
+          (list i '([1 2] [3]))
+          (collect i)
+          (at outer (_max j))))
+  :loopy ((_max . max))
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (_max . maximizing)
+              (max . maximizing))
+  :iter-keyword ((list . list)
+                 (collect . collect)
+                 (_max . max)))
 
 (ert-deftest loopy-cmd-implicit-accum-in-loop ()
   (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
