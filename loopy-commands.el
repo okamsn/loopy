@@ -999,7 +999,7 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
       (when (or (and explicit-start key-start)
                 (and explicit-end key-end)
                 (and explicit-by key-by))
-        (error "Conflicting command options given: %s" cmd))
+        (signal 'loopy-conflicting-command-arguments (list cmd)))
 
       (let* ((end (or explicit-end key-end))
              (end-val-holder (gensym "nums-end"))
@@ -1074,7 +1074,7 @@ This is for increasing indices.
   :instructions
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
-      (error "Conflicting command options given: %s" cmd))
+      (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
      `(numbers ,var ,val
                :upto ,(cl-first other-vals)
@@ -1095,7 +1095,7 @@ This is for decreasing indices.
   :instructions
   (loopy--plist-bind (:by by) opts
     (when (and by (cl-second other-vals))
-      (error "Conflicting command options given: %s" cmd))
+      (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
      `(numbers ,var ,val
                :downto ,(cl-first other-vals)
