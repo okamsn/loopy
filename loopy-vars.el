@@ -738,6 +738,10 @@ or `loopy-aliases'."
   (unless (loopy--known-loop-name-p target)
     (signal 'loopy-unknown-loop-target (list target))))
 
+(defun loopy--check-position-name (pos)
+  (unless (member pos '(start end beginning))
+    (signal 'loopy-bad-position-command-argument (list pos))))
+
 (defmacro loopy--wrap-variables-around-body (&rest body)
   "Wrap variables in `loopy--variables' in `let*' bindings around BODY."
   (macroexp-let* (mapcar (lambda (x) (list x nil))
