@@ -67,6 +67,10 @@
   "Loopy: Incompatible accumulations"
   'loopy-error)
 
+(define-error 'loopy-missing-accum-counters
+  "Loopy: Failed to set up accumulation counters"
+  'loopy-error)
+
 (define-error 'loopy-unknown-loop-target
   "Loopy: Unknown loop target"
   'loopy-error)

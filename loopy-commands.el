@@ -1621,16 +1621,14 @@ that such places are the only possible use of the symbol."
 LOOP is the current loop.  VAR is the accumulation variable.
 PLACE is one of `start' or `end'.  VALUE is the integer by which
 to increment the count (default 1)."
-  (unless (memq loop loopy--known-loop-names)
-    (error "Unknown loop name: %s" loop))
+  (loopy--check-target-loop-name loop)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
     (setq place (loopy--normalize-symbol place))
     (when (eq place 'beginning) (setq place 'start))
-    (unless (memq place '(start end beginning))
-      (error "Bad place: %s" place))
+    (loopy--check-position-name place)
     (cl-incf (map-elt (map-elt loop-map var) place) value)))
 
 ;;;;;; Commands
@@ -1821,7 +1819,7 @@ you can use in the instructions:
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'adjoin)
       (let* ((val-is-expression (not (symbolp val)))
              (value-holder (if val-is-expression
                                (gensym "adjoin-value")
@@ -1969,7 +1967,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     (setq pos (loopy--get-quoted-symbol pos))
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'append)
       (if (>= start end)
           ;; Create list in normal order.
           (progn
@@ -2046,7 +2044,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     `((loopy--accumulation-vars (,var nil))
       ,@(map-let (('start start)
                   ('end end))
-            (map-nested-elt loopy--accumulation-places (list loop var))
+            (loopy--get-accum-counts loop var 'collect)
           (if (>= start end)
               ;; Create list in normal order.
               (progn
@@ -2138,7 +2136,7 @@ This function is called by `loopy--get-optimized-accum'."
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'concat)
       ;; Forward list order.
       (if (>= start end)
           (progn
@@ -2323,8 +2321,7 @@ VAR."
       plist
     (map-let (('start start)
               ('end end))
-        (or (map-nested-elt loopy--accumulation-places (list loop var))
-            (error "Failed to set up counters: nconc"))
+        (loopy--get-accum-counts loop var 'nconc)
       ;; Forward list order.
       (if (>= start end)
           (progn
@@ -2392,8 +2389,7 @@ This function is used by `loopy--get-optimized-accum'."
     (let ((test-method (loopy--get-union-test-method var key test)))
       (map-let (('start start)
                 ('end end))
-          (or (map-nested-elt loopy--accumulation-places (list loop var))
-              (error "Failed to set up counters: nconc"))
+          (loopy--get-accum-counts loop var 'nunion)
         ;; Forward list order.
         (if (>= start end)
             (progn
@@ -2541,8 +2537,7 @@ This function is used by `loopy--get-optimized-accum'."
     (let ((test-method (loopy--get-union-test-method var key test)))
       (map-let (('start start)
                 ('end end))
-          (or (map-nested-elt loopy--accumulation-places (list loop var))
-              (error "Failed to set up counters: nconc"))
+          (loopy--get-accum-counts loop var 'union)
         ;; Forward list order.
         (if (>= start end)
             (progn
@@ -2619,7 +2614,7 @@ This function is called by `loopy--get-optimized-accum'."
       plist
     (map-let (('start start)
               ('end end))
-        (map-nested-elt loopy--accumulation-places (list loop var))
+        (loopy--get-accum-counts loop var 'vconcat)
       ;; Forward list order.
       (if (>= start end)
           (progn

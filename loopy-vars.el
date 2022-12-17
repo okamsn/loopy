@@ -606,6 +606,12 @@ kinds accumulations.
 Generally, this is used with commands that produce lists, such as
 `collect' and `append'.")
 
+(defun loopy--get-accum-counts (loop var cmd-name)
+  "Get the count of accumulation places for VAR in LOOP.
+CMD-NAME is used for signaling errors."
+  (or (map-nested-elt loopy--accumulation-places (list loop var))
+      (signal 'loopy-missing-accum-counters (list cmd-name))))
+
 (defvar loopy--accumulation-constructors
   '((adjoin .  loopy--construct-accum-adjoin)
     (append .  loopy--construct-accum-append)
