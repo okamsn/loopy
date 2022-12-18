@@ -274,11 +274,11 @@ This variable is bound while `loopy-iter' is running, combining
   (let* ((cmd-name (cl-first command))
          (parser (loopy--get-command-parser
                   cmd-name
-                  :parsers loopy-iter--command-parsers)))
-    (if-let ((instructions (funcall parser command)))
-        (remq nil instructions)
-      (error "Loopy Iter: No instructions returned by command parser: %s"
-             parser))))
+                  :parsers loopy-iter--command-parsers))
+         (instructions (remq nil (funcall parser command))))
+    (or instructions
+        (signal 'loopy-parser-instructions-missing
+                (list command parser)))))
 
 (defvar loopy-iter--non-main-body-instructions nil
   "Used to capture other instructions while expanding.

@@ -829,25 +829,22 @@ prefix the items in LOOPY or ITER-BARE."
                  (collect . collect)
                  (_max . max)))
 
-(ert-deftest loopy-cmd-implicit-accum-in-loop ()
-  (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect (cons i j)))))))
-
-  (should (equal "14152425"
-                 (lq outer
-                     (list i '("1" "2"))
-                     (loopy (list j '("4" "5"))
-                            (at outer (concat (concat i j)))))))
-
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect (cons i j))))
-                     (finally-return (cons 0 loopy-result))))))
+(loopy-deftest loopy-cmd-implicit-accum-in-loop ()
+  :result '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
+  :multi-body t
+  :body ((outer
+          (list i '(1 2))
+          (loopy (array j [4 5])
+                 (at outer (collect (cons i j))))
+          (after-do (push 0 loopy-result)))
+         ((named outer)
+          (list i '(1 2))
+          (loopy (array j [4 5])
+                 (at outer (collect (cons i j))))
+          (finally-return (cons 0 loopy-result))))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword (list))
 
 (ert-deftest loopy-cmd-explicit-accum-in-loop ()
   (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
