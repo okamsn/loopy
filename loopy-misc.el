@@ -123,6 +123,10 @@
   "Loopy: Unrecognized function form"
   'loopy-error)
 
+(define-error 'loopy-bad-quoted-form
+  "Loopy: Unrecognized quoted form"
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
@@ -1038,12 +1042,11 @@ See `loopy--destructure-list' for normal values."
 When a quoted argument is passed to a macro, it can appear
 as `(quote my-var)' or `(function my-func)' inside the body.  For
 expansion, we generally only want the actual symbol."
-  (if (symbolp function-form)
-      function-form
-    (cl-case (cl-first function-form)
-      ((function quote cl-function) (cl-second function-form))
-      (lambda function-form)
-      (t (signal 'loopy-bad-function-form (list function-form))))))
+  (pcase function-form
+    ((or (pred symbolp) `(lambda ,_))           function-form)
+    ;; This could be something like "(function (lambda () ...))".
+    (`(,(or 'function 'quote 'cl-function) ,fn) fn)
+    (_ (signal 'loopy-bad-function-form (list function-form)))))
 
 (defalias 'loopy--normalize-symbol #'loopy--get-quoted-symbol
   "Make QUOTED-FORM normally quoted instead of maybe doubly quoted.")
@@ -1054,13 +1057,10 @@ When quoted symbols are passed to the macro, these can show up as
 \"(quote SYMBOL)\", where we only want SYMBOL.
 
 For functions, use `loopy--get-function-symbol'."
-  (cond
-   ((symbolp quoted-form)
-    quoted-form)
-   ((eq (car-safe quoted-form) 'quote)
-    (cl-second quoted-form))
-   (t
-    (error "This function form is unrecognized: %s" quoted-form))))
+  (pcase quoted-form
+    ((pred symbolp) quoted-form)
+    (`(quote ,form) form)
+    (_              (signal 'loopy-bad-quoted-form (list quoted-form)))))
 
 (defun loopy--quoted-form-p (form-or-symbol)
   "Whether FORM-OR-SYMBOL is quoted via `quote' or `function'.
