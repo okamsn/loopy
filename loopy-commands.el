@@ -2923,7 +2923,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
             ((eq this-var '&rest)
              (setq looking-at-key-vars nil)
              (when var-is-dotted
-               (error "Can't use `&rest' in dotted list: %s" var))
+               (signal 'loopy-&rest-dotted (list var)))
              (dolist (instr (loopy--parse-loop-command
                              `( ,name ,(cl-second remaining-var)
                                 ,value-holder ,@args)))
@@ -2984,8 +2984,7 @@ NAME is the name of the command.  VAR is a variable name.  VAL is a value."
                             (next-var (aref remaining-var next-idx)))
                        ;; Check that the var after `&rest' is the last:
                        (when (> (1- array-length) next-idx)
-                         (error "More than one variable after `&rest': %s"
-                                var))
+                         (signal 'loopy-&rest-multiple (list var)))
 
                        (dolist (instr
                                 (loopy--parse-loop-command
@@ -3012,11 +3011,11 @@ To allow for some flexibility in the command parsers, any nil
 instructions are removed.
 
 This function gets the parser, and passes the command to that parser."
-  (let ((parser (loopy--get-command-parser (cl-first command))))
-    (if-let ((instructions (funcall parser command)))
-        (remq nil instructions)
-      (error "Loopy: No instructions returned by command parser: %s"
-             parser))))
+  (let* ((parser (loopy--get-command-parser (cl-first command)))
+         (instructions (remq nil (funcall parser command))))
+    (or instructions
+        (signal 'loopy-parser-instructions-missing
+                (list command parser)))))
 
 ;; TODO: Allow for commands to return single instructions, instead of requiring
 ;; list of instructions.

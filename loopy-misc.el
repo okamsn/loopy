@@ -135,6 +135,10 @@
   "Loopy: No accumulation constructor for command or alias"
   'loopy-error)
 
+(define-error 'loopy-parser-instructions-missing
+  "Loopy: Parser returned 0 non-nil instructions."
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
