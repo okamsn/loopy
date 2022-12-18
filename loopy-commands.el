@@ -1580,39 +1580,6 @@ second pass of macro expansion."
               (loopy--process-instructions
                `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
               (macroexp-progn main-body))
-
-(defun loopy--get-optimized-accum (plist)
-  "Produce accumulation expansion.  Non-main-body instructions are processed.
-
-PLIST is a list with at least the keys `:cmd' and `:loop'.  Then
-entire plist is passed to the constructor found in
-`loopy--accumulation-constructors'."
-  (loopy--plist-bind (:name name :loop loop)
-      plist
-    (let ((true-name (loopy--get-true-name name)))
-      (seq-let (main-body other-instrs)
-          (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
-              (loopy--extract-main-body (funcall func plist))
-            (error "No accumulation constructor for command or alias: %s" name))
-        (loopy--process-instructions
-         `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
-        (macroexp-progn main-body)))))
-
-(defun loopy--accum-code-expansion (form)
-  "Aggressively search for uses of the symbol `loopy--optimized-accum' in FORM.
-
-This symbol is used like a function to mark places where it
-should be replaced by optimized accumulation code.  It is assumed
-that such places are the only possible use of the symbol."
-  (cond
-   ((atom form)
-    form)
-   ((eq (cl-first form) 'loopy--optimized-accum)
-    ;; Get the data list within the single quoted argument.
-    (loopy--get-optimized-accum (cl-second (cl-second form))))
-   (t
-    (cons (cl-first form)
-          (mapcar #'loopy--accum-code-expansion (cl-rest form))))))
           (signal 'loopy-accum-constructor-missing (list name)))))))
 
 (cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
@@ -2130,7 +2097,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 (defun loopy--construct-accum-concat (plist)
   "Create accumulation code for `concat' from PLIST.
 
-This function is called by `loopy--get-optimized-accum'."
+This function is called by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
@@ -2382,7 +2349,7 @@ VAR."
 (defun loopy--construct-accum-nunion (plist)
   "Create accumulation code for `nunion' from PLIST.
 
-This function is used by `loopy--get-optimized-accum'."
+This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2530,7 +2497,7 @@ With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
 (defun loopy--construct-accum-union (plist)
   "Create accumulation code for `nunion' from PLIST.
 
-This function is used by `loopy--get-optimized-accum'."
+This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2608,7 +2575,7 @@ This function is used by `loopy--get-optimized-accum'."
 (defun loopy--construct-accum-vconcat (plist)
   "Create accumulation code for `vconcat' from PLIST.
 
-This function is called by `loopy--get-optimized-accum'."
+This function is called by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
