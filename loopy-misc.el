@@ -1073,18 +1073,6 @@ If not, then it is possible that FORM is a variable."
            (eq (car form-or-symbol) 'function)
            (eq (car form-or-symbol) 'cl-function))))
 
-(defun loopy--quoted-symbol-p (form)
-  "Whether FORM is a quoted symbol."
-  (and (memq (car-safe form) '(quote function cl-function))
-       (symbolp (cl-second form))))
-
-(defun loopy--quote-if-car-not-symbol-or-lambda (list)
-  "Apply a heuristic to decide if LIST should be quoted."
-  (if (or (symbolp (car-safe list))
-          (eq (car-safe list) 'lambda))
-      list
-    `(quote ,list)))
-
 (defun loopy--apply-function (func &rest args)
   "Return an expansion to appropriately apply FUNC to ARGS.
 
