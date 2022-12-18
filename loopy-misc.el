@@ -127,6 +127,14 @@
   "Loopy: Unrecognized quoted form"
   'loopy-error)
 
+(define-error 'loopy-bad-accum-category
+  "Loopy: Bad accumulation category"
+  'loopy-error)
+
+(define-error 'loopy-accum-constructor-missing
+  "Loopy: No accumulation constructor for command or alias"
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
@@ -135,8 +143,6 @@
 (defun loopy--signal-must-be-top-level (command-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
-
-
 
 ;;;; List Processing
 (defalias 'loopy--car-equals-car #'loopy--car-equal-car)

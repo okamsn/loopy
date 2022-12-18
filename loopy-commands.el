@@ -627,7 +627,7 @@ iteration command.  The supported keywords are:
               (< 1 (cl-count-if #'identity (list to upto downto above below)))
               (and downfrom below)
               (and upfrom above))
-      (error "Conflicting arguments: %s" plist))
+      (signal 'loopy-conflicting-command-arguments (list plist)))
 
     (let ((decreasing (or downfrom downto above)))
 
@@ -636,7 +636,7 @@ iteration command.  The supported keywords are:
       ;; :below is only for when the value in increasing.
       (when (or (and below decreasing)
                 (and above (not decreasing)))
-        (error "Conflicting arguments: %s" plist))
+        (signal 'loopy-conflicting-command-arguments (list plist)))
 
       `(,@(when-let ((start (or from upfrom downfrom)))
             `(:start ,start))
@@ -1371,7 +1371,7 @@ like the `:result-type' keyword argument of commands like
 - `boolean-thereis' is only used by the `thereis' command.
 - `boolean-always-never' is only used by the `always' and `never' commands."
   (unless (memq category loopy--known-accumulation-categories)
-    (error "Bad accumulation description: %s" category))
+    (signal 'loopy-bad-accum-category (list category)))
 
   (let ((key (cons loop-name variable)))
     (if-let ((existing-description
@@ -1580,7 +1580,6 @@ second pass of macro expansion."
               (loopy--process-instructions
                `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
               (macroexp-progn main-body))
-          (error "No accumulation constructor for command or alias: %s" name))))))
 
 (defun loopy--get-optimized-accum (plist)
   "Produce accumulation expansion.  Non-main-body instructions are processed.
@@ -1614,6 +1613,7 @@ that such places are the only possible use of the symbol."
    (t
     (cons (cl-first form)
           (mapcar #'loopy--accum-code-expansion (cl-rest form))))))
+          (signal 'loopy-accum-constructor-missing (list name)))))))
 
 (cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
   "Keep track of where things are being placed.
