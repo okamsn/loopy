@@ -2201,7 +2201,7 @@ This function is called by `loopy--expand-optimized-accum'."
                    `(loopy--vars-final-updates
                      (,var . (if ,var nil (setq ,var ,on-failure)))))))
   :implicit (let* ((test-arg (cl-second args))
-                   (test-form (if (loopy--quoted-symbol-p test-arg)
+                   (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
                    (on-failure (plist-get opts :on-failure))
