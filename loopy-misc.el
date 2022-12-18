@@ -79,6 +79,50 @@
   "Loopy: Conflicting command arguments"
   'loopy-error)
 
+(define-error 'loopy-bad-desctructuring
+  "Loopy: Bad destructuring"
+  'loopy-error)
+
+(define-error 'loopy-&whole-sequence
+  "Loopy: `&whole' variable is sequence"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&whole-missing
+  "Loopy: `&whole' variable is missing"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&rest-missing
+  "Loopy: `&rest' variable is missing"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&rest-non-var
+  "Loopy: Non-variable item after `&rest'"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&rest-multiple
+  "Loopy: Multiple variables after `&rest'"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&rest-dotted
+  "Loopy: Using `&rest' in dotted (improper) list"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-&key-missing
+  "Loopy: `&key' variable is missing"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-destructure-type
+  "Loopy: Can't destructure type"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-destructure-vars-missing
+  "Loopy: No variables bound"
+  'loopy-bad-desctructuring)
+
+(define-error 'loopy-bad-function-form
+  "Loopy: Unrecognized function form"
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for COMMAND-NAME."
   (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
@@ -278,7 +322,7 @@ If SEQ is `_', then a generated variable name will be used."
                ,value-expression)))
     (list (loopy--destructure-list seq value-expression))
     (array (loopy--destructure-array seq value-expression))
-    (t (error "Type unknown: %s" seq))))
+    (t (signal 'loopy-destructure-type (list seq)))))
 
 (defun loopy--destructure-array (var value-expression)
   "Return a list of bindings destructuring VALUE-EXPRESSION according to VAR.
@@ -296,9 +340,9 @@ If SEQ is `_', then a generated variable name will be used."
     (when (eq '&whole (aref var 0))
       (cond ((or (= 1 remaining-length)
                  (eq (aref var 1) '&rest))
-             (error "`&whole' variable not named: %s" var))
+             (signal 'loopy-&whole-missing (list var)))
             ((sequencep (aref remaining-var 1))
-             (error "`&whole' variable is sequence: %s" var))
+             (signal 'loopy-&whole-sequence (list var)))
             (t
              (let ((whole-var (aref remaining-var 1)))
                (when (= 2 remaining-length)
@@ -314,9 +358,9 @@ If SEQ is `_', then a generated variable name will be used."
     (when-let ((pos (cl-position '&rest remaining-var :test #'eq)))
       (cond
        ((= (1+ pos) remaining-length)
-        (error "`&rest' variable not named: %s" var))
+        (signal 'loopy-&rest-missing (list var)))
        ((> remaining-length (+ 2 pos))
-        (error "Too many variables after `&rest': %s" var))
+        (signal 'loopy-&rest-multiple (list var)))
        (t
         ;; (when (zerop pos)
         ;;   (warn "`&rest' variable used like `&whole': %s" var))
@@ -352,7 +396,7 @@ If SEQ is `_', then a generated variable name will be used."
 
     (cond
      ((zerop (length remaining-var))
-      (error "No variables bound: %s" var))
+      (signal 'loopy-destructure-vars-missing (list var)))
      ;; Check to see if we can avoid binding the holding variable.
      ((and (= 1 remaining-length)
            (not using-whole-var)
@@ -392,7 +436,7 @@ If SEQ is `_', then a generated variable name will be used."
               (push `(,using-rest-var ,rest-val) bindings))))
 
         (when (null (cdr bindings))
-          (error "No variables bound: %s" var)))))
+          (signal 'loopy-destructure-vars-missing (list var))))))
 
     (nreverse bindings)))
 
@@ -438,14 +482,14 @@ Only the positional variables and the remainder can be recursive."
     (when (eq (cl-first remaining-var) '&whole)
       (if (null (cdr remaining-var))
           ;; Make sure there is a variable named.
-          (error "Bad destructuring: %s" var)
+          (signal 'loopy-&whole-missing (list var))
         (let ((possible-whole-var (cl-second remaining-var)))
           (cond
            ;; Make sure we have a variable and not a special symbol.
            ((memq possible-whole-var '(&rest &key &keys))
-            (error "`&whole' variable not named: %s" var))
+            (signal 'loopy-&whole-missing (list var)))
            ((sequencep possible-whole-var)
-            (error "`&whole' variable can't be a sequence: %s" var))
+            (signal 'loopy-&whole-sequence (list var)))
            ;; If it's the only variable named, just bind it and return.
            ((and (not (cddr remaining-var))
                  (not (loopy--var-ignored-p possible-whole-var)))
@@ -481,13 +525,13 @@ Only the positional variables and the remainder can be recursive."
                   (vars-after-rest-var (cddr after)))
               (cond ((or (null rest-var)
                          (memq (cl-second after) '(&key &keys)))
-                     (error "`&rest' variable not named: %s" var))
+                     (signal 'loopy-&rest-missing (list var)))
                     ;; This is the best place to check that argument only uses
                     ;; keys after the `rest-var'.
                     ((and vars-after-rest-var
                           (not (memq (cl-first vars-after-rest-var)
                                      '(&key &keys))))
-                     (error "Bad arguments after `&rest' var: %s" var))
+                     (signal 'loopy-&rest-non-var (list var)))
                     (t
                      ;; Now just operate on remaining variables.
                      (setq remaining-var (append before vars-after-rest-var)
@@ -516,7 +560,7 @@ Only the positional variables and the remainder can be recursive."
           (setq before bef after aft)))
       (when after
         (if (null (cdr after))
-            (error "No `&key' variables: %s" var)
+            (signal 'loopy-&key-missing (list var))
           (setq key-vars (cdr after)
                 remaining-var before))))
 
@@ -751,7 +795,7 @@ Only the positional variables and the remainder can be recursive."
 
     ;; Check that things were bound.
     (when (null bindings)
-      (error "No variables bound: %s" var))
+      (signal 'loopy-destructure-vars-missing (list var)))
 
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
@@ -768,7 +812,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'."
               `((,var ,value-expression))))
     (list   (loopy--destructure-generalized-list var value-expression))
     (array  (loopy--destructure-generalized-array var value-expression))
-    (t      (error "Type not recognized: %s" var))))
+    (t      (signal 'loopy-destructure-type (list var)))))
 
 (defun loopy--destructure-generalized-array (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR as `setf'-able places.
@@ -787,9 +831,9 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 
     (when (eq '&whole (aref var 0))
       (cond ((= 1 remaining-length)
-             (error "`&whole' variable not named: %s" var))
+             (signal 'loopy-&whole-missing (list var)))
             ((sequencep (aref remaining-var 1))
-             (error "`&whole' variable is sequence: %s" var))
+             (signal 'loopy-&whole-sequence (list var)))
             (t
              (let ((whole-var (aref remaining-var 1)))
                (when (= 2 remaining-length)
@@ -805,9 +849,9 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
     (when-let ((pos (cl-position '&rest remaining-var :test #'eq)))
       (cond
        ((= (1+ pos) remaining-length)
-        (error "`&rest' variable not named: %s" var))
+        (signal 'loopy-&rest-missing (list var)))
        ((> remaining-length (+ 2 pos))
-        (error "Too many variables after `&rest': %s" var))
+        (signal 'loopy-&rest-multiple (list var)))
        (t
         (setq using-rest-var (aref remaining-var (1+ pos))
               remaining-length (max 0 (- remaining-length 2))
@@ -859,7 +903,7 @@ See `loopy--destructure-list' for normal values."
       (cond
        ;; Make sure there is a variable named.
        ((null (cdr var))
-        (error "Bad destructuring: %s" var-list))
+        (signal 'loopy-&whole-missing (list var-list)))
        ;; If it's the only variable named, just bind it and return.
        ((null (cddr var))
         (warn "`&whole' used when only one variable listed: %s"
@@ -903,15 +947,14 @@ See `loopy--destructure-list' for normal values."
                   (vars-after-rest-var (cddr var)))
               (cond
                (var-is-dotted
-                (error "Can't use `&rest' in dotted list: %s"
-                       var-list))
+                (signal 'loopy-&rest-dotted (list var-list)))
                ((or (null rest-var)
                     (memq rest-var '(&key &keys)))
-                (error "`&rest' variable not named: %s" var-list))
+                (signal 'loopy-&rest-missing (list var-list)))
                ((and vars-after-rest-var
                      (not (memq (cl-first vars-after-rest-var)
                                 '(&key &keys))))
-                (error "Bad arguments after `&rest' var: %s" var-list))
+                (signal 'loopy-&rest-non-var (list var-list)))
                (t
                 (unless (loopy--var-ignored-p rest-var)
                   (setq rest-var-value `(nthcdr ,index ,value-expression))
@@ -1000,7 +1043,7 @@ expansion, we generally only want the actual symbol."
     (cl-case (cl-first function-form)
       ((function quote cl-function) (cl-second function-form))
       (lambda function-form)
-      (t (error "This function form is unrecognized: %s" function-form)))))
+      (t (signal 'loopy-bad-function-form (list function-form))))))
 
 (defalias 'loopy--normalize-symbol #'loopy--get-quoted-symbol
   "Make QUOTED-FORM normally quoted instead of maybe doubly quoted.")
