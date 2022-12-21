@@ -45,7 +45,7 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 (cl-defmacro loopy-deftest
     ( name args
-      &key repeat body multi-body
+      &key doc repeat body multi-body
       repeat-loopy repeat-iter-bare repeat-iter-keyword
       wrap
       macroexpand
@@ -166,6 +166,7 @@ prefix the items in LOOPY or ITER-BARE."
        (build (&key macro prefix alist provided repeat keyword)
               (when provided
                 `(ert-deftest ,(intern (format "%s/%s" prefix name)) ,args
+                   ,doc ; Nil if not given
                    ,@(mapcar (lambda (x) (thread-first `(,macro ,@x)
                                                        (surround-wrap wrap)
                                                        quote-wrap
