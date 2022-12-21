@@ -847,107 +847,125 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-bare ((list . listing))
   :iter-keyword (list))
 
-(ert-deftest loopy-cmd-explicit-accum-in-loop ()
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loopy (list j '(4 5))
-                            (at outer (collect my-coll (cons i j))))
-                     (finally-return (cons 0 my-coll)))))
+(loopy-deftest loopy-cmd-leave-early ()
+  :result '(1 2 3)
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6))
+                (leave)
+                (at outer (collect j)))
+         (_collect i))
+  :loopy ((_list . list)
+          (_collect . collect))
+  :iter-bare ((_list . listing)
+              (_collect . collecting))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)))
 
-  (should (equal "014152425"
-                 (lq (named outer)
-                     (list i '("1" "2"))
-                     (loopy (list j '("4" "5"))
-                            (at outer (concat my-str (concat i j))))
-                     (finally-return (concat "0" my-str))))))
-;;
-(ert-deftest loopy-cmd-leave-early ()
-  "A `leave' in a sub-loop should not affect the outer loop."
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (list i '(1 2 3))
-                     (loopy (list j '(4 5 6))
-                            (leave)
-                            (at outer (collect j)))
-                     (collect i)))))
+(loopy-deftest loopy-cmd-skip ()
+  :doc "A `skip' in a sub-loop should not affect the outer loop."
+  :result '(5 7 1 5 7 2 5 7 3)
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6 7 8))
+                (when (cl-evenp j)
+                  (continue))
+                (at outer (collect j)))
+         (_collect i))
+  :loopy ((_list . list)
+          (_collect . collect))
+  :iter-bare ((_list . listing)
+              (_collect . collecting))
+  :iter-keyword ((_list . list)
+                 (_collect . collect)))
 
-(ert-deftest loopy-cmd-skip ()
-  "A `skip' in a sub-loop should not affect the outer loop."
-  (should (equal '(5 7 1 5 7 2 5 7 3)
-                 (lq  outer
-                      (list i '(1 2 3))
-                      (loopy (list j '(4 5 6 7 8))
-                             (when (cl-evenp j)
-                               (continue))
-                             (at outer (collect j)))
-                      (collect i)))))
+(loopy-deftest loopy-cmd-return-from-outer ()
+  :result 3
+  :body (outer
+         (_list i '(1 2 3))
+         (loopy (list j '(4 5 6 3))
+                (when (= j i)
+                  (return-from outer j))))
+  :loopy ((_list . list))
+  :iter-bare ((_list . listing))
+  :iter-keyword ((_list . list)))
 
-(ert-deftest loopy-cmd-return-from-outer ()
-  (should (= 3 (lq outer
-                   (list i '(1 2 3))
-                   (loopy (list j '(4 5 6 3))
-                          (when (= j i)
-                            (return-from outer j)))))))
+(loopy-deftest loopy-cmd-named ()
+  :result '((3 5) (3 5))
+  :body (outer
+         (_cycle 2)
+         (loopy inner1
+                (list j '(3 4))
+                (loopy (list k '(5 6 7))
+                       (if (= k 6)
+                           ;; Return from inner1 so never reach 4.
+                           (return-from inner1)
+                         (at outer (collect (list j k)))))))
+  :loopy ((_cycle . cycle))
+  :iter-bare ((_cycle . cycling))
+  :iter-keyword ((_cycle . cycle)))
 
-(ert-deftest loopy-cmd-named ()
-  (should
-   (equal
-    '((3 5) (3 5))
-    (lq outer
-        (repeat 2)
-        (loopy inner1
-               (list j '(3 4))
-               (loopy (list k '(5 6 7))
-                      (if (= k 6)
-                          ;; Return from inner1 so never reach 4.
-                          (return-from inner1)
-                        (at outer (collect (list j k))))))))))
 ;;;; Generic Evaluation
 ;;;;; Do
-(ert-deftest do ()
-  (should
-   (equal '(t nil)
-          (eval (quote (loopy (with (my-val nil)
-                                    (this-nil? t))
-                              (do (setq my-val t)
-                                  (setq this-nil? (not my-val)))
-                              (return nil)
-                              (finally-return my-val this-nil?)))))))
+(loopy-deftest do ()
+  :result '(t nil)
+  :body ((with (my-val nil)
+               (this-nil? t))
+         (do (setq my-val t)
+             (setq this-nil? (not my-val)))
+         (return nil)
+         (finally-return my-val this-nil?))
+  :loopy t
+  :iter-keyword (do return))
 
 ;;;;; Expr
-(ert-deftest expr-init ()
-  (should (= 1 (eval (quote (loopy (repeat 3)
-                                   (expr var 1 :init 'cat)
-                                   (finally-return var))))))
+(loopy-deftest expr-init ()
+  :result 3
+  :body ((cycle 3)
+         (set var (1+ var) :init 0)
+         (finally-return var))
+  :loopy t
+  :iter-keyword (cycle set)
+  :iter-bare ((cycle . cycling)
+              (set . setting)))
 
-  (should (= 1 (eval (quote (loopy (repeat 3)
-                                   (expr var 1 :init nil)
-                                   (finally-return var))))))
+(loopy-deftest expr-one-value ()
+  :result '(0 1 1 1)
+  :body ((cycle 4)
+         (collect i)
+         (_set i 1 :init 0))
+  :repeat _set
+  :loopy ((_set . (set expr)))
+  :iter-bare ((_set . (setting)) ; No `expring'.
+              (collect . collecting)
+              (cycle . cycling))
+  :iter-keyword ((_set . (set expr))
+                 (collect . collect)
+                 (cycle . cycle)))
 
-  (should (= 3 (eval (quote (loopy (repeat 3)
-                                   (expr var (1+ var) :init 0)
-                                   (finally-return var)))))))
+(defmacro loopy--set-destr-tests ()
+  "Implementation is different for more than 2 values."
+  (macroexp-progn
+   (cl-loop with list = '((1 2) (3 4) (5 6) (7 8))
+            for num from 1 to (length list)
+            for subseq = (cl-subseq list 0 num)
+            collect `(loopy-deftest ,(intern (format "expr-destr-%d-value" num)) ()
+                       :result (quote ,subseq)
+                       :repeat _set
+                       :body ((cycle ,num)
+                              (_set (i j) ,@(cl-loop for i in subseq
+                                                     collect `(quote ,i)))
+                              (collect coll (list i j))
+                              (finally-return coll))
+                       :loopy ((_set . (set expr)))
+                       :iter-bare ((_set . (setting))
+                                   (collect . collecting)
+                                   (cycle . cycling))
+                       :iter-keyword ((_set . (set expr))
+                                      (collect . collect)
+                                      (cycle . cycle))))))
 
-(ert-deftest expr-one-value ()
-  (should
-   (and (eval (quote (loopy (with (my-val nil))
-                            (expr my-val t)
-                            (return nil)
-                            (finally-return my-val))))
-        (equal '(t t) (eval (quote (loopy (expr (i j) '(t t))
-                                          (return nil) ; TODO: Change to leave.
-                                          (finally-return i j)))))
-
-        (equal '(0 1 1 1)
-               (eval (quote (loopy (repeat 4)
-                                   (collect i)
-                                   (set i 1 :init 0)))))
-
-        (equal '(0 1 1 1)
-               (eval (quote (loopy (repeat 4)
-                                   (collect i)
-                                   (expr i 1 :init 0))))))))
+(loopy--set-destr-tests)
 
 (ert-deftest expr-two-values ()
   (should
