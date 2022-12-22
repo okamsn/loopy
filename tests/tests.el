@@ -208,12 +208,6 @@ prefix the items in LOOPY or ITER-BARE."
               (leave-from . leaving-from))
   :iter-keyword t)
 
-;; (ert-deftest named ()
-;;   (should (= 4 (loopy my-loop (return-from my-loop 4))))
-;;   (should (= 4 (loopy (named my-loop) (return-from my-loop 4))))
-;;   (should (equal '(4) (loopy my-loop (collect 4) (leave-from my-loop))))
-;;   (should (equal '(4) (loopy (named my-loop) (collect 4) (leave-from my-loop)))))
-
 ;;;; With
 (loopy-deftest with-arg-order ()
   :result 4
@@ -226,22 +220,6 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-keyword t
   :repeat _with)
 
-;; (ert-deftest with-arg-order ()
-;;   (should (= 4
-;;              (eval (quote (loopy (with (a 2)
-;;                                        (b (+ a 2)))
-;;                                  (return b))))))
-;;
-;;   (should (= 4
-;;              (eval (quote (loopy (let* (a 2)
-;;                                    (b (+ a 2)))
-;;                                  (return b))))))
-;;
-;;   (should (= 4
-;;              (eval (quote (loopy (init (a 2)
-;;                                        (b (+ a 2)))
-;;                                  (return b)))))))
-
 (loopy-deftest with-destructuring ()
   :result -2
   :body ((with ((a b) '(1 2))
@@ -250,13 +228,6 @@ prefix the items in LOOPY or ITER-BARE."
                     (- c d))))
   :loopy t
   :iter-bare ((return . returning)))
-
-;; (ert-deftest with-destructuring ()
-;;   (should (= -2
-;;              (eval (quote (loopy (with ((a b) '(1 2))
-;;                                        ([c d] `[,(1+ a) ,(1+ b)]))
-;;                                  (return (+ (- a b)
-;;                                             (- c d)))))))))
 
 ;;;; Without
 (loopy-deftest without ()
@@ -273,31 +244,6 @@ prefix the items in LOOPY or ITER-BARE."
               (return . returning))
   :repeat _without)
 
-;; (ert-deftest without ()
-;;   (should (equal '(4 5)
-;;                  (eval (quote (let ((a 1) (b 2))
-;;                                 (loopy (with (c 3))
-;;                                        (without a b)
-;;                                        (expr a (+ a c))
-;;                                        (expr b (+ b c))
-;;                                        (return a b)))))))
-;;
-;;   (should (equal '(4 5)
-;;                  (eval (quote (let ((a 1) (b 2))
-;;                                 (loopy (with (c 3))
-;;                                        (no-init a b)
-;;                                        (expr a (+ a c))
-;;                                        (expr b (+ b c))
-;;                                        (return a b)))))))
-;;
-;;   (should (equal '(4 5)
-;;                  (eval (quote (let ((a 1) (b 2))
-;;                                 (loopy (with (c 3))
-;;                                        (no-with a b)
-;;                                        (expr a (+ a c))
-;;                                        (expr b (+ b c))
-;;                                        (return a b))))))))
-
 ;;;; Before Do
 ;; `before-do' always runs, and occurs before the loop.
 (loopy-deftest basic-before-do ()
@@ -309,24 +255,6 @@ prefix the items in LOOPY or ITER-BARE."
   :loopy ((_before . (before-do before initially-do initially))
           (return . returning))
   :repeat _before)
-
-;; (ert-deftest basic-before-do ()
-;;   (should (and (= 4
-;;                   (eval (quote (loopy (with (i 3))
-;;                                       (before-do (setq i (1+ i)))
-;;                                       (return i)))))
-;;                (= 4
-;;                   (eval (quote (loopy (with (i 3))
-;;                                       (before (setq i (1+ i)))
-;;                                       (return i)))))
-;;                (= 4
-;;                   (eval (quote (loopy (with (i 3))
-;;                                       (initially-do (setq i (1+ i)))
-;;                                       (return i)))))
-;;                (= 4
-;;                   (eval (quote (loopy (with (i 3))
-;;                                       (initially (setq i (1+ i)))
-;;                                       (return i))))))))
 
 ;;;; After Do - runs after loop is loop completed successfully
 (loopy-deftest basic-after-do-does-run ()
@@ -362,32 +290,6 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-keyword t
   :repeat _after)
 
-;; (ert-deftest basic-after-do ()
-;;   (should (and (eq t (eval (quote (loopy (with (my-ret nil))
-;;                                          (list i '(1 2 3 4))
-;;                                          (after-do (setq my-ret t))
-;;                                          (finally-return my-ret)))))
-;;                (eq nil (eval (quote (loopy (with (my-ret nil))
-;;                                            (list i '(1 2 3 4))
-;;                                            (return nil)
-;;                                            (after-do (setq my-ret t))
-;;                                            (finally-return my-ret)))))
-;;                (eq nil (eval (quote (loopy (with (my-ret nil))
-;;                                            (list i '(1 2 3 4))
-;;                                            (return nil)
-;;                                            (after (setq my-ret t))
-;;                                            (finally-return my-ret)))))
-;;                (eq nil (eval (quote (loopy (with (my-ret nil))
-;;                                            (list i '(1 2 3 4))
-;;                                            (return nil)
-;;                                            (else-do (setq my-ret t))
-;;                                            (finally-return my-ret)))))
-;;                (eq nil (eval (quote (loopy (with (my-ret nil))
-;;                                            (list i '(1 2 3 4))
-;;                                            (return nil)
-;;                                            (else (setq my-ret t))
-;;                                            (finally-return my-ret))))))))
-
 ;;;; Before and After
 (loopy-deftest basic-before-and-after-test ()
   :result 3
@@ -399,13 +301,6 @@ prefix the items in LOOPY or ITER-BARE."
   :loopy t
   :iter-bare ((cycle . cycling))
   :iter-keyword ((cycle . cycle)))
-
-;; (ert-deftest basic-before-and-after-test ()
-;;   (should (= 3 (eval (quote (loopy (with (i 1))
-;;                                    (before-do (cl-incf i))
-;;                                    (repeat 1)
-;;                                    (after-do (cl-incf i))
-;;                                    (finally-return i)))))))
 
 ;;;; Wrap
 (loopy-deftest wrap ()
@@ -452,33 +347,6 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-keyword ((_cycle . cycle)
                  (_do . do)))
 
-;; (ert-deftest wrap ()
-;;   ;; Test saving match data
-;;   (should
-;;    (save-match-data
-;;      (let ((original-data (set-match-data nil)))
-;;        (equal original-data
-;;               (eval (quote (loopy (wrap save-match-data)
-;;                                   (repeat 1)
-;;                                   (do (string-match (make-string 100 ?a)
-;;                                                     (make-string 100 ?a)))
-;;                                   (finally-return (match-data)))))))))
-;;
-;;   ;; Test order things wrapped in.
-;;   (should (= 3 (eval (quote (loopy (wrap (let ((a 1)))
-;;                                          (let ((b (1+ a)))))
-;;                                    (return (+ a b)))))))
-;;
-;;   ;; Ensure wrapping effects don't linger.
-;;   (should-not
-;;    (save-match-data
-;;      (let ((original-data (set-match-data nil)))
-;;        (equal original-data
-;;               (eval (quote (loopy (cycle 1)
-;;                                   (do (string-match (make-string 100 ?a)
-;;                                                     (make-string 100 ?a)))
-;;                                   (finally-return (match-data))))))))))
-
 ;;;; Final Instructions
 (loopy-deftest finally-do ()
   :result 10
@@ -488,18 +356,6 @@ prefix the items in LOOPY or ITER-BARE."
   :loopy ((_list . list))
   :iter-bare ((_list . listing))
   :iter-keyword ((_list . list)))
-
-;; (ert-deftest finally-do ()
-;;   (should (and (= 10
-;;                   (let ((my-var))
-;;                     (loopy (list i (number-sequence 1 10))
-;;                            (finally-do (setq my-var i)))
-;;                     my-var))
-;;                (= 10
-;;                   (let ((my-var))
-;;                     (loopy (list i (number-sequence 1 10))
-;;                            (finally (setq my-var i)))
-;;                     my-var)))))
 
 (loopy-deftest finally-do-not-affect-return ()
   :result nil
