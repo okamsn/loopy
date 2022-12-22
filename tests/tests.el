@@ -929,19 +929,17 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-bare ((cycle . cycling)
               (set . setting)))
 
-(loopy-deftest expr-one-value ()
-  :result '(0 1 1 1)
-  :body ((cycle 4)
-         (collect i)
-         (_set i 1 :init 0))
-  :repeat _set
-  :loopy ((_set . (set expr)))
-  :iter-bare ((_set . (setting)) ; No `expring'.
-              (collect . collecting)
-              (cycle . cycling))
-  :iter-keyword ((_set . (set expr))
-                 (collect . collect)
-                 (cycle . cycle)))
+(loopy-deftest expr-when ()
+  :result '(nil 0 0 1 1 2 2 3)
+  :body ((list i '(1 2 3 4 5 6 7 8))
+         (when (cl-evenp i)
+           (set j 0 (1+ j)))
+         (collect j))
+  :loopy t
+  :iter-keyword (list set collect)
+  :iter-bare ((list . listing)
+              (set . setting)
+              (collect . collecting)))
 
 (defmacro loopy--set-destr-tests ()
   "Implementation is different for more than 2 values."
@@ -967,58 +965,30 @@ prefix the items in LOOPY or ITER-BARE."
 
 (loopy--set-destr-tests)
 
-(ert-deftest expr-two-values ()
-  (should
-   (and
-    (equal '(1 2 2)
-           (eval (quote (loopy  (repeat 3)
-                                (expr my-val 1 2)
-                                (collect my-coll my-val)
-                                (finally-return my-coll)))))
-    (equal '((1 1) (2 2) (2 2))
-           (eval (quote (loopy  (repeat 3)
-                                (expr (i j) '(1 1) '(2 2))
-                                (collect my-coll (list i j))
-                                (finally-return my-coll)))))
+(defmacro loopy--set-value-tests ()
+  "Implementation is different for more than 2 values."
+  (macroexp-progn
+   (cl-loop with list = '(1 2 3 4 5)
+            and len = 10
+            for num in '(1 2 3 5)
+            for subseq = (cl-subseq list 0 num)
+            for result = (append subseq (make-list (- len num) num))
+            collect `(loopy-deftest ,(intern (format "expr-%d-values" num)) ()
+                       :result (quote ,result)
+                       :repeat _set
+                       :body ((cycle ,len)
+                              (_set i ,@subseq)
+                              (collect coll i)
+                              (finally-return coll))
+                       :loopy ((_set . (set expr)))
+                       :iter-bare ((_set . (setting))
+                                   (collect . collecting)
+                                   (cycle . cycling))
+                       :iter-keyword ((_set . (set expr))
+                                      (collect . collect)
+                                      (cycle . cycle))))))
 
-    (equal '(0 1 2 2)
-           (eval (quote (loopy (repeat 4)
-                               (collect i)
-                               (expr i 1 2 :init 0))))))))
-
-(ert-deftest expr-two-values-when ()
-  (should (equal '(nil 0 0 1 1 2 2 3)
-                 (loopy (list i '(1 2 3 4 5 6 7 8))
-                        (when (cl-evenp i)
-                          (expr j 0 (1+ j)))
-                        (collect j)))))
-
-(ert-deftest expr-three-values-when ()
-  (should (equal '(nil a a 0 0 1 1 2)
-                 (loopy (list i '(1 2 3 4 5 6 7 8))
-                        (when (cl-evenp i)
-                          (expr j 'a 0 (1+ j)))
-                        (collect j)))))
-
-;; Implementation is different for more than 2 values.
-(ert-deftest expr-five-values ()
-  (should
-   (and (equal '(1 2 3 4 5 5 5 5 5 5)
-               (eval (quote (loopy  (repeat 10)
-                                    (expr my-val 1 2 3 4 5)
-                                    (collect my-coll my-val)
-                                    (finally-return my-coll)))))
-        (equal '((1 1) (2 2) (3 3) (4 4) (5 5) (5 5) (5 5) (5 5) (5 5) (5 5))
-               (eval (quote (loopy  (repeat 10)
-                                    (expr (i j) '(1 1) '(2 2)
-                                          '(3 3) '(4 4) '(5 5))
-                                    (collect my-coll (list i j))
-                                    (finally-return my-coll)))))
-
-        (equal '(0 1 2 3 4 5 5 5 5 5)
-               (eval (quote (loopy (repeat 10)
-                                   (collect i)
-                                   (expr i 1 2 3 4 5 :init 0))))))))
+(loopy--set-value-tests)
 
 (ert-deftest expr-dont-repeat ()
   "Make sure commands don't repeatedly create/declare the same variable."
