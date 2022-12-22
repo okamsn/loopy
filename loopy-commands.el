@@ -3037,7 +3037,7 @@ Failing that, an error is signaled."
 
   (let ((true-name (loopy--get-true-name command-name)))
     (or (map-elt parsers true-name)
-        (signal 'loopy-unknown-command command-name))))
+        (signal 'loopy-unknown-command (list command-name)))))
 
 (provide 'loopy-commands)
 
