@@ -929,6 +929,19 @@ prefix the items in LOOPY or ITER-BARE."
   :iter-bare ((cycle . cycling)
               (set . setting)))
 
+(loopy-deftest expr-init-destr ()
+  :doc "Each variable is initialized to `:init', not a destructured part of `:init'."
+  :result '((0 0 0) (1 2 3))
+  :body ((collect (list i j k))
+         (set (i j k) '(1 2 3) :init 0)
+         (collect (list i j k))
+         (leave))
+  :loopy t
+  :iter-keyword (leave set collect)
+  :iter-bare ((collect . collecting)
+              (leave . leaving)
+              (set . setting)))
+
 (loopy-deftest expr-when ()
   :result '(nil 0 0 1 1 2 2 3)
   :body ((list i '(1 2 3 4 5 6 7 8))
