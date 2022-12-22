@@ -1002,22 +1002,19 @@ prefix the items in LOOPY or ITER-BARE."
           (how-many "(j nil)")))))
 
 ;;;;; Group
-(ert-deftest group ()
-  (should
-   (equal '((2 4 6) (2 4 6))
-          (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                              (if (cl-evenp i)
-                                  (group (collect c1 i)
-                                         (collect c2 i)))
-                              (finally-return c1 c2))))))
-
-  (should
-   (equal '((2 4 6) (2 4 6))
-          (eval (quote (loopy (list i '(1 2 3 4 5 6))
-                              (if (cl-evenp i)
-                                  (command-do (collect c1 i)
-                                              (collect c2 i)))
-                              (finally-return c1 c2)))))))
+(loopy-deftest group ()
+  :result '((2 4 6) (2 4 6))
+  :body ((list i '(1 2 3 4 5 6))
+         (if (cl-evenp i)
+             (_group (collect c1 i)
+                     (collect c2 i)))
+         (finally-return c1 c2))
+  :repeat _group
+  :loopy ((_group . (group command-do)))
+  ;; Technically don't need to test (and wouldn't work if we used `for' inside,
+  ;; anyway).
+  :iter-keyword ((list . list)
+                 (_group . (group command-do))))
 
 ;;;;; Prev-Expr
 (ert-deftest prev-expr ()
