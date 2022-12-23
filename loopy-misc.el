@@ -139,10 +139,13 @@
   "Loopy: Parser returned 0 non-nil instructions."
   'loopy-error)
 
+(define-error 'loopy-iteration-in-sub-level
+  "Loopy: Can only use iteration commands at top level of a loop or sub-loop"
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can only use command `%s' (`%s') in top level of `loopy' or sub-loop"
-              used-name true-name))
+  "Signal an error for USED-NAME that is really TRUE-NAME."
+  (signal 'loopy-iteration-in-sub-level (list used-name true-name)))
 
 (defun loopy--signal-must-be-top-level (command-name)
   "Signal an error for COMMAND-NAME."

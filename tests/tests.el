@@ -938,45 +938,37 @@ prefix the items in LOOPY or ITER-BARE."
 
 ;;;; Iteration
 ;; Making sure iteration fails in sub-level
-(ert-deftest iteration-sub-level ()
-  (should-error
-   (progn
-     (loopy (if t (list i '(1))) (finally-return t))
-     (loopy (if t (list-ref i '(1))) (finally-return t))
-     (loopy (if t (array i '(1))) (finally-return t))
-     (loopy (if t (array-ref i '(1))) (finally-return t))
-     (loopy (if t (seq i '(1))) (finally-return t))
-     (loopy (if t (seq-ref i '(1))) (finally-return t))
-     (loopy (if t (repeat 1)) (finally-return t))
-     (loopy (when t (list i '(1))) (finally-return t))
-     (loopy (when t (list-ref i '(1))) (finally-return t))
-     (loopy (when t (array i '(1))) (finally-return t))
-     (loopy (when t (array-ref i '(1))) (finally-return t))
-     (loopy (when t (seq i '(1))) (finally-return t))
-     (loopy (when t (seq-ref i '(1))) (finally-return t))
-     (loopy (when t (repeat 1)) (finally-return t))
-     (loopy (unless t (list i '(1))) (finally-return t))
-     (loopy (unless t (list-ref i '(1))) (finally-return t))
-     (loopy (unless t (array i '(1))) (finally-return t))
-     (loopy (unless t (array-ref i '(1))) (finally-return t))
-     (loopy (unless t (seq i '(1))) (finally-return t))
-     (loopy (unless t (seq-ref i '(1))) (finally-return t))
-     (loopy (unless t (repeat 1)) (finally-return t))
-     (loopy (cond (t (list i '(1)))) (finally-return t))
-     (loopy (cond (t (list-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (array i '(1)))) (finally-return t))
-     (loopy (cond (t (array-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (seq i '(1)))) (finally-return t))
-     (loopy (cond (t (seq-ref i '(1)))) (finally-return t))
-     (loopy (cond (t (repeat 1))) (finally-return t))
-     (loopy (group (list i '(1))) (finally-return t))
-     (loopy (group (list-ref i '(1))) (finally-return t))
-     (loopy (group (array i '(1))) (finally-return t))
-     (loopy (group (array-ref i '(1))) (finally-return t))
-     (loopy (group (seq i '(1))) (finally-return t))
-     (loopy (group (seq-ref i '(1))) (finally-return t))
-     (loopy (group (repeat 1))) (finally-return t))
-   :type 'user-error))
+(defmacro test--iteration-sub-level ()
+  (let ((plain-cmds '( list list-ref array array-ref seq seq-ref cycle))
+        (ing-cmds   '( listing listing-ref
+                       arraying arraying-ref
+                       sequencing sequencing-ref
+                       cycling)))
+    `(progn
+       ,@(cl-loop
+          for body in '(((if t (_cmd i '(1))) (finally-return t))
+                        ((when t (_cmd i '(1))) (finally-return t))
+                        ((unless t (_cmd i '(1))) (finally-return t))
+                        ((cond (t (_cmd i '(1)))) (finally-return t)))
+          for sub-cmd = (car (car body))
+          collect `(loopy-deftest ,(intern (format "iteration-sub-level-%s"
+                                                   sub-cmd)) ()
+                     :error loopy-iteration-in-sub-level
+                     :repeat _cmd
+                     :loopy ((_cmd . ,plain-cmds))
+                     :iter-bare ((_cmd . ,ing-cmds))
+                     :iter-keyword ((_cmd . ,plain-cmds))
+                     :body ,body))
+
+       (loopy-deftest iteration-sub-level-group ()
+         :doc "Don't test `group' for `iter-bare'."
+         :error loopy-iteration-in-sub-level
+         :repeat _cmd
+         :loopy ((_cmd . ,plain-cmds))
+         :iter-keyword ((_cmd . ,plain-cmds))
+         :body  ((group (_cmd i '(1))) (finally-return t))))))
+
+(test--iteration-sub-level)
 
 ;; Can't bind the same iteration variable with multiple commands.
 (ert-deftest iteration-same-var-multiple-cmd ()
