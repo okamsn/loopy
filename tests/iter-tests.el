@@ -2100,7 +2100,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
      (loopy-iter (progn (sequencing i '(1))) (finally-return t))
      (loopy-iter (progn (sequencing-ref i '(1))) (finally-return t))
      (loopy-iter (progn (cycling 1))) (finally-return t))
-   :type 'user-error))
+   :type 'loopy-iteration-in-sub-level))
 
 ;;;;; Array
 (ert-deftest array ()

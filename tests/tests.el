@@ -939,11 +939,22 @@ prefix the items in LOOPY or ITER-BARE."
 ;;;; Iteration
 ;; Making sure iteration fails in sub-level
 (defmacro test--iteration-sub-level ()
-  (let ((plain-cmds '( list list-ref array array-ref seq seq-ref cycle))
+  (let ((plain-cmds '( list list-ref
+                       cons
+                       array array-ref
+                       seq seq-ref seq-index
+                       cycle
+                       iter
+                       map map-ref
+                       numbers numbers-down numbers-up))
         (ing-cmds   '( listing listing-ref
+                       consing
                        arraying arraying-ref
-                       sequencing sequencing-ref
-                       cycling)))
+                       sequencing sequencing-ref sequencing-index
+                       cycling
+                       iterating
+                       mapping mapping-ref
+                       numbering numbering-down numbering-up)))
     `(progn
        ,@(cl-loop
           for body in '(((if t (_cmd i '(1))) (finally-return t))
