@@ -694,8 +694,12 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 
 Some iteration commands can produce more efficient code if there
 is no request for a specific initialization value."
-  (or (memq var-name (mapcar #'car loopy--with-vars))
-      (memq var-name loopy--without-vars)))
+  (or (cl-loop for (var val) in loopy--with-vars
+               when (eq var var-name)
+               return (cons 'with val))
+      (cl-loop for x in loopy--without-vars
+               when (eq x var-name)
+               return (cons 'without nil))))
 
 (defun loopy--command-bound-p (var-name)
   "Whether VAR-NAME was bound by a command (and not a special macro argument).
