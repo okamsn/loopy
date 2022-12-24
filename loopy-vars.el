@@ -706,9 +706,15 @@ is no request for a specific initialization value."
 
 The variable can exist in `loopy--iteration-vars',
 `loopy--accumulation-vars', or `loopy--generalized-vars'."
-  (or (memq var-name (mapcar #'car loopy--iteration-vars))
-      (memq var-name (mapcar #'car loopy--accumulation-vars))
-      (memq var-name (mapcar #'car loopy--generalized-vars))))
+  (or (cl-loop for (var val) in loopy--iteration-vars
+               when (eq var var-name)
+               return (cons 'iteration val))
+      (cl-loop for (var val) in loopy--accumulation-vars
+               when (eq var var-name)
+               return (cons 'accumulation val))
+      (cl-loop for (var val) in loopy--generalized-vars
+               when (eq var var-name)
+               return (cons 'generalized val))))
 
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
