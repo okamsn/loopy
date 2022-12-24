@@ -43,6 +43,7 @@
 (require 'seq)
 (require 'subr-x)
 
+
 ;;;; Errors
 (define-error 'loopy-error
   "Error in `loopy' macro")
@@ -51,18 +52,28 @@
   "Loopy: Unknown command"
   'loopy-error)
 
-(define-error 'loopy-wrong-number-of-command-arguments
-  "Loopy: Wrong number of command arguments"
-  '(loopy-error wrong-number-of-arguments))
+(define-error 'loopy-unknown-loop-target
+  "Loopy: Unknown loop target"
+  'loopy-error)
 
+;;;;; Errors on Command Arguments
 (define-error 'loopy-bad-command-arguments
   "Loopy: Bad command arguments"
   'loopy-error)
+
+(define-error 'loopy-wrong-number-of-command-arguments
+  "Loopy: Wrong number of command arguments"
+  '(loopy-error wrong-number-of-arguments loopy-bad-command-arguments))
 
 (define-error 'loopy-bad-position-command-argument
   "Loopy: Bad `:at' position"
   '(loopy-error loopy-bad-command-arguments))
 
+(define-error 'loopy-conflicting-command-arguments
+  "Loopy: Conflicting command arguments"
+  '(loopy-error loopy-bad-command-arguments))
+
+;;;;; Errors on Accumulations
 (define-error 'loopy-incompatible-accumulations
   "Loopy: Incompatible accumulations"
   'loopy-error)
@@ -71,14 +82,28 @@
   "Loopy: Failed to set up accumulation counters"
   'loopy-error)
 
-(define-error 'loopy-unknown-loop-target
-  "Loopy: Unknown loop target"
+(define-error 'loopy-accum-constructor-missing
+  "Loopy: No accumulation constructor for command or alias"
   'loopy-error)
 
-(define-error 'loopy-conflicting-command-arguments
-  "Loopy: Conflicting command arguments"
+(define-error 'loopy-bad-accum-category
+  "Loopy: Bad accumulation category"
   'loopy-error)
 
+;;;;; Errors on Iteration
+(define-error 'loopy-iteration-in-sub-level
+  "Loopy: Can only use iteration commands at top level of a loop or sub-loop"
+  'loopy-error)
+
+(defun loopy--signal-bad-iter (used-name true-name)
+  "Signal an error for USED-NAME that is really TRUE-NAME."
+  (signal 'loopy-iteration-in-sub-level (list used-name true-name)))
+
+(defun loopy--signal-must-be-top-level (command-name)
+  "Signal an error for COMMAND-NAME."
+  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
+
+;;;;; Errors on Destructuring
 (define-error 'loopy-bad-desctructuring
   "Loopy: Bad destructuring"
   'loopy-error)
@@ -119,6 +144,7 @@
   "Loopy: No variables bound"
   'loopy-bad-desctructuring)
 
+;;;;; Errors on Quoted Forms
 (define-error 'loopy-bad-function-form
   "Loopy: Unrecognized function form"
   'loopy-error)
@@ -127,30 +153,7 @@
   "Loopy: Unrecognized quoted form"
   'loopy-error)
 
-(define-error 'loopy-bad-accum-category
-  "Loopy: Bad accumulation category"
-  'loopy-error)
-
-(define-error 'loopy-accum-constructor-missing
-  "Loopy: No accumulation constructor for command or alias"
-  'loopy-error)
-
-(define-error 'loopy-parser-instructions-missing
-  "Loopy: Parser returned 0 non-nil instructions."
-  'loopy-error)
-
-(define-error 'loopy-iteration-in-sub-level
-  "Loopy: Can only use iteration commands at top level of a loop or sub-loop"
-  'loopy-error)
-
-(defun loopy--signal-bad-iter (used-name true-name)
-  "Signal an error for USED-NAME that is really TRUE-NAME."
-  (signal 'loopy-iteration-in-sub-level (list used-name true-name)))
-
-(defun loopy--signal-must-be-top-level (command-name)
-  "Signal an error for COMMAND-NAME."
-  (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
-
+
 ;;;; List Processing
 (defalias 'loopy--car-equals-car #'loopy--car-equal-car)
 (defun loopy--car-equal-car (a b)
@@ -300,6 +303,7 @@ splitting (1 2 3) or (1 2 . 3) returns ((1 2) 3)."
       (let ((last (cl-first var-hold)))
         (list (nreverse (cl-rest var-hold)) last)))))
 
+
 ;;;; Destructuring
 ;; This better allows for things to change in the future.
 (defun loopy--var-ignored-p (var)
@@ -1040,6 +1044,7 @@ See `loopy--destructure-list' for normal values."
     ;; Fix the order of the bindings and return.
     (nreverse bindings)))
 
+
 ;;;; Loop Tag Names
 (defun loopy--produce-non-returning-exit-tag-name (&optional loop-name)
   "Produce a tag from LOOP-NAME."
@@ -1054,6 +1059,7 @@ See `loopy--destructure-list' for normal values."
       (intern (format "loopy-%s-skip-tag"  loop-name))
     'loopy--skip-tag))
 
+
 ;;;; Quoted Symbols and Functions
 (defun loopy--get-function-symbol (function-form)
   "Return the actual symbol described by FUNCTION-FORM.
@@ -1100,6 +1106,7 @@ This expansion can apply FUNC directly or via `funcall'."
       `(,(loopy--get-function-symbol func) ,@args)
     `(funcall ,func ,@args)))
 
+
 ;;;; Indexing
 
 (defun loopy--generate-inc-idx-instructions
