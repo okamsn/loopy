@@ -95,6 +95,10 @@
   "Loopy: Can only use iteration commands at top level of a loop or sub-loop"
   'loopy-error)
 
+(define-error 'loopy-reinitializing-iteration-variable
+  "Loopy: Can only define iteration once"
+  'loopy-error)
+
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for USED-NAME that is really TRUE-NAME."
   (signal 'loopy-iteration-in-sub-level (list used-name true-name)))

@@ -981,10 +981,14 @@ prefix the items in LOOPY or ITER-BARE."
 
 (test--iteration-sub-level)
 
-;; Can't bind the same iteration variable with multiple commands.
-(ert-deftest iteration-same-var-multiple-cmd ()
-  (should-error (eval (quote (loopy (list i '(1 2 3))
-                                    (list i '(1 2 3)))))))
+(loopy-deftest iteration-same-var-multiple-cmd ()
+  :doc "Can't bind the same iteration variable with multiple commands."
+  :error loopy-reinitializing-iteration-variable
+  :body ((list i '(1 2 3))
+         (list i '(1 2 3)))
+  :loopy t
+  :iter-bare ((list . listing))
+  :iter-keyword (list))
 
 ;;;;; Array
 (ert-deftest array ()

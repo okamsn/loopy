@@ -724,12 +724,13 @@ macro `loopy' itself."
       (loopy--iteration-vars
        (loopy--validate-binding instruction-value)
        ;; Don't want to accidentally rebind variables to `nil'.
-       (let ((var (cl-first instruction-value)))
-         (cond
-          ((loopy--with-bound-p var)) ; Do nothing.
-          ((loopy--command-bound-p var)
-           (error "Re-initializing iteration variable: %s" instruction-value))
-          (t (push instruction-value loopy--iteration-vars)))))
+       (pcase-let ((`(,var ,new-val) instruction-value))
+         (pcase var
+           ((pred loopy--with-bound-p) nil)
+           ((app loopy--command-bound-p `(,place . ,old-val))
+            (signal 'loopy-reinitializing-iteration-variable
+                    (list :in place :var var :old old-val :new new-val)))
+           (_ (push instruction-value loopy--iteration-vars)))))
 
       (loopy--accumulation-vars
        (loopy--validate-binding instruction-value)
