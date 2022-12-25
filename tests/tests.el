@@ -22,6 +22,7 @@
 (require 'loopy-vars "./loopy-vars.el")
 (require 'loopy-commands "./loopy-commands.el")
 (require 'loopy-iter "./loopy-iter.el")
+(require 'subr-x)
 
 (push (list "Loopy Tests"
             (rx (0+ blank) "(loopy-deftest" (0+ blank)
@@ -185,6 +186,26 @@ prefix the items in LOOPY or ITER-BARE."
                :provided iter-keyword-provided
                :repeat (or repeat repeat-iter-keyword)
                :keyword t))))
+
+(defun my-iter-insert (&rest syms-str)
+  "Insert values for `:iter-keyword' and `:iter-bare'.
+SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
+  (interactive (completing-read-multiple "Bare name: "
+                                         loopy-iter-bare-commands))
+  (let* ((true-names-str (mapcar (lambda (x)
+                                   (thread-last x
+                                                intern
+                                                loopy--get-true-name
+                                                symbol-name))
+                                 syms-str)))
+    (insert (format ":iter-keyword (%s)"
+                    (string-join true-names-str " ")))
+    (newline-and-indent)
+    (insert (format ":iter-bare (%s)"
+                    (string-join (cl-loop for true in true-names-str
+                                          for iter in syms-str
+                                          collect (format "(%s . %s)" true iter))
+                                 "\n")))))
 
 ;;; Macro arguments
 ;;;; Named (loop Name)
