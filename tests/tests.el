@@ -138,13 +138,17 @@ prefix the items in LOOPY or ITER-BARE."
                   (mapcar (lambda (sexp)
                             (pcase sexp
                               (`(,first . ,rest)
-                               (let ((new-rest (translate group-alist rest keyword))
-                                     (new-first (map-elt group-alist first)))
-                                 (if new-first
-                                     (if keyword
-                                         `(for ,new-first ,@new-rest)
-                                       `(,new-first ,@new-rest))
-                                   `(,first ,@new-rest))))
+                               ;; If not a proper list, then it was probably a
+                               ;; dotted variable list.
+                               (if (not (proper-list-p rest))
+                                   sexp
+                                 (let ((new-rest (translate group-alist rest keyword))
+                                       (new-first (map-elt group-alist first)))
+                                   (if new-first
+                                       (if keyword
+                                           `(for ,new-first ,@new-rest)
+                                         `(,new-first ,@new-rest))
+                                     `(,first ,@new-rest)))))
                               (_ sexp)))
                           this-body))
        (make-bodies (alist group-repeat &optional keyword)
