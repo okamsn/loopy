@@ -2,6 +2,10 @@
 
 ;; Run these tests using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
+;;
+;; NOTE:
+;; - Destructuring tests in `./misc-tests.el'.
+;; - Alternative destructuring systems tested in their own files.
 
 (push (expand-file-name ".")
       load-path)
@@ -29,14 +33,6 @@
 (defmacro lq (&rest body)
   "`loopy' quote: Quote a use of `loopy'."
   `(eval (quote (loopy ,@body)) t))
-
-(defmacro loopy-test-structure (input output-pattern)
-  "Use `pcase' to check a destructurings bindings.
-INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
-  `(pcase ,input
-     (,output-pattern
-      t)
-     (_ nil)))
 
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
