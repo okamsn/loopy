@@ -1012,124 +1012,147 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-keyword (list))
 
 ;;;;; Array
-(ert-deftest array ()
-  (should (equal '(1 2 3)
-                 (eval (quote (loopy  (array i [1 2 3])
-                                      (collect coll i)
-                                      (finally-return coll))))))
+(loopy-deftest array ()
+  :result '(97 98 99)
+  :multi-body t
+  :body [((array  i [97 98 99]) (collect coll i) (finally-return coll))
+         ((string i "abc")      (collect coll i) (finally-return coll))]
+  :loopy t
+  :iter-keyword (array collect string)
+  :iter-bare ((array . arraying)
+              (string . stringing)
+              (collect . collecting)))
 
-  (should (equal '(97 98 99)
-                 (eval (quote (loopy  (string i "abc")
-                                      (collect coll i)
-                                      (finally-return coll)))))))
+(loopy-deftest array-vars ()
+  :doc "Test behavior for using numbers stored in variable vs. using numbers directly.
+Using numbers directly will use less variables and more efficient code."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (end 8)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array i arr :from start :to end :by 2)
+          (collect i))
+         ((with (start 2) (end 8) (step 2)
+                (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array i arr :from start :to end :by step)
+          (collect i))]
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-vars ()
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array i arr :from start :to end :by 2)
-                     (collect i))))
+(loopy-deftest array-destructuring ()
+  :doc "Check that `array' implements destructuring, not destructuring itself."
+  :result '(5 6 7 8)
+  :body ((array (a b c . d) [(1 2 3 . 4) (5 6 7 . 8)])
+         (finally-return a b c d))
+  :loopy t
+  :iter-keyword (array)
+  :iter-bare ((array . arraying)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array i arr :from start :to end :by step)
-                     (collect i)))))
+(loopy-deftest array-multi-array ()
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((array i [1 2] [3 4])
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-destructuring ()
-  (should (and (equal '(5 6)
-                      (eval (quote (loopy (array (a . b)
-                                                 [(1 . 2) (3 . 4) (5 . 6)])
-                                          (finally-return a b)))))
-               (equal '(5 (6))
-                      (eval (quote (loopy (array (a . b)
-                                                 [(1 2) (3 4) (5 6)])
-                                          (finally-return a b)))))
-               (equal '(4 5 6 7)
-                      (eval (quote (loopy (array (a b c d)
-                                                 [(1 2 3 4) (4 5 6 7)])
-                                          (finally-return a b c d)))))
-               (equal '(4 5 6)
-                      (eval (quote (loopy (array [i j k] [[1 2 3] [4 5 6]])
-                                          (finally-return i j k))))))))
+(loopy-deftest array-multi-array-:by ()
+  :result '((1 3) (2 3))
+  :body ((array i [1 2] [3 4] :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-multi-array-quote ()
+  :doc "Just to check how quoting is handled."
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((array i  `[1 ,(1+ 1)] [3 4])
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-keywords-:index ()
+  :result  '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+  :body ((array i [4 3 2 1 0] :index cat)
+         (collect (cons cat i)))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
+(loopy-deftest array-keywords-:by ()
+  :result '(0 2 4 6 8 10)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
 
-(ert-deftest array-recursive-destructuring ()
-  (should
-   (and
-    (equal '(5 5 6)
-           (eval (quote (loopy (array (a [b c]) [(1 [1 2]) (5 [5 6])])
-                               (finally-return (list a b c))))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a [b c]] [[1 [2 3]] [4 [5 6]]])
-                    (finally-return a b c)))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a [b [c]]] [[1 [2 [3]]] [4 [5 [6]]]])
-                    (finally-return a b c)))))
-    (equal '(4 5 6)
-           (eval
-            (quote
-             (loopy (array [a (b c)] [[1 (2 3)] [4 (5 6)]])
-                    (finally-return a b c))))))))
+(loopy-deftest array-keywords-:from-:downto-:by ()
+  :result  '(8 6 4 2)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10]
+                :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-multi-array ()
-  (should (equal '((1 3) (1 4) (2 3) (2 4))
-                 (loopy (array i [1 2] [3 4])
-                        (collect i))))
+(loopy-deftest array-keywords-:upto ()
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-  (should (equal '((1 3) (2 3))
-                 (loopy (array i [1 2] [3 4] :by 2)
-                        (collect i))))
 
-  ;; Just to check how quoting is handled.
-  (should (equal '((1 3) (1 4) (2 3) (2 4))
-                 (loopy (array i `[1 ,(1+ 1)] [3 4])
-                        (collect i)))))
+(loopy-deftest array-keywords-:to ()
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-multi-array-destructuring ()
-  (should (equal '((1 1 2 2) (3 4 3 4))
-                 (eval (quote (loopy (array (i j) [1 2] [3 4])
-                                     (collect c1 i)
-                                     (collect c2 j)
-                                     (finally-return c1 c2)))))))
+(loopy-deftest array-keywords-:downto ()
+  :result  '(10 9 8 7 6 5 4 3)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-(ert-deftest array-keywords ()
-  (should (equal '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
-                 (eval (quote (loopy (array i [4 3 2 1 0] :index cat)
-                                     (collect (cons cat i)))))))
 
-  (should (equal '(0 2 4 6 8 10)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
-                                     (collect i))))))
+(loopy-deftest array-keywords-:above ()
+  :result  '(10 9 8)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
-  (should (equal '(8 6 4 2)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10]
-                                            :from 8 :downto 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
-                                     (collect i))))))
-
-  (should (equal '(10 9 8 7 6 5 4 3)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
-                                     (collect i))))))
-
-  (should (equal '(10 9 8)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (array i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
-                                     (collect i)))))))
+(loopy-deftest array-keywords-:below ()
+  :result  '(0 1 2)
+  :body ((array i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
 
 ;;;;; Array Ref
 (ert-deftest array-ref ()
