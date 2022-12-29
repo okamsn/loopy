@@ -1290,58 +1290,69 @@ Using numbers directly will use less variables and more efficient code."
               (do . ignore)))
 
 ;;;;; Cons
-(ert-deftest cons ()
-  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-                 (eval (quote (loopy (cons x '(1 2 3 4))
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons ()
+  :result '((1 2 3 4) (2 3 4) (3 4) (4))
+  :body ((_cmd x '(1 2 3 4))
+         (collect coll x)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cons conses)))
+  :iter-keyword ((_cmd . (cons conses))
+                 (collect . collect))
+  :iter-bare ((_cmd . (consing))
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cdr)
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-:by ()
+  :result '((1 2 3 4) (3 4))
+  :multi-body t
+  :body [((cons x '(1 2 3 4) :by #'cddr)
+          (collect coll x)
+          (finally-return coll))
+         ((cons x '(1 2 3 4) :by (lambda (y) (cddr y)))
+          (collect coll x)
+          (finally-return coll))
+         ((with (f (lambda (y) (cddr y))))
+          (cons x '(1 2 3 4) :by f)
+          (collect coll x)
+          (finally-return coll))]
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (loopy (cons x '(1 2 3 4) :by #'cddr)
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-destr ()
+  :doc  "Check that `cons' implements destructuring, not destructuring itself."
+  :result '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
+  :body ((cons (i . j) '(1 2 3 4))
+         (collect coll (list i j))
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (loopy (cons x '(1 2 3 4)
-                                           :by (lambda (x) (cddr x)))
-                                     (collect coll x)
-                                     (finally-return coll))))))
+(loopy-deftest cons-init-direct ()
+  :doc "Check that `cons' immediately binds the value when possible."
+  :result '((1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4) (4))
+  :body  ((collect l)
+          (cons l '(1 2 3 4))
+          (collect l))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
-  (should (equal '((1 2 3 4) (3 4))
-                 (eval (quote (let ((f (lambda (x) (cddr x))))
-                                (loopy (cons x '(1 2 3 4) :by f)
-                                       (collect coll x)
-                                       (finally-return coll)))))))
-
-  (should (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
-                 (eval (quote (loopy (cons (i . j) '(1 2 3 4))
-                                     (collect coll (list i j))
-                                     (finally-return coll))))))
-
-  (should (equal '((1 (2 3 4)) (3 (4)))
-                 (eval (quote (loopy (cons (i . j) '(1 2 3 4) :by #'cddr)
-                                     (collect coll (list i j))
-                                     (finally-return coll)))))))
-
-(ert-deftest cons-init ()
-  (equal '((1 2 3 4) (2 3 4) (3 4) (4))
-         (lq (cons l '(1 2 3 4))
-             (collect l)))
-
-  (equal '((1 (2 3 4)) (2 (3 4)) (3 (4)) (4 nil))
-         (lq (cons (car . cdr) '(1 2 3 4))
-             (collect (list car cdr))))
-
-  (equal '(25 (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
-         (lq (with (l 25))
-             (collect l)
-             (cons l '(1 2 3 4))
-             (collect l))))
+(loopy-deftest cons-init-indirect ()
+  :doc "Check that `cons' doesn't overwrite a with-bound value."
+  :result '(25 (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
+  :body  ((with (l 25))
+          (collect l)
+          (cons l '(1 2 3 4))
+          (collect l))
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
 
 ;;;;; Iter
 (ert-deftest iter-with-single-var ()
