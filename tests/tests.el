@@ -1155,121 +1155,139 @@ Using numbers directly will use less variables and more efficient code."
               (array . arraying)))
 
 ;;;;; Array Ref
-(ert-deftest array-ref ()
-  (should (equal "aaa"
-                 (eval (quote (loopy (with (my-str "cat"))
-                                     (array-ref i my-str)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
-  (should (equal "aaa"
-                 (eval (quote (loopy (with (my-str "cat"))
-                                     (stringf i my-str)
-                                     (do (setf i ?a))
-                                     (finally-return my-str)))))))
+(loopy-deftest array-ref ()
+  :result "aaa"
+  :body ((with (my-str "cat"))
+         (_cmd i my-str)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :repeat _cmd
+  :loopy ((_cmd . (array-ref string-ref arrayf stringf)))
+  :iter-keyword ((_cmd . (array-ref string-ref arrayf stringf))
+                 (do . do))
+  :iter-bare ((_cmd . (arraying-ref stringing-ref))
+              (do . ignore)))
+
+(loopy-deftest array-ref-destructuring ()
+  :doc  "Check that `array-ref' implements destructuring, not destructuring itself."
+  :result [(7 8 9) (7 8 9)]
+  :body ((with (my-array [(1 2 3) (4 5 6)]))
+         (array-ref (i j k) my-array)
+         (do (setf i 7)
+             (setf j 8)
+             (setf k 9))
+         (finally-return my-array))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
 
-(ert-deftest array-ref-destructuring ()
-  (should (and (equal [(7 8 9) (7 8 9)]
-                      (eval (quote (loopy (with (my-array [(1 2 3) (4 5 6)]))
-                                          (array-ref (i j k) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array)))))
-               (equal [(7 8 9 10) (7 8 9 10)]
-                      (eval (quote (loopy (with (my-array [(1 2 3 4) (4 5 6 8)]))
-                                          (array-ref (i j . k) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k '(9 10)))
-                                          (finally-return my-array)))))
-               (equal [[7 8 9 4] [7 8 9 8]]
-                      (eval (quote (loopy (with (my-array [[1 2 3 4] [4 5 6 8]]))
-                                          (array-ref [i j k] my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array))))))))
+(loopy-deftest array-ref-keywords-:by ()
+  :result "a1a3a5a7a9"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :by 2)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-(ert-deftest array-ref-recursive-destructuring ()
-  (should (and (equal [(7 [8 9]) (7 [8 9])]
-                      (eval (quote (loopy (with (my-array [(1 [2 3]) (4 [5 6])]))
-                                          (array-ref (i [j k]) my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array)))))
-               (equal [[7 [8 9] 4] [7 [8 9] 8]]
-                      (eval (quote (loopy (with (my-array [[1 [2 3] 4] [4 [5 6] 8]]))
-                                          (array-ref [i [j k]] my-array)
-                                          (do (setf i 7)
-                                              (setf j 8)
-                                              (setf k 9))
-                                          (finally-return my-array))))))))
+(loopy-deftest array-ref-keywords-:by-:index ()
+  :result  "a1a3a5a7a9"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :by 2 :index cat)
+          (do (setf (aref my-str cat) ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-(ert-deftest array-ref-keywords ()
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :by 2)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:from-:by ()
+  :result  "0a2a4a6a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :from 1 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "a1a3a5a7a9"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :by 2 :index cat)
-                                     (do (setf (aref my-str cat) ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:downto-:by ()
+  :result  "0123456a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :downto 6 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "0a2a4a6a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :from 1 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:below ()
+  :result  "aaaaa56789"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :below 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "0123456a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :downto 6 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:above ()
+  :result  "012345aaaa"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :above 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaa56789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :below 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:upto ()
+  :result  "aaaaaa6789"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :upto 5)
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "012345aaaa"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :above 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
+(loopy-deftest array-ref-keywords-:upfrom-:by ()
+  :result  "0a2a4a6a8a"
+  :body  ((with (my-str "0123456789"))
+          (array-ref i my-str :upfrom 1 :by 2 )
+          (do (setf i ?a))
+          (finally-return my-str))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
-  (should (equal "aaaaaa6789"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :upto 5)
-                                     (do (setf i ?a))
-                                     (finally-return my-str))))))
-
-  (should (equal "0a2a4a6a8a"
-                 (eval (quote (loopy (with (my-str "0123456789"))
-                                     (array-ref i my-str :upfrom 1 :by 2 )
-                                     (do (setf i ?a))
-                                     (finally-return my-str)))))))
-
-(ert-deftest array-ref-vars ()
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array-ref i arr :from start :to end :by 2)
-                     (do (setf i 22))
-                     (finally-return arr))))
-
-  (should (equal [0 1 22 3 22 5 22 7 22 9 10]
-                 (lq (with (start 2) (end 8) (step 2)
-                           (arr (cl-coerce (number-sequence 0 10) 'vector)))
-                     (array-ref i arr :from start :to end :by step)
-                     (do (setf i 22))
-                     (finally-return arr)))))
+(loopy-deftest array-ref-vars ()
+  :doc "Test behavior for using numbers stored in variable vs. using numbers directly.
+Using numbers directly will use less variables and more efficient code."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :multi-body t
+  :body [((with (start 2) (end 8) (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array-ref i arr :from start :to end :by 2)
+          (do (setf i 22))
+          (finally-return arr))
+         ((with (start 2) (end 8) (step 2) (arr (cl-coerce (number-sequence 0 10) 'vector)))
+          (array-ref i arr :from start :to end :by step)
+          (do (setf i 22))
+          (finally-return arr))]
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
 
 ;;;;; Cons
 (ert-deftest cons ()
