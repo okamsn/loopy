@@ -1653,56 +1653,77 @@ Using numbers directly will use less variables and more efficient code."
               (collect . collecting)))
 
 ;;;;; Map Ref
+(loopy-deftest map-ref ()
+  :result [17 18 19 20 21]
+  :body ((with (map (vector 10 11 12 13 14)))
+         (_cmd i map)
+         (do (cl-incf i 7))
+         (finally-return map))
+  :repeat _cmd
+  :loopy ((_cmd . (map-ref mapf mapping-ref)))
+  :iter-keyword ((_cmd . (map-ref mapf mapping-ref))
+                 (do . do))
+  :iter-bare ((_cmd . (mapping-ref))
+              (do . ignore)))
 
-(ert-deftest map-ref ()
-  (should (equal [17 18 19 20 21]
-                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
-                                     (mapf i map)
-                                     (do (cl-incf i 7))
-                                     (finally-return map))))))
+(loopy-deftest map-ref-:key ()
+  :result '([17 18 19 20 21] (0 1 2 3 4))
+  :body ((with (map (vector 10 11 12 13 14)))
+         (mapf i map :key my-key)
+         (do (cl-incf i 7))
+         (collect my-key)
+         (finally-return map loopy-result))
+  :loopy t
+  :iter-keyword (mapf do collect)
+  :iter-bare ((mapf . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-  (should (equal '([17 18 19 20 21] (0 1 2 3 4))
-                 (eval (quote (loopy (with (map (vector 10 11 12 13 14)))
-                                     (mapf i map :key my-key)
-                                     (do (cl-incf i 7))
-                                     (collect my-key)
-                                     (finally-return map loopy-result)))))))
+(loopy-deftest map-ref-:unique-t ()
+  :doc "`:unique' is `t' by default."
+  :result '(:a 8 :a 2 :b 10)
+  :multi-body t
+  :body [((with (map (list :a 1 :a 2 :b 3)))
+          (map-ref i map)
+          (do (cl-incf i 7))
+          (finally-return map))
+         ((with (map (list :a 1 :a 2 :b 3)))
+          (map-ref i map :unique t)
+          (do (cl-incf i 7))
+          (finally-return map))]
+  :loopy t
+  :iter-keyword (map-ref do collect)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-(ert-deftest map-ref-unique ()
-  (should (equal '(:a 8 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map)
-                          (do (cl-incf i 7))
-                          (finally-return map)))))
+(loopy-deftest map-ref-:unique-nil ()
+  :doc "Fist `:a' becomes 15 because it gets found twice by `setf'."
+  :result '(:a 15 :a 2 :b 10)
+  :body (loopy (with (map (list :a 1 :a 2 :b 3)))
+               (map-ref i map :unique nil)
+               (do (cl-incf i 7))
+               (finally-return map))
+  :loopy t
+  :iter-keyword (map-ref do collect)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
 
-  (should (equal '(:a 8 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map :unique t)
-                          (do (cl-incf i 7))
-                          (finally-return map)))))
+(loopy-deftest map-ref-destr ()
+  :doc "Check that `map-ref' implements destructuring, not the destructuring itself."
+  :result [[7 8] [7 8]]
+  :body ((with (map (vector (vector 10 11)
+                            (vector 12 13))))
+         (map-ref [i j] map)
+         (do (setf i 7)
+             (setf j 8))
+         (finally-return map))
+  :loopy t
+  :iter-keyword (map-ref do)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)))
 
-  (should (equal '(:a 15 :a ignored :b 10)
-                 (let ((map (list :a 1 :a 'ignored :b 3)))
-                   (loopy (map-ref i map :unique nil)
-                          (do (cl-incf i 7))
-                          (finally-return map))))))
-
-(ert-deftest map-ref-destructuring ()
-  (should (equal [[7 8] [7 8]]
-                 (eval (quote (loopy (with (map (vector (vector 10 11)
-                                                        (vector 12 13))))
-                                     (mapf [i j] map)
-                                     (do (setf i 7)
-                                         (setf j 8))
-                                     (finally-return map))))))
-
-  (should (equal '((a 7 8) (b 7 8))
-                 (eval (quote (loopy (with (map (list (cons 'a (list 1 2))
-                                                      (cons 'b (list 3 4)))))
-                                     (mapf (i j) map)
-                                     (do (setf i 7)
-                                         (setf j 8))
-                                     (finally-return map)))))))
 
 ;;;;; Nums
 (ert-deftest nums ()
