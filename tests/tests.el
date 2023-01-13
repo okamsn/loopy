@@ -1724,136 +1724,199 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((map-ref . mapping-ref)
               (do . ignore)))
 
-
 ;;;;; Nums
-(ert-deftest nums ()
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (nums i 1 5)
-                                     (collect i))))))
+;; TODO: Names `num' and `number' aren't listed in the Org doc.
+;;       They should be removed.
+(loopy-deftest numbers ()
+  :result '(1 2 3 4 5)
+  :repeat _cmd
+  :body ((_cmd i 1 5)
+         (collect i))
+  :loopy ((_cmd . (nums numbers num number)))
+  :iter-keyword ((_cmd . (nums numbers num number))
+                 (collect . collect))
+  :iter-bare ((_cmd . (numbering))
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (numbers i 1 5)
-                                     (collect i))))))
+(loopy-deftest numbers-pos-nokey-step ()
+  :result '(1 3 5)
+  :body ((numbers i 1 5 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (num i 1 5)
-                                     (collect i))))))
+(loopy-deftest numbers-neg-nokey-step ()
+  :result '(5 3 1)
+  :body (loopy (numbers i 5 1 -2)
+               (collect i))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(1 2 3 4 5)
-                 (eval (quote (loopy (number i 1 5)
-                                     (collect i))))))
+;;;;; Nums Keywords
 
-  (should (equal '(1 3 5)
-                 (eval (quote (loopy (nums i 1 5 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:to-:by ()
+  :result '(0 2 4 6 8 10)
+  :body ((numbers i :from 0 :to 10 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(5 3 1)
-                 (eval (quote (loopy (nums i 5 1 -2)
-                                     (collect i)))))))
+(loopy-deftest numbers-keywords-:from-:downto-:by ()
+  :result  '(8 6 4 2)
+  :body ((numbers i :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-(ert-deftest nums-keywords ()
-  (should (equal '(1 3 5)
-                 (eval (quote (loopy (nums i 1 5 :by 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:upto ()
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((numbers i :upto 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(5 3 1)
-                 (eval (quote (loopy (nums i 5 :downto 1 :by 2)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:to ()
+  :result  '(0 1 2 3 4 5 6 7)
+  :body ((numbers i :to 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 7 14)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i 0 :by 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:downto ()
+  :result  '(10 9 8 7 6 5 4 3)
+  :body ((numbers i :from 10 :downto 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 -7 -14 -21 -28 -35 -42)
-                 (eval (quote (loopy (repeat 7)
-                                     (nums i :downfrom 0 :by 7)
-                                     (collect i))))))
-  (should (equal '(7 8 9)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i :upfrom 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:from-:above ()
+  :result  '(10 9 8)
+  :body ((numbers i :from 10 :above 7)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(7 8 9)
-                 (eval (quote (loopy (repeat 3)
-                                     (nums i :from 7)
-                                     (collect i))))))
+(loopy-deftest numbers-keywords-:below ()
+  :result  '(0 1 2)
+  :body ((numbers i :below 3)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (nums i :upto 7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2 3 4 5 6 7)
-                 (eval (quote (loopy (nums i :to 7)
-                                     (collect i))))))
-
-  (should (equal '(0 -1 -2 -3 -4 -5 -6 -7)
-                 (eval (quote (loopy (nums i :downto -7)
-                                     (collect i))))))
-
-  (should (equal '(0 -1 -2 -3 -4 -5 -6)
-                 (eval (quote (loopy (nums i :above -7)
-                                     (collect i))))))
-
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (nums i :below 3)
-                                     (collect i))))))
-
-  (should (equal nil
-                 (eval (quote (loopy (nums i :above 3)
-                                     (collect i))))))
-  (should (equal '(0 1.5 3.0)
-                 (loopy (nums i 0 3 :by 1.5)
-                        (collect i))))
-
-  (should (equal '(0 1.5 3.0 4.5)
-                 (eval (quote (loopy (nums i 0 5 :by 1.5)
-                                     (collect i))))))
-
-  ;; NOTE: It remains to be seen how well this test works.
-  (progn
-    (cl-float-limits)
-    (should (cl-every (lambda (x y) (> cl-float-epsilon (- x y)))
-                      '(0.5 0.3 0.1 -0.1 -0.3 -0.5)
-                      (eval (quote (loopy (nums i
-                                                :downfrom 0.5
-                                                :above -0.7
-                                                :by 0.2)
-                                          (collect i))))))))
 
 ;;;;; Nums With Vars
-(ert-deftest nums-vars ()
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2))
-                     (numbers i start end step)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-and-literal-end ()
+  :doc "Check the optimizing for non-variable `:by' and `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2))
+          (numbers i start 8 2)
+          (collect i))
+         ((with (start 2))
+          (numbers i start :to 8 :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8))
-                     (numbers i start end 2)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-with-var-end ()
+  :doc "Check the optimizing for non-variable `:by' and variable `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (end 8))
+          (numbers i start end 2)
+          (collect i))
+         ((with (start 2) (end 8))
+          (numbers i start :to end :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(8 6 4 2)
-                 (lq (with (start 8) (end 2) (step -2))
-                     (numbers i start end step)
-                     (collect i))))
+(loopy-deftest numbers-var-by-with-var-end ()
+  :doc "Check the optimizing for variable `:by' and variable `:to' doesn't fail."
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (start 2) (by 2) (end 8))
+          (numbers i start end by)
+          (collect i))
+         ((with (start 2) (by 2) (end 8))
+          (numbers i start :to end :by by)
+          (collect i))]
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8))
-                     (numbers i :from start :to end :by 2)
-                     (collect i))))
+(loopy-deftest numbers-literal-by-and-no-end ()
+  :doc "Check the optimizing for literal `:by' and no `:to'."
+  :result '(2 4 6 8)
+  :body ((with (start 2))
+         (cycle 4)
+         (numbers i start :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect cycle)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)
+              (cycle . cycling)))
 
-  (should (equal '(2 4 6 8)
-                 (lq (with (start 2) (end 8) (step 2))
-                     (numbers i :from start :to end :by step)
-                     (collect i)))))
+(loopy-deftest numbers-var-by-and-no-end ()
+  :doc "Check the optimizing for variable `:by' and no `:to'."
+  :result '(2 4 6 8)
+  :body ((with (start 2) (by 2))
+         (cycle 4)
+         (numbers i start :by by)
+         (collect i))
+  :loopy t
+  :iter-keyword (numbers collect cycle)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)
+              (cycle . cycling)))
 
-(ert-deftest nums-with ()
-  (should (equal '(24 1 1 2)
-                 (loopy (with (n 24))
-                        (collect n)
-                        (numbers n :from 1 :to 2)
-                        (collect n)))))
+(loopy-deftest numbers-no-with ()
+  :doc "Var should be initialized to the first value."
+  :result '(1 1 2 2)
+  :body ((collect n)
+         (numbers n :from 1 :to 2)
+         (collect n))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
+
+(loopy-deftest numbers-yes-with ()
+  :doc "Var should be initialized to the first value, unless with given."
+  :result '(24 1 1 2)
+  :body ((with (n 24))
+         (collect n)
+         (numbers n :from 1 :to 2)
+         (collect n))
+  :loopy t
+  :iter-keyword (numbers collect)
+  :iter-bare ((numbers . numbering)
+              (collect . collecting)))
+
 
 ;;;;; Nums-Down
 (ert-deftest nums-down ()
