@@ -1945,35 +1945,58 @@ Using numbers directly will use less variables and more efficient code."
                  (collect . collecting)))
 
 ;;;;; Repeat
-(ert-deftest repeat-cycle-no-var ()
-  (should (= 3 (length (eval (quote (loopy  (repeat 3)
-                                            (list i (number-sequence 1 10))
-                                            (collect coll i)
-                                            (finally-return coll)))))))
+(loopy-deftest cycle-no-var ()
+  :result '(1 2 3)
+  :body ((_cmd 3)
+         (list i (number-sequence 1 10))
+         (collect coll i)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cycle repeat)))
+  :iter-keyword ((_cmd . (cycle repeat))
+                 (list . list)
+                 (collect . collect))
+  :iter-bare ((_cmd . (cycling repeating))
+              (list . listing)
+              (collect . collecting)))
 
-  (should (= 3 (length (eval (quote (loopy  (cycle 3)
-                                            (list i (number-sequence 1 10))
-                                            (collect coll i)
-                                            (finally-return coll))))))))
+(loopy-deftest cycle-yes-var ()
+  :doc "Need to test order of execution and functionality."
+  :result '(0 1 2)
+  :body ((collect coll i)
+         (_cmd i 3)
+         (finally-return coll))
+  :repeat _cmd
+  :loopy ((_cmd . (cycle repeat)))
+  :iter-keyword ((_cmd . (cycle repeat))
+                 (list . list)
+                 (collect . collect))
+  :iter-bare ((_cmd . (cycling repeating))
+              (list . listing)
+              (collect . collecting)))
 
-(ert-deftest repeat-cycle-var ()
-  "Need to test order of execution and functionality."
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (collect coll i)
-                                     (repeat i 3)
-                                     (finally-return coll))))))
+(loopy-deftest cycle-init-no-with ()
+  :doc "Variable is initialized to 0."
+  :result '(0 0 1 1 2 2)
+  :body ((collect my-var)
+         (cycle my-var 3)
+         (collect my-var))
+  :loopy t
+  :iter-keyword (collect cycle)
+  :iter-bare ((collect . collecting)
+              (cycle . cycling)))
 
-  (should (equal '(0 1 2)
-                 (eval (quote (loopy (collect coll i)
-                                     (cycle i 3)
-                                     (finally-return coll)))))))
-
-(ert-deftest cycle-init ()
-  (should (equal '(cat 0 0 1 1 2)
-                 (lq (with (my-var 'cat))
-                     (collect my-var)
-                     (cycle my-var 3)
-                     (collect my-var)))))
+(loopy-deftest cycle-init-yes-with ()
+  :doc "Variable is initialized to 0, except from `with'."
+  :result '(cat 0 0 1 1 2)
+  :body ((with (my-var 'cat))
+         (collect my-var)
+         (cycle my-var 3)
+         (collect my-var))
+  :loopy t
+  :iter-keyword (collect cycle)
+  :iter-bare ((collect . collecting)
+              (cycle . cycling)))
 
 ;;;;; Seq
 (ert-deftest seq ()
