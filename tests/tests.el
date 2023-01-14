@@ -1999,12 +1999,21 @@ Using numbers directly will use less variables and more efficient code."
               (cycle . cycling)))
 
 ;;;;; Seq
-(ert-deftest seq ()
-  (should (eval (quote (loopy (seq l '(1 2 3 4 5))
-                              (seq a [1 2 3 4 5])
-                              (if (/= l a)
-                                  (return nil))
-                              (finally-return t))))))
+(loopy-deftest sequence ()
+  :result t
+  :body ((_cmd l '(97 98 99 100 101))
+         (_cmd a [97 98 99 100 101])
+         (_cmd s "abcde")
+         (if (not (and (/= l a)
+                       (/= a s)))
+             (return nil))
+         (finally-return t))
+  :repeat _cmd
+  :loopy ((_cmd . (seq sequence seqing sequencing elements)))
+  :iter-keyword ((_cmd . (seq sequence seqing sequencing elements))
+                 (return . return))
+  :iter-bare ((seq . (seqing sequencing))
+              (return . returning)))
 
 (ert-deftest seq-destructuring ()
   (should (and (equal '(5 6)
