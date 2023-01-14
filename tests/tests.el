@@ -1919,40 +1919,30 @@ Using numbers directly will use less variables and more efficient code."
 
 
 ;;;;; Nums-Down
-(ert-deftest nums-down ()
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (nums-down i 10 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (nums-down i 10 1 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (numsdown i 10 1 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(10 8 6 4 2)
-                 (eval (quote (loopy (numbers-down i 10 1 :by 2)
-                                     (collect i)))))))
+(loopy-deftest numbers-down ()
+  :result '(10 8 6 4 2)
+  :multi-body t
+  :body [((_cmd i 10 1 :by 2) (collect i))
+         ((_cmd i 10 1 2) (collect i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nums-down numsdown numbers-down)))
+  :iter-keyword ((_cmd . (nums-down numsdown numbers-down))
+                 (collect . collect))
+  :iter-keyword ((_cmd . (numbering-down))
+                 (collect . collecting)))
 
 ;;;;; Nums-Up
-(ert-deftest nums-up ()
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (nums-up i 1 10 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (nums-up i 1 10 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (numsup i 1 10 :by 2)
-                                     (collect i))))))
-
-  (should (equal '(1 3 5 7 9)
-                 (eval (quote (loopy (numbers-up i 1 10 :by 2)
-                                     (collect i)))))))
+(loopy-deftest numbers-up ()
+  :result '(1 3 5 7 9)
+  :multi-body t
+  :body [((_cmd i 1 10 :by 2) (collect i))
+         ((_cmd i 1 10 2) (collect i))]
+  :repeat _cmd
+  :loopy ((_cmd . (nums-up numsup numbers-up)))
+  :iter-keyword ((_cmd . (nums-up numsup numbers-up))
+                 (collect . collect))
+  :iter-keyword ((_cmd . (numbering-up))
+                 (collect . collecting)))
 
 ;;;;; Repeat
 (ert-deftest repeat-cycle-no-var ()
