@@ -139,7 +139,7 @@ Definition must exist.  Neither argument need be quoted."
     (set-prev        . (setting-prev prev prev-expr prev-set))
     (seq             . (seqing sequence sequencing elements))
     (seq-index       . ( sequence-index seqing-index sequencing-index
-                         sequencing seqi list-index listing-index
+                         sequencing-index sequencei seqi list-index listing-index
                          listi array-index arraying-index arrayi
                          string-index stringing-index stringi))
     (seq-ref         . ( seqf seqing-ref
