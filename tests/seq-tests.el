@@ -2,14 +2,11 @@
 ;; Run these tests from project dir using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
-(push (expand-file-name ".")
-      load-path)
-
 (require 'cl-lib)
 (require 'ert)
 (require 'seq)
-(require 'loopy "./loopy.el")
-(require 'loopy-seq "./loopy-seq.el")
+(require 'loopy)
+(require 'loopy-seq)
 
 ;; We can't just run the normal tests like we can with Dash, as `seq' expects a
 ;; different form of input.  In particular, `seq-let' uses `&rest' for lists and

@@ -1,0 +1,57 @@
+name: Test Emacs Matrix
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+jobs:
+  test:
+    name: 'Install and Test'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        emacs-version:
+          - '27.1'
+          - '27.2'
+          - '28.1'
+          - '28.2'
+          # - 'release-snapshot'
+          # - 'snapshot'
+    steps:
+    - uses: actions/checkout@v3
+    - uses: purcell/setup-emacs@master
+      with:
+        version: ${{ matrix.emacs-version }}
+    - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+    - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+    - name: List files in the repository
+      run: |
+        ls ${{ github.workspace }}
+    - name: Make config dir to guaratee location.  Do it before we run Emacs the first time.
+      run: mkdir ~/.emacs.d
+    - name: Check Emacs version
+      run: emacs --version
+    - name: Make folder for base package.
+      run: |
+         mkdir 'test-install'
+         cp loopy-commands.el loopy.el loopy-vars.el loopy-misc.el loopy-pkg.el test-install
+         cp loopy-iter.el loopy-pcase.el loopy-seq.el test-install
+    - name: Install packages
+      run: emacs -batch -l tests/install-script.el
+    - name: Basic tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+    - name: Seq tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
+    - name: Pcase tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
+    - name: Iter tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
+    - name: Dash tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/dash-tests.el -f ert-run-tests-batch-and-exit
+    - name: Miscellaneous tests
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
+    - run: echo "🍏 This job's status is ${{ job.status }}."

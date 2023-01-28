@@ -1,0 +1,8 @@
+(setq package-user-dir "~/.emacs.d/elpa")
+(message "Current directory: %s" default-directory)
+(require 'package)
+(package-refresh-contents)
+(message "\nInstall from dir:")
+(package-install-file "~/work/loopy/loopy/test-install")
+(message "\nInstall from file:")
+(package-install-file "./loopy-dash.el")
