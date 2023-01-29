@@ -2,15 +2,11 @@
 ;; Run these tests from project dir using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
-
-(push (expand-file-name ".")
-      load-path)
-
 (require 'cl-lib)
 (require 'ert)
 (require 'pcase)
-(require 'loopy "./loopy.el")
-(require 'loopy-pcase "./loopy-pcase.el")
+(require 'loopy)
+(require 'loopy-pcase)
 
 ;; We can't just run the normal tests like we can with Dash, as `pcase' expects
 ;; a different form of input.  For now, just test the important cases.

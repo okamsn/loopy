@@ -11,11 +11,7 @@
 (require 'ert)
 (require 'generator)
 (require 'pcase)
-(require 'map "./dependecy-links/map.el" 'no-error)
-(eval-when-compile (require 'loopy "./loopy.el"))
-(require 'loopy "./loopy.el")
-(require 'loopy-vars "./loopy-vars.el")
-(require 'loopy-commands "./loopy-commands.el")
+(require 'loopy)
 
 ;; "loopy quote"
 (defmacro lq (&rest body)

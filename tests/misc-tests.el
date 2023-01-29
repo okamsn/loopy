@@ -1,15 +1,11 @@
 ;; Tests of secondary features and helper functions.
 
-(push (expand-file-name ".")
-      load-path)
-
 (require 'cl-lib)
 (require 'map)
 (require 'ert)
 (require 'pcase)
-(require 'map "./dependecy-links/map.el" 'no-error)
-(eval-when-compile (require 'loopy "./loopy.el"))
-(require 'loopy "./loopy.el")
+(require 'map)
+(require 'loopy)
 
 (defmacro loopy-test-structure (input output-pattern)
   "Use `pcase' to check a destructurings bindings.

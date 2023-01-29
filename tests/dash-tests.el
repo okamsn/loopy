@@ -2,15 +2,10 @@
 ;; Run these tests from project dir using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
-
-(push (expand-file-name ".")
-      load-path)
-
 (require 'cl-lib)
 (require 'ert)
-(require 'dash "./dependecy-links/dash.el" 'no-error)
-(require 'loopy "./loopy.el")
-(require 'loopy-dash "./loopy-dash.el")
+(require 'loopy)
+(require 'loopy-dash)
 
 (ert-deftest dash-flag-default ()
   (should (equal '(5 6)

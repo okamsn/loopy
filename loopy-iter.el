@@ -2,14 +2,6 @@
 
 ;; Copyright (c) 2021 Earl Hyatt
 
-;; Author: Earl Hyatt
-;; Created: March 2021
-;; URL: https://github.com/okamsn/loopy
-;; Version: 0.11.0
-;; Package-Requires: ((emacs "27.1"))
-;; Keywords: extensions
-;; LocalWords:  Loopy's emacs sexps
-
 ;;; Disclaimer:
 ;; This file is not part of GNU Emacs.
 ;;
