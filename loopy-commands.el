@@ -2297,7 +2297,7 @@ VAR."
         ;; Reverse list order.
         (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
         `(,@(if (eq pos 'start)
-                (loopy--produce-multi-item-end-tracking var val 'destructive)
+                (loopy--produce-multi-item-end-tracking var `(nreverse ,val) 'destructive)
               `((loopy--main-body (setq ,var (nconc (nreverse  ,val) ,var)))))
           (loopy--vars-final-updates
            (,var . (setq ,var (nreverse ,var)))))))))

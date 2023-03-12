@@ -2929,13 +2929,13 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal '(5 6 3 4 1 2)
                  (loopy (accum-opt (coll end))
                         (list i (list (list 1 2) (list 3 4) (list 5 6)))
-                        (append coll i :at start)
+                        (nconc coll i :at start)
                         (finally-return coll))))
 
   (should (equal '(1 2 3 4 5 6)
                  (loopy (accum-opt (coll start))
                         (list i (list (list 1 2) (list 3 4) (list 5 6)))
-                        (append coll i :at end)
+                        (nconc coll i :at end)
                         (finally-return coll))))
 
   (should (equal '(5 6 3 4 1 2 11 12 13 14 15 16)
