@@ -2,6 +2,34 @@
 
 This document describes the user-facing changes to Loopy.
 
+## 0.11.1
+
+Released 2023-03-13.
+
+### Bugs Fixed
+
+- Fix `nconc`-ing onto the non-optimized end of an optimized collection, as in
+  the below example ([#157]).
+
+  ```elisp
+  ;; => ((3 4 1 2) (1 2 3 4))
+  (loopy (accum-opt (opt-end end) (opt-start start))
+         (list i '((1 2) (3 4)))
+         (nconc opt-end (copy-sequence i) :at start)
+         (nconc opt-start (copy-sequence i) :at end)
+         (finally-return opt-end opt-start))
+  ```
+
+### Other Changes
+
+- Added [Compat](https://github.com/emacs-compat/compat) as a dependency
+  ([#152]).  This is required for generalized variables in property lists.  This
+  feature was added in Emacs 28, which we had been creating if not found.  It is
+  better to let Compat do this for us.
+
+[#152]: https://github.com/okamsn/loopy/pull/152
+[#157]: https://github.com/okamsn/loopy/pull/157
+
 ## 0.11.0
 
 Released 2022-11-25.

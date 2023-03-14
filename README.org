@@ -30,6 +30,7 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Version 0.11.1: None. Bug fix.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.
    - Removed the variable ~loopy-first-iteration~.  This can be replaced by just
