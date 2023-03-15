@@ -281,7 +281,7 @@ two elements:
 
 For example, an acceptable return value might be something like
 
-    (list 'pcase-let* BINDINGS)
+    (list \\='pcase-let* BINDINGS)
 
 which will be used to wrap the loop and other code."
   (funcall (or loopy--destructuring-for-with-vars-function

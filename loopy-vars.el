@@ -237,8 +237,8 @@ Learn more with `(info \"(emacs)loopy\")'.
 For example, to add a `when' command (if one didn't already
 exist), one could do
 
-  (add-to-list \'loopy-command-parsers
-                (cons 'when #'my-loopy-parse-when-command))"
+  (add-to-list \\='loopy-command-parsers
+                (cons \\='when #\\='my-loopy-parse-when-command))"
   :group 'loopy
   :type '(alist :key-type symbol :value-type function))
 
@@ -266,7 +266,7 @@ two elements:
 
 For example, an acceptable return value might be something like
 
-    (list 'pcase-let* BINDINGS)
+    (list \\='pcase-let* BINDINGS)
 
 which will be used to wrap the loop and other code.
 
