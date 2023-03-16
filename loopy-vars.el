@@ -232,7 +232,7 @@ and
 are both parsed by the same function, but that parsing function
 is not limited in how it responds to different usages.  If you
 really want, it can return different instructions each time.
-Learn more with `(info \"(emacs)loopy\")'.
+Learn more in the Info node `(loopy)Custom Commands'.
 
 For example, to add a `when' command (if one didn't already
 exist), one could do
