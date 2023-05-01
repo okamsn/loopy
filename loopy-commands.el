@@ -2369,7 +2369,7 @@ This function is used by `loopy--get-optimized-accum'."
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
           `(,@(if (eq pos 'start)
-                  (loopy--produce-union-end-tracking var val test-method 'destructive)
+                  (loopy--produce-union-end-tracking var `(nreverse ,val) test-method 'destructive)
                 `((loopy--main-body
                    (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
                                      ,var)))))

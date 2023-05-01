@@ -2,6 +2,10 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+- Fix `nunion` for appending onto the start of end-optimized lists.
+
 ## 0.11.1
 
 Released 2023-03-13.
