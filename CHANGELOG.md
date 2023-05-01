@@ -2,9 +2,23 @@
 
 This document describes the user-facing changes to Loopy.
 
-## Unreleased
+## 0.11.2
 
-- Fix `nunion` for appending onto the start of end-optimized lists.
+### Bugs Fixed
+
+- Fix `nunion` for appending onto the start of end-optimized lists, as in the
+  below example.
+
+  ```elisp
+  ;; => (10 8 9 7 5 6 4 1 2 3)
+  (loopy (accum-opt (coll end))
+               (array i (vector (list 1 2 3) (list 1 2 3)
+                                (list 4 5 6) (list 7 8 9)))
+               (nunion coll (copy-sequence i) :at start)
+               (nunion coll (mapcar #'1+ i) :at start)
+               (finally-return coll))
+  ```
+
 
 ## 0.11.1
 
