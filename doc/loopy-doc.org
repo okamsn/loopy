@@ -2673,8 +2673,9 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
   This command also has the alias =prepending=.
 
-  This command is equivalent to =(append VAR EXPR :at start)=.  It exists
-  for clarity and convenience.
+  This command is interpreted by Loopy as =(append VAR EXPR :at start)=, and is
+  normally described as such when reporting errors.  It exists for clarity and
+  convenience.
 
   #+begin_src emacs-lisp
     ;; => (5 6 3 4 1 2)
@@ -2693,13 +2694,14 @@ Sequence accumulation commands are used to join lists (such as =union= and
 #+findex: pushing
 #+findex: push-into
 #+findex: pushing-into
-- =(push|push-into VAR EXPR)= :: Collect the value of =EXPR= into a list, adding
+- =(push-into|push VAR EXPR)= :: Collect the value of =EXPR= into a list, adding
   values to the front of =VAR= as if by using the function ~push~.
 
   This command also has the alias =pushing= and =pushing-into=.
 
-  This command is equivalent to =(collect VAR EXPR :at start)=.  It exists
-  for clarity and convenience.
+  This command is interpreted by Loopy as =(collect VAR EXPR :at start)=, and is
+  normally described as such when reporting errors.  It exists for clarity and
+  convenience.
 
   #+BEGIN_SRC emacs-lisp
     ;; => (3 2 1)

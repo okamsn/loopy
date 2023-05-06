@@ -590,7 +590,9 @@ Generally, this is used with commands that produce lists, such as
 (defvar loopy--accumulation-constructors
   '((adjoin .  loopy--construct-accum-adjoin)
     (append .  loopy--construct-accum-append)
+    (prepend .  loopy--construct-accum-append)
     (collect . loopy--construct-accum-collect)
+    (push-into . loopy--construct-accum-collect)
     (concat . loopy--construct-accum-concat)
     (nconc . loopy--construct-accum-nconc)
     (nunion . loopy--construct-accum-nunion)

@@ -2,6 +2,14 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Bugs Fixed
+
+- Rewrite `prepend` in terms of `append`.  Rewrite `push-into` in terms of
+  `collect`.  This change makes these commands work with the new system for
+  optimized accumulation variables.
+
 ## 0.11.2
 
 ### Bugs Fixed

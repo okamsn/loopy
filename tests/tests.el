@@ -3102,6 +3102,13 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                  (eval (quote (loopy (list i '((1 2) (3 4) (5 6)))
                                      (prepending i)))))))
 
+(defun prepend-append-compat ()
+  (should (equal '(7 6 5 4 3 2 1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '((1) (2) (3) (4) (5) (6)))
+                                     (accum-opt (var end))
+                                     (append var i :at end)
+                                     (prepend var (mapcar #'1+ i) :at start)
+                                     (finally-return var)))))))
 
 ;;;;; Push Into
 (ert-deftest push-into ()
@@ -3139,6 +3146,14 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
                  (eval (quote (loopy (list elem '((1 2) (3 4) (5 6)))
                                      (pushing (p1 p2) elem)
                                      (finally-return p1 p2)))))))
+
+(defun push-into-collect-compat ()
+  (should (equal '(7 6 5 4 3 2 1 2 3 4 5 6)
+                 (eval (quote (loopy (list i '(1 2 3 4 5 6))
+                                     (accum-opt (var end))
+                                     (collect var i :at end)
+                                     (push var (1+ i) :at start)
+                                     (finally-return var)))))))
 
 ;;;;; Reduce
 (ert-deftest reduce ()

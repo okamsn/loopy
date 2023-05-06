@@ -2422,37 +2422,25 @@ This function is used by `loopy--get-optimized-accum'."
                                   :key ,key :test ,test))))))
 
 ;;;;;;; Prepend
-(loopy--defaccumulation prepend
-  "Parse the `prepend' command as (prepend VAR VAL)."
-  :explicit (progn
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body (setq ,var (append ,val ,var)))))
-  :implicit (progn
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body (setq ,var (nconc ,(if (symbolp val)
-                                                         `(copy-sequence  ,val)
-                                                       val)
-                                                    ,var)))
-                (loopy--implicit-return ,var))))
+(defun loopy--parse-prepend-command (arg)
+  "Parse the `prepend' command as (append VAR VAL :at start)."
+  (unless (member (length arg) '(2 3))
+    (error "`%s': Wrong number of arguments: %s"
+           (car arg) arg))
+  ;; Needs to be named `append' for destructuring to work,
+  ;; as destructuring just applies the named command to the sub-elements.
+  (loopy--parse-append-command `(append ,@(cdr arg) :at start)))
 
 ;;;;;;; Push Into
-(loopy--defaccumulation push-into
-  "Parse the `push' command as (push VAR VAL)."
-  :explicit (progn
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body (setq ,var (cons ,val  ,var)))))
-  :implicit (progn
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'list cmd)
-              `((loopy--accumulation-vars (,var nil))
-                (loopy--main-body (setq ,var (cons ,val  ,var)))
-                (loopy--implicit-return ,var))))
+(defun loopy--parse-push-into-command (arg)
+  "Parse the `push-into' command as (collect VAR VAL :at start)."
+
+  (unless (member (length arg) '(2 3))
+    (error "`%s': Wrong number of arguments: %s"
+           (car arg) arg))
+  ;; Needs to be named `collect' for destructuring to work,
+  ;; as destructuring just applies the named command to the sub-elements.
+  (loopy--parse-collect-command `(collect ,@(cdr arg) :at start)))
 
 ;;;;;;; Reduce
 (loopy--defaccumulation reduce
