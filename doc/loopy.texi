@@ -688,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org09f2c80
+@float Listing,orgd0ad0bd
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -810,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org1a7fe46
+@float Listing,orgb08dfe3
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -825,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgbe30df0
+@float Listing,orgfadf3de
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2454,18 +2454,6 @@ The initial value of @samp{VAR}.  For explicitly named variables, one
 can use this argument or the @samp{with} special macro argument.
 @end table
 
-@cindex accumulation keyword result-type
-@table @asis
-@item @samp{result-type}
-A sequence type into which @samp{VAR} is converted @emph{after the
-loop is over}.  These types need not be quoted.  For example, @samp{'vector} and
-@samp{vector} are both valid ways to specify the vector data type.  Commands using
-the same variable must use the same type coercion.
-
-This argument can be more convenient than writing out a call to @code{cl-coerce}
-or @code{seq-into}.
-@end table
-
 The arguments to the @samp{test} and @samp{key} parameters can be quoted functions or
 variables, just like when using @code{cl-union}, @code{cl-adjoin}, and so on.  @code{loopy}
 knows how to expand efficiently for either case.
@@ -2714,7 +2702,7 @@ Sequence accumulation commands are used to join lists (such as @samp{union} and
 @findex adjoin
 @findex adjoining
 @table @asis
-@item @samp{(adjoin VAR EXPR &key at test key init result-type)}
+@item @samp{(adjoin VAR EXPR &key at test key init)}
 Repeatedly add @samp{EXPR}
 to @samp{VAR} if it is not already present in the list.
 
@@ -2742,14 +2730,14 @@ This command also has the alias @samp{adjoining}.
 ;; Coerced to a vector /after/ the loop ends.
 ;; => [1 2 3 4]
 (loopy (list i '(1 2 3 3 4))
-       (adjoin my-var i :result-type 'vector)
+       (adjoin my-var i)
        (when (vectorp my-var)
          (return 'is-vector))
        (finally-return my-var))
 
 ;; => [4 3 2 1]
 (loopy (list i '(1 2 3 3 4))
-       (adjoin my-var i :result-type 'vector :at 'start)
+       (adjoin my-var i :at 'start)
        (finally-return my-var))
 @end lisp
 @end table
@@ -2778,7 +2766,7 @@ This command also has the alias @samp{appending}.
 @findex collect
 @findex collecting
 @table @asis
-@item @samp{(collect VAR EXPR &key result-type at)}
+@item @samp{(collect VAR EXPR &key at)}
 Collect the value of @samp{EXPR} into
 the list @samp{VAR}.  By default, elements are added to the end of the list.
 
@@ -2821,9 +2809,7 @@ Repeatedly @code{concat} the value of @samp{EXPR} onto
 
 This command also has the alias @samp{concating}.
 
-@samp{VAR} is a string throughout the loop.  This differs from the behavior of
-commands with the keyword argument @samp{result-type}, which coerces the resulting
-sequence of accumulated values into a new type @emph{after} the loop completes.
+@samp{VAR} is a string throughout the loop.
 
 @lisp
 ;; => "abc"
@@ -3004,10 +2990,7 @@ command @samp{concat}.
 
 This command also has the alias @samp{vconcating}.
 
-@samp{VAR} is a vector throughout the loop.  This differs from the behavior of
-commands with the keyword argument @samp{result-type}, which coerces the
-resulting sequence of accumulated values into a new type @emph{after} the loop
-completes.
+@samp{VAR} is a vector throughout the loop.
 
 @lisp
 ;; => [1 2 3 4 5 6]
@@ -4008,7 +3991,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgd37df25
+@float Listing,org1d6cd86
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4841,17 +4824,16 @@ Some examples are:
 @item
 Correcting the order of elements in a list that was constructed in reverse.
 @item
-Coercing the variable into a new sequence type, for commands with the
-@code{:result-type} argument.
+Coercing the variable into a new sequence type.
+@item
+Appending a list of lists.
 @end enumerate
 
 Each accumulation variable can only be updated once, in a single way.  For
 example, a variable cannot be reversed according to the needs of one command
 and then coerced into a new type according to the needs of another.  Commands
 acting on the same accumulation variable must require the same final update,
-including if they require no final update.  For example, a command that uses
-@samp{:result-type} to coerce @code{loopy-result} into a vector is incompatible with a
-command that does not require (and so does not expect) a final update.
+including if they require no final update.
 @end table
 
 
