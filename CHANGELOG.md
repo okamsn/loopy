@@ -22,6 +22,12 @@ This document describes the user-facing changes to Loopy.
          (list i '(4 5 6)))
   ```
 
+- Using multiple conditions in `always`, `never`, and `thereis` is deprecated.
+  These commands will be changed to have call argument lists more like
+  accumulation commands, such as `(always [VAR] VAL &key into)`.  This will
+  simplify the code and remove an inconsistency between them and the other
+  commands.
+
 ### Command Improvements
 
 - To produce faster code, some commands now avoid creating an intermediate

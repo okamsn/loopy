@@ -688,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org0bb29db
+@float Listing,org09f2c80
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -724,7 +724,7 @@ participle form (the ``-ing'' form).  A few examples are seen in the table below
 
 Some commands take optional keyword arguments.  For example, the command @samp{list}
 can take a function argument following the keyword @samp{:by}, which affects how that
-iterates through the elements in the list.
+command iterates through the elements in the list.
 
 For simplicity, the commands are described using the following notation:
 
@@ -810,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orga8033ad
+@float Listing,org1a7fe46
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -825,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org8c468d7
+@float Listing,orgbe30df0
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -872,8 +872,8 @@ syntax for sequences.
 @end lisp
 
 @item
-The symbol @samp{_}: The symbol @samp{_} means to avoid creating a variable.  This can
-be more efficient.
+The symbol @samp{_}: The symbol @samp{_} (an underscore) means to avoid creating a
+variable.  This can be more efficient.
 
 @lisp
 ;; Only create the variables `a' and `c'.
@@ -960,8 +960,8 @@ Currently, only lists support this destructuring.
 
 If the key is not in the list, a default value can be provided by using a
 two-item list of the variable and the default value.  If a default value is
-provided, then keys are sought using @code{plist-member} so that a value of @code{nil}
-for a key is not the same as a missing key.
+provided, then keys are sought using @code{plist-member}. That way, a value of
+@code{nil} for a key is not the same as a missing key.
 
 @lisp
 ;; Note that `nil' is not the same as a missing value.
@@ -1195,6 +1195,14 @@ In @code{loopy}, iteration commands are named after what they iterate through.  
 example, the @samp{array} and @samp{list} commands iterate through the elements of arrays
 and lists, respectively.
 
+@quotation Note
+In general, iteration variables (such as the @code{i} and @code{j} above) are initialized
+to @code{nil}.  For efficiency, some commands do not do this.  In such cases, the
+initial value of an iteration variable can be set using the @samp{with} special macro
+argument, but this can result in less efficient code.
+
+@end quotation
+
 @menu
 * Generic Iteration::            Looping a certain number of times.
 * Numeric Iteration::            Iterating through numbers.
@@ -1213,8 +1221,11 @@ and lists, respectively.
 @table @asis
 @item @samp{(cycle|repeat [VAR] EXPR)}
 Run the loop for @samp{EXPR} iterations.  If
-specified, @samp{VAR} starts at 0, and is incremented by 1 at the end of the loop.
-If @samp{EXPR} is 0, then the loop isn't run.
+specified, @samp{VAR} starts at 0, and is incremented by 1 at the end of each step
+in the loop.  If @samp{EXPR} is 0, then the loop isn't run.
+
+For efficiency, @samp{VAR} is not initialized to @code{nil}.  This can be overridden
+using the @samp{with} special macro argument, which can result in slower code.
 
 This command also has the aliases @samp{cycling} and @samp{repeating}.
 
@@ -1224,10 +1235,11 @@ This command also has the aliases @samp{cycling} and @samp{repeating}.
        (cycle 3)
        (collect i))
 
-;; => (10 10 10)
+;; => (10 0 10 1 10 2)
 (loopy (with (i 10))
-       (repeat 3)
-       (collect i))
+       (repeat j 3)
+       (collect i)
+       (collect j))
 
 ;; An argument of 0 stops the loop from running:
 ;; => nil
@@ -1253,6 +1265,13 @@ the value yielded by calling @code{iter-next}).
 @samp{close} is whether the generator should be  closed via @code{iter-close} after the
 loop ends.  The default is @code{t}.  Note that Emacs will eventually close
 un-closed, un-reachable generators during garbage collection.
+
+For efficiency, when possible, @samp{VAR} is bound to the yielded value before each
+step of the loop, which is used to detect whether the iterator signals that it
+is finished.  This is not possible when destructuring.  You can override this
+behavior by using the @samp{with} special macro argument, which can result in
+slower code and tells the macro that the initial value of @samp{VAR} is meaningful
+and to update @samp{VAR} during the loop.
 
 This command also has the name @samp{iterating}.
 
@@ -1314,8 +1333,9 @@ The command @samp{numbers} is used to iterate through numbers.  For example,
 @samp{(numbers i :from 1 :to 10)} is similar to @samp{(list i (number-sequence 1 10))},
 and @samp{(numbers i 3)} is similar to @samp{(set i 3 (1+ i))}.
 
-Unlike most other iteration commands, @samp{VAR} is initialized to the passed-in
-starting value, not @code{nil}.
+For efficiency, @samp{VAR} is initialized to the starting numeric value, not @code{nil},
+and is updated at the end of each step of the loop.  This can be overridden
+using the @samp{with} special macro argument, which can result in slower code.
 
 To balance convenience and similarity to other commands, @samp{numbers} has a
 flexible argument list.  In its most basic form, it uses no keywords and takes
@@ -1505,12 +1525,11 @@ similar to that of nested loops.
                                          collect (list i j k))))
 @end lisp
 
-
 The @samp{array} and @samp{sequence} commands can use the same keywords as the @samp{numbers}
 command (@ref{Numeric Iteration}) for working with the index and choosing a range of
-the sequence elements through which to iterate.  In addition to those keywords,
-they also have an @samp{index} keyword, which names the variable used to store the
-accessed index during the loop.
+the sequence's elements through which to iterate.  In addition to those
+keywords, they also have an @samp{index} keyword, which names the variable used to
+store the accessed index during the loop.
 
 @lisp
 ;; => ((1 . 9) (3 . 6) (5 . 5) (7 . 3) (9 . 1))
@@ -1591,6 +1610,11 @@ this new, resulting array of lists.
 @item @samp{(cons|conses VAR EXPR &key by)}
 Loop through the cons cells of @samp{EXPR}.
 Optionally, find the cons cells via the function @samp{by} instead of @samp{cdr}.
+
+For efficiency, when possible, @samp{VAR} is initialized to the value of @samp{EXPR},
+not @code{nil}, and is updated at the end of each step in the loop.  This is not
+possible when destructuring.  Such initialization can be overridden by using
+the @samp{with} special macro argument, which can result in slower code.
 
 This command also has the alias @samp{consing}.
 
@@ -1835,6 +1859,8 @@ type-specific versions.  This command also has the following aliases:
 @item
 @samp{sequence-index}, @samp{sequenceing-index}, @samp{sequencei}, @samp{seqi}, @samp{seqing-index}
 @end itemize
+@end table
+
 
 The aliases @samp{seqi}, @samp{arrayi}, @samp{listi}, and @samp{stringi} are similar to the
 aliases @samp{seqf}, @samp{arrayf}, @samp{listf}, and @samp{stringf} of the @samp{seq-ref} command.
@@ -1845,6 +1871,11 @@ command.  This command is very similar to @samp{numbers}, except that it can
 automatically end the loop when the final element is reached.  With
 @samp{numbers}, one would first need to explicitly calculate the length of the
 sequence.
+
+Similar to @samp{numbers}, for efficiency, @samp{VAR} is initialized to the starting
+index value, not @code{nil}, and is updated at the end of each step of the loop.
+This can be overridden using the @samp{with} special macro argument, which can
+result in slower code.
 
 @lisp
 ;; => (97 98 99 100 101 102)
@@ -1878,7 +1909,6 @@ This command does not support destructuring.
        (seq-index idx my-seq :from 8 :downto 1 :by 2)
        (collect (elt my-seq idx)))
 @end lisp
-@end table
 
 @node Sequence Reference Iteration
 @subsection Sequence Reference Iteration
@@ -2885,8 +2915,9 @@ as if by the function @code{append}.
 
 This command also has the alias @samp{prepending}.
 
-This command is equivalent to @samp{(append VAR EXPR :at start)}.  It exists
-for clarity and convenience.
+This command is interpreted by Loopy as @samp{(append VAR EXPR :at start)}, and is
+normally described as such when reporting errors.  It exists for clarity and
+convenience.
 
 @lisp
 ;; => (5 6 3 4 1 2)
@@ -2907,14 +2938,15 @@ for clarity and convenience.
 @findex push-into
 @findex pushing-into
 @table @asis
-@item @samp{(push|push-into VAR EXPR)}
+@item @samp{(push-into|push VAR EXPR)}
 Collect the value of @samp{EXPR} into a list, adding
 values to the front of @samp{VAR} as if by using the function @code{push}.
 
 This command also has the alias @samp{pushing} and @samp{pushing-into}.
 
-This command is equivalent to @samp{(collect VAR EXPR :at start)}.  It exists
-for clarity and convenience.
+This command is interpreted by Loopy as @samp{(collect VAR EXPR :at start)}, and is
+normally described as such when reporting errors.  It exists for clarity and
+convenience.
 
 @lisp
 ;; => (3 2 1)
@@ -3013,18 +3045,39 @@ explicitly.
 (loopy (list i '(1 2 3))
        (finding i (> i 2)))
 
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (> i 2) (return i)))
+
 ;; => nil
 (loopy (list i '(1 2 3))
        (finding i (> i 4)))
+
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (> i 4) (return i)))
 
 ;; => "not found"
 (loopy (list i '(1 2 3))
        (finding i (> i 4) :on-failure "not found"))
 
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (> i 4) (return i))
+       (else-do (cl-return "not found")))
+
 ;; Does not display message.
 ;; => 2
 (loopy (list i '(1 2 3))
        (finding i (= i 2) :into found)
+       (after-do (message "found: %s" found))
+       (finally-return found))
+
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (= i 2)
+         (set found i)
+         (leave))
        (after-do (message "found: %s" found))
        (finally-return found))
 
@@ -3035,9 +3088,25 @@ explicitly.
        (finally-do (message "found: %s" found))
        (finally-return found))
 
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (= i 2)
+         (set found i)
+         (leave))
+       (finally-do (message "found: %s" found))
+       (finally-return found))
+
 ;; => "not found"
 (loopy (list i '(1 2 3))
        (finding whether-found i (> i 4) :on-failure "not found")
+       (finally-return whether-found))
+
+;; Equivalent to above.
+(loopy (list i '(1 2 3))
+       (when (> i 4)
+         (set whether-found i)
+         (leave))
+       (else-do (setq whether-found "not found"))
        (finally-return whether-found))
 @end lisp
 @end table
@@ -3171,63 +3240,166 @@ that, you are recommended to use @samp{accum-opt} on those variables.
 @section Checking Conditions
 
 @dfn{Boolean commands} are used to test whether a condition holds true
-during the loop.  Under certain conditions, they cause the loop to exit and
-return a value.  Like accumulation commands, they have an implicit return value
-which is used if these commands do not cause the loop to exit.
+during the loop.  They work like a combination of iteration and accumulation
+commands, in that values are stored in @code{loopy-result} and that can terminate the
+loop.
 
-For convenience, these commands can be passed multiple conditions.
+The behavior and use of the boolean commands is a compromise between consistency
+with other commands, similarity to how similar features are used in other
+libraries, and convenience for how they are commonly used.  This gives us the
+following:
 
-@quotation Note
-It is incorrect to use both the command @samp{thereis} and the command @samp{always} or
-@samp{never} in the same loop, as this leads to conflicting implicit return values.
+@itemize
+@item
+@code{loopy-result} is used as the implicit return value of the loop.
+
+@item
+Like accumulation commands, the keyword @samp{:into} can be used the specify a
+variable other than @code{loopy-result}.
+
+@itemize
+@item
+Unlike accumulation commands, there is no non-keyword way to specify a
+variable.  The first argument (the only required argument) of each boolean
+command is a condition to check.
+
+@item
+The @samp{always} and @samp{never} commands must use the same variable to work
+together correctly.  By default, the both use @code{loopy-result}.
+@end itemize
+
+@item
+These commands exit the loop without forcing a value (@ref{Early Exit}).
+
+@itemize
+@item
+Therefore, optimized accumulation variables can be finalized even when the
+loop ends, as happens with the @samp{leave} command.
+
+@item
+However, because the boolean commands already use @code{loopy-result}, such
+optimized accumulation variables must be created with the special macro
+argument @samp{accum-opt} and must be used explicitly, as in the below example.
+@end itemize
+@end itemize
+
+
+@lisp
+;; A maybe unidiomatic example:
+;; => (nil (1 3 5))
+(loopy (accum-opt coll)
+       (list i '(1 3 5 6 9))
+       (always (cl-oddp i))
+       (collect coll i)
+       (finally-return loopy-result coll))
+
+;; Same as above, but maybe more idiomatic:
+;; => (nil (1 3 5))
+(loopy (with (succes t))
+       (list i '(1 3 5 6 9))
+       (if (cl-oddp i)
+           (collect i)
+         (set success nil)
+         (leave))
+       (finally-return success loopy-result))
+
+;; Works similarly, but forces the `nil' return value.
+;; Returns the collection if `always' doesn't trigger an exit.
+;; Attempting similar with CL's `iterate' will signal an error.
+;; => nil
+(cl-loop for i in '(1 3 5 6 9)
+         always (cl-oddp i)
+         collect i)
+@end lisp
+
+@quotation Warn
+Using the command @samp{thereis} is incompatible with using the commands @samp{always} and
+@samp{never}, as this would create conflicting initial values for the implicit return
+value (both using @code{loopy-result}).
 
 @end quotation
 
-
 @findex always
 @table @asis
-@item @samp{(always COND [CONDS])}
-Immediately return @code{nil} if any @samp{COND} is ever
-@code{nil}.  Otherwise, the loop returns the final value of the last @samp{COND} or
-@code{t} if no @samp{COND} is ever evaluated.
+@item @samp{(always EXPR &key into)}
+Check the result of the condition @samp{EXPR}.  If the
+condition evaluates to @code{nil}, end the loop.  Otherwise, the loop returns the
+final value of the condition or @code{t} if the command is never run.
+
+The steps are thus:
+@enumerate
+@item
+The variable (by default, @code{loopy-result}) is initially bound to @code{t}, using
+it as the implicit return value of the loop.
+@item
+When the condition is checked, the variable is bound to the value of
+the condition.
+@item
+If the variable is @code{nil}, the loop is exited.
+@item
+If the loop completes successfully, then the variable is the final value
+of the condition.  If the command is never run, then the variable will
+remain @code{t}.
+@end enumerate
+@end table
+
 
 @lisp
 ;; => t
 (loopy (list i '(1 0 1 0 1))
        (always (< i 2)))
 
+;; Returns the final value of the condition:
+;; => 5
+(loopy (list i '(1 0 1 0 1))
+       (always (and (< i 2) 5)))
+
 ;; => nil
 (loopy (list i '(1 0 1 0 1))
        (always (< i 1)))
 
-;; => t
-(loopy (list i '(1 0 1 0 1))
-       ;; Note: can accept multiple conditions.
-       ;; This is equivalent to `(always (and (< i 2) (>= i 0)))'.
-       (always (< i 2) (>= i 0)))
-
-;; => "hello"
-(loopy (list i '(1 1 1 1))
-       ;; The return value of `(and (< i 2) "hello")' is "hello".
-       (always (< i 2) "hello"))
-
 ;; NOTE: Here, the implicit return value is `t' because an
 ;;       `always' command was used, and that return value
 ;;       is never updated to "hello" because the `always'
-;;       command is never actually used.
+;;       command is never actually run.
 ;;
 ;; => t
 (loopy (list i '(1 1 1 1))
        (when nil
-         (always (> i 5) "hello")))
+         (always (and (> i 5) "hello"))))
 @end lisp
-@end table
 
 @findex never
 @table @asis
-@item @samp{(never COND [CONDS])}
-Immediately return @code{nil} if any @samp{COND} is ever
-non-nil.  Otherwise, the loop returns @code{t}.
+@item @samp{(never EXPR &key into)}
+Check the condition @samp{EXPR}.  If the condition is
+ever non-nil, then the loop is exited and returns @code{nil}.  Otherwise the loop
+returns @code{t}.
+
+The steps are thus:
+@enumerate
+@item
+The variable (by default, @code{loopy-result}) is initialized to @code{t} and used as
+the loop's implicit return value.
+@item
+The value of the condition is checked.
+@item
+If the condition is non-nil, then the variable is set to @code{nil}
+and the loop is ended via the @samp{leave} command.
+@end enumerate
+@end table
+
+
+@quotation Note
+Unlike the @samp{always} command, @samp{never} does not store any information in the
+variable until it ends the loop.  Therefore, @samp{never} does not affect the
+loop's implicit return value when using the @samp{always} command so long as the
+conditions of @samp{never} are always @code{nil}.
+
+Be aware, though, that this behavior depends on @samp{always} and @samp{never} using
+the same variable.
+
+@end quotation
 
 @lisp
 ;; => t
@@ -3238,19 +3410,6 @@ non-nil.  Otherwise, the loop returns @code{t}.
 (loopy (list i '(1 0 1 0 1))
        (never (= i 0)))
 
-;; Like `always', `never' can also accept multiple arguments.  They are
-;; treated as `(never (or COND1 COND2 ... CONDN))'.
-
-;; => t
-(loopy (list i '(1 0 1 0 1))
-       ;; equivalent to `(never (or (= i 3) (= i 4)))'.
-       (never (= i 3) (= i 4)))
-@end lisp
-
-@samp{never} does not affect the loop's implicit return value when using the
-@samp{always} command.
-
-@lisp
 ;; This example taken from the documentation of CL's Iterate package.
 ;;
 ;; => 2, not t
@@ -3258,15 +3417,26 @@ non-nil.  Otherwise, the loop returns @code{t}.
        (always 2)
        (never nil))
 @end lisp
-@end table
 
 @findex thereis
 @table @asis
-@item @samp{(thereis COND [CONDS])}
-Immediately return the value of @samp{COND} if said
-value is ever non-nil.  Otherwise, the loop returns @code{nil}.  If more than
-one condition is specified, then they are treated as one condition joined
-by @code{and}.
+@item @samp{(thereis EXPR &key into)}
+Check the result of the condition
+@samp{EXPR}.  If the condition evaluates to a non-@code{nil} value, the loop returns
+that value.  Otherwise, the loop returns nil.
+
+The steps are thus:
+@enumerate
+@item
+The variable (by default, @code{loopy-result}) is initialized to @code{nil} and used
+as the implicit return value of the loop.
+@item
+The value of the condition is stored in the variable.
+@item
+If the value of the variable is non-nil, the loop exits.
+@end enumerate
+@end table
+
 
 @lisp
 ;; => 3
@@ -3278,16 +3448,11 @@ by @code{and}.
 (loopy (list i '(1 0 1 0 1))
        (thereis (and (> i 2) i)))
 
-;; => nil
-(loopy (list i '(1 0 1 0 1))
-       ;; Same as above.  Like `always' uses an explicit `and'.
-       (thereis (> i 2) i))
-
-;; => 3
+;; => 7
 (loopy (list i '(nil nil 3 nil))
-       (thereis i))
+       (thereis i)
+       (finally-return (+ loopy-result 4)))
 @end lisp
-@end table
 
 @node Control Flow
 @section Control Flow
@@ -3843,7 +4008,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org2010f58
+@float Listing,orgd37df25
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4596,7 +4761,11 @@ Lists of a symbol and an expression that will be
 given to @code{let*}.  This is used for initializing variables needed for iteration
 commands, such as the @samp{i} in @samp{(list i '(1 2 3))} or to store the list @samp{'(1 2
   3)} in @samp{(list i '(1 2 3))}.  This also includes variables needed for
-destructuring.
+destructuring for said commands.
+
+@samp{loopy} will signal an error if iteration variables would be initialized
+multiple times, as that would arise from expanding into incorrect code which
+would fail during runtime.
 @end table
 
 @vindex loopy--accumulation-vars
@@ -4605,7 +4774,16 @@ destructuring.
 Lists of a symbol and an expression that will be
 given to @code{let*}.  This is used for initializing variables needed for
 accumulation commands, such as the @samp{coll} in @samp{(collect coll my-val)} or any
-variables needed for destructuring.
+variables needed for destructuring for said commands.
+@end table
+
+@vindex loopy--other-vars
+@table @asis
+@item @samp{loopy--other-vars}
+Lists of a symbol and an expression that will be
+given to @code{let*}.  This is used for initializing variables needed for
+generic commands, such as the @samp{my-var} in @samp{(set my-var 2)} or any
+variables needed for destructuring for said command.
 @end table
 
 @vindex loopy--pre-conditions
