@@ -688,7 +688,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting to do something like the below example might not do what you expect,
 as @samp{i} is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgd0ad0bd
+@float Listing,org2573569
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -810,7 +810,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgb08dfe3
+@float Listing,orgb4c5e86
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -825,7 +825,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgfadf3de
+@float Listing,orgbf178dd
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1029,15 +1029,10 @@ To use loopy commands in arbitrary code, use the macro @code{loopy-iter} instead
 @findex expr
 @findex exprs
 @table @asis
-@item @samp{(set|expr VAR [EXPRS] &key init)}
+@item @samp{(set|expr VAR [EXPRS])}
 Bind @samp{VAR} to each @samp{EXPR} in order.
 Once the last @samp{EXPR} is reached, it is used repeatedly for the rest of the
 loop.  With no @samp{EXPR}, @samp{VAR} is repeatedly bound to @code{nil}.
-
-If @samp{INIT} is provided, use that as the initial value of @samp{VAR}.  This could
-also be achieved by specifying a value using the @samp{with} special macro
-argument.  When destructuring, each variable is initialized to @samp{INIT}, not
-a destructured part of @samp{INIT}.
 
 This command also has the aliases @samp{setting} and @samp{exprs}.
 
@@ -1069,23 +1064,6 @@ variables outside of the loop in the same way that using @samp{(do (setq VAR
        (set i 0 (1+ i))
        (collect coll i)
        (finally-return coll))
-
-;; Note that `i' is initialized to 0, and set to 1 in
-;; the middle of the first cycle of the loop.
-;;
-;; => ((0 1 2) (1 2 3))
-(loopy (cycle 3)
-       (collect befores i)
-       (set i 1 (1+ i) :init 0)
-       (collect afters i)
-       (finally-return befores afters))
-
-;; Note that using `with' has a similar effect.
-;; => (0 1 2)
-(loopy (with (i 0))
-       (cycle 3)
-       (collect i)
-       (set i 1 (1+ i)))
 @end lisp
 @end table
 
@@ -1128,14 +1106,10 @@ expressions.  Currently, this command is only useful when used within the
 @findex prev-expr
 @findex prev
 @table @asis
-@item @samp{(set-prev|prev-expr VAR VAL &key init back)}
-Bind
-@samp{VAR} to a value @samp{VAL} from a previous cycle in the loop.  @samp{VAR} is
-initialized to @samp{INIT} or nil.  With @samp{BACK}, use the value from that many
-cycles previous.  This command @emph{does not} work like a queue.
-
-As in @samp{set}, when using destructuring, each variable is initialized to
-@samp{INIT}, not a destructured part of @samp{INIT}.
+@item @samp{(set-prev|prev-expr VAR VAL &key back)}
+Bind @samp{VAR} to a value @samp{VAL} from a
+previous cycle in the loop.  With @samp{BACK}, use the value from that many cycles
+previous.  This command @emph{does not} work like a queue.
 
 This command also has the aliases @samp{setting-prev}, @samp{prev-set}, and @samp{prev}.
 
@@ -1145,25 +1119,25 @@ This command also has the aliases @samp{setting-prev}, @samp{prev-set}, and @sam
        (set-prev j i)
        (collect j))
 
-;; (nil nil nil 1 2)
+;; => (nil nil nil 1 2)
 (loopy (list i '(1 2 3 4 5))
        (set-prev j i :back 3)
        (collect j))
 
-;; => ((7 7 1 3) (7 7 2 4))
-(loopy (list i '((1 2) (3 4) (5 6) (7 8)))
-       (set-prev (a b) i :back 2 :init 7)
-       (collect c1 a)
-       (collect c2 b)
-       (finally-return c1 c2))
+;; => ((first-val nil) (first-val nil) (1 2) (3 4))
+(loopy (with (j 'first-val))
+       (list i '((1 . 2) (3 . 4) (5 . 6) (7 . 8)))
+       (set-prev (j . k) i :back 2)
+       (collect (list j k)))
 
 ;; NOTE: `prev-expr' keeps track of the previous value of `i',
 ;;       even when `j' isn't updated.
 ;;
 ;; => (first-val first-val 2 2 4 4 6 6 8 8)
-(loopy (numbers i :from 1 :to 10)
+(loopy (with (j 'first-val))
+       (numbers i :from 1 :to 10)
        (when (cl-oddp i)
-         (set-prev j i :init 'first-val))
+         (set-prev j i))
        (collect j))
 @end lisp
 @end table
@@ -2468,10 +2442,9 @@ using the @samp{set} command.
 @findex set-accum
 @findex setting-accum
 @table @asis
-@item @samp{(set-accum VAR EXPR &key init)}
+@item @samp{(set-accum VAR EXPR)}
 Set the accumulation variable @samp{VAR} to the
-value of @samp{EXPR}.  @samp{init} sets the initial value of @samp{VAR}, which defaults to
-@code{nil}.
+value of @samp{EXPR}.
 
 This command also has the alias @samp{setting-accum}.
 
@@ -2484,39 +2457,39 @@ unsafe.
 @lisp
 ;; => 16
 (loopy (array i [1 2 3])
-       (set-accum (+ loopy-result i) :init 10))
+       (set-accum (+ loopy-result i)))
 
-;; These are equivalent:
-
-;; => 16
-(loopy (array i [1 2 3])
-       (set-accum my-sum (+ my-sum i) :init 10)
-       (finally-return my-sum))
+;; These are equivalent to the above example:
 
 ;; => 16
 (loopy (array i [1 2 3])
-       (set my-sum (+ my-sum i) :init 10)
-       (finally-return my-sum))
+       (set loopy-result (+ loopy-result i))
+       (finally-return loopy-result))
+
+;; => 16
+(loopy (array i [1 2 3])
+       (set-accum loopy-result (+ loopy-result i))
+       (finally-return loopy-result))
 @end lisp
 @end table
 
 @findex accumulate
 @findex accumulating
 @table @asis
-@item @samp{(accumulate|accumulating VAR EXPR FUNC &key init)}
+@item @samp{(accumulate|accumulating VAR EXPR FUNC)}
 Accumulate the result
 of applying function @samp{FUNC} to @samp{EXPR} and @samp{VAR}.  @samp{EXPR} and @samp{VAR} are used as
 the first and second arguments to @samp{FUNC}, respectively.
 
 This is a generic accumulation command in case the others don't meet your
-needs.  It is similar in effect to using the command @samp{expr}.
+needs.  It is similar in effect to using the command @samp{set}.
 
 @lisp
 ;; Call `(cons i my-accum)'
 ;;
 ;; => (2 1)
 (loopy (list i '(1 2))
-       (accumulate my-accum i #'cons :init nil)
+       (accumulate my-accum i #'cons)
        (finally-return my-accum))
 
 ;; Works mostly the same as the above:
@@ -2524,9 +2497,11 @@ needs.  It is similar in effect to using the command @samp{expr}.
        (set my-accum (cons i my-accum))
        (finally-return my-accum))
 
-;; => ((3 1) (4 2))
-(loopy (list i '((1 2) (3 4)))
-       (accumulate (accum1 accum2) i #'cons :init nil)
+;; => ((3 1) (4 2 8 9 10))
+(loopy (with (accum1 nil)
+             (accum2 (list 8 9 10)))
+       (list i '((1 2) (3 4)))
+       (accumulate (accum1 accum2) i #'cons)
        (finally-return accum1 accum2))
 @end lisp
 
@@ -2536,7 +2511,7 @@ quoted.  This alias is intended to help users remember argument order.
 
 @lisp
 (loopy (list i '(1 2))
-       (callf2 my-accum i #'cons :init nil)
+       (callf2 my-accum i #'cons)
        (finally-return my-accum))
 
 ;; Is the same as the above:
@@ -2550,32 +2525,33 @@ quoted.  This alias is intended to help users remember argument order.
 @findex reduce
 @findex reducing
 @table @asis
-@item @samp{(reduce VAR EXPR FUNC &key init)}
-Reduce @samp{EXPR} into @samp{VAR} by @samp{FUNC}.
-@samp{FUNC} is called with @samp{VAR} as the first argument and @samp{EXPR} as the second
-argument.  This is unlike @samp{accumulate}, which gives @samp{VAR} and @samp{EXPR} to @samp{FUNC}
-in the opposite order (that is, @samp{EXPR} first, then @samp{VAR}).
+@item @samp{(reduce VAR EXPR FUNC)}
+Reduce @samp{EXPR} into @samp{VAR} by @samp{FUNC}.  @samp{FUNC} is
+called with @samp{VAR} as the first argument and @samp{EXPR} as the second argument.
+This is unlike @samp{accumulate}, which gives @samp{VAR} and @samp{EXPR} to @samp{FUNC} in the
+opposite order (that is, @samp{EXPR} first, then @samp{VAR}).
 
 This command also has the alias @samp{reducing}.
-
-@samp{VAR} is initialized to @samp{INIT}, if provided, or @code{nil}.
 
 This command is similar in effect to the @samp{set} command.
 
 @lisp
 ;; = > 6
-(loopy (list i '(1 2 3))
-       (reduce my-reduction i #'+ :init 0)
+(loopy (with (my-reduction 0))
+       (list i '(1 2 3))
+       (reduce my-reduction i #'+)
        (finally-return my-reduction))
 
 ;; Works similarly to above:
-(loopy (list i '(1 2 3))
-       (set my-reduction (+ i my-reduction) :init 0)
+(loopy (with (my-reduction 0))
+       (list i '(1 2 3))
+       (set my-reduction (+ i my-reduction))
        (finally-return my-reduction))
 
 ;; => 24
-(loopy (list i '(1 2 3 4))
-       (reduce i #'* :init 1))
+(loopy (with (loopy-result 1))
+       (list i '(1 2 3 4))
+       (reduce i #'*))
 @end lisp
 
 This command also has the alias @samp{callf}.  It is similar to using the
@@ -2584,8 +2560,9 @@ must be quoted.  This alias is intended to help users remember argument
 order.
 
 @lisp
-(loopy (list i '(1 2 3))
-       (callf my-reduction i #'+ :init 0)
+(loopy (with (my-reduction 0))
+       (list i '(1 2 3))
+       (callf my-reduction i #'+)
        (finally-return my-reduction))
 
 ;; Is similar to the above:
@@ -2702,9 +2679,9 @@ Sequence accumulation commands are used to join lists (such as @samp{union} and
 @findex adjoin
 @findex adjoining
 @table @asis
-@item @samp{(adjoin VAR EXPR &key at test key init)}
-Repeatedly add @samp{EXPR}
-to @samp{VAR} if it is not already present in the list.
+@item @samp{(adjoin VAR EXPR &key at test key)}
+Repeatedly add @samp{EXPR} to @samp{VAR} if it
+is not already present in the list.
 
 This command also has the alias @samp{adjoining}.
 
@@ -3991,7 +3968,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org1d6cd86
+@float Listing,org6ad6355
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

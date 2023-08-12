@@ -924,14 +924,9 @@ An element in the sequence =VAR= can be one of the following:
 #+findex: setting
 #+findex: expr
 #+findex: exprs
-- =(set|expr VAR [EXPRS] &key init)= :: Bind =VAR= to each =EXPR= in order.
+- =(set|expr VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.
   Once the last =EXPR= is reached, it is used repeatedly for the rest of the
   loop.  With no =EXPR=, =VAR= is repeatedly bound to ~nil~.
-
-  If =INIT= is provided, use that as the initial value of =VAR=.  This could
-  also be achieved by specifying a value using the =with= special macro
-  argument.  When destructuring, each variable is initialized to =INIT=, not
-  a destructured part of =INIT=.
 
   This command also has the aliases =setting= and =exprs=.
 
@@ -963,23 +958,6 @@ An element in the sequence =VAR= can be one of the following:
            (set i 0 (1+ i))
            (collect coll i)
            (finally-return coll))
-
-    ;; Note that `i' is initialized to 0, and set to 1 in
-    ;; the middle of the first cycle of the loop.
-    ;;
-    ;; => ((0 1 2) (1 2 3))
-    (loopy (cycle 3)
-           (collect befores i)
-           (set i 1 (1+ i) :init 0)
-           (collect afters i)
-           (finally-return befores afters))
-
-    ;; Note that using `with' has a similar effect.
-    ;; => (0 1 2)
-    (loopy (with (i 0))
-           (cycle 3)
-           (collect i)
-           (set i 1 (1+ i)))
   #+END_SRC
 
 #+findex: group
@@ -1017,13 +995,9 @@ An element in the sequence =VAR= can be one of the following:
 #+findex: prev-set
 #+findex: prev-expr
 #+findex: prev
-- =(set-prev|prev-expr VAR VAL &key init back)= :: Bind
-  =VAR= to a value =VAL= from a previous cycle in the loop.  =VAR= is
-  initialized to =INIT= or nil.  With =BACK=, use the value from that many
-  cycles previous.  This command /does not/ work like a queue.
-
-  As in =set=, when using destructuring, each variable is initialized to
-  =INIT=, not a destructured part of =INIT=.
+- =(set-prev|prev-expr VAR VAL &key back)= :: Bind =VAR= to a value =VAL= from a
+  previous cycle in the loop.  With =BACK=, use the value from that many cycles
+  previous.  This command /does not/ work like a queue.
 
   This command also has the aliases =setting-prev=, =prev-set=, and =prev=.
 
@@ -1033,25 +1007,25 @@ An element in the sequence =VAR= can be one of the following:
            (set-prev j i)
            (collect j))
 
-    ;; (nil nil nil 1 2)
+    ;; => (nil nil nil 1 2)
     (loopy (list i '(1 2 3 4 5))
            (set-prev j i :back 3)
            (collect j))
 
-    ;; => ((7 7 1 3) (7 7 2 4))
-    (loopy (list i '((1 2) (3 4) (5 6) (7 8)))
-           (set-prev (a b) i :back 2 :init 7)
-           (collect c1 a)
-           (collect c2 b)
-           (finally-return c1 c2))
+    ;; => ((first-val nil) (first-val nil) (1 2) (3 4))
+    (loopy (with (j 'first-val))
+           (list i '((1 . 2) (3 . 4) (5 . 6) (7 . 8)))
+           (set-prev (j . k) i :back 2)
+           (collect (list j k)))
 
     ;; NOTE: `prev-expr' keeps track of the previous value of `i',
     ;;       even when `j' isn't updated.
     ;;
     ;; => (first-val first-val 2 2 4 4 6 6 8 8)
-    (loopy (numbers i :from 1 :to 10)
+    (loopy (with (j 'first-val))
+           (numbers i :from 1 :to 10)
            (when (cl-oddp i)
-             (set-prev j i :init 'first-val))
+             (set-prev j i))
            (collect j))
   #+end_src
 
@@ -2296,9 +2270,8 @@ using the =set= command.
 
 #+findex: set-accum
 #+findex: setting-accum
-- =(set-accum VAR EXPR &key init)= :: Set the accumulation variable =VAR= to the
-  value of =EXPR=.  =init= sets the initial value of =VAR=, which defaults to
-  ~nil~.
+- =(set-accum VAR EXPR)= :: Set the accumulation variable =VAR= to the
+  value of =EXPR=.
 
   This command also has the alias =setting-accum=.
 
@@ -2311,36 +2284,36 @@ using the =set= command.
   #+begin_src emacs-lisp
     ;; => 16
     (loopy (array i [1 2 3])
-           (set-accum (+ loopy-result i) :init 10))
+           (set-accum (+ loopy-result i)))
 
-    ;; These are equivalent:
-
-    ;; => 16
-    (loopy (array i [1 2 3])
-           (set-accum my-sum (+ my-sum i) :init 10)
-           (finally-return my-sum))
+    ;; These are equivalent to the above example:
 
     ;; => 16
     (loopy (array i [1 2 3])
-           (set my-sum (+ my-sum i) :init 10)
-           (finally-return my-sum))
+           (set loopy-result (+ loopy-result i))
+           (finally-return loopy-result))
+
+    ;; => 16
+    (loopy (array i [1 2 3])
+           (set-accum loopy-result (+ loopy-result i))
+           (finally-return loopy-result))
   #+end_src
 
 #+findex: accumulate
 #+findex: accumulating
-- =(accumulate|accumulating VAR EXPR FUNC &key init)= :: Accumulate the result
+- =(accumulate|accumulating VAR EXPR FUNC)= :: Accumulate the result
   of applying function =FUNC= to =EXPR= and =VAR=.  =EXPR= and =VAR= are used as
   the first and second arguments to =FUNC=, respectively.
 
   This is a generic accumulation command in case the others don't meet your
-  needs.  It is similar in effect to using the command =expr=.
+  needs.  It is similar in effect to using the command =set=.
 
   #+begin_src emacs-lisp
     ;; Call `(cons i my-accum)'
     ;;
     ;; => (2 1)
     (loopy (list i '(1 2))
-           (accumulate my-accum i #'cons :init nil)
+           (accumulate my-accum i #'cons)
            (finally-return my-accum))
 
     ;; Works mostly the same as the above:
@@ -2348,9 +2321,11 @@ using the =set= command.
            (set my-accum (cons i my-accum))
            (finally-return my-accum))
 
-    ;; => ((3 1) (4 2))
-    (loopy (list i '((1 2) (3 4)))
-           (accumulate (accum1 accum2) i #'cons :init nil)
+    ;; => ((3 1) (4 2 8 9 10))
+    (loopy (with (accum1 nil)
+                 (accum2 (list 8 9 10)))
+           (list i '((1 2) (3 4)))
+           (accumulate (accum1 accum2) i #'cons)
            (finally-return accum1 accum2))
   #+end_src
 
@@ -2360,7 +2335,7 @@ using the =set= command.
 
   #+begin_src emacs-lisp
     (loopy (list i '(1 2))
-           (callf2 my-accum i #'cons :init nil)
+           (callf2 my-accum i #'cons)
            (finally-return my-accum))
 
     ;; Is the same as the above:
@@ -2372,31 +2347,32 @@ using the =set= command.
 
 #+findex: reduce
 #+findex: reducing
-- =(reduce VAR EXPR FUNC &key init)= :: Reduce =EXPR= into =VAR= by =FUNC=.
-  =FUNC= is called with =VAR= as the first argument and =EXPR= as the second
-  argument.  This is unlike =accumulate=, which gives =VAR= and =EXPR= to =FUNC=
-  in the opposite order (that is, =EXPR= first, then =VAR=).
+- =(reduce VAR EXPR FUNC)= :: Reduce =EXPR= into =VAR= by =FUNC=.  =FUNC= is
+  called with =VAR= as the first argument and =EXPR= as the second argument.
+  This is unlike =accumulate=, which gives =VAR= and =EXPR= to =FUNC= in the
+  opposite order (that is, =EXPR= first, then =VAR=).
 
   This command also has the alias =reducing=.
-
-  =VAR= is initialized to =INIT=, if provided, or ~nil~.
 
   This command is similar in effect to the =set= command.
 
   #+begin_src emacs-lisp
     ;; = > 6
-    (loopy (list i '(1 2 3))
-           (reduce my-reduction i #'+ :init 0)
+    (loopy (with (my-reduction 0))
+           (list i '(1 2 3))
+           (reduce my-reduction i #'+)
            (finally-return my-reduction))
 
     ;; Works similarly to above:
-    (loopy (list i '(1 2 3))
-           (set my-reduction (+ i my-reduction) :init 0)
+    (loopy (with (my-reduction 0))
+           (list i '(1 2 3))
+           (set my-reduction (+ i my-reduction))
            (finally-return my-reduction))
 
     ;; => 24
-    (loopy (list i '(1 2 3 4))
-           (reduce i #'* :init 1))
+    (loopy (with (loopy-result 1))
+           (list i '(1 2 3 4))
+           (reduce i #'*))
   #+end_src
 
   This command also has the alias =callf=.  It is similar to using the
@@ -2405,8 +2381,9 @@ using the =set= command.
   order.
 
   #+begin_src emacs-lisp
-    (loopy (list i '(1 2 3))
-           (callf my-reduction i #'+ :init 0)
+    (loopy (with (my-reduction 0))
+           (list i '(1 2 3))
+           (callf my-reduction i #'+)
            (finally-return my-reduction))
 
     ;; Is similar to the above:
@@ -2512,8 +2489,8 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
 #+findex: adjoin
 #+findex: adjoining
-- =(adjoin VAR EXPR &key at test key init)= :: Repeatedly add =EXPR=
-  to =VAR= if it is not already present in the list.
+- =(adjoin VAR EXPR &key at test key)= :: Repeatedly add =EXPR= to =VAR= if it
+  is not already present in the list.
 
   This command also has the alias =adjoining=.
 
