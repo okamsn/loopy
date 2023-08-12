@@ -802,8 +802,8 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :loopy t
   :iter-keyword (do return))
 
-;;;;; Expr
-(loopy-deftest expr-init
+;;;;; Set
+(loopy-deftest set-init
   :result 3
   :body ((cycle 3)
          (set var (1+ var) :init 0)
@@ -813,7 +813,19 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-bare ((cycle . cycling)
               (set . setting)))
 
-(loopy-deftest expr-init-destr
+(loopy-deftest set-with
+  :doc "Test to make sure that we can replace `:init' with `with'."
+  :result 3
+  :body ((with (var 0))
+         (cycle 3)
+         (set var (1+ var))
+         (finally-return var))
+  :loopy t
+  :iter-keyword (cycle set)
+  :iter-bare ((cycle . cycling)
+              (set . setting)))
+
+(loopy-deftest set-init-destr
   :doc "Each variable is initialized to `:init', not a destructured part of `:init'."
   :result '((0 0 0) (1 2 3))
   :body ((collect (list i j k))
@@ -826,7 +838,23 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
               (leave . leaving)
               (set . setting)))
 
-(loopy-deftest expr-when
+(loopy-deftest set-with-destr
+  :doc "Test to make sure that we can replace `:init' with `with'."
+  :result '((0 0 0) (1 2 3))
+  :body ((with (i 0)
+               (j 0)
+               (k 0))
+         (collect (list i j k))
+         (set (i j k) '(1 2 3))
+         (collect (list i j k))
+         (leave))
+  :loopy t
+  :iter-keyword (leave set collect)
+  :iter-bare ((collect . collecting)
+              (leave . leaving)
+              (set . setting)))
+
+(loopy-deftest set-when
   :result '(nil 0 0 1 1 2 2 3)
   :body ((list i '(1 2 3 4 5 6 7 8))
          (when (cl-evenp i)
@@ -887,7 +915,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 
 (loopy--set-value-tests)
 
-(loopy-deftest expr-dont-repeat
+(loopy-deftest set-dont-repeat
   :doc "Make sure commands don't repeatedly create/declare the same variable."
   :result 1
   :wrap ((x . `(with-temp-buffer
@@ -918,8 +946,8 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-keyword ((list . list)
                  (_group . (group command-do))))
 
-;;;;; Prev-Expr
-(loopy-deftest prev-expr
+;;;;; Set-Prev
+(loopy-deftest set-prev
   :result '(nil 1 2 3 4)
   :body ((list i '(1 2 3 4 5))
          (_set-prev j i)
@@ -933,7 +961,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
                  (collect . collect)
                  (_set-prev . (set-prev prev-set prev-expr))))
 
-(loopy-deftest prev-expr-keyword-back
+(loopy-deftest set-prev-keyword-back
   :result '(nil nil nil 1 2)
   :body ((list i '(1 2 3 4 5))
          (set-prev j i :back 3)
@@ -944,7 +972,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
               (set-prev . setting-prev))
   :iter-keyword (list set-prev collect))
 
-(loopy-deftest prev-expr-keyword-init
+(loopy-deftest set-prev-keyword-init
   :result '(first-val first-val 2 2 4 4 6 6 8 8)
   :body ((numbers i 1 10)
          (when (cl-oddp i)
@@ -956,7 +984,21 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
               (set-prev . setting-prev))
   :iter-keyword (numbers set-prev collect))
 
-(loopy-deftest prev-expr-destructuring
+(loopy-deftest set-prev-:back-with
+  :doc "Special behavior in command for with-bound variables."
+  :result '((first-val 22) (first-val 22) (1 2) (3 4))
+  :body ((with (j 'first-val)
+               (k 22))
+         (list i '((1 . 2) (3 . 4) (5 . 6) (7 . 8)))
+         (set-prev (j . k) i :back 2)
+         (collect (loopy-test-escape (list j k))))
+  :loopy t
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (set-prev . setting-prev))
+  :iter-keyword (list set-prev collect))
+
+(loopy-deftest set-prev-destructuring
   :result '((7 7 1 3) (7 7 2 4))
   :body ((list i '((1 2) (3 4) (5 6) (7 8)))
          (set-prev (a b) i :back 2 :init 7)
@@ -2639,6 +2681,18 @@ Othe cases use `elt'."
   :iter-bare ((list . listing)
               (_cmd . (accumulating))))
 
+(loopy-deftest accumulate-with
+  :doc "Test to make sure that we can replace `:inti' with `with'."
+  :result 10
+  :body ((with (my-accum 1))
+         (list i '(2 3 4))
+         (accumulate my-accum i #'+)
+         (finally-return my-accum))
+  :loopy t
+  :iter-keyword (accumulate list)
+  :iter-bare ((list . listing)
+              (accumulate . accumulating)))
+
 (loopy-deftest accumulate-:init
   :result 10
   :body ((list i '(2 3 4))
@@ -4106,6 +4160,26 @@ Using `start' and `end' in either order should give the same result."
   :iter-bare ((list . listing)
               (_cmd . (reducing))))
 
+(loopy-deftest reduce-with
+  :doc "Test that we can replace `:init' with `with'."
+  :result 6
+  :multi-body t
+  :body [((with (r 0))
+          (list i '(1 2 3))
+          (_cmd r i #'+)
+          (finally-return r))
+
+         ((with (r 0))
+          (list i '(1 2 3))
+          (_cmd r i #'+)
+          (finally-return r))]
+  :repeat _cmd
+  :loopy ((_cmd . (reduce reducing callf)))
+  :iter-keyword ((list . list)
+                 (_cmd . (reduce reducing callf)))
+  :iter-bare ((list . listing)
+              (_cmd . (reducing))))
+
 (loopy-deftest reduce-append
   :result '(1 2 3)
   :multi-body t
@@ -4159,6 +4233,23 @@ Using `start' and `end' in either order should give the same result."
                  (_cmd . (set-accum setting-accum)))
   :iter-bare ((list . listing)
               (_cmd . (setting-accum))))
+
+(loopy-deftest set-accum-+-2
+  :doc "Test to make sure that we can replace `:init' with `with'."
+  :result 16
+  :multi-body t
+  :body [((with (my-sum 10))
+          (list i '(1 2 3))
+          (set-accum my-sum (+ my-sum i))
+          (finally-return my-sum))
+
+         ((with (loopy-result 10))
+          (list i '(1 2 3))
+          (set-accum (+ loopy-result i)))]
+  :loopy t
+  :iter-keyword (list set-accum)
+  :iter-bare ((list . listing)
+              (set-accum . setting-accum)))
 
 (loopy-deftest set-accum-cons
   :result '(3 2 1)

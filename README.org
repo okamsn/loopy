@@ -46,6 +46,8 @@ please let me know.
      the other commands.
    - =:result-type= is deprecated.  Instead, use coercion functions in
      special macro arguments, possibly with =accum-opt=.
+   - The =:init= keyword argument is deprecated.  Use the special macro argument
+     =with= instead.
  - Versions 0.11.1 and 0.11.2: None. Bug fixes.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.

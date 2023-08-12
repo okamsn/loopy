@@ -219,6 +219,11 @@ handled by `loopy-iter'."
                              ':init))
          (init-arg (when using-init-arg
                      (nth (1- length-vals) vals))))
+
+    (when using-init-arg
+      (warn "Loopy: `set': The `:init' argument is deprecated.
+Instead, use the special macro argument `with'."))
+
     (let ((arg-length (if using-init-arg
                           (- length-vals 2)
                         length-vals))
@@ -272,7 +277,8 @@ handled by `loopy-iter'."
           needed-instructions)))))
 
 ;;;;;; Prev Expr
-(cl-defun loopy--parse-set-prev-command ((_ var val &key init back))
+(cl-defun loopy--parse-set-prev-command
+    ((&whole cmd _ var val &key (init nil init-provided) back))
   "Parse the `set-prev' command as (set-prev VAR VAL &key init back).
 
 VAR is set to a version of VAL in a past loop cycle.  With INIT,
@@ -280,49 +286,94 @@ initialize VAR to INIT.  With BACK, wait that many cycle before
 beginning to update VAR.
 
 This command does not wait for VAL to change before updating VAR."
-  (let ((holding-vars (cl-loop for i from 1 to (or back 1)
-                               collect (gensym "set-prev-hold")))
-        (init-value-holder (gensym "set-prev-init"))
-        (init-destr-value-holder (gensym "set-prev-destr-init"))
-        (using-destructuring (sequencep var)))
-    ;; TODO: This feels more complicated than it needs to be, but the resulting
-    ;;       code is pretty simple.
-    `(,@(if init
-            `((loopy--other-vars (,init-value-holder ,init))
-              ;; When using destructuring, each variable in `holding-vars'
-              ;; needs to be initialized to a value that can be destructured
-              ;; according to VAR.
-              ;;
-              ;; We only want to calculate the initial value once, even for the
-              ;; destructuring, so we require two holding variables.
-              ,@(if using-destructuring
-                    `((loopy--other-vars
-                       (,init-destr-value-holder
-                        (loopy--mimic-init-structure
-                         (quote ,var) ,init-value-holder)))
-                      ,@(mapcar (lambda (x)
-                                  `(loopy--other-vars
-                                    (,x ,init-destr-value-holder)))
-                                holding-vars))
-                  (mapcar (lambda (x)
-                            `(loopy--other-vars  (,x ,init-value-holder)))
-                          holding-vars)))
-          (mapcar (lambda (x)
-                    `(loopy--other-vars (,x nil)))
-                  holding-vars))
-      ,@(loopy--substitute-using
-         (pcase-lambda ((and instr `(,place (,var ,_))))
-           (if (eq place 'loopy--other-vars)
-               `(,place (,var ,(when init
-                                 init-value-holder)))
-             instr))
-         (loopy--destructure-for-other-command
-          var (car (last holding-vars))))
-      (loopy--latter-body
-       (setq ,@(apply #'append
-                      (nreverse (cl-loop for pvar = val then hv
-                                         for hv in holding-vars
-                                         collect (list hv pvar)))))))))
+  (let* ((holding-vars (cl-loop for i from 1 to (or back 1)
+                                collect (gensym "set-prev-hold")))
+         (init-value-holder (gensym "set-prev-init"))
+         (init-destr-value-holder (gensym "set-prev-destr-init"))
+         (using-destructuring (sequencep var))
+         (with-bound (if using-destructuring
+                         (cl-loop for instr
+                                  in (loopy--destructure-for-other-command var 'blah)
+                                  when (eq (car instr) 'loopy--other-vars)
+                                  for (_ (sym _)) = instr
+                                  thereis (loopy--with-bound-p sym))
+                       (loopy--with-bound-p var))))
+
+    (when init-provided
+      (warn "Loopy: `set-prev': The `:init' argument is deprecated.
+Instead, use the special macro argument `with'."))
+
+    (when (and init-provided with-bound)
+      (error "Can't use `with' and `:init': %s" cmd))
+
+    (let ((holding-vars-setq
+           `(loopy--latter-body
+             (setq ,@(apply #'append
+                            (nreverse (cl-loop for pvar = val then hv
+                                               for hv in holding-vars
+                                               collect (list hv pvar))))))))
+      (cond
+       ((and with-bound (not using-destructuring))
+        `(,@(mapcar (lambda (x) `(loopy--other-vars (,x ,var)))
+                    holding-vars)
+          (loopy--main-body (setq ,var ,(car (last holding-vars))))
+          ,holding-vars-setq))
+       ((and with-bound using-destructuring)
+        (let ((cnt-holder (gensym "count"))
+              (back-holder (gensym "back")))
+          `((loopy--other-vars (,cnt-holder 0))
+            (loopy--latter-body (setq ,cnt-holder (1+ ,cnt-holder)))
+            (loopy--other-vars (,back-holder ,back))
+            ,@(mapcar (lambda (x) `(loopy--other-vars (,x nil)))
+                      holding-vars)
+            ,@(seq-let (main-exprs rest-instr)
+                  (loopy--extract-main-body
+                   (loopy--destructure-for-other-command
+                    var (car (last holding-vars))))
+                `((loopy--main-body (when (>= ,cnt-holder ,back-holder)
+                                      ,@main-exprs))
+                  ,@rest-instr))
+            ,holding-vars-setq)))
+       ;; TODO: Old code.  Update when `:init' removed.
+       (t
+        ;; TODO: This feels more complicated than it needs to be, but the resulting
+        ;;       code is pretty simple.
+        `(,@(if init
+                `((loopy--other-vars (,init-value-holder ,init))
+                  ;; When using destructuring, each variable in `holding-vars'
+                  ;; needs to be initialized to a value that can be destructured
+                  ;; according to VAR.
+                  ;;
+                  ;; We only want to calculate the initial value once, even for the
+                  ;; destructuring, so we require two holding variables.
+                  ,@(if using-destructuring
+                        `((loopy--other-vars
+                           (,init-destr-value-holder
+                            (loopy--mimic-init-structure
+                             (quote ,var) ,init-value-holder)))
+                          ,@(mapcar (lambda (x)
+                                      `(loopy--other-vars
+                                        (,x ,init-destr-value-holder)))
+                                    holding-vars))
+                      (mapcar (lambda (x)
+                                `(loopy--other-vars  (,x ,init-value-holder)))
+                              holding-vars)))
+              (mapcar (lambda (x)
+                        `(loopy--other-vars (,x nil)))
+                      holding-vars))
+          ,@(loopy--substitute-using
+             (pcase-lambda ((and instr `(,place (,var ,_))))
+               (if (eq place 'loopy--other-vars)
+                   `(,place (,var ,(when init
+                                     init-value-holder)))
+                 instr))
+             (loopy--destructure-for-other-command
+              var (car (last holding-vars))))
+          (loopy--latter-body
+           (setq ,@(apply #'append
+                          (nreverse (cl-loop for pvar = val then hv
+                                             for hv in holding-vars
+                                             collect (list hv pvar))))))))))))
 
 ;;;;;; Group
 (cl-defun loopy--parse-group-command ((_ &rest body))
@@ -1699,6 +1750,13 @@ you can use in the instructions:
 Instead, use a coercing function like `seq-into' in a special
 macro argument, such as `finally-return'.  See also `accum-opt' at the Info node
 `(loopy)Optimizing Accumulations'."
+                   name))
+
+           (when (plist-member opts :init)
+             (warn "Loopy: `%s': The `:init' argument is deprecated.
+Instead, use the special macro argument `with' for the
+accumulation variable. The default accumulation variable is
+`loopy-result'."
                    name))
 
            (let ((arg-length (length args)))

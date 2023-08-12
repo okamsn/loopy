@@ -32,7 +32,7 @@ This document describes the user-facing changes to Loopy.
   Iterate.  While useful, this can be done more directly using named
   accumulation variables (such as `loopy-result`) in special macro arguments,
   such as `finally-return`.  Because of `accum-opt`, using named variables is
-  more flexible,
+  more flexible.
 
   ```elisp
   ;; Can't be done using only `:result-type'.
@@ -44,6 +44,14 @@ This document describes the user-facing changes to Loopy.
          (finally-return (cl-coerce doubles 'vector)
                          (cl-coerce triples 'vector)))
   ```
+
+- `:init` is deprecated.  Some commands had special behavior with `:init`, such
+  as `set-prev`, but this has been changed to work with `with` too.  Some
+  iteration commands, such as `numbers`, change behavior based on whether
+  a variable is `with` bound.  Removing `:init` increases consistency
+  with these commands and decreases the duplication of features.
+  - Relatedly, remove documentation that said `adjoin` supported `:init`.  It
+    does not.
 
 ### Command Improvements
 
