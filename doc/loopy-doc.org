@@ -2317,7 +2317,8 @@ using the =set= command.
            (finally-return my-accum))
 
     ;; Works mostly the same as the above:
-    (loopy (list i '(1 2))
+    (loopy (with (my-accum nil))
+           (list i '(1 2))
            (set my-accum (cons i my-accum))
            (finally-return my-accum))
 
@@ -2370,9 +2371,14 @@ using the =set= command.
            (finally-return my-reduction))
 
     ;; => 24
-    (loopy (with (loopy-result 1))
-           (list i '(1 2 3 4))
+    (loopy (list i '(1 2 3 4))
            (reduce i #'*))
+
+    (loopy (list i '(1 2 3 4))
+           (set first-time t nil)
+           (set-accum (if first-time
+                          i
+                        (* i loopy-result))))
   #+end_src
 
   This command also has the alias =callf=.  It is similar to using the
