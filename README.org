@@ -39,6 +39,11 @@ please let me know.
      /can/ update named iteration variables outside of the main loop body
      and initialize variables to non-nil values, producing faster code.
      This can be overridden via the special macro argument =with=.
+   - Using multiple conditions in =always=, =never=, and =thereis= is
+     deprecated.  These commands will be changed to have call argument lists
+     more like accumulation commands, such as =(always [VAR] VAL &key into)=.
+     This will simplify the code and remove an inconsistency between them and
+     the other commands.
  - Versions 0.11.1 and 0.11.2: None. Bug fixes.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.

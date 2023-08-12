@@ -2647,6 +2647,11 @@ or t if the command is never evaluated."
               other-conditions (butlast other-conditions-or-var 2))
       (setq other-conditions other-conditions-or-var))
 
+    (when other-conditions
+      (warn "Loopy: `always': Use of multiple conditions is deprecated.
+This command's behavior will be changed to be (always [VAR] CONDITION &key into),
+like accumulation commands."))
+
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-always-never cmd)
 
@@ -2679,6 +2684,11 @@ Otherwise, `loopy' should return t."
               other-conditions (butlast other-conditions-or-var 2))
       (setq other-conditions other-conditions-or-var))
 
+    (when other-conditions
+      (warn "Loopy: `never': Use of multiple conditions is deprecated.
+This command's behavior will be changed to be (never [VAR] CONDITION &key into),
+like accumulation commands."))
+
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-always-never cmd)
 
@@ -2709,6 +2719,11 @@ returned."
         (setq var (cl-second final-two-cond)
               other-conditions (butlast other-conditions-or-var 2))
       (setq other-conditions other-conditions-or-var))
+
+    (when other-conditions
+      (warn "Loopy: `thereis': Use of multiple conditions is deprecated.
+This command's behavior will be changed to be (thereis [VAR] CONDITION &key into),
+like accumulation commands."))
 
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-thereis cmd)
