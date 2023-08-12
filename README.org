@@ -44,6 +44,8 @@ please let me know.
      more like accumulation commands, such as =(always [VAR] VAL &key into)=.
      This will simplify the code and remove an inconsistency between them and
      the other commands.
+   - =:result-type= is deprecated.  Instead, use coercion functions in
+     special macro arguments, possibly with =accum-opt=.
  - Versions 0.11.1 and 0.11.2: None. Bug fixes.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.

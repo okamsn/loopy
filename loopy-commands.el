@@ -1691,7 +1691,16 @@ you can use in the instructions:
                         (setq opts cons-cell
                               args (nreverse args-holding))
                       (setq args parser-args)))
+
            (ignore args opts)
+
+           (when (plist-member opts :result-type)
+             (warn "Loopy: `%s': Use of `:result-type' is deprecated.
+Instead, use a coercing function like `seq-into' in a special
+macro argument, such as `finally-return'.  See also `accum-opt' at the Info node
+`(loopy)Optimizing Accumulations'."
+                   name))
+
            (let ((arg-length (length args)))
              (cond
               ((= arg-length ,implicit-num-args)
@@ -1861,9 +1870,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           (loopy--update-accum-place-count loopy--loop-name var pos)
           `((loopy--main-body
              (loopy--optimized-accum '( :cmd ,cmd :name ,name
-                                       :var ,var :val ,val
-                                       :test ,test :key ,key :at ,pos
-                                       :result-type ,result-type)))))
+                                        :var ,var :val ,val
+                                        :test ,test :key ,key :at ,pos
+                                        :result-type ,result-type)))))
 
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
@@ -1916,9 +1925,9 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
-                                 :var ,var :val ,val
-                                 :test ,test :key ,key :at ,pos
-                                 :result-type ,result-type)))
+                                  :var ,var :val ,val
+                                  :test ,test :key ,key :at ,pos
+                                  :result-type ,result-type)))
       (loopy--implicit-return ,var))))
 
 ;;;;;;; Append

@@ -28,6 +28,23 @@ This document describes the user-facing changes to Loopy.
   simplify the code and remove an inconsistency between them and the other
   commands.
 
+- `:result-type` is deprecated.  This feature was taken from Common Lisp's
+  Iterate.  While useful, this can be done more directly using named
+  accumulation variables (such as `loopy-result`) in special macro arguments,
+  such as `finally-return`.  Because of `accum-opt`, using named variables is
+  more flexible,
+
+  ```elisp
+  ;; Can't be done using only `:result-type'.
+  ;; => ([2 4 6] [3 6 9])
+  (loopy (accum-opt doubles triples)
+         (list i '(1 2 3))
+         (collect doubles (* i 2))
+         (collect triples (* i 3))
+         (finally-return (cl-coerce doubles 'vector)
+                         (cl-coerce triples 'vector)))
+  ```
+
 ### Command Improvements
 
 - To produce faster code, some commands now avoid creating an intermediate

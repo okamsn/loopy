@@ -2280,15 +2280,6 @@ all described below.
 - =init= :: The initial value of =VAR=.  For explicitly named variables, one
   can use this argument or the =with= special macro argument.
 
-#+cindex: accumulation keyword result-type
-- =result-type= :: A sequence type into which =VAR= is converted /after the
-  loop is over/.  These types need not be quoted.  For example, ='vector= and
-  =vector= are both valid ways to specify the vector data type.  Commands using
-  the same variable must use the same type coercion.
-
-  This argument can be more convenient than writing out a call to ~cl-coerce~
-  or ~seq-into~.
-
 The arguments to the =test= and =key= parameters can be quoted functions or
 variables, just like when using ~cl-union~, ~cl-adjoin~, and so on.  ~loopy~
 knows how to expand efficiently for either case.
@@ -2521,7 +2512,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
 #+findex: adjoin
 #+findex: adjoining
-- =(adjoin VAR EXPR &key at test key init result-type)= :: Repeatedly add =EXPR=
+- =(adjoin VAR EXPR &key at test key init)= :: Repeatedly add =EXPR=
   to =VAR= if it is not already present in the list.
 
   This command also has the alias =adjoining=.
@@ -2548,14 +2539,14 @@ Sequence accumulation commands are used to join lists (such as =union= and
     ;; Coerced to a vector /after/ the loop ends.
     ;; => [1 2 3 4]
     (loopy (list i '(1 2 3 3 4))
-           (adjoin my-var i :result-type 'vector)
+           (adjoin my-var i)
            (when (vectorp my-var)
              (return 'is-vector))
            (finally-return my-var))
 
     ;; => [4 3 2 1]
     (loopy (list i '(1 2 3 3 4))
-           (adjoin my-var i :result-type 'vector :at 'start)
+           (adjoin my-var i :at 'start)
            (finally-return my-var))
   #+end_src
 
@@ -2579,7 +2570,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
 #+findex: collect
 #+findex: collecting
-- =(collect VAR EXPR &key result-type at)= :: Collect the value of =EXPR= into
+- =(collect VAR EXPR &key at)= :: Collect the value of =EXPR= into
   the list =VAR=.  By default, elements are added to the end of the list.
 
   This command also has the alias =collecting=.
@@ -2618,9 +2609,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
   This command also has the alias =concating=.
 
-  =VAR= is a string throughout the loop.  This differs from the behavior of
-  commands with the keyword argument =result-type=, which coerces the resulting
-  sequence of accumulated values into a new type /after/ the loop completes.
+  =VAR= is a string throughout the loop.
 
   #+BEGIN_SRC emacs-lisp
     ;; => "abc"
@@ -2783,10 +2772,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
   This command also has the alias =vconcating=.
 
-  =VAR= is a vector throughout the loop.  This differs from the behavior of
-  commands with the keyword argument =result-type=, which coerces the
-  resulting sequence of accumulated values into a new type /after/ the loop
-  completes.
+  =VAR= is a vector throughout the loop.
 
   #+BEGIN_SRC emacs-lisp
     ;; => [1 2 3 4 5 6]
@@ -4340,16 +4326,14 @@ For accumulation commands, you might also wish to place values in the following:
   commands need to update the variable one final time after ending the loop.
   Some examples are:
   1. Correcting the order of elements in a list that was constructed in reverse.
-  2. Coercing the variable into a new sequence type, for commands with the
-     ~:result-type~ argument.
+  2. Coercing the variable into a new sequence type.
+  3. Appending a list of lists.
 
   Each accumulation variable can only be updated once, in a single way.  For
   example, a variable cannot be reversed according to the needs of one command
   and then coerced into a new type according to the needs of another.  Commands
   acting on the same accumulation variable must require the same final update,
-  including if they require no final update.  For example, a command that uses
-  =:result-type= to coerce ~loopy-result~ into a vector is incompatible with a
-  command that does not require (and so does not expect) a final update.
+  including if they require no final update.
 
 
 Loopy will attempt to produce efficient code, and will not attempt to set up
