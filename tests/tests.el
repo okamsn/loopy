@@ -4160,6 +4160,24 @@ Using `start' and `end' in either order should give the same result."
   :iter-bare ((list . listing)
               (_cmd . (reducing))))
 
+(loopy-deftest reduce-no-init
+  :doc "When the accumulation variable isn't explicitly initialized,
+`reduce' should store the first value without calling the function.
+
+This is how `cl-reduce' and `seq-reduce' work."
+  :result (cl-reduce #'+ '(1 2 3))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (reduce r i #'+)
+          (finally-return r))
+
+         ((list i '(1 2 3))
+          (reduce i #'+))]
+  :loopy t
+  :iter-keyword (list reduce)
+  :iter-bare ((list . listing)
+              (reduce . reducing)))
+
 (loopy-deftest reduce-with
   :doc "Test that we can replace `:init' with `with'."
   :result 6
@@ -4198,9 +4216,20 @@ Using `start' and `end' in either order should give the same result."
 
 (loopy-deftest reduce-destructuring-+
   :result '(4 6)
-  :body ((list i '((1 2) (3 4)))
-         (reduce (r1 r2) i #'+ :init 0)
-         (finally-return r1 r2))
+  :multi-body t
+  :body [((with (r1 0)
+                (r2 0))
+          (list i '((1 2) (3 4)))
+          (reduce (r1 r2) i #'+)
+          (finally-return r1 r2))
+
+         ((list i '((1 2) (3 4)))
+          (reduce (r1 r2) i #'+ :init 0)
+          (finally-return r1 r2))
+
+         ((list i '((1 2) (3 4)))
+          (reduce (r1 r2) i #'+)
+          (finally-return r1 r2))]
   :loopy t
   :iter-keyword (list reduce)
   :iter-bare ((list . listing)

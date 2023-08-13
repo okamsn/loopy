@@ -1773,6 +1773,12 @@ accumulation variable. The default accumulation variable is
                                'loopy-result))
                       (val (cl-first args)))
                  (ignore var val)
+
+                 (when (and (loopy--with-bound-p var)
+                            (plist-member opts :init))
+                   (error "Loopy: Can't use `:init' and `with' for same variable: %s"
+                          var))
+
                  ;; Substitute in the instructions.
                  ;;
                  ;; If `:into' is used, then we must act as if this is the
@@ -1806,6 +1812,8 @@ accumulation variable. The default accumulation variable is
                (let ((var (cl-first args))
                      (val (cl-second args)))
                  (ignore var val)
+
+
                  (if (sequencep var)
                      ;; If we need to destructure the sequence `var', we use the
                      ;; function named by
@@ -1814,6 +1822,12 @@ accumulation variable. The default accumulation variable is
                      (funcall (or loopy--destructuring-accumulation-parser
                                   #'loopy--parse-destructuring-accumulation-command)
                               cmd)
+
+                   (when (and (loopy--with-bound-p var)
+                              (plist-member opts :init))
+                     (error "Loopy: Can't use `:init' and `with' for same variable: %s"
+                            var))
+
                    ;; Substitute in the instructions.
                    ,(when category
                       `(loopy--check-accumulation-compatibility
@@ -2515,19 +2529,44 @@ This function is used by `loopy--expand-optimized-accum'."
 With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
   :num-args 3
   :keywords (init)
+  :category generic
   :implicit (loopy--plist-bind (:init init) opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'generic cmd)
-              `((loopy--accumulation-vars (,var ,init))
-                (loopy--main-body
-                 (setq ,var ,(loopy--apply-function (cl-second args) var val)))
+              `(,@(cond
+                   ((loopy--with-bound-p var)
+                    `((loopy--main-body
+                       (setq ,var ,(loopy--apply-function (cl-second args) var val)))))
+                   ((plist-member opts :init)
+                    `((loopy--accumulation-vars (,var ,init))
+                      (loopy--main-body
+                       (setq ,var ,(loopy--apply-function (cl-second args) var val)))))
+                   (t
+                    (let ((first-time (gensym "first-time")))
+                      `((loopy--accumulation-vars (,var ,init))
+                        (loopy--accumulation-vars (,first-time t))
+                        (loopy--main-body
+                         (if ,first-time
+                             (setq ,first-time nil
+                                   ,var ,val)
+                           (setq ,var ,(loopy--apply-function (cl-second args) var val))))))))
                 (loopy--implicit-return ,var)))
   :explicit (loopy--plist-bind (:init init) opts
-              (loopy--check-accumulation-compatibility
-               loopy--loop-name var 'generic cmd)
-              `((loopy--accumulation-vars (,var ,init))
-                (loopy--main-body
-                 (setq ,var ,(loopy--apply-function (cl-third args) var val))))))
+              `(,@(cond
+                   ((loopy--with-bound-p var)
+                    `((loopy--main-body
+                       (setq ,var ,(loopy--apply-function (cl-third args) var val)))))
+                   ((plist-member opts :init)
+                    `((loopy--accumulation-vars (,var ,init))
+                      (loopy--main-body
+                       (setq ,var ,(loopy--apply-function (cl-third args) var val)))))
+                   (t
+                    (let ((first-time (gensym "first-time")))
+                      `((loopy--accumulation-vars (,var ,init))
+                        (loopy--accumulation-vars (,first-time t))
+                        (loopy--main-body
+                         (if ,first-time
+                             (setq ,first-time nil
+                                   ,var ,val)
+                           (setq ,var ,(loopy--apply-function (cl-third args) var val)))))))))))
 
 ;;;;;;; Sum
 (loopy--defaccumulation sum
