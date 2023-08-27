@@ -48,70 +48,12 @@
 ;; Iterate, but now it just defers to what Emacs already does when expanding
 ;; macros, such as in `macroexpand-all'.
 
-;;;; Flags (obsolete)
-(make-obsolete-variable
- 'loopy-iter--lax-naming
- "Use `loopy-iter-bare-special-macro-arguments' or
-`loopy-iter-bare-commands' instead.  See the manual."
- "2022-07")
-(defvar loopy-iter--lax-naming nil
-  "Whether loop commands must be preceded by keywords to be recognized.
-
-By default, `loopy-iter' requires loop commands to be preceded by
-the keywords `for', `accum', or `exit', in order to distinguish
-loop commands from other Emacs features.
-
-The flag `lax-naming' disables this requirement, at the cost of
-name collisions becoming more likely.")
-
-(make-obsolete 'loopy-iter--enable-flag-lax-naming nil "2022-07")
-(defun loopy-iter--enable-flag-lax-naming ()
-  "Set `loopy-iter--lax-naming' to t inside the loop."
-  (setq loopy-iter--lax-naming t))
-
-(make-obsolete 'loopy-iter--disable-flag-lax-naming nil "2022-07")
-(defun loopy-iter--disable-flag-lax-naming ()
-  "Set `loopy-iter--lax-naming' to nil inside the loop if active."
-  ;; Currently redundant, but leaves room for possibilities.
-  (if loopy-iter--lax-naming
-      (setq loopy-iter--lax-naming nil)))
-
-(let ((f #'(lambda ()
-             (warn (concat "loopy-iter: Flag `lax-naming' is now obsolete.  "
-                           "See manual or changelog.")))))
-
-  (dolist (flag '(lax-naming +lax-naming lax-names +lax-names))
-    (setf loopy--flag-settings
-          (map-insert loopy--flag-settings flag f)))
-
-  (dolist (flag '(-lax-naming -lax-names))
-    (setf loopy--flag-settings
-          (map-insert loopy--flag-settings flag f))))
-
 ;;;; Custom User Options
 (defgroup loopy-iter nil
   "Options specifically for the `loopy-iter' macro."
   :group 'loopy
   :prefix "loopy-iter-")
 
-(make-obsolete-variable
- 'loopy-iter-ignored-names
- "Use `loopy-iter-bare-special-macro-arguments' or
-`loopy-iter-bare-commands' instead.  See the manual."
- "2022-07")
-(defcustom loopy-iter-ignored-names '(let*)
-  "Names of commands, special macro arguments, and their aliases to be ignored.
-
-Some aliases and command names can cause conflicts, such as `let*' as
-an alias of the special macro argument `with'.
-
-This option always applies to special macro arguments.  This
-option is used with commands when the `lax-naming' flag is
-enabled."
-  :type '(repeat symbol))
-
-(define-obsolete-variable-alias 'loopy-iter-command-keywords
-  'loopy-iter-keywords "2022-07")
 (defcustom loopy-iter-keywords '(accum for exit arg)
   "Keywords that `loopy-iter' can use to recognize loop commands.
 
@@ -128,33 +70,6 @@ Without these keywords, one must use one of the names given in
 `loopy-iter-bare-commands' or
 `loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol))
-
-
-
-;;;; Miscellaneous Helper Functions
-;; (defun loopy-iter--valid-loop-command (name)
-;;   "Check if NAME is a known command.
-;;
-;; This checks for NAME as a key in `loopy-aliases'
-;; and `loopy-command-parsers', in that order."
-;;   (if (and loopy-iter--lax-naming
-;;            (memq name loopy-iter-ignored-names))
-;;       nil
-;;     (map-elt loopy-command-parsers (loopy--get-true-name name))))
-;;
-;; (defun loopy-iter--literal-form-p (form)
-;;   "Whether FORM is a literal form that should not be interpreted."
-;;   (or (and (consp form)
-;;            (memq (cl-first form) loopy-iter--literal-forms))
-;;       (arrayp form)))
-;;
-;; (defun loopy-iter--sub-loop-command-p (name)
-;;   "Whether command named NAME is a sub-loop."
-;;   (memq name (loopy--get-all-names 'sub-loop
-;;                                    :from-true t
-;;                                    :ignored loopy-iter-ignored-names)))
-
-
 
 (def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
   ;; This is the same as for `loopy', but without `let*'.
@@ -201,9 +116,6 @@ Without these keywords, one must use one of the names given in
     listing
     listing-index
     listing-ref
-    ;; TODO: Remove once we move to a new version number.
-    ;;       The `sub-loop' command has been deprecated.
-    looping
     mapping
     mapping-pairs
     mapping-ref
@@ -239,18 +151,13 @@ Without these keywords, one must use one of the names given in
     stringing
     stringing-index
     stringing-ref
-    ;; TODO: Remove once we move to a new version number.
-    ;;       The `sub-loop' command has been deprecated.
-    sub-looping
     thereis
     summing
     unioning
     vconcating)
   "Commands recognized in `loopy-iter' without a preceding keyword.
 
-For special marco arguments, see `loopy-iter-bare-special-macro-arguments'.
-
-This option replaces the flag `lax-naming', and is always in effect."
+For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol)
   :group 'loopy-iter)
 
@@ -332,8 +239,7 @@ in the expression with `loopy--optimized-accum-2'."
 ;;;;; Overwritten definitions
 
 (defcustom loopy-iter-overwritten-command-parsers
-  '((at       . loopy-iter--parse-at-command)
-    (sub-loop . loopy-iter--parse-sub-loop-command))
+  '((at       . loopy-iter--parse-at-command))
   "Overwritten command parsers.
 
 This is an alist of dotted pairs of base names and parsers, as in
@@ -370,10 +276,6 @@ These commands affect other loops higher up in the call list."
               ,@(thread-last loopy-iter--non-main-body-instructions
                              nreverse
                              (apply #'append))))))))
-
-(cl-defun loopy-iter--parse-sub-loop-command ((_ &rest body))
-  "Parse the `sub-loop' command in `loopy-iter'."
-  `((loopy--main-body ,(macroexpand `(loopy-iter ,@body)))))
 
 ;;;; For parsing special macro arguments
 

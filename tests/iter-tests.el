@@ -487,11 +487,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                    j)))
                           (accum collect a))))))))
 
-;;; lax naming
-;; TODO: HERE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-;; (ert-deftest deprecate-flag-lax-naming ()
-;;   (should-error ))
-
 ;; Wrap in accum
 (ert-deftest wrap-expressions-in-loop-commands ()
   (should
@@ -639,26 +634,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                     (summing important-val val)))
                                 (finally-return important-val)))))))
 
-
-(ert-deftest sub-loop ()
-  (should (equal '(2 3 4 5 6)
-                 (loopy-iter outer
-                             (for list i '(1 2 3 4 5))
-                             (for loop
-                                  (for repeat 1)
-                                  (for set j (1+ i))
-                                  (for at outer
-                                       (accum collect j))))))
-
-  (should (equal '(2 3 4 5 6)
-                 (loopy-iter (named outer)
-                             (listing i '(1 2 3 4 5))
-                             (looping
-                              (repeating 1)
-                              (setting j (1+ i))
-                              (at outer
-                                  (collecting j)))))))
-
 (ert-deftest loopy-iter-sub-loop ()
   (should (equal '(2 3 4 5 6)
                  (loopy-iter (named outer)
@@ -738,9 +713,9 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
     (loopy-iter
      outer
      (for repeat 2)
-     (for loop inner1
+     (for loopy-iter inner1
           (for list j '(3 4))
-          (for loop
+          (for loopy-iter
                (for list k '(5 6 7))
                (if (= k 6)
                    ;; Return from inner1 so never reach 4.
@@ -767,7 +742,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                  (let ((test-eshell-visual-subcommands))
                    (loopy-iter
                     (for list (cmd &rest subcmds) '(("git" "log" "diff" "show")))
-                    (for loop
+                    (for loopy-iter
                          (for list subcmd subcmds)
                          (push subcmd (alist-get cmd test-eshell-visual-subcommands
                                                  nil nil #'equal))))
@@ -799,7 +774,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                    (eval (quote (loopy-iter my-loop
                                             (for array i [(1 2) (3 4)])
                                             (accum collect i :at start)
-                                            (for loop inner
+                                            (for loopy-iter inner
                                                  (for list j i)
                                                  (for at my-loop
                                                       (accum collect j :at
@@ -837,7 +812,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
         (loopy--accumulation-variable-info))
     (macroexpand '(loopy-iter
                    main
-                   (flag lax-naming)
                    (with (a 1) (b 2) (c 3))
                    (while clause)
                    (loopy-let* ((key (pop clause))
@@ -862,7 +836,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
         (loopy--accumulation-variable-info))
     (macroexpand '(loopy-iter
                    main
-                   (flag lax-naming)
                    (with (a 1) (b 2) (c 3))
                    (while clause)
                    (loopy-let* ((key (pop clause))
