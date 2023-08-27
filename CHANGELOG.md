@@ -10,6 +10,18 @@ This document describes the user-facing changes to Loopy.
   `collect`.  This change makes these commands work with the new system for
   optimized accumulation variables.
 
+- Without an explicit starting value for the accumulation variable, `reduce` now
+  uses the first accumulated value without passing it to the function.  This is
+  how reducing actually works, and was the intended behavior. Previously, the
+  function was always called. _This is a breaking change._ See [#164].
+
+  ```emacs-lisp
+  ;; Now correct behavior (would previously error):
+  ;; => 6
+  (loopy (list i '(1 2 3))
+         (reduce i #'*))
+  ```
+
 ### Breaking Changes
 
 - Make it an error to re-use iteration variables with multiple iteration
@@ -92,6 +104,9 @@ This document describes the user-facing changes to Loopy.
 - Add `loopy--other-vars`, given the more explicit restriction on
   `loopy--iteration-vars`.  For example, these are the variables bound by the
   `set` command, which are allowed to occur in more than one command.
+
+[#164]: https://github.com/okamsn/loopy/pull/164
+
 
 ## 0.11.2
 
