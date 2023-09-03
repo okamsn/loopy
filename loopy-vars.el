@@ -140,7 +140,6 @@ Definition must exist.  Neither argument need be quoted."
                          elements-ref))
     (skip            . (skipping continue continuing))
     (skip-from       . (skipping-from continue-from continuing-from))
-    (sub-loop        . (sub-looping subloop sublooping loop looping))
     (sum             . (summing))
     (union           . (unioning))
     (vconcat         . (vconcating))
@@ -209,7 +208,6 @@ true names and lists of aliases.
     (set-prev     . loopy--parse-set-prev-command)
     (skip         . loopy--parse-skip-command)
     (skip-from    . loopy--parse-skip-from-command)
-    (sub-loop     . loopy--parse-sub-loop-command)
     (sum          . loopy--parse-sum-command)
     (thereis      . loopy--parse-thereis-command)
     (union        . loopy--parse-union-command)
@@ -246,13 +244,6 @@ exist), one could do
 
 ;;;; Flags
 ;;;;; Variables that can be set by flags
-(defvar loopy--split-implied-accumulation-results nil
-  "Whether implicit accumulation commands should use separate variables.
-
-Nil means that each accumulation command without a named
-accumulation variable should accumulate into the same variable,
-by default named `loopy-result'.")
-
 (defvar loopy--destructuring-for-with-vars-function nil
   "The function used for destructuring `with' variables.
 
@@ -675,8 +666,7 @@ known to fall into the first group.")
       ;; -- Flag Variables --
       loopy--destructuring-for-with-vars-function
       loopy--destructuring-for-iteration-function
-      loopy--destructuring-accumulation-parser
-      loopy--split-implied-accumulation-results)
+      loopy--destructuring-accumulation-parser)
     "These variables must be `let'-bound around the loop.
 
 This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))

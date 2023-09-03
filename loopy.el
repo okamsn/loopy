@@ -130,40 +130,12 @@
 (require 'loopy-vars)
 
 ;;;; Built-in flags
-;;;;; Split
-(make-obsolete 'loopy--enable-flag-split
-               (concat "use the `accum-opt' special macro argument."
-                       "  See the Info documentation.")
-               "2022-08")
-(defun loopy--enable-flag-split ()
-  "Set `loopy-split-implied-accumulation-results' to t inside the loop."
-  (warn "The flag `split' is deprecated.  Use `accum-opt' instead.")
-  (setq loopy--split-implied-accumulation-results t))
-
-(make-obsolete 'loopy--disable-flag-split
-               (concat "use the `accum-opt' special macro argument."
-                       "  See the Info documentation.")
-               "2022-08")
-(defun loopy--disable-flag-split ()
-  "Set `loopy-split-implied-accumulation-results' to t inside the loop."
-  (warn "The flag `split' is deprecated.  Use `accum-opt' instead.")
-  ;; Currently redundant, but leaves room for possibilities.
-  (if loopy--split-implied-accumulation-results
-      (setq loopy--split-implied-accumulation-results nil)))
-
-(with-suppressed-warnings ((obsolete loopy--enable-flag-split
-                                     loopy--disable-flag-split))
-  (dolist (flag '(split +split))
-    (cl-callf map-insert loopy--flag-settings flag #'loopy--enable-flag-split))
-
-  (cl-callf map-insert loopy--flag-settings '-split #'loopy--disable-flag-split))
 
 ;;;;;; Default
 ;; It doesn't make sense to allow the disabling of this one.
 (defun loopy--enable-flag-default ()
   "Set `loopy' behavior back to its default state for the loop."
-  (setq loopy--split-implied-accumulation-results nil
-        loopy--destructuring-for-with-vars-function
+  (setq loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
         #'loopy--parse-destructuring-accumulation-command))
@@ -459,13 +431,7 @@ The function creates quoted code that should be used by a macro."
                       ;; Be sure that the `cl-block' defaults to returning the
                       ;; implicit return, which can be nil.  This can be
                       ;; overridden by any call to `cl-return-from'.
-                      ,(if (and loopy--split-implied-accumulation-results
-                                loopy--implicit-return
-                                (or loopy--after-do
-                                    loopy--final-do
-                                    loopy--final-return))
-                           `(setq loopy-result ,loopy--implicit-return)
-                         loopy--implicit-return))
+                      ,loopy--implicit-return)
             ;; Will always be a single expression after wrapping with
             ;; `cl-block'.
             result-is-one-expression t)
@@ -509,16 +475,6 @@ The function creates quoted code that should be used by a macro."
       ;; Declare accumulation variables.
       (when loopy--accumulation-vars
         (setq result `(let* ,loopy--accumulation-vars ,@(get-result))
-              result-is-one-expression t))
-
-      ;; Bind `loopy-result' if using split accumulation variables.
-      ;; In such case, no command requests this, so we do it here.
-      (when (and loopy--split-implied-accumulation-results
-                 loopy--implicit-return
-                 (or loopy--after-do
-                     loopy--final-do
-                     loopy--final-return))
-        (setq result `(let ((loopy-result nil)) ,@(get-result))
               result-is-one-expression t))
 
       ;; Declare the With variables.

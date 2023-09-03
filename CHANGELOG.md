@@ -34,6 +34,25 @@ This document describes the user-facing changes to Loopy.
          (list i '(4 5 6)))
   ```
 
+#### Removals
+
+- The deprecated flag `split` was removed ([#165], [#131], [#124]).  Instead,
+  use named accumulation variables with the special macro argument `accum-opt`
+  as appropriate.
+
+- The deprecated flag `lax-naming` was removed ([#165], [#119]).  Instead, see
+  `loopy-iter-bare-commands` and `loopy-iter-bare-special-macro-arguments`.
+
+- The deprecated command `sub-loop` was removed ([#165], [#130], [#127]).  Use
+  the commands/macros `loopy` and `loopy-iter` instead.  In `loopy`, `sub-loop`
+  acted like `loopy`.  In `loopy-iter`, `sub-loop` acted like `loopy-iter`.
+
+- The obsolete variable alias `loopy-iter-command-keywords` for the variable
+  `loopy-iter-keywords` was removed ([#165], [#119]).
+
+
+#### Deprecations
+
 - Using multiple conditions in `always`, `never`, and `thereis` is deprecated.
   These commands will be changed to have call argument lists more like
   accumulation commands, such as `(always [VAR] VAL &key into)`.  This will
@@ -106,7 +125,7 @@ This document describes the user-facing changes to Loopy.
   `set` command, which are allowed to occur in more than one command.
 
 [#164]: https://github.com/okamsn/loopy/pull/164
-
+[#165]: https://github.com/okamsn/loopy/pull/165
 
 ## 0.11.2
 

@@ -561,88 +561,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 
 ;;; Loop Commands
 ;;;; Sub-loop Commands
-;;;;; At and sub-loop
-;; NOTE: `sub-loop' is deprecated.
-(ert-deftest sub-loop-implicit-accum-in-loop ()
-  (should (equal '((1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loop (list j '(4 5))
-                           (at outer (collect (cons i j)))))))
-
-  (should (equal "14152425"
-                 (lq (named outer)
-                     (list i '("1" "2"))
-                     (loop (list j '("4" "5"))
-                           (at outer (concat (concat i j)))))))
-
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loop (list j '(4 5))
-                           (at outer (collect (cons i j))))
-                     (finally-return (cons 0 loopy-result))))))
-
-(ert-deftest sub-loop-explicit-accum-in-loop ()
-  (should (equal '(0 (1 . 4) (1 . 5) (2 . 4) (2 . 5))
-                 (lq outer
-                     (list i '(1 2))
-                     (loop (list j '(4 5))
-                           (at outer (collect my-coll (cons i j))))
-                     (finally-return (cons 0 my-coll)))))
-
-  (should (equal "014152425"
-                 (lq (named outer)
-                     (list i '("1" "2"))
-                     (loop (list j '("4" "5"))
-                           (at outer (concat my-str (concat i j))))
-                     (finally-return (concat "0" my-str))))))
-;;
-(ert-deftest sub-loop-leave-early ()
-  "A `leave' in a sub-loop should not affect the outer loop."
-  (should (equal '(1 2 3)
-                 (lq outer
-                     (list i '(1 2 3))
-                     (loop (list j '(4 5 6))
-                           (leave)
-                           (at outer (collect j)))
-                     (collect i)))))
-
-(ert-deftest sub-loop-skip ()
-  "A `skip' in a sub-loop should not affect the outer loop."
-  (should (equal '(5 7 1 5 7 2 5 7 3)
-                 (lq  outer
-                      (list i '(1 2 3))
-                      (loop (list j '(4 5 6 7 8))
-                            (when (cl-evenp j)
-                              (continue))
-                            (at outer (collect j)))
-                      (collect i)))))
-
-(ert-deftest sub-loop-return-from-outer ()
-  (should (= 3 (lq (named outer)
-                   (list i '(1 2 3))
-                   (loop (list j '(4 5 6 3))
-                         (when (= j i)
-                           (return-from outer j)))))))
-
-(ert-deftest sub-loop-named ()
-  (should
-   (equal
-    '((3 5) (3 5))
-    (lq outer
-        (repeat 2)
-        (loop inner1
-              (list j '(3 4))
-              (loop (list k '(5 6 7))
-                    (if (= k 6)
-                        ;; Return from inner1 so never reach 4.
-                        (return-from inner1)
-                      (at outer (collect (list j k))))))))))
-
 ;;;;; loopy command
-;; NOTE: This duplicates the tests from the `sub-loop' command, which will be
-;;       removed.
 
 (loopy-deftest same-level-at-accum
   :result '(1 2 3 4)
@@ -5289,16 +5208,16 @@ This assumes that you're on guix."
 
 ;;; Custom Aliases
 (loopy-deftest custom-alias-flag
-  :result '((1) (2))
+  :doc "Test with `default' flag, which is essentially a no-op."
+  :result '(1)
   :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
                      (loopy-iter-bare-special-macro-arguments
                       (cons 'f loopy-iter-bare-special-macro-arguments)))
                  (loopy-defalias f flag)
                  (eval (quote ,x) t))))
-  :body ((f split)
+  :body ((f default)
          (list i '(1))
-         (collect i)
-         (collect (1+ i)))
+         (collect i))
   :loopy t
   :iter-keyword (list collect f)
   :iter-bare ((list . listing)

@@ -4335,7 +4335,7 @@ accumulation itself must still occur within the loop =inner=.
   ;; => (1 2 3 4)
   (loopy (named outer)
          (array i [(1 2) (3 4)])
-         (sub-loop inner
+         (loopy inner
                    (list j i)
                    (at outer (collect coll j)))
          (finally-return coll))

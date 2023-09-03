@@ -181,24 +181,6 @@ These commands affect other loops higher up in the call list."
        (,target-loop
         ,@(loopy--parse-loop-commands commands))))))
 
-;;;;;; Sub-Loop
-(make-obsolete 'loopy--parse-sub-loop-command
-               (concat "use the `loopy' or `loopy-iter' commands instead."
-                       "  See the manual and change log.")
-               "2022-08")
-(cl-defun loopy--parse-sub-loop-command ((_ &rest body))
-  "Parse the `sub-loop' command as (sub-loop BODY).
-
-The sub-loop is a full call to the `loopy' macro, supporting
-special macro arguments.  In `loopy-iter', it is specially
-handled to use `loopy-iter' instead.
-
-The sub-loop is specially handled."
-  (warn (concat "The command `sub-loop' is deprecated."
-                "  Use the commands `loopy' or `loopy-iter' instead."
-                "  See the Info documentation and change log."))
-  `((loopy--main-body ,(macroexpand `(loopy ,@body)))))
-
 ;;;;;; Loopy
 (cl-defun loopy--parse-loopy-command ((_ &rest body))
   "Parse the `loopy' command as (loopy BODY).
@@ -1767,10 +1749,7 @@ accumulation variable. The default accumulation variable is
                  (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
                          (list cmd)))
                (let* ((into-var (plist-get opts :into))
-                      (var (or into-var
-                               (and loopy--split-implied-accumulation-results
-                                    (gensym (symbol-name name)))
-                               'loopy-result))
+                      (var (or into-var 'loopy-result))
                       (val (cl-first args)))
                  (ignore var val)
 
