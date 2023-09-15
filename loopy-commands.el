@@ -2244,35 +2244,49 @@ This function is called by `loopy--expand-optimized-accum'."
                    (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
+                   (of-used (plist-member opts :on-failure))
                    (on-failure (plist-get opts :on-failure))
                    (tag-name (loopy--produce-non-returning-exit-tag-name
-                              loopy--loop-name)))
+                              loopy--loop-name))
+                   (found (gensym "found")))
 
               `((loopy--non-returning-exit-used ,tag-name)
                 (loopy--accumulation-vars (,var nil))
-                (loopy--main-body (when ,test-form
-                                    (setq ,var ,val)
-                                    (throw (quote ,tag-name) t)))
-                ;; If VAR nil, bind to ON-FAILURE.
-                ,(when on-failure
-                   `(loopy--vars-final-updates
-                     (,var . (if ,var nil (setq ,var ,on-failure)))))))
+                ,@(if of-used
+                      ;; If TEST always nil, bind to ON-FAILURE.
+                      `((loopy--accumulation-vars (,found nil))
+                        (loopy--main-body (when ,test-form
+                                            (setq ,var ,val
+                                                  ,found t)
+                                            (throw (quote ,tag-name) t)))
+                        (loopy--vars-final-updates
+                         (,var . (unless ,found (setq ,var ,on-failure)))))
+                    `((loopy--main-body (when ,test-form
+                                          (setq ,var ,val)
+                                          (throw (quote ,tag-name) t)))))))
   :implicit (let* ((test-arg (cl-second args))
                    (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
+                   (of-used (plist-member opts :on-failure))
                    (on-failure (plist-get opts :on-failure))
+                   (found (gensym "found"))
                    (tag-name (loopy--produce-non-returning-exit-tag-name
                               loopy--loop-name)))
               `((loopy--non-returning-exit-used ,tag-name)
                 (loopy--accumulation-vars (,var nil))
-                (loopy--main-body (when ,test-form
-                                    (setq ,var ,val)
-                                    (throw (quote ,tag-name) t)))
-                ;; If VAR nil, bind to ON-FAILURE.
-                ,(when on-failure
-                   `(loopy--vars-final-updates
-                     (,var . (if ,var nil (setq ,var ,on-failure)))))
+                ,@(if of-used
+                      ;; If TEST always nil, bind to ON-FAILURE.
+                      `((loopy--accumulation-vars (,found nil))
+                        (loopy--main-body (when ,test-form
+                                            (setq ,var ,val
+                                                  ,found t)
+                                            (throw (quote ,tag-name) t)))
+                        (loopy--vars-final-updates
+                         (,var . (unless ,found (setq ,var ,on-failure)))))
+                    `((loopy--main-body (when ,test-form
+                                          (setq ,var ,val)
+                                          (throw (quote ,tag-name) t)))))
                 (loopy--implicit-return   ,var))))
 
 ;;;;;;; Set Accum

@@ -4991,8 +4991,13 @@ Not multiple of 3: 7"
 ;;;;; finding
 (loopy-deftest find-pass-notest
   :result 3
-  :body ((list i '(1 2 3))
-	 (_cmd i (> i 2)))
+  :multi-body t
+  :body [((list i '(1 2 3))
+	  (_cmd res i (> i 2))
+          (finally-return res))
+
+         ((list i '(1 2 3))
+	  (_cmd i (> i 2)))]
   :repeat _cmd
   :loopy ((_cmd . (find finding)))
   :iter-keyword ((list . list)
@@ -5002,8 +5007,13 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-fail-notest
   :result nil
-  :body ((list i '(1 2 3))
-	 (find i (> i 4)))
+  :multi-body t
+  :body [((list i '(1 2 3))
+	  (find res i (> i 4))
+          (finally-return res))
+
+         ((list i '(1 2 3))
+	  (find i (> i 4)))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5011,8 +5021,13 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-fail-onfail
   :result 0
-  :body ((list i '(1 2 3))
-	 (find i (> i 4) :on-failure 0))
+  :multi-body t
+  :body [((list i '(1 2 3))
+	  (find res i (> i 4) :on-failure 0)
+          (finally-return res))
+
+         ((list i '(1 2 3))
+	  (find i (> i 4) :on-failure 0))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5020,8 +5035,30 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-pass-onfail
   :result 2
-  :body ((list i '(1 2 3))
-	 (find i (> i 1) :on-failure 0))
+  :multi-body t
+  :body [((list i '(1 2 3))
+	  (find res i (> i 1) :on-failure 0)
+          (finally-return res))
+
+         ((list i '(1 2 3))
+	  (find i (> i 1) :on-failure 0))]
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
+
+(loopy-deftest find-expr-onfail-explicit-nil
+  :doc "Make sure a nil value will still be set on failure."
+  :result nil
+  :multi-body t
+  :body [((with (val 27))
+          (list i '(1 2 3))
+          (find val nil (> i 10) :on-failure nil)
+          (finally-return val))
+
+         ((with (loopy-result 27))
+          (list i '(1 2 3))
+          (find nil (> i 10) :on-failure nil))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5029,9 +5066,13 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-pass-var
   :result 2
-  :body ((list i '(1 2 3))
-         (find found i (= i 2))
-         (finally-return found))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (find found i (= i 2))
+          (finally-return found))
+
+         ((list i '(1 2 3))
+          (find i (= i 2)))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5039,9 +5080,13 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-fail-var
   :result nil
-  :body ((list i '(1 2 3))
-         (find found i (> i 3))
-         (finally-return found))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (find found i (> i 3))
+          (finally-return found))
+
+         ((list i '(1 2 3))
+          (find i (> i 3)))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5049,10 +5094,13 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-fail-var-onfail
   :result "not found"
-  :body  ((list i '(1 2 3))
-          (find whether-found i (> i 4)
-                :on-failure "not found")
-          (finally-return whether-found))
+  :multi-body t
+  :body  [((list i '(1 2 3))
+           (find whether-found i (> i 4) :on-failure "not found")
+           (finally-return whether-found))
+
+          ((list i '(1 2 3))
+           (find i (> i 4) :on-failure "not found"))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
@@ -5060,10 +5108,30 @@ Not multiple of 3: 7"
 
 (loopy-deftest find-pass-var-onfail
   :result 2
-  :body  ((list i '(1 2 3))
-          (find whether-found i (> i 1)
+  :multi-body t
+  :body  [((list i '(1 2 3))
+           (find whether-found i (> i 1)
+                 :on-failure "not found")
+           (finally-return whether-found))
+
+          ((list i '(1 2 3))
+           (find i (> i 1) :on-failure "not found"))]
+  :loopy t
+  :iter-keyword (list find)
+  :iter-bare ((list . listing)
+              (find . finding)))
+
+(loopy-deftest find-expr-is-nil-onfail
+  :doc "Make sure a nil value not assumed to be a failure."
+  :result nil
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (find whether-found nil (> i 1)
                 :on-failure "not found")
           (finally-return whether-found))
+
+         ((list i '(1 2 3))
+          (find nil (> i 1) :on-failure "not found"))]
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)

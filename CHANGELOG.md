@@ -22,6 +22,31 @@ This document describes the user-facing changes to Loopy.
          (reduce i #'*))
   ```
 
+- Fix `find` when `:on-failure` is nil.  Previously, `nil` was interpreted as
+  not passing `:on-failure`.
+
+  ```emacs-lisp
+   ;; Previously erroneously returned 27:
+   ;; => nil
+   (loopy (with (val 27))
+          (list i '(1 2 3))
+          (find val nil (> i 10) :on-failure nil)
+          (finally-return val))
+  ```
+
+- Fix `find` when `EXPR` is nil and `:on-failure` is given.  Previously, after
+  the test passed and `VAR` was set to `nil`, that `nil` was interpreted as not
+  passing the test, so that `VAR` then bound to the value passed for
+  `:on-failure`.
+
+  ```emacs-lisp
+  ;; Previously erroneously returned 27:
+  ;; => nil
+  (loopy (list i '(1 2 3))
+         (find nil (> i 1) :on-failure 27))
+  ```
+
+
 ### Breaking Changes
 
 - Make it an error to re-use iteration variables with multiple iteration
