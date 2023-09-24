@@ -1794,6 +1794,77 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((collect . collecting)
               (numbers . numbering)))
 
+(loopy-deftest numbers-keywords-:test
+  :result '(1 2 3 4 5)
+  :body ((numbers i :from 1 :to 5 :test #'<=)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
+
+(loopy-deftest numbers-keywords-:test-lambda
+  :result '(1 2 3 4 5)
+  :body ((numbers i :from 1 :to 5 :test (lambda (var end) (<= var end)))
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
+
+(loopy-deftest numbers-keywords-:test-neg-step
+  :result '(5 4 3 2 1)
+  :body ((numbers i :from 5 :to 1 :by -1 :test #'>=)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
+
+(loopy-deftest numbers-keywords-test-err
+  :error loopy-conflicting-command-arguments
+  :multi-body t
+  :body [((numbers i :test 'blah :downfrom 10))
+         ((numbers i :test 'blah :upfrom 10))
+         ((numbers i :test 'blah :downto 10))
+         ((numbers i :test 'blah :upto 10))
+         ((numbers i :test 'blah :above 10))
+         ((numbers i :test 'blah :below 10))]
+  :loopy t
+  :iter-keyword (numbers)
+  :iter-bare ((numbers . numbering)))
+
+(loopy-deftest numbers-error-more-than-one
+  :error loopy-conflicting-command-arguments
+  :multi-body t
+  :body [((numbers i :from 1 :upfrom 1))
+         ((numbers i :from 1 :downfrom 1))
+         ((numbers i :upfrom 1 :downfrom 1))
+
+         ((numbers i :to 1 :upto 1))
+         ((numbers i :to 1 :downto 1))
+         ((numbers i :to 1 :above 1))
+         ((numbers i :to 1 :below 1))
+         ((numbers i :upto 1 :downto 1))
+         ((numbers i :upto 1 :above 1))
+         ((numbers i :upto 1 :below 1))
+         ((numbers i :downto 1 :above 1))
+         ((numbers i :downto 1 :below 1))
+         ((numbers i :above 1 :below 1))]
+  :loopy t
+  :iter-keyword (numbers)
+  :iter-bare ((numbers . numbering)))
+
+(loopy-deftest numbers-error-conflicting-direction
+  :error loopy-conflicting-command-arguments
+  :multi-body t
+  :body [((numbers i :upfrom 1 :downto 1))
+         ((numbers i :upfrom 1 :above 1))
+         ((numbers i :downfrom 1 :upto 1))
+         ((numbers i :downfrom 1 :below 1))]
+  :loopy t
+  :iter-keyword (numbers)
+  :iter-bare ((numbers . numbering)))
 
 ;;;;; Nums With Vars
 (loopy-deftest numbers-literal-by-and-literal-end
@@ -1890,6 +1961,25 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((numbers . numbering)
               (collect . collecting)))
 
+(loopy-deftest numbers-var-:test
+  :result '(1 2 3 4 5)
+  :body ((with (func #'<=))
+         (numbers i :from 1 :to 5 :test func)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
+
+(loopy-deftest numbers-var-:test-neg-step
+  :result '(5 4 3 2 1)
+  :body ((with (func #'>=))
+         (numbers i :from 5 :to 1 :by -1 :test func)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
 ;;;;; Nums-Down
 (loopy-deftest numbers-down

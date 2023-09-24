@@ -46,6 +46,7 @@ This document describes the user-facing changes to Loopy.
          (find nil (> i 1) :on-failure 27))
   ```
 
+- Better signal an error with conflicting arguments in `numbers`.  See [#172].
 
 ### Breaking Changes
 
@@ -109,6 +110,13 @@ This document describes the user-facing changes to Loopy.
   - Relatedly, remove documentation that said `adjoin` supported `:init`.  It
     does not.
 
+- The non-keyword arguments of `numbers` are deprecated ([#172]).  These
+  arguments were meant to be similar to the arguments of Pythons `range`
+  feature, but, depending on prior knowledge, would generally produce worse
+  code.  Cases in which the direction of the iteration (up or down) is unknown
+  can now be handled by the new `:test` argument, which is more flexible than
+  the non-keyword arguments anyway.
+
 ### Command Improvements
 
 - To produce faster code, some commands now avoid creating an intermediate
@@ -143,6 +151,18 @@ This document describes the user-facing changes to Loopy.
   - As with other incompatible commands, an error is now signaled when trying to
     use `thereis` with `always` or `never` **when using the same variable**
 
+- Add a `:test` keyword argument to `numbers` ([#172]).  This is useful when the
+  direction of the iteration is not known ahead of time.
+  ```elisp
+  ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
+  (loopy (with (start 10)
+               (end 5)
+               (func #'>)
+               (step -0.5))
+         (numbers i :to end :from start :by step :test func)
+         (collect i))
+  ```
+
 ### Other Changes
 
 - Add `loopy--other-vars`, given the more explicit restriction on
@@ -151,6 +171,7 @@ This document describes the user-facing changes to Loopy.
 
 [#164]: https://github.com/okamsn/loopy/pull/164
 [#165]: https://github.com/okamsn/loopy/pull/165
+[#171]: https://github.com/okamsn/loopy/pull/172
 
 ## 0.11.2
 
