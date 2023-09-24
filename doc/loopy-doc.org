@@ -1178,9 +1178,9 @@ variants =numbers-up= and =numbers-down=.
 #+findex: number
 #+findex: numbering
 #+findex: numbers
-- =(numbers|nums VAR [START [END [STEP]]] &key KEYS)= :: Iterate
-  through numbers.  =KEYS= is one or several of =from=, =upfrom=, =downfrom=,
-  =to=, =upto=, =downto=, =above=, =below=, and =by=.
+- =(numbers|nums VAR &key KEYS)= :: Iterate through numbers.  =KEYS= is one or
+  several of =from=, =upfrom=, =downfrom=, =to=, =upto=, =downto=, =above=,
+  =below=, =by=, and =test=.
 
   This command also has the aliases =num=, =number=, and =numbering=.
 
@@ -1188,13 +1188,13 @@ variants =numbers-up= and =numbers-down=.
   =(numbers i :from 1 :to 10)= is similar to =(list i (number-sequence 1 10))=,
   and =(numbers i 3)= is similar to =(set i 3 (1+ i))=.
 
-  For efficiency, =VAR= is initialized to the starting numeric value, not ~nil~,
-  and is updated at the end of each step of the loop.  This can be overridden
-  using the =with= special macro argument, which can result in slower code.
+  For efficiency, _=VAR= is initialized to the starting numeric value_, not
+  ~nil~, and is updated at the end of each step of the loop.  This can be
+  overridden using the =with= special macro argument, which can result in slower
+  code.
 
-  To balance convenience and similarity to other commands, =numbers= has a
-  flexible argument list.  In its most basic form, it uses no keywords and takes
-  a starting value and an ending value.  The ending value is inclusive.
+  In its most basic form, =numbers= iterates from a starting value to an
+  inclusive ending value using the =:from= and =:to= keywords, respectively.
 
   #+begin_src emacs-lisp
     ;; => (1 2 3 4 5)
@@ -1212,11 +1212,10 @@ variants =numbers-up= and =numbers-down=.
            (collect i))
   #+end_src
 
-  To specify the step size, one can use an optional third argument (like in
-  Python's ~range~) or the keyword =:by= (like in ~cl-loop~).  The value of the
-  optional third argument can be positive or negative. /However/, in keeping
-  with ~cl-loop~, the value for =:by= should always be positive; other keyword
-  arguments then control whether the variable is incremented or decremented.
+  To specify the step size, one can use the keyword =:by=.  Except when =:test=
+  is given, _the value for =:by= must be positive_.  Other keyword arguments
+  (=:upfrom=, =:downfrom=, =:upto=, =:downto=, =:above=, and =:below=) control
+  whether the variable is incremented or decremented.
 
   #+begin_src emacs-lisp
     ;; => (1 3 5)
@@ -1239,9 +1238,11 @@ variants =numbers-up= and =numbers-down=.
 
   By default, the variable's value starts at 0 and increases by 1.  To specify
   whether the value should be increasing or decreasing when using the =:by=
-  keyword, one can use the keywords =:downfrom=, =:downto=, =:upfrom=, and
-  =:upto=.  The keywords =:from= and =:to= don't by themselves specify a
-  direction.
+  keyword, one can use the keywords =:downfrom=, =:downto=, =:upfrom=, =:upto=,
+  =:above=, and =:below=.  The keywords =:from= and =:to= don't by themselves
+  specify a direction, and they can be used with the keyword arguments that do
+  without conflict.  Using arguments that contradict one another will signal an
+  error.
 
   #+begin_src emacs-lisp
     ;; => (3 2 1)
@@ -1261,13 +1262,12 @@ variants =numbers-up= and =numbers-down=.
     (loopy (numbers i :from 10 :downto 2 :by 2)
            (collect i))
 
-    ;; Produced code is not as efficient as above:
-    ;; => (10 8 6 4 2)
-    (loopy (numbers i :from 10 :to 2 -2)
-           (collect i))
-
     ;; => (1 2 3 4 5 6 7)
     (loopy (numbers i :from 1 :upto 7)
+           (collect i))
+
+    ;; => Signals an error:
+    (loopy (numbers i :downfrom 10 :upto 20)
            (collect i))
   #+end_src
 
@@ -1279,7 +1279,7 @@ variants =numbers-up= and =numbers-down=.
     (loopy (numbers i :from 1 :below 10)
            (collect i))
 
-    ;; Same as
+    ;; Same as above:
     (loopy (set i 1 (1+ i))
            (while (< i 10))
            (collect i))
@@ -1293,12 +1293,39 @@ variants =numbers-up= and =numbers-down=.
            (collect i))
   #+end_src
 
-  #+ATTR_TEXINFO: :tag Note
-  #+begin_quote
-  Because the ~loopy~ macro can't test the value of the step size ahead of time,
-  being more explicit by using the keyword parameters can produce faster code.
-  #+end_quote
+  If you do not know whether you will be incrementing or decrementing, you can
+  use the keyword argument =test=, whose value is a function that should return
+  a non-nil value if the loop should continue, such as ~#'<=~.  The function
+  receives =VAR= as the first argument and the final value as the second
+  argument, as in ~(funcall TEST VAR FINAL-VAL)~.  =test= can only be used with
+  =from= and =to=; it cannot be used with keywords that already describe a
+  direction and ending condition.  To match the behavior of ~cl-loop~, the
+  default testing function is ~#'<=~.  When =test= is given, =by= can be
+  negative.
 
+  #+begin_src emacs-lisp
+    ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
+    (loopy (with (start 10)
+                 (end 5)
+                 (func #'>)
+                 (step -0.5))
+           (numbers i :to end :from start :by step :test func)
+           (collect i))
+
+    ;; Expands to similar code as above.
+    ;; Note that with `:above', step must be positive.
+    ;;
+    ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
+    (loopy (with (start 10)
+                 (end 5)
+                 (step 0.5))
+           (numbers i :from start :above end :by step)
+           (collect i))
+
+    ;; Signals an error because `:upto' implies a testing function already:
+    (loopy (numbers i :from 1 :upto 10 :test #'<)
+           (collect i))
+  #+end_src
 
 If you prefer using positional arguments to keyword arguments, you can use the
 commands =numbers-up= and =numbers-down= to specify directions.  These commands

@@ -636,24 +636,25 @@ The values are returned in a list in that order as a plist.
 PLIST contains the keyword arguments passed to a sequence
 iteration command.  The supported keywords are:
 
-- from, upfrom (inclusive start)
-- downfrom (inclusive start)
-- to, upto (inclusive end)
-- downto (inclusive end)
-- above (exclusive end)
-- below (exclusive end)
-- by (increment)"
+- `:from', `:upfrom' (inclusive start)
+- `:downfrom' (inclusive start)
+- `:to', `:upto' (inclusive end)
+- `:downto' (inclusive end)
+- `:above' (exclusive end)
+- `:below' (exclusive end)
+- `:by' (increment)
+- `:test' (comparison function)"
 
   (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
                        :to to :upto upto :downto downto
                        :above above :below below
-                       :by by)
+                       :by by :test test)
       plist
     ;; Check the inputs:
     (when (or (< 1 (cl-count-if #'identity (list from upfrom downfrom)))
               (< 1 (cl-count-if #'identity (list to upto downto above below)))
-              (and downfrom below)
-              (and upfrom above))
+              (and (or downfrom downto above)
+                   (or upfrom upto below)))
       (signal 'loopy-conflicting-command-arguments (list plist)))
 
     (let ((decreasing (or downfrom downto above)))
@@ -671,6 +672,8 @@ iteration command.  The supported keywords are:
             `(:by ,by))
         ,@(when-let ((end (or to downto above below upto)))
             `(:end ,end))
+        :dir-given ,(or above below downfrom downto upfrom upto)
+        :test ,test
         :decreasing ,decreasing
         :inclusive ,(not (or above below))))))
 
@@ -996,22 +999,26 @@ map's keys.  Duplicate keys are ignored."
 
 ;;;;;; Numbers
 (loopy--defiteration numbers
-  "Parse the `numbers' command as (nums VAR [START [END [STEP]]] &key KEYS).
+  "Parse the `numbers' command as (nums VAR &key KEYS).
 
 - START is the starting index, if given.
 - END is the ending index (inclusive), if given.
 - STEP is a positive or negative step size, if given.
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
-`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+`:upfrom', `:to', `:downto', `:upto', `:above', `:below', or
+`:test'.
 
 - `:by' is the increment step size as a positive value.
 - `:from', `:downfrom', and `:upfrom' name the starting index
 - `:to', `:downto', and `:upto' name the ending index (inclusive)
 - `:below' and `:above' name an exclusive ending index.
+- `:test' is the function that checks whether the loop ends,
+  as in `(TEST VAR END)'.  `:test' can only be used
+  when a direction is not already given.
 
 `:downto' and `:downfrom' make the index decrease instead of increase."
-  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :required-vals 0
   :other-vals (0 1 2 3)
   :instructions
@@ -1019,13 +1026,25 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
   (seq-let (explicit-start explicit-end explicit-by)
       other-vals
     (loopy--plist-bind ( :start key-start :end key-end :by key-by
-                         :decreasing decreasing :inclusive inclusive)
-        (loopy--find-start-by-end-dir-vals opts)
+                         :decreasing decreasing :inclusive inclusive
+                         :dir-given dir-given :test test)
+
+        (condition-case nil
+            (loopy--find-start-by-end-dir-vals opts)
+          (loopy-conflicting-command-arguments
+           (signal 'loopy-conflicting-command-arguments (list cmd))))
+
+      ;; Warn that the non-keyword arguments are deprecated.
+      (when (or explicit-start
+                explicit-end
+                explicit-by)
+        (warn "`loopy': `numbers': The non-keyword arguments are deprecated.
+Instead, use the keyword arguments, possibly including the new `:test' argument."))
 
       ;; Check that nothing conflicts.
       (when (or (and explicit-start key-start)
-                (and explicit-end key-end)
-                (and explicit-by key-by))
+                (and explicit-end   key-end)
+                (and explicit-by    key-by))
         (signal 'loopy-conflicting-command-arguments (list cmd)))
 
       (let* ((end (or explicit-end key-end))
@@ -1039,26 +1058,36 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                                  (gensym "num-test-var")
                                var)))
 
+        (when (and test (or dir-given (null end)))
+          (signal 'loopy-conflicting-command-arguments (list cmd)))
+
         `((loopy--iteration-vars (,var-val-holder ,start))
           ,(when (loopy--with-bound-p var)
              `(loopy--main-body (setq ,var ,var-val-holder)))
 
           (loopy--latter-body
-           (setq ,var-val-holder ,(let ((inc (if number-by by increment-val-holder)))
-                                    (cond (explicit-by `(+ ,var-val-holder ,inc))
-                                          (key-by      `(,(if decreasing #'- #'+)
-                                                         ,var-val-holder ,inc))
-                                          (decreasing  `(1- ,var-val-holder))
-                                          (t           `(1+ ,var-val-holder))))))
+           (setq ,var-val-holder
+                 ,(let ((inc (if number-by
+                                 by
+                               increment-val-holder)))
+                    (cond (explicit-by `(+ ,var-val-holder ,inc))
+                          (test        `(+ ,var-val-holder ,inc))
+                          (key-by      `(,(if decreasing #'- #'+)
+                                         ,var-val-holder ,inc))
+                          (decreasing  `(1- ,var-val-holder))
+                          (t           `(1+ ,var-val-holder))))))
 
           ,@(cond
              (number-by-and-end
-              `((loopy--pre-conditions (,(if explicit-by
-                                             (if (cl-plusp by) #'<= #'>=)
-                                           (if inclusive
-                                               (if decreasing #'>= #'<=)
-                                             (if decreasing #'> #'<)))
-                                        ,var-val-holder ,end))))
+              `((loopy--pre-conditions ,(loopy--apply-function
+                                         (cond
+                                          (test test)
+                                          (explicit-by
+                                           (if (cl-plusp by) '#'<= '#'>=))
+                                          (inclusive
+                                           (if decreasing '#'>= '#'<=))
+                                          (t  (if decreasing '#'> '#'<)))
+                                         var-val-holder end))))
              ;; `end' is not a number.  `by' might be a number.
              (end
               `((loopy--iteration-vars (,end-val-holder ,end))
@@ -1066,14 +1095,19 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                             (or key-by explicit-by))
                    `(loopy--iteration-vars (,increment-val-holder ,by)))
                 ,@(cond
+                   (test `((loopy--pre-conditions
+                            ,(loopy--apply-function
+                              test var-val-holder end-val-holder))))
                    ((not explicit-by) ; `key-by' or default
-                    `((loopy--pre-conditions (,(if inclusive
-                                                   (if decreasing #'>= #'<=)
-                                                 (if decreasing #'> #'<))
-                                              ,var-val-holder ,end-val-holder))))
+                    `((loopy--pre-conditions ,(loopy--apply-function
+                                               (if inclusive
+                                                   (if decreasing '#'>= '#'<=)
+                                                 (if decreasing '#'> '#'<))
+                                               var-val-holder end-val-holder))))
                    (number-by
-                    `((loopy--pre-conditions (,(if (cl-plusp by) #'<= #'>=)
-                                              ,var-val-holder ,end-val-holder))))
+                    `((loopy--pre-conditions ,(loopy--apply-function
+                                               (if (cl-plusp by) '#'<= '#'>=)
+                                               var-val-holder end-val-holder))))
                    ;; Ambiguous, so need to check
                    (t
                     (let ((fn (gensym "nums-fn")))
@@ -1103,7 +1137,7 @@ This is for increasing indices.
     (when (and by (cl-second other-vals))
       (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
-     `(numbers ,var ,val
+     `(numbers ,var :from ,val
                :upto ,(cl-first other-vals)
                :by ,(or by (cl-second other-vals))))))
 
@@ -1124,7 +1158,7 @@ This is for decreasing indices.
     (when (and by (cl-second other-vals))
       (signal 'loopy-conflicting-command-arguments (list cmd)))
     (loopy--parse-loop-command
-     `(numbers ,var ,val
+     `(numbers ,var :from ,val
                :downto ,(cl-first other-vals)
                :by ,(or by (cl-second other-vals))))))
 
