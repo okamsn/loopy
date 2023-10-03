@@ -309,6 +309,7 @@ splitting (1 2 3) or (1 2 . 3) returns ((1 2) 3)."
 
 
 ;;;; Destructuring
+
 ;; This better allows for things to change in the future.
 (defun loopy--var-ignored-p (var)
   "Return whether VAR should be ignored."

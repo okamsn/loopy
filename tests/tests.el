@@ -5549,6 +5549,96 @@ This assumes that you're on guix."
   :iter-bare ((list . listing)
               (cycle . cycling)))
 
+(loopy-deftest accum-flet-outside
+  :doc "Make sure that macro expansion doesn't mess with `cl-flet' environment.
+We don't want to rebind the environment to nil by failing to pass
+the existing environment (`macroexpand-all-environment') to
+`macroexpand-all'."
+  :result '(11 12 13 14 15)
+  :wrap ((x . `(cl-flet ((10+ (y) (+ 10 y))) ,x)))
+  :body ((list i '(1 2 3 4 5))
+         (collect (10+ i)))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest accum-flet-outside-wrap-sma
+  :doc "Make sure that macro expansion doesn't mess with `cl-flet' environment.
+We don't want to rebind the environment to nil by failing to pass
+the existing environment (`macroexpand-all-environment') to
+`macroexpand-all'."
+  :result '(11 12 13 14 15)
+  :body ((wrap (cl-flet ((10+ (y) (+ 10 y)))))
+         (list i '(1 2 3 4 5))
+         (collect (10+ i)))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest flet-iter-subloop
+  :doc "Make sure that macro expansion doesn't mess with `cl-flet' environment.
+We don't want to rebind the environment to nil by failing to pass
+the existing environment (`macroexpand-all-environment') to
+`macroexpand-all'."
+  :result '(11 12 13 14 15)
+  :multi-body t
+  :body [((named outer)
+          (list i '((1 2) (3 4) (5)))
+          (loopy-test-escape
+           (loopy-iter (listing j i)
+                       (at outer
+                           (cl-flet ((10+ (y) (+ 10 y)))
+                             (collecting (10+ j)))))))
+
+         ((named outer)
+          (list i '((1 2) (3 4) (5)))
+          (loopy-test-escape
+           (loopy-iter (listing j i)
+                       (at outer
+                           (cl-flet ((10+ (y) (+ 10 y)))
+                             (collecting (funcall #'10+ j)))))))
+
+         ((named outer)
+          (list i '((1 2) (3 4) (5)))
+          (loopy-test-escape
+           (loopy-iter (listing j i)
+                       (cl-flet ((10+ (y) (+ 10 y)))
+                         (at outer
+                             (collecting (10+ j)))))))
+
+         ((named outer)
+          (list i '((1 2) (3 4) (5)))
+          (loopy-test-escape
+           (loopy-iter (listing j i)
+                       (cl-flet ((10+ (y) (+ 10 y)))
+                         (at outer
+                             (collecting (10+ j)))))))
+
+         ((named outer)
+          (list i '((1 2) (3 4) (5)))
+          (loopy-test-escape
+           (loopy-iter (listing j i)
+                       (at outer
+                           (cl-flet ((10+ (y) (+ 10 y)))
+                             (collecting (funcall #'10+ j)))))))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest iter-list-in-top-level-expr
+  :doc "Macros that are required to be at the top level should not consider
+a sub-expression as the top level."
+  :error loopy-iteration-in-sub-level
+  :macroexpand t
+  :body ((let ((var 1))
+           (listing i '(1 2 3 4 5)))
+         (collecting i))
+  :iter-keyword (listing collecting)
+  :iter-bare t)
+
 ;; Local Variables:
 ;; End:
 ;; LocalWords:  destructurings backquote

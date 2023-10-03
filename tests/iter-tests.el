@@ -762,8 +762,6 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                  (push j target)))
                    target))))
 
-
-
 (ert-deftest loopy-iter-clean-stack-variables ()
   (let ((loopy--known-loop-names)
         (loopy--accumulation-places)

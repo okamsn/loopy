@@ -654,6 +654,12 @@ code and must instead be cleaned up manually."
   (cl-callf2 seq-drop-while (lambda (x) (eq loopy--loop-name (caar x)))
              loopy--accumulation-variable-info))
 
+(defmacro loopy--with-protected-stack (&rest body)
+  "Protect the stack variables from BODY during unwind and cleanup."
+  `(unwind-protect
+       ,(macroexp-progn body)
+     (loopy--clean-up-stack-vars)))
+
 ;;;;; Process Instructions
 (cl-defun loopy--process-instruction (instruction &key erroring-instructions)
   "Process INSTRUCTION, assigning values to the variables in `loopy--variables'.
@@ -1003,7 +1009,8 @@ see the Info node `(loopy)' distributed with this package."
                 with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
                                                 collect (cons i nil))
                                      (loopy--optimized-accum
-                                      . loopy--expand-optimized-accum))
+                                      . loopy--expand-optimized-accum)
+                                     ,@macroexpand-all-environment)
                 for i in loopy--main-body
                 collect (macroexpand-all i macro-funcs)))
 
