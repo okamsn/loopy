@@ -47,6 +47,11 @@
 ;; Previously, `loopy-iter' used its tree-walking functions, as done by CL's
 ;; Iterate, but now it just defers to what Emacs already does when expanding
 ;; macros, such as in `macroexpand-all'.
+;;
+;; NOTE: When using `macroexpand-all', always pass an environment like
+;;       `macroexpand-all-environment'.  Otherwise, the environment is
+;;       set to nil, which breaks any macros that build their own environment
+;;       while expanding commands.  For example, `cl-flet'.
 
 ;;;; Custom User Options
 (defgroup loopy-iter nil
@@ -169,7 +174,9 @@ This variable is bound while `loopy-iter' is running, combining
 `loopy-iter-overwritten-command-parsers'.")
 
 (defun loopy-iter--parse-command (command)
-  "An Iter version of `loopy--parse-loop-command'."
+  "Parse COMMAND using parsers in`loopy-iter--command-parsers'.
+
+See also `loopy--parse-loop-command'."
   (let* ((cmd-name (cl-first command))
          (parser (loopy--get-command-parser
                   cmd-name
@@ -182,61 +189,47 @@ This variable is bound while `loopy-iter' is running, combining
 (defvar loopy-iter--non-main-body-instructions nil
   "Used to capture other instructions while expanding.
 
-Expanding functions `push' lists of instructions into this variable.")
+Expanding functions `push' lists of instructions into this
+variable.  The contents of main-body instructions are inserted
+into the expanded body in the command's place during macro
+expansion.")
 
 ;;;;; Expanders
 
-(defvar loopy-iter--sub-level-expanders nil
-  "Macro expanders for sub-level expressions.")
+(defvar loopy-iter--level nil
+  "The level of the expression `loopy-iter' is currently processing.
 
-(defvar loopy-iter--top-level-expanders nil
-  "Macro expanders for top-level expressions.")
+For example, iteration commands should only be processed during
+level 1, which is the top level.  The next level of nesting is
+level 2, and so on.  If `loopy-iter--level' is greater than 1,
+then `loopy--in-sub-level' is set to `t'.
 
-(defun loopy-iter--macroexpand-top (expr)
-  "Expand a top-level expression using `loopy-iter--top-level-expanders'"
-  (macroexpand-1 expr loopy-iter--top-level-expanders))
-
-(defun loopy-iter--macroexpand-sub (expr)
-  "Expand a top-level expression using `loopy-iter--sub-level-expanders'"
-  (macroexpand-all expr loopy-iter--sub-level-expanders))
-
-(defun loopy-iter--keyword-expander-top (&rest args)
-  "Expand top-level commands preceded by keywords in `loopy-iter-keywords'."
-  (cl-destructuring-bind (main other)
-      (loopy--extract-main-body
-       (loopy-iter--parse-command args))
-    (push other loopy-iter--non-main-body-instructions)
-    (macroexp-progn main)))
-
-(defun loopy-iter--keyword-expander-sub (&rest args)
-  "Expand sub-level commands preceded by keywords in `loopy-iter-keywords'."
-  (cl-destructuring-bind (main other)
-      (loopy--extract-main-body
-       (let ((loopy--in-sub-level t))
-         (loopy-iter--parse-command args)))
-    (push other loopy-iter--non-main-body-instructions)
-    (macroexp-progn main)))
+The macro initially `let'-binds this variable to 0, and it is
+incremented upon parsing a new function.")
 
 (defun loopy-iter--opt-accum-expand-val (arg)
-  "Macro expand only the value of an optimized accumulation.
+  "Macro expand only the value of the optimized accumulation expression ARG.
 
 Optimized accumulations are expanded into a special form, after
 which this function will recursively expand the expression of the
 accumulated value.
 
 To avoid an infinite loop, this function replaces the `loopy--optimized-accum'
-in the expression with `loopy--optimized-accum-2'."
+in the expression with `loopy--optimized-accum-2', which is then processed
+during a second pass on the expanded code."
   (loopy (with (plist (cadr arg)))
          (cons (k v) plist :by #'cddr)
          (collect k)
          ;; By this point, command expansion are already defined, so we don't
          ;; need to try to handle instructions.
          (collect (if (eq k :val)
-                      (macroexpand-all v loopy-iter--sub-level-expanders)
+                      (let ((loopy-iter--level (1+ loopy-iter--level))
+                            (loopy--in-sub-level t))
+                        (macroexpand-all v macroexpand-all-environment))
                     v))
          (finally-return `(loopy--optimized-accum-2 (quote ,loopy-result)))))
 
-;;;;; Overwritten definitions
+;;;;; Overwritten parser definitions
 
 (defcustom loopy-iter-overwritten-command-parsers
   '((at       . loopy-iter--parse-at-command))
@@ -258,15 +251,17 @@ These commands affect other loops higher up in the call list."
   (loopy--check-target-loop-name target-loop)
   ;; We need to capture all non-main-body instructions into a new `at'
   ;; instruction, so we just temporarily `let'-bind
-  ;; `loopy-iter--non-main-body-instructions' while expanders push to it,
-  ;; we which then wrap back in a new instruction and pass up to the calling
-  ;; function, which consumes instructions.
+  ;; `loopy-iter--non-main-body-instructions' while the expanding functions push
+  ;; to it, which we then wrap back in a new instruction and pass up to the
+  ;; calling function, which consumes instructions.
   (loopy (with (loopy-iter--non-main-body-instructions nil)
                (loopy--loop-name target-loop)
-               (loopy--in-sub-level t))
+               (loopy--in-sub-level t)
+               (loopy-iter--level (1+ loopy-iter--level)))
          (list cmd commands)
-         (collect (list 'loopy--main-body
-                        (loopy-iter--macroexpand-sub cmd)))
+         (collect (list 'loopy--main-body (macroexpand-all
+                                           cmd
+                                           macroexpand-all-environment)))
          (finally-return
           ;; Return list of instructions to comply with expectations of calling
           ;; function, which thinks that this is a normal loop-command parser.
@@ -444,7 +439,6 @@ for other reasons.  The macros `cl-block', `cl-return-from', and
 `cl-return' are known to fall into the first group.")
 
 ;;;; The macro itself
-
 (defmacro loopy-iter (&rest body)
   "Allows embedding loop commands in arbitrary code within this macro's body.
 
@@ -462,137 +456,135 @@ on how to use `loopy-iter'.  See the Info node `(loopy)' for how
 to use `loopy' in general.
 
 \(fn CODE-or-COMMAND...)"
+  ;; We expand the code in BODY in two passes.  The macro works like this:
+  ;;
+  ;; 1) Like normal, process the special macro arguments.
+  ;;
+  ;; 2) Set up the environments used for macro expansion.  These are alists of
+  ;;    macro names and functions that process the macro arguments.  The
+  ;;    functions only receive the arguments, not the name.
+  ;;
+  ;; 3) Parse commands and process the initial resulting instructions.  The
+  ;;    result is a new body with the commands expanded, but the optimized
+  ;;    accumulations incomplete and `at' instructions are not finished.
+  ;;
+  ;; 4) Parse the optimized accumulations and process the `at' instructions the
+  ;;    resulted from processing the commands and instructions in Step 3.
+  ;;
+  ;; 5) Set `loopy--main-body' to the now expanded expressions (as a list, no
+  ;;    `macroexpand-progn').
+  ;;
+  ;; 6) Then we manipulate the variables and build the loop like normal, as we
+  ;;    do in `loopy'.
+
   (loopy--wrap-variables-around-body
 
    (mapc #'loopy--apply-flag loopy-default-flags)
 
-   (setq body (loopy-iter--process-special-arg-loop-name body))
-   (setq body (loopy-iter--process-special-arg-flag body))
-   (setq body (loopy-iter--process-special-arg-with body))
-   (setq body (loopy-iter--process-special-arg-without body))
-   (setq body (loopy-iter--process-special-arg-accum-opt body))
-   (setq body (loopy-iter--process-special-arg-wrap body))
-   (setq body (loopy-iter--process-special-arg-before-do body))
-   (setq body (loopy-iter--process-special-arg-after-do body))
-   (setq body (loopy-iter--process-special-arg-finally-do body))
-   (setq body (loopy-iter--process-special-arg-finally-return body))
-   (setq body (loopy-iter--process-special-arg-finally-protect body))
+   (setq body (thread-first body
+                            loopy-iter--process-special-arg-loop-name
+                            loopy-iter--process-special-arg-flag
+                            loopy-iter--process-special-arg-with
+                            loopy-iter--process-special-arg-without
+                            loopy-iter--process-special-arg-accum-opt
+                            loopy-iter--process-special-arg-wrap
+                            loopy-iter--process-special-arg-before-do
+                            loopy-iter--process-special-arg-after-do
+                            loopy-iter--process-special-arg-finally-do
+                            loopy-iter--process-special-arg-finally-return
+                            loopy-iter--process-special-arg-finally-protect))
 
-   ;; Process the main body.
-   (unwind-protect
-       (progn
-         (let ((suppressed-alist (loopy (list i loopy-iter-suppressed-macros)
+   (loopy--with-protected-stack
+    (let* ((suppressed-expanders (loopy (list i loopy-iter-suppressed-macros)
                                         (collect (cons i nil))))
-               (loopy-iter--command-parsers
-                (or loopy-iter--command-parsers
-                    (append loopy-iter-overwritten-command-parsers
-                            loopy-command-parsers))))
+           (loopy-iter--command-parsers (or loopy-iter--command-parsers
+                                            (append loopy-iter-overwritten-command-parsers
+                                                    loopy-command-parsers)))
+           (loopy-iter--non-main-body-instructions)
+           (loopy-iter--level 0)
+           (command-env
+            (append (loopy (list keyword loopy-iter-keywords)
+                           (collect
+                            (cons keyword
+                                  (lambda (&rest args)
+                                    (loopy--bind-main-body (main other)
+                                        ;; Bind here in case a command required to be
+                                        ;; in the top level is found in an expression
+                                        ;; while parsing an actual top-level command.
+                                        (let* ((loopy-iter--level (1+ loopy-iter--level))
+                                               (loopy--in-sub-level (> loopy-iter--level 1)))
+                                          (loopy-iter--parse-command args))
+                                      (push other loopy-iter--non-main-body-instructions)
+                                      (macroexp-progn main))))))
+                    (loopy (list command loopy-iter-bare-commands)
+                           (collect
+                            (cons command
+                                  ;; Expanding functions do not receive the head
+                                  ;; of the expression, only the arguments, so
+                                  ;; we use a lexical lambda to include that
+                                  ;; information.
+                                  (let ((cmd command))
+                                    (lambda (&rest args)
+                                      (loopy--bind-main-body (main other)
+                                          ;; Bind here in case a command required to
+                                          ;; be in the top level is found in an
+                                          ;; expression while parsing an actual
+                                          ;; top-level command.
+                                          (let* ((loopy-iter--level (1+ loopy-iter--level))
+                                                 (loopy--in-sub-level (> loopy-iter--level 1)))
+                                            (loopy-iter--parse-command (cons cmd args)))
+                                        (push other loopy-iter--non-main-body-instructions)
+                                        (macroexp-progn main)))))))))
+           (common-env `(,@suppressed-expanders
+                         ,@command-env
+                         ,@macroexpand-all-environment))
+           (first-pass-env `((loopy--optimized-accum . loopy-iter--opt-accum-expand-val)
+                             (loopy--optimized-accum-2 . nil)
+                             ,@common-env))
+           (second-pass-env `(;; Identify second version of optimized accumulation.
+                              (loopy--optimized-accum-2 . loopy--expand-optimized-accum)
+                              ,@common-env)))
 
-           ;; During the initial top-level expansion and the subsequent
-           ;; all-level expansion, we make an effort to keep instructions in the
-           ;; same order that they are received.  This might help to avoid
-           ;; unexpected behavior regarding variable declarations.  For example,
-           ;; if the top level of a following expression refers back to a
-           ;; variable initialized in a preceeding sub-expression.
-           (let ((loopy-iter--non-main-body-instructions)
-                 (cmd-alist-1)
-                 (cmd-alist-sub)
-                 (keyword-alist-1)
-                 (keyword-alist-sub))
+      (cl-labels (;; A wrapper to set `loopy--in-sub-level' correctly:
+                  ;; If this is a known command, expand as normal.  The command
+                  ;; parser will handle sub-level-ness.  Otherwise, while EXPR
+                  ;; isn't a command itself, bind `loopy--in-sub-level' in case
+                  ;; of any commands further down.
+                  (iter-macroexpand-all (expr)
+                    (if (map-elt command-env (car expr))
+                        (macroexpand-all expr first-pass-env)
+                      (let ((loopy-iter--level (1+ loopy-iter--level))
+                            (loopy--in-sub-level t))
+                        (macroexpand-all expr first-pass-env))))
+                  ;; Process body, insert data for optimized accumulations,
+                  ;; then process the other instructions:
+                  (first-pass (body)
+                    (prog1
+                        (mapcar #'iter-macroexpand-all body)
+                      (loopy--process-instructions
+                       (thread-last loopy-iter--non-main-body-instructions
+                                    nreverse
+                                    (apply #'append)))))
+                  ;; Expand the optimized accumulation variables,
+                  ;; then process the `at' instructions for this loop:
+                  (second-pass (body)
+                    (prog1
+                        (mapcar (lambda (expr) (macroexpand-all expr second-pass-env))
+                                body)
+                      (loopy--process-instructions (map-elt loopy--at-instructions
+                                                            loopy--loop-name)
+                                                   :erroring-instructions
+                                                   '(loopy--main-body)))))
+        (setq loopy--main-body
+              (thread-first body
+                            first-pass
+                            second-pass)))
 
-             ;; Entries for command names.
-             (dolist (cmd loopy-iter-bare-commands)
-               (let ((cmd cmd))
-                 (push (cons cmd (lambda (&rest args)
-                                   (cl-destructuring-bind (main other)
-                                       (loopy--extract-main-body
-                                        (loopy-iter--parse-command
-                                         (cons cmd args)))
-                                     (push other
-                                           loopy-iter--non-main-body-instructions)
-                                     (macroexp-progn main))))
-                       cmd-alist-1)
-                 (push (cons cmd (lambda (&rest args)
-                                   (cl-destructuring-bind (main other)
-                                       (loopy--extract-main-body
-                                        (let ((loopy--in-sub-level t))
-                                          (loopy-iter--parse-command
-                                           (cons cmd args))))
-                                     (push other
-                                           loopy-iter--non-main-body-instructions)
-                                     (macroexp-progn main))))
-                       cmd-alist-sub)))
+      ;; Make sure the order-dependent lists are in the correct order.
+      (loopy--correct-var-structure :exclude-main-body t)
 
-             ;; Entries for keyword commands
-             (dolist (keyword loopy-iter-keywords)
-               (push (cons keyword #'loopy-iter--keyword-expander-top)
-                     keyword-alist-1)
-               (push (cons keyword #'loopy-iter--keyword-expander-sub)
-                     keyword-alist-sub))
-
-             (let* ((loopy-iter--top-level-expanders
-                     `(,@suppressed-alist
-                       (loopy--optimized-accum . loopy-iter--opt-accum-expand-val)
-                       (loopy--optimized-accum-2 . nil)
-                       ,@cmd-alist-1
-                       ,@keyword-alist-1))
-                    (loopy-iter--sub-level-expanders
-                     `(,@suppressed-alist
-                       (loopy--optimized-accum . loopy-iter--opt-accum-expand-val)
-                       (loopy--optimized-accum-2 . nil)
-                       ,@cmd-alist-sub
-                       ,@keyword-alist-sub
-                       ,@macroexpand-all-environment)))
-
-               ;; Now process the main body.
-               (loopy (accum-opt new-body)
-                      (list expr body)
-                      (collect new-body
-                               (thread-last expr
-                                            loopy-iter--macroexpand-top
-                                            loopy-iter--macroexpand-sub))
-                      (finally-do
-                       (setq loopy--main-body new-body)
-                       (loopy--process-instructions
-                        (thread-last loopy-iter--non-main-body-instructions
-                                     nreverse
-                                     (apply #'append)))))))
-
-           ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-           ;; using the function `loopy--expand-optimized-accum'.
-           (loopy
-            ;; TODO:
-            ;; - Is there a way to only expand `loopy--optimized-accum'?
-            (with (macro-funcs `(,@suppressed-alist
-                                 ;; Identify second version of optimized accumulation.
-                                 (loopy--optimized-accum-2 . loopy--expand-optimized-accum)
-                                 ,@macroexpand-all-environment)))
-            (list i loopy--main-body)
-            (collect (macroexpand-all i macro-funcs))
-            (finally-do (setq loopy--main-body loopy-result))))
-
-
-         (loopy--process-instructions (map-elt loopy--at-instructions
-                                               loopy--loop-name)
-                                      :erroring-instructions
-                                      '(loopy--main-body)))
-     (loopy--clean-up-stack-vars))
-
-   ;; Make sure the order-dependent lists are in the correct order.
-   (loopy--correct-var-structure :exclude-main-body t)
-   ;; (setq loopy--iteration-vars (nreverse loopy--iteration-vars)
-   ;;       loopy--accumulation-vars (nreverse loopy--accumulation-vars)
-   ;;       loopy--implicit-return (when (consp loopy--implicit-return)
-   ;;                                (if (= 1 (length loopy--implicit-return))
-   ;;                                    ;; If implicit return is just a single thing,
-   ;;                                    ;; don't use a list.
-   ;;                                    (car loopy--implicit-return)
-   ;;                                  ;; If multiple items, be sure to use a list
-   ;;                                  ;; in the correct order.
-   ;;                                  `(list ,@(nreverse loopy--implicit-return)))))
-
-   ;; Produce the expanded code, based on the `let'-bound variables.
-   (loopy--expand-to-loop)))
+      ;; Produce the expanded code, based on the `let'-bound variables.
+      (loopy--expand-to-loop)))))
 
 ;;;; Add `loopy-iter' to `loopy'
 (cl-defun loopy-iter--parse-loopy-iter-command ((_ &rest body))

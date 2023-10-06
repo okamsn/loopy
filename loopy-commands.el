@@ -114,6 +114,14 @@ The lists will be in the order parsed (correct for insertion)."
     ;; Return the sub-lists.
     (list (nreverse wrapped-main-body) (nreverse other-instructions))))
 
+;; We find ourselves doing this pattern a lot.
+(cl-defmacro loopy--bind-main-body ((main-expr other-instrs) value &rest body)
+  "Bind MAIN-EXPR and OTHER-INSTRS for those items in VALUE for BODY."
+  (declare (indent 2))
+  `(cl-destructuring-bind (,main-expr ,other-instrs)
+       (loopy--extract-main-body ,value)
+     ,@body))
+
 (defun loopy--convert-iteration-vars-to-other-vars (instructions)
   "Convert instructions for `loopy--iteration-vars' to `loopy--other-vars'.
 

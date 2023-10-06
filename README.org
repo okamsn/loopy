@@ -56,6 +56,8 @@ please let me know.
    - The non-keyword arguments of =numbers= are deprecated.  Use the keyword
      arguments instead.  A =:test= keyword argument was added, which is more
      flexible and explicit than the non-keyword arguments.
+   - Fixed a problem with macro expansion in some cases for sub-macros
+     that created a new macro environment (e.g., ~cl-flet~).
  - Versions 0.11.1 and 0.11.2: None. Bug fixes.
  - Version 0.11.0:
    - More incorrect destructured bindings now correctly signal an error.

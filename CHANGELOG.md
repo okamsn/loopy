@@ -48,6 +48,22 @@ This document describes the user-facing changes to Loopy.
 
 - Better signal an error with conflicting arguments in `numbers`.  See [#172].
 
+- Fix macro expansion in some cases by not resetting the macro environment
+  ([#173]).  For example, we failed to pass the current/modified environment to
+  `macroexpand-all` in some cases.
+
+  ```emacs-lisp
+  ;; Previously failed to use `cl-flet''s internally defined function
+  ;; for `10+':
+  ;; => (11 12 13 14 15)
+  (loopy (named outer)
+         (list i '((1 2) (3 4) (5)))
+         (loopy-iter (listing j i)
+                     (cl-flet ((10+ (y) (+ 10 y)))
+                       (at outer
+                           (collecting (10+ j))))))
+  ```
+
 ### Breaking Changes
 
 - Make it an error to re-use iteration variables with multiple iteration
@@ -172,6 +188,7 @@ This document describes the user-facing changes to Loopy.
 [#164]: https://github.com/okamsn/loopy/pull/164
 [#165]: https://github.com/okamsn/loopy/pull/165
 [#171]: https://github.com/okamsn/loopy/pull/172
+[#173]: https://github.com/okamsn/loopy/pull/173
 
 ## 0.11.2
 
