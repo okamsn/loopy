@@ -199,7 +199,7 @@ handled by `loopy-iter'."
 
 ;;;;; Genereric Evaluation
 ;;;;;; Set
-(cl-defun loopy--parse-set-command ((_ var &rest vals))
+(cl-defun loopy--parse-set-command ((&whole cmd _ var &rest vals))
   "Parse the `set' command.
 
 - VAR is the variable to assign.
@@ -212,7 +212,8 @@ handled by `loopy-iter'."
 
     (when using-init-arg
       (warn "Loopy: `set': The `:init' argument is deprecated.
-Instead, use the special macro argument `with'."))
+Instead, use the special macro argument `with'.
+Warning trigger: %s" cmd))
 
     (let ((arg-length (if using-init-arg
                           (- length-vals 2)
@@ -291,7 +292,8 @@ This command does not wait for VAL to change before updating VAR."
 
     (when init-provided
       (warn "Loopy: `set-prev': The `:init' argument is deprecated.
-Instead, use the special macro argument `with'."))
+Instead, use the special macro argument `with'.
+Warning trigger: %s" cmd))
 
     (when (and init-provided with-bound)
       (error "Can't use `with' and `:init': %s" cmd))
@@ -1047,7 +1049,8 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                 explicit-end
                 explicit-by)
         (warn "`loopy': `numbers': The non-keyword arguments are deprecated.
-Instead, use the keyword arguments, possibly including the new `:test' argument."))
+Instead, use the keyword arguments, possibly including the new `:test' argument.
+Warning trigger: %s" cmd))
 
       ;; Check that nothing conflicts.
       (when (or (and explicit-start key-start)
@@ -1773,15 +1776,19 @@ you can use in the instructions:
              (warn "Loopy: `%s': Use of `:result-type' is deprecated.
 Instead, use a coercing function like `seq-into' in a special
 macro argument, such as `finally-return'.  See also `accum-opt' at the Info node
-`(loopy)Optimizing Accumulations'."
-                   name))
+`(loopy)Optimizing Accumulations'.
+Warning trigger: %s"
+                   name
+                   cmd))
 
            (when (plist-member opts :init)
              (warn "Loopy: `%s': The `:init' argument is deprecated.
 Instead, use the special macro argument `with' for the
 accumulation variable. The default accumulation variable is
-`loopy-result'."
-                   name))
+`loopy-result'.
+Warning trigger: %s"
+                   name
+                   cmd))
 
            (let ((arg-length (length args)))
              (cond
@@ -2791,7 +2798,8 @@ or t if the command is never evaluated."
     (when other-conditions
       (warn "Loopy: `always': Use of multiple conditions is deprecated.
 This command's behavior will be changed to be (always [VAR] CONDITION &key into),
-like accumulation commands."))
+like accumulation commands.
+Warning trigger: %s" cmd))
 
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-always-never cmd)
@@ -2828,7 +2836,8 @@ Otherwise, `loopy' should return t."
     (when other-conditions
       (warn "Loopy: `never': Use of multiple conditions is deprecated.
 This command's behavior will be changed to be (never [VAR] CONDITION &key into),
-like accumulation commands."))
+like accumulation commands.
+Warning trigger: %s" cmd))
 
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-always-never cmd)
@@ -2864,7 +2873,8 @@ returned."
     (when other-conditions
       (warn "Loopy: `thereis': Use of multiple conditions is deprecated.
 This command's behavior will be changed to be (thereis [VAR] CONDITION &key into),
-like accumulation commands."))
+like accumulation commands.
+Warning trigger: %s" cmd))
 
     (loopy--check-accumulation-compatibility
      loopy--loop-name var 'boolean-thereis cmd)
