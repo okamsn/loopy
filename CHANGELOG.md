@@ -7,7 +7,7 @@ This document describes the user-facing changes to Loopy.
 ### Bugs Fixed
 
 - Rewrite `prepend` in terms of `append`.  Rewrite `push-into` in terms of
-  `collect`.  This change makes these commands work with the new system for
+  `collect` ([#160]).  This change makes these commands work with the new system for
   optimized accumulation variables.
 
 - Without an explicit starting value for the accumulation variable, `reduce` now
@@ -22,8 +22,8 @@ This document describes the user-facing changes to Loopy.
          (reduce i #'*))
   ```
 
-- Fix `find` when `:on-failure` is nil.  Previously, `nil` was interpreted as
-  not passing `:on-failure`.
+- Fix `find` when `:on-failure` is nil ([#170]).  Previously, `nil` was
+  interpreted as not passing `:on-failure`.
 
   ```emacs-lisp
    ;; Previously erroneously returned 27:
@@ -34,10 +34,10 @@ This document describes the user-facing changes to Loopy.
           (finally-return val))
   ```
 
-- Fix `find` when `EXPR` is nil and `:on-failure` is given.  Previously, after
-  the test passed and `VAR` was set to `nil`, that `nil` was interpreted as not
-  passing the test, so that `VAR` then bound to the value passed for
-  `:on-failure`.
+- Fix `find` when `EXPR` is nil and `:on-failure` is given ([#170]).
+  Previously, after the test passed and `VAR` was set to `nil`, that `nil` was
+  interpreted as not passing the test, so that `VAR` then bound to the value
+  passed for `:on-failure`.
 
   ```emacs-lisp
   ;; Previously erroneously returned 27:
@@ -66,9 +66,12 @@ This document describes the user-facing changes to Loopy.
 
 ### Breaking Changes
 
+- Fix how the first accumulated value is used in `reduce`.  See [#164] and the
+  item above.
+
 - Make it an error to re-use iteration variables with multiple iteration
-  commands.  The resulting code shouldn't have worked anyway, but we now report
-  it as an error during macro expansion.
+  commands ([#142], [#144]).  The resulting code shouldn't have worked anyway,
+  but we now report it as an error during macro expansion.
 
   ```elisp
   ;; Will now signal an error during expansion:
@@ -95,17 +98,17 @@ This document describes the user-facing changes to Loopy.
 
 #### Deprecations
 
-- Using multiple conditions in `always`, `never`, and `thereis` is deprecated.
-  These commands will be changed to have call argument lists more like
-  accumulation commands, such as `(always [VAR] VAL &key into)`.  This will
-  simplify the code and remove an inconsistency between them and the other
+- Using multiple conditions in `always`, `never`, and `thereis` is deprecated
+  ([#145], [#161]).  These commands will be changed to have call argument lists
+  more like accumulation commands, such as `(always [VAR] VAL &key into)`.  This
+  will simplify the code and remove an inconsistency between them and the other
   commands.
 
-- `:result-type` is deprecated.  This feature was taken from Common Lisp's
-  Iterate.  While useful, this can be done more directly using named
-  accumulation variables (such as `loopy-result`) in special macro arguments,
-  such as `finally-return`.  Because of `accum-opt`, using named variables is
-  more flexible.
+- `:result-type` is deprecated ([#154], [#162]).  This feature was taken from
+  Common Lisp's Iterate.  While useful, this can be done more directly using
+  named accumulation variables (such as `loopy-result`) in special macro
+  arguments, such as `finally-return`.  Because of `accum-opt`, using named
+  variables is more flexible.
 
   ```elisp
   ;; Can't be done using only `:result-type'.
@@ -118,10 +121,10 @@ This document describes the user-facing changes to Loopy.
                          (cl-coerce triples 'vector)))
   ```
 
-- `:init` is deprecated.  Some commands had special behavior with `:init`, such
-  as `set-prev`, but this has been changed to work with `with` too.  Some
-  iteration commands, such as `numbers`, change behavior based on whether
-  a variable is `with` bound.  Removing `:init` increases consistency
+- `:init` is deprecated ([#146], [#163]).  Some commands had special behavior with
+  `:init`, such as `set-prev`, but this has been changed to work with `with`
+  too.  Some iteration commands, such as `numbers`, change behavior based on
+  whether a variable is `with` bound.  Removing `:init` increases consistency
   with these commands and decreases the duplication of features.
   - Relatedly, remove documentation that said `adjoin` supported `:init`.  It
     does not.
@@ -136,17 +139,17 @@ This document describes the user-facing changes to Loopy.
 ### Command Improvements
 
 - To produce faster code, some commands now avoid creating an intermediate
-  variable by initializing iteration variables to their first value.  This
-  initialization can be controlled using the `with` special macro argument,
-  which can result in slower code.  Previously, these iteration variables were
-  always initialized to `nil` and updated to the first value at the location of
-  the command.
+  variable by initializing iteration variables to their first value ([#142],
+  [#144]).  This initialization can be controlled using the `with` special macro
+  argument, which can result in slower code.  Previously, these iteration
+  variables were always initialized to `nil` and updated to the first value at
+  the location of the command.
   - `cycle` already has this behavior, but can now be slower.
   - `cons` will initialize to the list value.
   - `nums` and `seq-index` will initialize to the first numeric value.
 
 - The behavior of `always`, `never`, and `thereis` has been slightly changed to
-  be more convenient and consistent with other commands.
+  be more convenient and consistent with other commands ([#144]).
   - The commands now exit the loop without forcing a return value, which allows
     implicit return values to be finalized.
   - The commands now use variables to store the implicit return values of the
@@ -166,6 +169,7 @@ This document describes the user-facing changes to Loopy.
     ```
   - As with other incompatible commands, an error is now signaled when trying to
     use `thereis` with `always` or `never` **when using the same variable**
+    ([#144]).
 
 - Add a `:test` keyword argument to `numbers` ([#172]).  This is useful when the
   direction of the iteration is not known ahead of time.
@@ -182,11 +186,21 @@ This document describes the user-facing changes to Loopy.
 ### Other Changes
 
 - Add `loopy--other-vars`, given the more explicit restriction on
-  `loopy--iteration-vars`.  For example, these are the variables bound by the
-  `set` command, which are allowed to occur in more than one command.
+  `loopy--iteration-vars` ([#144]).  For example, these are the variables bound
+  by the `set` command, which are allowed to occur in more than one command.
 
+[#144]: https://github.com/okamsn/loopy/issue/142
+[#144]: https://github.com/okamsn/loopy/pull/144
+[#145]: https://github.com/okamsn/loopy/issue/145
+[#146]: https://github.com/okamsn/loopy/issue/146
+[#154]: https://github.com/okamsn/loopy/issue/154
+[#160]: https://github.com/okamsn/loopy/pull/160
+[#161]: https://github.com/okamsn/loopy/pull/161
+[#162]: https://github.com/okamsn/loopy/pull/162
+[#163]: https://github.com/okamsn/loopy/pull/163
 [#164]: https://github.com/okamsn/loopy/pull/164
 [#165]: https://github.com/okamsn/loopy/pull/165
+[#170]: https://github.com/okamsn/loopy/pull/170
 [#171]: https://github.com/okamsn/loopy/pull/172
 [#173]: https://github.com/okamsn/loopy/pull/173
 
