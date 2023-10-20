@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgd11885b
+@float Listing,org9e6a997
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -828,7 +828,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org27388de
+@float Listing,org866b582
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -843,7 +843,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org2966e15
+@float Listing,orgedbe07f
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2491,8 +2491,8 @@ You will notice that each accumulation command has an alias of the command name
 in the present participle form (the ``-ing'' form).  For example, instead of
 ``minimize'', you can use ``minimizing''.  Instead of ``sum'' and ``append'', you can
 use ``summing'' and ``appending''.  This is similar to the behavior of @code{cl-loop},
-and helps to avoid name collisions when using the @code{loopy-iter} macro (@ref{The @code{loopy-iter} Macro, , The
-@code{loopy-iter} Macro}).
+and helps to avoid name collisions when using the @code{loopy-iter} macro
+(@ref{The @code{loopy-iter} Macro}).
 
 @cindex accumulation keyword arguments
 Some accumulation commands have optional keyword parameters, which are listed
@@ -2505,6 +2505,16 @@ all described below.
 Where to place a value.  One of @samp{end}, @samp{start}, or @samp{beginning}
 (equivalent to @samp{start}).  If ungiven, defaults to @samp{end}.  These positions
 need not be quoted.
+
+@lisp
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i :at end))
+
+;; => (3 2 1)
+(loopy (list i '(1 2 3))
+       (collect i :at start))
+@end lisp
 @end table
 
 @cindex accumulation keyword into
@@ -2517,29 +2527,85 @@ argument for a more @code{cl-loop}-like syntax.
 
 As all accumulation commands support this keyword, it is not listed in
 any command definition.
+
+@lisp
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect my-collection i)
+       (finally-return my-collection))
+
+;; => (1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i :into my-collection)
+       (finally-return my-collection))
+@end lisp
 @end table
 
 @cindex accumulation keyword test
 @table @asis
 @item @samp{test}
 A function of two arguments, usually used to test for equality.
-Most tests default to @code{equal}, like in other Emacs Lisp libraries.  This is
-different from @samp{cl-lib}, which mimics Common Lisp and prefers using @code{eql}.
+This function is normally used to test if a value is already present in the
+accumulating sequence. If so, the function should return a non-nil value.
+
+@quotation Note
+This argument is similar to the @samp{:test} argument used by @samp{cl-lib}, but is
+closer to the optional @samp{testfn} argument used by @samp{seq} (for example, in
+@code{seq-contains-p}).  This are two important differences:
+@enumerate
+@item
+Tests default to @code{equal}, like in other Emacs Lisp libraries, not @code{eql}.
+@item
+The first argument is the existing value or sequence and the second
+argument is the tested value.  This is the @emph{opposite} of the order used by
+@code{cl-member} and @code{memq}.
+@end enumerate
+
+@end quotation
+
+@lisp
+;; Only add items to the list whose `car's are not already present
+;; or whose `cdr' is not 3:
+;;
+;; => ((a . 1) (c . 4))
+(loopy (with (test-fn (lambda (seq-val new-val)
+                        (or (equal (cdr new-val)
+                                   3)
+                            (eq (car seq-val)
+                                (car new-val))))))
+       (list i '((a . 1) (a . 2) (b . 3) (c . 4)))
+       (adjoin i :test test-fn))
+@end lisp
 @end table
 
 @cindex accumulation keyword key
 @table @asis
 @item @samp{key}
-A function of one argument, used to transform the inputs of
-@samp{test}.
+A one-argument function that transforms the both tested value and
+the value from sequence used by the @samp{test} keyword.
+
+The keyword @samp{key} is useful to avoid applying a transforming function to the
+tested value more than once when searching through a long sequence, as would
+be done if it were called explicitly in @samp{test}.
+
+@lisp
+;; => ((a . 1) (b . 2) (c . 4))
+(loopy (with (test #'car))
+       (list i '((a . 1) (b . 2) (a . 3) (c . 4)))
+       (adjoin i :at end :key #'car))
+
+;; Similary to the above:
+;;
+;; => ((a . 1) (b . 2) (c . 4))
+(loopy (with (test-val))
+       (list i '((a . 1) (b . 2) (a . 3) (c . 4)))
+       (set test-val (car i))
+       (adjoin i :test (lambda (seq-val _)
+                         (equal (car seq-val)
+                                test-val))))
+@end lisp
 @end table
 
-@cindex accumulation keyword init
-@table @asis
-@item @samp{init}
-The initial value of @samp{VAR}.  For explicitly named variables, one
-can use this argument or the @samp{with} special macro argument.
-@end table
 
 The arguments to the @samp{test} and @samp{key} parameters can be quoted functions or
 variables, just like when using @code{cl-union}, @code{cl-adjoin}, and so on.  @code{loopy}
@@ -2809,12 +2875,12 @@ This command also has the alias @samp{summing}.
 @subsection Sequence Accumulation
 
 Sequence accumulation commands are used to join lists (such as @samp{union} and
-@samp{append}) and to collect items into lists (such as @samp{collect}).
+@samp{append}) and to collect items into lists (such as @samp{collect} and @samp{adjoin}).
 
 @findex adjoin
 @findex adjoining
 @table @asis
-@item @samp{(adjoin VAR EXPR &key at test)}
+@item @samp{(adjoin VAR EXPR &key at test key)}
 Repeatedly add @samp{EXPR} to @samp{VAR} if it
 is not already present in the list.
 
@@ -2958,7 +3024,7 @@ apply wherever that value is used (@ref{Self-Evaluating Forms,,,elisp,}).
 @findex nunion
 @findex nunioning
 @table @asis
-@item @samp{(nunion VAR EXPR &key test at)}
+@item @samp{(nunion VAR EXPR &key test at key)}
 Repeatedly and @emph{destructively} insert
 into @samp{VAR} the elements of @samp{EXPR} which are not already present in @samp{VAR}.
 
@@ -3036,7 +3102,7 @@ convenience.
 @findex union
 @findex unioning
 @table @asis
-@item @samp{(union VAR EXPR &key test at)}
+@item @samp{(union VAR EXPR &key test at key)}
 Repeatedly insert into @samp{VAR} the
 elements of the list @samp{EXPR} that are not already present in @samp{VAR}.
 
@@ -4117,7 +4183,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org808789f
+@float Listing,org0290e68
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

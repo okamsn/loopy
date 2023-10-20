@@ -1506,12 +1506,12 @@ more efficient than repeatedly traversing the list."
          (setq ,var (list ,val)
                ,last-link ,var)))))))
 
-(defun loopy--produce-adjoin-end-tracking (var val membership-test)
+(cl-defun loopy--produce-adjoin-end-tracking (var val &key test key)
   "Produce instructions for an end-tracking accumulation of single items.
 
 VAR is the variable whose end is to be tracked.  VAL is the value
-to be added to the end of VAR.  MEMBERSHIP-TEST determines
-whether VAL is already a member of VAR.  This is used in
+to be added to the end of VAR. TEST is the test function.  KEY is
+the transform function.  This is used in
 accumulation commands like `adjoin'.
 
 For efficiency, accumulation commands use references to track the
@@ -1521,23 +1521,28 @@ more efficient than repeatedly traversing the list."
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
     `((loopy--accumulation-vars (,last-link nil))
-      (loopy--main-body
-       (cond
-        (,membership-test nil)
-        ;; If `last-link' is know, set it's cdr.
-        (,last-link
-         (setcdr ,last-link (list ,val))
-         (setq ,last-link (cdr ,last-link)))
-        ;; If `var' was updated without `last-link',
-        ;; reset `last-link'.
-        (,var
-         (setq ,last-link (last ,var))
-         (setcdr ,last-link (list ,val))
-         (setq ,last-link (cdr ,last-link)))
-        ;; Otherwise, set `var' and `last-link' directly.
-        (t
-         (setq ,var (list ,val)
-               ,last-link ,var)))))))
+      ,@(loopy--instr-let2* ((test-val test)
+                             (key-val key))
+            loopy--accumulation-vars
+          `((loopy--main-body
+             ,(cl-once-only ((adjoin-value val))
+                `(cond
+                  ((loopy--member-p ,var ,adjoin-value :test ,test-val :key ,key-val)
+                   nil)
+                  ;; If `last-link' is know, set it's cdr.
+                  (,last-link
+                   (setcdr ,last-link (list ,adjoin-value))
+                   (setq ,last-link (cdr ,last-link)))
+                  ;; If `var' was updated without `last-link',
+                  ;; reset `last-link'.
+                  (,var
+                   (setq ,last-link (last ,var))
+                   (setcdr ,last-link (list ,adjoin-value))
+                   (setq ,last-link (cdr ,last-link)))
+                  ;; Otherwise, set `var' and `last-link' directly.
+                  (t
+                   (setq ,var (list ,adjoin-value)
+                         ,last-link ,var))))))))))
 
 (defun loopy--produce-multi-item-end-tracking (var val &optional destructive)
   "Produce instructions for an end-tracking accumulation of copy-joined lists.
@@ -1568,42 +1573,50 @@ more efficient than repeatedly traversing the list."
          (setq ,var ,accum-val
                ,last-link (last ,var))))))))
 
-(defun loopy--produce-union-end-tracking
-    (var val test-method &optional destructive)
+(cl-defun loopy--produce-union-end-tracking
+    (var val &key test key destructive)
   "Produce instructions for an end-tracking accumulation of modify-joined lists.
 
 VAR is the variable whose end is to be tracked.  VAL is the value
-to be added to the end of VAR.  TEST-METHOD is a function
-returning t for any element in VAL that is already a member of
-VAR.  DESTRUCTIVE determines whether VAL is added to end of VAR
-destructively.  This is used in accumulation commands like
-`union' and `nunion'.
+to be added to the end of VAR.  TEST is the function used to
+determine presence.  KEY is the transform function.  DESTRUCTIVE
+determines whether VAL is added to end of VAR destructively.
+This is used in accumulation commands like `union' and `nunion'.
 
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
   ;; End tracking is a bit slower than `nconc' for short
   ;; lists, but much faster for longer lists.
-  (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var))
-        (accum-val (if destructive val `(copy-sequence ,val)))
-        (new-items (gensym "new-items")))
+  (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
     `((loopy--accumulation-vars (,last-link nil))
-      (loopy--main-body
-       (if-let ((,new-items (cl-delete-if ,test-method ,accum-val)))
-           (cond
-            (,last-link
-             (setcdr ,last-link ,new-items)
-             (setq ,last-link (last ,last-link)))
-            (,var
-             (setq ,last-link (last ,var))
-             (setcdr ,last-link ,new-items)
-             (setq ,last-link (last ,last-link)))
-            (t
-             (setq ,var ,new-items
-                   ,last-link (last ,var)))))))))
+      ,@(loopy--instr-let2* ((test-val test)
+                             (key-val key))
+            loopy--accumulation-vars
+          `((loopy--main-body
+             ,(cl-with-gensyms (new-items)
+                `(if-let ((,new-items
+                           (cl-delete-if ,(loopy--get-union-test-method
+                                           var
+                                           :test test-val
+                                           :key key-val)
+                                         ,(if destructive
+                                              val
+                                            `(copy-sequence ,val)))))
+                     (cond
+                      (,last-link
+                       (setcdr ,last-link ,new-items)
+                       (setq ,last-link (last ,last-link)))
+                      (,var
+                       (setq ,last-link (last ,var))
+                       (setcdr ,last-link ,new-items)
+                       (setq ,last-link (last ,last-link)))
+                      (t
+                       (setq ,var ,new-items
+                             ,last-link (last ,var))))))))))))
 
 ;;;;;; Test Methods
-(defun loopy--get-union-test-method (var &optional key test)
+(cl-defun loopy--get-union-test-method (var &key key test)
   "Get a function testing for values in VAR in `union' and `nunion'.
 
 This function is fed to `cl-remove-if' or `cl-delete-if'.  See
@@ -1612,21 +1625,9 @@ the definitions of those commands for more context.
 TEST is use to check for equality (default `equal').  KEY modifies
 the inputs to test."
   ;;  KEY applies to the value being tested as well as the elements in the list.
-  (let ((function-arg (gensym "union-function-arg")))
-    `(lambda (,function-arg)
-       ,(if key
-            (let ((test-val (gensym "union-test-val"))
-                  (test-var (gensym "union-test-var")))
-              ;; Can't rely on lexical variables around a `lambda' in
-              ;; `cl-member-if', so we perform this part more manually.
-              `(cl-loop with ,test-val = ,(loopy--apply-function key
-                                                                 function-arg)
-                        for ,test-var in ,var
-                        thereis ,(loopy--apply-function
-                                  (or test (quote #'equal))
-                                  (loopy--apply-function key test-var)
-                                  test-val)))
-          `(cl-member ,function-arg ,var :test ,test)))))
+  (cl-with-gensyms (arg)
+    `(lambda (,arg)
+       (loopy--member-p ,var ,arg :test ,test :key ,key))))
 
 ;;;;;; Optimized Accumulations
 (defun loopy--expand-optimized-accum (arg)
@@ -1893,43 +1894,25 @@ Warning trigger: %s"
     (map-let (('start start)
               ('end end))
         (loopy--get-accum-counts loop var 'adjoin)
-      (let* ((val-is-expression (not (symbolp val)))
-             (value-holder (if val-is-expression
-                               (gensym "adjoin-value")
-                             val))
-             (membership-test
-              ;; `adjoin' applies KEY to both the new item and old items in
-              ;; list, while `member' only applies KEY to items in the list.
-              ;; To be consistent and apply KEY to all items, we use
-              ;; `cl-member-if' with a custom predicate instead.
-              (if key
-                  (let ((func-arg (gensym "adjoin-func-arg")))
-                    `(cl-member-if
-                      (lambda (,func-arg)
-                        ,(loopy--apply-function
-                          (or test (quote #'equal))
-                          (loopy--apply-function key func-arg)
-                          (loopy--apply-function key value-holder)))
-                      ,var))
-                `(cl-member ,value-holder ,var :test ,test))))
-
+      (let* ((at-start-instrs
+              (loopy--instr-let2* ((test-val test)
+                                   (key-val key))
+                  loopy--accumulation-vars
+                `((loopy--main-body
+                   ,(cl-once-only ((adjoin-value val))
+                      `(unless (loopy--member-p ,var ,adjoin-value
+                                                :test ,test-val :key ,key-val)
+                         (cl-callf2 cons ,adjoin-value ,var)))))))
+             (at-end-instrs (loopy--produce-adjoin-end-tracking var val
+                                                                :test test :key key)))
         `((loopy--accumulation-vars (,var nil))
-          ;; If the tested value is not already a variable, then we need to
-          ;; store so that we can check for its presence and then add it to the
-          ;; list.
-          ,@(when val-is-expression
-              `((loopy--accumulation-vars (,value-holder nil))
-                (loopy--main-body (setq ,value-holder ,val))))
           ,@(if (>= start end)
                 ;; Create list in normal order.
                 (progn
                   (loopy--check-accumulation-compatibility loop var 'list cmd)
                   `(,@(if (eq pos 'start)
-                          `((loopy--main-body
-                             (setq ,var (cl-adjoin ,value-holder ,var
-                                                   :test ,test :key ,key))))
-                        (loopy--produce-adjoin-end-tracking var value-holder
-                                                            membership-test))
+                          at-start-instrs
+                        at-end-instrs)
                     (loopy--vars-final-updates
                      (,var . ,(if (eq 'list result-type)
                                   nil
@@ -1938,11 +1921,8 @@ Warning trigger: %s"
               ;; Create list in reverse order.
               (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
               `(,@(if (eq pos 'start)
-                      (loopy--produce-adjoin-end-tracking var value-holder
-                                                          membership-test)
-                    `((loopy--main-body (if ,membership-test
-                                            nil
-                                          (setq ,var (cons ,value-holder ,var))))))
+                      at-end-instrs
+                    at-start-instrs)
                 (loopy--vars-final-updates
                  (,var . (setq ,var  ,(if (eq 'list result-type)
                                           `(nreverse ,var)
@@ -1978,33 +1958,16 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
            ((member pos '(start beginning 'start 'beginning))
-            `((loopy--main-body
-               (setq ,var (cl-adjoin ,val ,var :test ,test :key ,key)))))
+            (loopy--instr-let2* ((test-val test)
+                                 (key-val key))
+                loopy--accumulation-vars
+              `((loopy--main-body
+                 ,(cl-once-only ((adjoin-value val))
+                    `(unless (loopy--member-p ,var ,adjoin-value
+                                              :test ,test-val :key ,key-val)
+                       (cl-callf2 cons ,adjoin-value ,var)))))))
            ((member pos '(end nil 'end))
-            (let* ((val-is-expression (not (symbolp val)))
-                   (value-holder (if val-is-expression
-                                     (gensym "adjoin-value")
-                                   val))
-                   (membership-test
-                    ;; `adjoin' applies KEY to both the new item and old items in
-                    ;; list, while `member' only applies KEY to items in the list.
-                    ;; To be consistent and apply KEY to all items, we use
-                    ;; `cl-member-if' with a custom predicate instead.
-                    (if key
-                        (let ((func-arg (gensym "adjoin-func-arg")))
-                          `(cl-member-if
-                            (lambda (,func-arg)
-                              ,(loopy--apply-function
-                                (or test (quote #'equal))
-                                (loopy--apply-function key func-arg)
-                                (loopy--apply-function key value-holder)))
-                            ,var))
-                      `(cl-member ,value-holder ,var :test ,test))))
-              `(,@(when val-is-expression
-                    `((loopy--accumulation-vars (,value-holder nil))
-                      (loopy--main-body (setq ,value-holder ,val))))
-                ,@(loopy--produce-adjoin-end-tracking var value-holder
-                                                      membership-test))))
+            (loopy--produce-adjoin-end-tracking var val :test test :key key))
            (t
             (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates
@@ -2473,7 +2436,28 @@ This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
-    (let ((test-method (loopy--get-union-test-method var key test)))
+    (cl-flet ((make-at-start (reverse)
+                (loopy--instr-let2* ((key-val key)
+                                     (test-val test))
+                    loopy--accumulation-vars
+                  `((loopy--main-body
+                     (setq ,var
+                           (nconc ,(let ((del `(cl-delete-if ,(loopy--get-union-test-method
+                                                               var
+                                                               :test test-val
+                                                               :key key-val)
+                                                             ,val)))
+                                     (if reverse
+                                         `(nreverse ,del)
+                                       del))
+                                  ,var))))))
+              (make-at-end (reverse)
+                (loopy--produce-union-end-tracking var (if reverse
+                                                           `(reverse ,val)
+                                                         val)
+                                                   :test test
+                                                   :key key
+                                                   :destructive t)))
       (map-let (('start start)
                 ('end end))
           (loopy--get-accum-counts loop var 'nunion)
@@ -2483,18 +2467,15 @@ This function is used by `loopy--expand-optimized-accum'."
               (loopy--check-accumulation-compatibility
                loopy--loop-name var 'list cmd)
               `(,@(if (eq pos 'start)
-                      `((loopy--main-body
-                         (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var))))
-                    (loopy--produce-union-end-tracking var val test-method 'destructive))
+                      (make-at-start nil)
+                    (make-at-end nil))
                 (loopy--vars-final-updates (,var . nil))))
           ;; Reverse list order.
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
           `(,@(if (eq pos 'start)
-                  (loopy--produce-union-end-tracking var `(nreverse ,val) test-method 'destructive)
-                `((loopy--main-body
-                   (setq ,var (nconc (nreverse (cl-delete-if ,test-method ,val))
-                                     ,var)))))
+                  (make-at-end t)
+                (make-at-start t))
             (loopy--vars-final-updates
              (,var . (setq ,var (nreverse ,var))))))))))
 
@@ -2518,15 +2499,25 @@ This function is used by `loopy--expand-optimized-accum'."
                                         :key ,key :test ,test)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
-        ,@(let ((test-method (loopy--get-union-test-method var key test)))
-            (cond
-             ((member pos '(start beginning 'start 'beginning))
+        ,@(cond
+           ((member pos '(start beginning 'start 'beginning))
+            (loopy--instr-let2* ((test-val test)
+                                 (key-val key))
+                loopy--accumulation-vars
               `((loopy--main-body
-                 (setq ,var (nconc (cl-delete-if ,test-method ,val) ,var)))))
-             ((member pos '(end 'end))
-              (loopy--produce-union-end-tracking var val test-method 'destructive))
-             (t
-              (signal 'loopy-bad-position-command-argument (list pos cmd)))))
+                 (setq ,var (nconc (cl-delete-if
+                                    ,(loopy--get-union-test-method var
+                                                                   :test test-val
+                                                                   :key key-val)
+                                    ,val)
+                                   ,var))))))
+           ((member pos '(end 'end))
+            (loopy--produce-union-end-tracking var val
+                                               :test test
+                                               :key key
+                                               :destructive t))
+           (t
+            (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
@@ -2634,7 +2625,28 @@ This function is used by `loopy--expand-optimized-accum'."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
-    (let ((test-method (loopy--get-union-test-method var key test)))
+    (cl-flet ((make-at-start (reverse)
+                (loopy--instr-let2* ((key-val key)
+                                     (test-val test))
+                    loopy--accumulation-vars
+                  `((loopy--main-body
+                     (setq ,var
+                           (nconc ,(let ((del `(cl-delete-if ,(loopy--get-union-test-method
+                                                               var
+                                                               :test test-val
+                                                               :key key-val)
+                                                             (copy-sequence ,val))))
+                                     (if reverse
+                                         `(nreverse ,del)
+                                       del))
+                                  ,var))))))
+              (make-at-end (reverse)
+                (loopy--produce-union-end-tracking var (if reverse
+                                                           `(reverse ,val)
+                                                         val)
+                                                   :test test
+                                                   :key key
+                                                   :destructive nil)))
       (map-let (('start start)
                 ('end end))
           (loopy--get-accum-counts loop var 'union)
@@ -2644,22 +2656,15 @@ This function is used by `loopy--expand-optimized-accum'."
               (loopy--check-accumulation-compatibility
                loopy--loop-name var 'list cmd)
               `(,@(if (eq pos 'start)
-                      `((loopy--main-body
-                         (setq ,var
-                               (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                                      ,var))))
-                    (loopy--produce-union-end-tracking var val test-method))
+                      (make-at-start nil)
+                    (make-at-end nil))
                 (loopy--vars-final-updates (,var . nil))))
           ;; Reverse list order.
           (loopy--check-accumulation-compatibility
            loopy--loop-name var 'reverse-list cmd)
           `(,@(if (eq pos 'start)
-                  (loopy--produce-union-end-tracking var `(reverse ,val)
-                                                     test-method)
-                `((loopy--main-body
-                   (setq ,var (nconc (nreverse (cl-delete-if ,test-method
-                                                             (copy-sequence ,val)))
-                                     ,var)))))
+                  (make-at-end t)
+                (make-at-start t))
             (loopy--vars-final-updates
              (,var . (setq ,var (nreverse ,var))))))))))
 
@@ -2679,16 +2684,25 @@ This function is used by `loopy--expand-optimized-accum'."
                                         :key ,key :test ,test)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
-        ,@(let ((test-method (loopy--get-union-test-method var key test)))
-            (cond
-             ((member pos '(start beginning 'start 'beginning))
+        ,@(cond
+           ((member pos '(start beginning 'start 'beginning))
+            (loopy--instr-let2* ((test-val test)
+                                 (key-val key))
+                loopy--accumulation-vars
               `((loopy--main-body
-                 (setq ,var (nconc (cl-delete-if ,test-method (copy-sequence ,val))
-                                   ,var)))))
-             ((member pos '(end 'end))
-              (loopy--produce-union-end-tracking var val test-method))
-             (t
-              (signal 'loopy-bad-position-command-argument (list pos cmd)))))
+                 (setq ,var (nconc (cl-delete-if
+                                    ,(loopy--get-union-test-method var
+                                                                   :test test-val
+                                                                   :key key-val)
+                                    (copy-sequence ,val))
+                                   ,var))))))
+           ((member pos '(end 'end))
+            (loopy--produce-union-end-tracking var val
+                                               :test test
+                                               :key key
+                                               :destructive nil))
+           (t
+            (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
