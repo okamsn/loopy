@@ -1126,7 +1126,11 @@ first and ELEMENT second."
                   thereis (funcall test i element))))))
 
 (cl-defun loopy--member-p-comp (form list element &key (test '#'equal) key)
-  "Expand `loopy--member-p' to a more efficient function when possible."
+  "Expand `loopy--member-p' to a more efficient function when possible.
+
+FORM is the original use of the function.  LIST is the sequence
+in which ELEMENT is sought.  TEST compare the elements of LIST and ELEMENT.
+KEY transforms those elements and ELEMENT."
   (if key
       (cl-with-gensyms (test-val seq-val)
         `(cl-loop with ,test-val = (funcall ,key ,element)
@@ -1149,10 +1153,11 @@ first and ELEMENT second."
   "Use SYM as EXP for BODY, maybe creating an instruction to bind at PLACE.
 
 See also `macroexp-let2'."
-  (declare (indent 3))
+  (declare (indent 3)
+           (debug (sexp sexp form body)))
   (let ((bodysym (gensym "body"))
         (expsym (gensym "exp"))
-        (val-holder (gensym (format "new-" sym))))
+        (val-holder (gensym (format "new-%s" sym))))
     `(let* ((,expsym ,exp)
             (,sym (if (macroexp-const-p ,expsym)
                       ,expsym
@@ -1160,10 +1165,9 @@ See also `macroexp-let2'."
             (,bodysym (progn ,@body)))
        (if (eq ,sym ,expsym)
            ,bodysym
-         ,(macroexp-let* (list (list sym expsym))
-                         `(cons (list (quote ,place)
-                                      (list (quote ,val-holder) ,expsym))
-                                ,bodysym))))))
+         (cons (list (quote ,place)
+                     (list (quote ,val-holder) ,expsym))
+               ,bodysym)))))
 
 (defmacro loopy--instr-let2* (bindings place &rest body)
   "A multi-binding version of `loopy--instr-let2'.
@@ -1171,7 +1175,10 @@ See also `macroexp-let2'."
 BINDINGS are variable-value pairs.  PLACE is the Loopy variable to use
 as the head of the instruction.  BODY are the forms for which the
 binding exists."
-  (declare (indent 2))
+  (declare (indent 2)
+           (debug ((&rest (gate symbol form))
+                   symbol
+                   body)))
   (cl-loop with res = (macroexp-progn body)
            for (var val) in (reverse bindings)
            do (setq res
