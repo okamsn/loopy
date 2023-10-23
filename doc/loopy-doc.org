@@ -2334,8 +2334,8 @@ You will notice that each accumulation command has an alias of the command name
 in the present participle form (the "-ing" form).  For example, instead of
 "minimize", you can use "minimizing".  Instead of "sum" and "append", you can
 use "summing" and "appending".  This is similar to the behavior of ~cl-loop~,
-and helps to avoid name collisions when using the ~loopy-iter~ macro ([[#loopy-iter][The
-~loopy-iter~ Macro]]).
+and helps to avoid name collisions when using the ~loopy-iter~ macro
+([[#loopy-iter][The ~loopy-iter~ Macro]]).
 
 #+cindex: accumulation keyword arguments
 Some accumulation commands have optional keyword parameters, which are listed
@@ -2347,6 +2347,16 @@ all described below.
   (equivalent to =start=).  If ungiven, defaults to =end=.  These positions
   need not be quoted.
 
+  #+begin_src emacs-lisp
+    ;; => (1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect i :at end))
+
+    ;; => (3 2 1)
+    (loopy (list i '(1 2 3))
+           (collect i :at start))
+  #+end_src
+
 #+cindex: accumulation keyword into
 - =into= :: An alternative way to specify the variable into which to
   accumulate values.  One would normally just give =VAR= as the first
@@ -2356,18 +2366,73 @@ all described below.
   As all accumulation commands support this keyword, it is not listed in
   any command definition.
 
+  #+begin_src emacs-lisp
+    ;; => (1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect my-collection i)
+           (finally-return my-collection))
+
+    ;; => (1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect i :into my-collection)
+           (finally-return my-collection))
+  #+end_src
+
 #+cindex: accumulation keyword test
 - =test= :: A function of two arguments, usually used to test for equality.
-  Most tests default to ~equal~, like in other Emacs Lisp libraries.  This is
-  different from =cl-lib=, which mimics Common Lisp and prefers using ~eql~.
+  This function is normally used to test if a value is already present in the
+  accumulating sequence. If so, the function should return a non-nil value.
+
+  #+attr_texinfo: :tag Note
+  #+begin_quote
+  This argument is similar to the =:test= argument used by =cl-lib=, but is
+  closer to the optional =testfn= argument used by =seq= (for example, in
+  ~seq-contains-p~).  This are two important differences:
+  1. Tests default to ~equal~, like in other Emacs Lisp libraries, not ~eql~.
+  2. The first argument is the existing value or sequence and the second
+     argument is the tested value.  This is the /opposite/ of the order used by
+     ~cl-member~ and ~memq~.
+  #+end_quote
+
+  #+begin_src emacs-lisp
+    ;; Only add items to the list whose `car's are not already present
+    ;; or whose `cdr' is not 3:
+    ;;
+    ;; => ((a . 1) (c . 4))
+    (loopy (with (test-fn (lambda (seq-val new-val)
+                            (or (equal (cdr new-val)
+                                       3)
+                                (eq (car seq-val)
+                                    (car new-val))))))
+           (list i '((a . 1) (a . 2) (b . 3) (c . 4)))
+           (adjoin i :test test-fn))
+  #+end_src
 
 #+cindex: accumulation keyword key
-- =key= :: A function of one argument, used to transform the inputs of
-  =test=.
+- =key= :: A one-argument function that transforms the _both_ tested value and
+  the value from sequence used by the =test= keyword.
 
-#+cindex: accumulation keyword init
-- =init= :: The initial value of =VAR=.  For explicitly named variables, one
-  can use this argument or the =with= special macro argument.
+  The keyword =key= is useful to avoid applying a transforming function to the
+  tested value more than once when searching through a long sequence, as would
+  be done if it were called explicitly in =test=.
+
+  #+begin_src emacs-lisp
+    ;; => ((a . 1) (b . 2) (c . 4))
+    (loopy (with (test #'car))
+           (list i '((a . 1) (b . 2) (a . 3) (c . 4)))
+           (adjoin i :at end :key #'car))
+
+    ;; Similary to the above:
+    ;;
+    ;; => ((a . 1) (b . 2) (c . 4))
+    (loopy (with (test-val))
+           (list i '((a . 1) (b . 2) (a . 3) (c . 4)))
+           (set test-val (car i))
+           (adjoin i :test (lambda (seq-val _)
+                             (equal (car seq-val)
+                                    test-val))))
+  #+end_src
+
 
 The arguments to the =test= and =key= parameters can be quoted functions or
 variables, just like when using ~cl-union~, ~cl-adjoin~, and so on.  ~loopy~
@@ -2617,11 +2682,11 @@ multiplying values together.
 :END:
 
 Sequence accumulation commands are used to join lists (such as =union= and
-=append=) and to collect items into lists (such as =collect=).
+=append=) and to collect items into lists (such as =collect= and =adjoin=).
 
 #+findex: adjoin
 #+findex: adjoining
-- =(adjoin VAR EXPR &key at test)= :: Repeatedly add =EXPR= to =VAR= if it
+- =(adjoin VAR EXPR &key at test key)= :: Repeatedly add =EXPR= to =VAR= if it
   is not already present in the list.
 
   This command also has the alias =adjoining=.
@@ -2750,7 +2815,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
 #+findex: nunion
 #+findex: nunioning
-- =(nunion VAR EXPR &key test at)= :: Repeatedly and /destructively/ insert
+- =(nunion VAR EXPR &key test at key)= :: Repeatedly and /destructively/ insert
   into =VAR= the elements of =EXPR= which are not already present in =VAR=.
 
   This command also has the alias =nunioning=.
@@ -2819,7 +2884,7 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
 #+findex: union
 #+findex: unioning
-- =(union VAR EXPR &key test at)= :: Repeatedly insert into =VAR= the
+- =(union VAR EXPR &key test at key)= :: Repeatedly insert into =VAR= the
   elements of the list =EXPR= that are not already present in =VAR=.
 
   This command also has the alias =unioning=.

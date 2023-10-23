@@ -199,48 +199,28 @@ For example, applying `cl-oddp' on (2 4 6 7) returns 3."
 This is helpful when working with property lists."
   (cl-loop for i in list by #'cddr collect i))
 
-;; TODO: Would this be more useful as a `pcase' macro?
-
-;; Note: This macro cannot currently be replaced by `cl-destructuring-bind' or
-;;       `map-let'.
-;;       - `map-let' provides no way to specify a default value when a key is
-;;         not in PLIST.  This macro does.
-;;       - `cl-destructuring-bind' signals an error when a key is in PLIST that
-;;         is not in BINDINGS.  This macro does not.
 (defmacro loopy--plist-bind (bindings plist &rest body)
   "Bind values in PLIST to variables in BINDINGS, surrounding BODY.
 
 - PLIST is a property list.
 
-- BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR can
-  optionally be a list of two elements: a variable name and a
-  default value, similar to what one would use for expressing
-  keyword parameters in `cl-defun' or `cl-destructuring-bind'.
-  The default value is used /only/ when KEY is not found in
-  PLIST.
+- BINDINGS is of the form (KEY VAR KEY VAR ...).  VAR has the
+  form (NAME [DEFAULT [PROVIDED]]) as in `cl-destructuring-bind'.
 
 - BODY is the same as in `let'.
 
-This macro works the same as `cl-destructuring-bind', except for
-the case when keys exist in PLIST that are not listed in
-BINDINGS.  While `cl-destructuring-bind' would signal an error,
-this macro simply ignores them."
+This is a wrapper around `cl-destructuring-bind'.  The difference is
+that we do not need to specify `&allow-other-keys' and that
+keywords and variables are separate."
   (declare (indent 2))
-  (let ((value-holder (gensym "plist-let-"))
-        (found-key (gensym "plist-prop-found-")))
-    `(let* ((,value-holder ,plist)
-            ,@(cl-loop for (key var . _) on bindings by #'cddr
-                       if (consp var)
-                       collect `(,(cl-first var)
-                                 ;; Use `plist-member' instead of `plist-get' to
-                                 ;; allow giving `nil' as an argument without
-                                 ;; using the default value.
-                                 (if-let ((,found-key (plist-member ,value-holder
-                                                                    ,key)))
-                                     (cl-second ,found-key)
-                                   ,(cl-second var)))
-                       else collect `(,var (plist-get ,value-holder ,key))))
-       ,@body)))
+  `(cl-destructuring-bind (&key
+                           ,@(cl-loop for (key var . _) on bindings by #'cddr
+                                      if (consp var)
+                                      collect `((,key ,(cl-first var)) ,@(cdr var))
+                                      else collect `((,key ,var)))
+                           &allow-other-keys)
+       ,plist
+     ,@body))
 
 (cl-defun loopy--substitute-using (new seq &key test)
   "Copy SEQ, substituting elements using output of function NEW.
@@ -1114,6 +1094,90 @@ Returns a list of instructions."
       (loopy--latter-body
        (setq ,index-holder (,(if decreasing #'- #'+)
                             ,index-holder ,increment-holder))))))
+
+
+;;;; Membership
+
+(cl-defun loopy--member-p (list element &key (test #'equal) key)
+  "Check whether ELEMENT is in LIST using TEST.
+
+KEY is applied to both ELEMENT and the sequences of the list.
+
+This function is like `seq-contains-p' and `cl-member',
+but TEST is guaranteed to receive the value from the list
+first and ELEMENT second."
+  ;; `adjoin' applies KEY to both the new item and old items in
+  ;; list, while `member' only applies KEY to items in the list.
+  ;; To be consistent and apply KEY to all items, we use
+  ;; `cl-member-if' with a custom predicate instead.
+  ;;
+  ;; The CLHS is wrong in how `adjoin' works.  See #170.
+  (declare (compiler-macro loopy--member-p-comp))
+  (setq test (or test #'equal))
+  (if key
+      (cl-loop with test-val = (funcall key element)
+               for i in list
+               thereis (funcall test (funcall key i) test-val))
+    (pcase test
+      ('equal (member element list))
+      ('eql   (memql  element list))
+      ('eq    (memq   element list))
+      (_ (cl-loop for i in list
+                  thereis (funcall test i element))))))
+
+(cl-defun loopy--member-p-comp (form list element &key (test '#'equal) key)
+  "Expand `loopy--member-p' to a more efficient function when possible."
+  (if key
+      (cl-with-gensyms (test-val seq-val)
+        `(cl-loop with ,test-val = (funcall ,key ,element)
+                  for ,seq-val in ,list
+                  thereis (funcall ,test (funcall ,key ,seq-val) ,test-val)))
+    ;; This logic take from `cl--constr-expr-p'.
+    (pcase (let ((test (macroexpand-all test macroexpand-all-environment)))
+             (if (macroexp-const-p test)
+                 (if (consp test)
+                     (nth 1 test)
+                   test)))
+      ('equal `(member ,element ,list))
+      ('eql   `(memql  ,element ,list))
+      ('eq    `(memq   ,element ,list))
+      (_ form))))
+
+;;;; Variable binding for instructions
+
+(defmacro loopy--instr-let2 (place sym exp &rest body)
+  "Use SYM as EXP for BODY, maybe creating an instruction to bind at PLACE.
+
+See also `macroexp-let2'."
+  (declare (indent 3))
+  (let ((bodysym (gensym "body"))
+        (expsym (gensym "exp"))
+        (val-holder (gensym (format "new-" sym))))
+    `(let* ((,expsym ,exp)
+            (,sym (if (macroexp-const-p ,expsym)
+                      ,expsym
+                    (quote ,val-holder)))
+            (,bodysym (progn ,@body)))
+       (if (eq ,sym ,expsym)
+           ,bodysym
+         ,(macroexp-let* (list (list sym expsym))
+                         `(cons (list (quote ,place)
+                                      (list (quote ,val-holder) ,expsym))
+                                ,bodysym))))))
+
+(defmacro loopy--instr-let2* (bindings place &rest body)
+  "A multi-binding version of `loopy--instr-let2'.
+
+BINDINGS are variable-value pairs.  PLACE is the Loopy variable to use
+as the head of the instruction.  BODY are the forms for which the
+binding exists."
+  (declare (indent 2))
+  (cl-loop with res = (macroexp-progn body)
+           for (var val) in (reverse bindings)
+           do (setq res
+                    `(loopy--instr-let2 ,place ,var ,val
+                       ,res))
+           finally return res))
 
 (provide 'loopy-misc)
 ;;; loopy-misc.el ends here

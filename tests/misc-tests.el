@@ -23,6 +23,19 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
   (should (equal '((a b c) d)
                  (loopy--split-off-last-var '(a b c . d)))))
 
+(ert-deftest loopy--member-p ()
+  (should (loopy--member-p '((a . 1) (b . 2))
+                           '(2 . c)
+                           :test
+                           (lambda (seq-val test-val)
+                             (= (cdr seq-val)
+                                (car test-val)))))
+  (should (loopy--member-p '((1) (2) (3)) '(2)))
+  (should (loopy--member-p '((1) (2) (3)) '(2) :test #'equal))
+  (should-error (loopy--member-p '((1) (2) (3)) '(2) :test #'=))
+  (should (loopy--member-p '(1 2 3) 2 :test #'=))
+  (should (loopy--member-p '((1) (2) (3)) '(2) :test #'= :key #'car)))
+
 ;;; Destructuring
 
 (ert-deftest destructure-array-errors ()

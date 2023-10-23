@@ -22,7 +22,7 @@ This document describes the user-facing changes to Loopy.
          (reduce i #'*))
   ```
 
-- Fix `find` when `:on-failure` is nil ([#170]).  Previously, `nil` was
+- Fix `find` when `:on-failure` is nil ([#171]).  Previously, `nil` was
   interpreted as not passing `:on-failure`.
 
   ```emacs-lisp
@@ -34,7 +34,7 @@ This document describes the user-facing changes to Loopy.
           (finally-return val))
   ```
 
-- Fix `find` when `EXPR` is nil and `:on-failure` is given ([#170]).
+- Fix `find` when `EXPR` is nil and `:on-failure` is given ([#171]).
   Previously, after the test passed and `VAR` was set to `nil`, that `nil` was
   interpreted as not passing the test, so that `VAR` then bound to the value
   passed for `:on-failure`.
@@ -78,6 +78,15 @@ This document describes the user-facing changes to Loopy.
   (loopy (list i '(1 2 3))
          (list i '(4 5 6)))
   ```
+
+- In `adjoin`, `nunion`, and `union`, the `test` and `key` keywords are now
+  evaluated only once.  This is now consistent with passing function values of
+  other loop commands. See [#170] and [#177].
+
+- In accumulation commands using the `test` keyword argument, the argument order
+  of the two-argument test function is now document as `(SEQUENCE-ITEM,
+  TESTED-ITEM)`, similar to `seq-contains-p`.  The argument order was previously
+  undocumented and not guaranteed. See [#170] and [#177].
 
 #### Removals
 
@@ -200,9 +209,11 @@ This document describes the user-facing changes to Loopy.
 [#163]: https://github.com/okamsn/loopy/pull/163
 [#164]: https://github.com/okamsn/loopy/pull/164
 [#165]: https://github.com/okamsn/loopy/pull/165
-[#170]: https://github.com/okamsn/loopy/pull/170
-[#171]: https://github.com/okamsn/loopy/pull/172
+[#170]: https://github.com/okamsn/loopy/issues/170
+[#171]: https://github.com/okamsn/loopy/pull/171
+[#172]: https://github.com/okamsn/loopy/pull/172
 [#173]: https://github.com/okamsn/loopy/pull/173
+[#177]: https://github.com/okamsn/loopy/pull/177
 
 ## 0.11.2
 
