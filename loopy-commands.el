@@ -318,10 +318,9 @@ Warning trigger: %s" cmd))
             (loopy--other-vars (,back-holder ,back))
             ,@(mapcar (lambda (x) `(loopy--other-vars (,x nil)))
                       holding-vars)
-            ,@(seq-let (main-exprs rest-instr)
-                  (loopy--extract-main-body
-                   (loopy--destructure-for-other-command
-                    var (car (last holding-vars))))
+            ,@(loopy--bind-main-body (main-exprs rest-instr)
+                  (loopy--destructure-for-other-command
+                   var (car (last holding-vars)))
                 `((loopy--main-body (when (>= ,cnt-holder ,back-holder)
                                       ,@main-exprs))
                   ,@rest-instr))
@@ -638,7 +637,7 @@ instructions:
 
          ,instructions))))
 
-(defun loopy--find-start-by-end-dir-vals (plist)
+(defun loopy--find-start-by-end-dir-vals (plist &optional cmd)
   "Find the numeric start, end, and step, direction, and inclusivity.
 
 The values are returned in a list in that order as a plist.
@@ -653,7 +652,9 @@ iteration command.  The supported keywords are:
 - `:above' (exclusive end)
 - `:below' (exclusive end)
 - `:by' (increment)
-- `:test' (comparison function)"
+- `:test' (comparison function)
+
+CMD is the command usage for error reporting."
 
   (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
                        :to to :upto upto :downto downto
@@ -665,27 +666,56 @@ iteration command.  The supported keywords are:
               (< 1 (cl-count-if #'identity (list to upto downto above below)))
               (and (or downfrom downto above)
                    (or upfrom upto below)))
-      (signal 'loopy-conflicting-command-arguments (list plist)))
+      (signal 'loopy-conflicting-command-arguments (list (or cmd plist))))
 
-    (let ((decreasing (or downfrom downto above)))
+    (let ((dir-given (or above below downfrom downto upfrom upto))
+          (end-given (or to downto above below upto))
+          (start-given (or from downfrom upfrom))
+          (decreasing (or downfrom downto above))
+          (inclusive (not (or above below))))
 
       ;; Check directions  for above and below.
       ;; :above is only for when the value is decreasing.
       ;; :below is only for when the value in increasing.
       (when (or (and below decreasing)
                 (and above (not decreasing)))
-        (signal 'loopy-conflicting-command-arguments (list plist)))
+        (signal 'loopy-conflicting-command-arguments (list (or cmd plist))))
 
-      `(,@(when-let ((start (or from upfrom downfrom)))
-            `(:start ,start))
+      ;; If we're using a directional word, then we shouldn't be giving a test.
+      (when (and dir-given test)
+        (signal 'loopy-conflicting-command-arguments (list (or cmd plist))))
+
+      ;; The first guess is that if we're continuing indefinitely, then there is
+      ;; no test that we can run.  The second guess is that this is incorrect
+      ;; because the commands use a default value for the start and ends, so a
+      ;; testing function is still valid.  The answer is that without knowing
+      ;; the direction, then there is no way to know the correct default values,
+      ;; and if the direction is known, then the test is not needed.
+      (when (and test (null end-given))
+        (signal 'loopy-conflicting-command-arguments (list (or cmd plist))))
+
+      (when (and test (null start-given))
+        (signal 'loopy-conflicting-command-arguments (list (or cmd plist))))
+
+      `(,@(when start-given
+            `(:start ,start-given))
         ,@(when by
             `(:by ,by))
-        ,@(when-let ((end (or to downto above below upto)))
-            `(:end ,end))
-        :dir-given ,(or above below downfrom downto upfrom upto)
-        :test ,test
+        ,@(when end-given
+            `(:end ,end-given))
+        :dir-given ,dir-given
+        :test-given ,test
+        :test ,(or test (if inclusive
+                            ;; Functions are double quoted to match as if the
+                            ;; user passed a sharp-quoted function to the macro.
+                            (if decreasing
+                                (quote #'>=)
+                              (quote #'<=))
+                          (if decreasing
+                              (quote #'>)
+                            (quote #'<))))
         :decreasing ,decreasing
-        :inclusive ,(not (or above below))))))
+        :inclusive ,inclusive))))
 
 ;;;;;; Array
 (defmacro loopy--distribute-array-elements (&rest arrays)
@@ -712,7 +742,8 @@ For example, [1 2] and [3 4] gives [(1 3) (1 4) (2 3) (2 4)]."
   "Parse the `array' command as (array VAR VAL [VALS] &key KEYS).
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
-`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+`:upfrom', `:to', `:downto', `:upto', `:above', `:below', and
+`:test'.
 
 - `:index' names a variable used to store the accessed index of
   the array.
@@ -720,50 +751,49 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 - `:from', `:downfrom', and `:upfrom' name the starting index
 - `:to', `:downto', and `:upto' name the ending index (inclusive)
 - `:below' and `:above' name an exclusive ending index.
+- `:test' is the test function.
 
 `:downto' and `:downfrom' make the index decrease instead of increase.
 
 If multiple values are given, their elements are distributed
 using the function `loopy--distribute-array-elements'."
   :other-vals t
-  :keywords (:index
-             :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords ( :index :test
+              :by :from :downfrom :upfrom :to :downto :upto :above :below)
   :instructions
-  (let ((value-holder (gensym "array-"))
-        (index-holder (or (plist-get opts :index)
-                          (gensym "array-index-")))
-        (end-holder (gensym "array-end-"))
-        (increment-holder (gensym "array-increment")))
 
-    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
-                         :decreasing decreasing :inclusive inclusive)
-
-        (loopy--find-start-by-end-dir-vals opts)
-
-      `((loopy--iteration-vars (,value-holder ,(if (null other-vals)
-                                                   val
-                                                 `(loopy--distribute-array-elements
-                                                   ,val ,@other-vals))))
-        (loopy--iteration-vars (,end-holder ,(or key-end
-                                                 (if decreasing
-                                                     -1
-                                                   `(length ,value-holder)))))
-        (loopy--iteration-vars (,index-holder ,(or key-start
-                                                   (if decreasing
-                                                       `(1- (length ,value-holder))
-                                                     0))))
-        ,@(loopy--destructure-for-iteration-command
-           var `(aref ,value-holder ,index-holder))
-
-        ,@(loopy--generate-inc-idx-instructions
-           index-holder increment-holder by decreasing)
-
-        (loopy--pre-conditions (,(if (or (null key-end)
-                                         (not inclusive))
-                                     (if decreasing #'> #'<)
-                                   (if decreasing #'>= #'<=))
-                                ,index-holder
-                                ,end-holder))))))
+  (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                       :decreasing decreasing
+                       :test-given test-given :test test)
+      (loopy--find-start-by-end-dir-vals opts)
+    (loopy--instr-let-const* ((value-holder (if (null other-vals)
+                                                val
+                                              `(loopy--distribute-array-elements
+                                                ,val ,@other-vals)))
+                              (end-holder (or key-end
+                                              (if decreasing
+                                                  0
+                                                `(1- (length ,value-holder)))))
+                              (increment-holder by)
+                              (test test))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((index-holder (or key-start
+                                                (if decreasing
+                                                    `(1- (length ,value-holder))
+                                                  0))
+                                            (plist-get opts :index)))
+          loopy--iteration-vars
+        `(,@(loopy--destructure-for-iteration-command
+             var `(aref ,value-holder ,index-holder))
+          (loopy--latter-body
+           (setq ,index-holder (,(cond
+                                  (test-given #'+)
+                                  (decreasing #'-)
+                                  (t #'+))
+                                ,index-holder ,increment-holder)))
+          (loopy--pre-conditions (funcall ,test
+                                          ,index-holder
+                                          ,end-holder)))))))
 
 ;;;;;; Array Ref
 (loopy--defiteration array-ref
@@ -780,42 +810,37 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 - `:below' and `:above' name an exclusive ending index.
 
 `:downto' and `:downfrom' make the index decrease instead of increase."
-  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :instructions
-  (let ((value-holder (gensym "array-ref-"))
-        (index-holder (or (plist-get opts :index)
-                          (gensym "array-ref-index-")))
-        (end-holder (gensym "array-ref-end-"))
-        (increment-holder (gensym "array-ref-increment-")))
-
-    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
-                         :decreasing decreasing :inclusive inclusive)
-
-        (loopy--find-start-by-end-dir-vals opts)
-
-      `((loopy--iteration-vars (,value-holder ,val))
-
-        (loopy--iteration-vars (,end-holder ,(or key-end
-                                                 (if decreasing
-                                                     -1
-                                                   `(length ,value-holder)))))
-
-        (loopy--iteration-vars (,index-holder ,(or key-start
-                                                   (if decreasing
-                                                       `(1- (length ,value-holder))
-                                                     0))))
-
-        ,@(loopy--destructure-for-generalized-command
-           var `(aref ,value-holder ,index-holder))
-
-        ,@(loopy--generate-inc-idx-instructions
-           index-holder increment-holder by decreasing)
-
-        (loopy--pre-conditions (,(if (or (null key-end)
-                                         (not inclusive))
-                                     (if decreasing #'> #'<)
-                                   (if decreasing #'>= #'<=))
-                                ,index-holder ,end-holder))))))
+  (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                       :decreasing decreasing
+                       :test-given test-given :test test)
+      (loopy--find-start-by-end-dir-vals opts)
+    (loopy--instr-let-const* ((value-holder val)
+                              (end-holder (or key-end
+                                              (if decreasing
+                                                  0
+                                                `(1- (length ,value-holder)))))
+                              (increment-holder by)
+                              (test test))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((index-holder (or key-start
+                                                (if decreasing
+                                                    `(1- (length ,value-holder))
+                                                  0))
+                                            (plist-get opts :index)))
+          loopy--iteration-vars
+        `(,@(loopy--destructure-for-generalized-command
+             var `(aref ,value-holder ,index-holder))
+          (loopy--latter-body
+           (setq ,index-holder (,(cond
+                                  (test-given #'+)
+                                  (decreasing #'-)
+                                  (t #'+))
+                                ,index-holder ,increment-holder)))
+          (loopy--pre-conditions (funcall ,test
+                                          ,index-holder
+                                          ,end-holder)))))))
 
 ;;;;;; Cons
 (loopy--defiteration cons
@@ -825,23 +850,19 @@ VAR is a variable name.  VAL is a cons cell value.  Keyword BY
 is a function by which to update VAR (default `cdr')."
   :keywords (:by)
   :instructions
-  (if (or (loopy--with-bound-p var)
-          (sequencep var))
-      (let ((value-holder (gensym "cons-")))
-        `((loopy--iteration-vars (,value-holder ,val))
-          ,@(loopy--destructure-for-iteration-command var value-holder)
-          (loopy--latter-body
-           (setq ,value-holder ,(loopy--apply-function (or by (quote #'cdr))
-                                                       value-holder)))
-          ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+  (loopy--instr-let-const* ((cons-by (or by (quote #'cdr))))
+      loopy--iteration-vars
+    (let ((indirect (or (loopy--with-bound-p var)
+                        (sequencep var))))
+      (loopy--instr-let-var* ((cons-value val (unless indirect var)))
+          loopy--iteration-vars
+        `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
           ;;       at least for some commands.
-          (loopy--pre-conditions (consp ,value-holder))))
-    `((loopy--iteration-vars (,var ,val))
-      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
-      ;;       at least for some commands.
-      (loopy--pre-conditions (consp ,var))
-      (loopy--latter-body
-       (setq ,var ,(loopy--apply-function (or by (quote #'cdr)) var))))))
+          (loopy--pre-conditions (consp ,cons-value))
+          ,@(when indirect
+              (loopy--destructure-for-iteration-command var cons-value))
+          (loopy--latter-body
+           (setq ,cons-value (funcall ,cons-by ,cons-value))))))))
 
 ;;;;;; Iter
 (loopy--defiteration iter
@@ -899,10 +920,12 @@ closed after the loop completes."
 
 
 ;;;;;; List
+;; TODO: Make this a normal function.
 (defmacro loopy--distribute-list-elements (&rest lists)
   "Distribute the elements of LISTS into a list of lists.
 
 For example, (1 2) and (3 4) would give ((1 3) (1 4) (2 3) (2 4))."
+
   (let ((vars (cl-loop for _ in lists
                        collect (gensym "list-var-")))
         (reverse-order (reverse lists)))
@@ -928,22 +951,20 @@ using the function `loopy--distribute-list-elements'."
   :other-vals t
   :keywords (:by)
   :instructions
-  (let* ((by-func (or (plist-get opts :by)
-                      ;; Need to quote as if passed in to macro
-                      (quote #'cdr))))
-    (let ((value-holder (gensym "list-")))
-      `((loopy--iteration-vars
-         (,value-holder ,(if (null other-vals)
-                             val
-                           `(loopy--distribute-list-elements
-                             ,val ,@other-vals))))
-        (loopy--latter-body
-         (setq ,value-holder ,(loopy--apply-function by-func value-holder)))
-        ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+  (loopy--instr-let-const* ((list-func (or (plist-get opts :by)
+                                           (quote #'cdr))))
+      loopy--iteration-vars
+    (loopy--instr-let-var* ((list-val (if (null other-vals)
+                                          val
+                                        `(loopy--distribute-list-elements
+                                          ,val ,@other-vals))))
+        loopy--iteration-vars
+      `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
         ;;       at least for some commands.
-        (loopy--pre-conditions (consp ,value-holder))
-        ,@(loopy--destructure-for-iteration-command
-           var `(car ,value-holder))))))
+        (loopy--pre-conditions (consp ,list-val))
+        ,@(loopy--destructure-for-iteration-command var `(car ,list-val))
+        (loopy--latter-body
+         (setq ,list-val (funcall ,list-func ,list-val)))))))
 
 ;;;;;; List Ref
 (loopy--defiteration list-ref
@@ -952,18 +973,20 @@ using the function `loopy--distribute-list-elements'."
 BY is the function to use to move through the list (default `cdr')."
   :keywords (:by)
   :instructions
-  (let ((val-holder (gensym "list-ref"))
-        ;; Need to quote as if passed in to macro
-        (by-func (or by (quote #'cdr))))
-    `((loopy--iteration-vars (,val-holder ,val))
-      ,@(loopy--destructure-for-generalized-command var `(car ,val-holder))
-      (loopy--latter-body
-       (setq ,val-holder ,(loopy--apply-function by-func val-holder)))
-      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
-      ;;       at least for some commands.
-      (loopy--pre-conditions (consp ,val-holder)))))
+  (loopy--instr-let-const* ((list-func (or by (quote #'cdr))))
+      loopy--iteration-vars
+    (loopy--instr-let-var* ((list-val val))
+        loopy--iteration-vars
+      `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+        ;;       at least for some commands.
+        (loopy--pre-conditions (consp ,list-val))
+        ,@(loopy--destructure-for-generalized-command var `(car ,list-val))
+        (loopy--latter-body
+         (setq ,list-val (funcall ,list-func ,list-val)))))))
 
 ;;;;;; Map
+;; TODO: Instead of using `seq-uniq' at the start,
+;;       check as we go.
 (cl-defun loopy--parse-map-command ((name var val &key (unique t)))
   "Parse the `map' loop command.
 
@@ -1009,7 +1032,7 @@ map's keys.  Duplicate keys are ignored."
 
 ;;;;;; Numbers
 (loopy--defiteration numbers
-  "Parse the `numbers' command as (nums VAR &key KEYS).
+  "Parse the `numbers' command as (numbers VAR &key KEYS).
 
 - START is the starting index, if given.
 - END is the ending index (inclusive), if given.
@@ -1032,104 +1055,106 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
   :required-vals 0
   :other-vals (0 1 2 3)
   :instructions
-  ;; TODO: `cl-destructuring-bind' signals error here.  Why?
-  (seq-let (explicit-start explicit-end explicit-by)
+  ;; TODO: Use `loopy--instr-let-const*' to simplify, after the non-keyword arguments
+  ;;       have been removed.
+  (cl-destructuring-bind (&optional explicit-start explicit-end explicit-by)
       other-vals
     (loopy--plist-bind ( :start key-start :end key-end :by key-by
-                         :decreasing decreasing :inclusive inclusive
-                         :dir-given dir-given :test test)
+                         :decreasing decreasing :inclusive inclusive)
 
         (condition-case nil
             (loopy--find-start-by-end-dir-vals opts)
           (loopy-conflicting-command-arguments
            (signal 'loopy-conflicting-command-arguments (list cmd))))
 
-      ;; Warn that the non-keyword arguments are deprecated.
-      (when (or explicit-start
-                explicit-end
-                explicit-by)
-        (warn "`loopy': `numbers': The non-keyword arguments are deprecated.
-Instead, use the keyword arguments, possibly including the new `:test' argument.
-Warning trigger: %s" cmd))
+      ;; We have to do this here because of how we treat the explicit arguments.
+      ;; Once they are removed, we can move this into the above
+      ;; `loopy--plist-bind'.
+      (let ((key-test (plist-get opts :test)))
 
-      ;; Check that nothing conflicts.
-      (when (or (and explicit-start key-start)
-                (and explicit-end   key-end)
-                (and explicit-by    key-by))
-        (signal 'loopy-conflicting-command-arguments (list cmd)))
+        ;; Warn that the non-keyword arguments are deprecated.
+        (when (or explicit-start
+                  explicit-end
+                  explicit-by)
+          (warn "`loopy': `numbers': The non-keyword arguments are deprecated.
+  Instead, use the keyword arguments, possibly including the new `:test' argument.
+  Warning trigger: %s" cmd))
 
-      (let* ((end (or explicit-end key-end))
-             (end-val-holder (gensym "nums-end"))
-             (start (or explicit-start key-start 0))
-             (by (or explicit-by key-by 1))
-             (number-by (numberp by))
-             (number-by-and-end (and number-by (numberp end)))
-             (increment-val-holder (gensym "nums-increment"))
-             (var-val-holder (if (loopy--with-bound-p var)
-                                 (gensym "num-test-var")
-                               var)))
-
-        (when (and test (or dir-given (null end)))
+        ;; Check that nothing conflicts.
+        (when (or (and explicit-start key-start)
+                  (and explicit-end   key-end)
+                  (and explicit-by    key-by))
           (signal 'loopy-conflicting-command-arguments (list cmd)))
 
-        `((loopy--iteration-vars (,var-val-holder ,start))
-          ,(when (loopy--with-bound-p var)
-             `(loopy--main-body (setq ,var ,var-val-holder)))
+        (let* ((end (or explicit-end key-end))
+               (end-val-holder (gensym "nums-end"))
+               (start (or explicit-start key-start 0))
+               (by (or explicit-by key-by 1))
+               (number-by (numberp by))
+               (number-by-and-end (and number-by (numberp end)))
+               (increment-val-holder (gensym "nums-increment"))
+               (var-val-holder (if (loopy--with-bound-p var)
+                                   (gensym "num-test-var")
+                                 var)))
 
-          (loopy--latter-body
-           (setq ,var-val-holder
-                 ,(let ((inc (if number-by
-                                 by
-                               increment-val-holder)))
-                    (cond (explicit-by `(+ ,var-val-holder ,inc))
-                          (test        `(+ ,var-val-holder ,inc))
-                          (key-by      `(,(if decreasing #'- #'+)
-                                         ,var-val-holder ,inc))
-                          (decreasing  `(1- ,var-val-holder))
-                          (t           `(1+ ,var-val-holder))))))
+          `((loopy--iteration-vars (,var-val-holder ,start))
+            ,(when (loopy--with-bound-p var)
+               `(loopy--main-body (setq ,var ,var-val-holder)))
 
-          ,@(cond
-             (number-by-and-end
-              `((loopy--pre-conditions ,(loopy--apply-function
-                                         (cond
-                                          (test test)
-                                          (explicit-by
-                                           (if (cl-plusp by) '#'<= '#'>=))
-                                          (inclusive
-                                           (if decreasing '#'>= '#'<=))
-                                          (t  (if decreasing '#'> '#'<)))
-                                         var-val-holder end))))
-             ;; `end' is not a number.  `by' might be a number.
-             (end
-              `((loopy--iteration-vars (,end-val-holder ,end))
-                ,(when (and (not number-by)
-                            (or key-by explicit-by))
-                   `(loopy--iteration-vars (,increment-val-holder ,by)))
-                ,@(cond
-                   (test `((loopy--pre-conditions
-                            ,(loopy--apply-function
-                              test var-val-holder end-val-holder))))
-                   ((not explicit-by) ; `key-by' or default
-                    `((loopy--pre-conditions ,(loopy--apply-function
-                                               (if inclusive
-                                                   (if decreasing '#'>= '#'<=)
-                                                 (if decreasing '#'> '#'<))
-                                               var-val-holder end-val-holder))))
-                   (number-by
-                    `((loopy--pre-conditions ,(loopy--apply-function
-                                               (if (cl-plusp by) '#'<= '#'>=)
-                                               var-val-holder end-val-holder))))
-                   ;; Ambiguous, so need to check
-                   (t
-                    (let ((fn (gensym "nums-fn")))
-                      `((loopy--iteration-vars
-                         (,fn (if (cl-plusp ,increment-val-holder) #'<= #'>=)))
-                        (loopy--pre-conditions (funcall ,fn ,var-val-holder
-                                                        ,end-val-holder))))))))
+            (loopy--latter-body
+             (setq ,var-val-holder
+                   ,(let ((inc (if number-by
+                                   by
+                                 increment-val-holder)))
+                      (cond (explicit-by `(+ ,var-val-holder ,inc))
+                            (key-test        `(+ ,var-val-holder ,inc))
+                            (key-by      `(,(if decreasing #'- #'+)
+                                           ,var-val-holder ,inc))
+                            (decreasing  `(1- ,var-val-holder))
+                            (t           `(1+ ,var-val-holder))))))
 
-             ;; No `end'. We gave a non-number as `by', so we need a holding var.
-             ((and by (not number-by))
-              `((loopy--iteration-vars (,increment-val-holder ,by))))))))))
+            ,@(cond
+               (number-by-and-end
+                `((loopy--pre-conditions (funcall
+                                          ,(cond
+                                            (key-test key-test)
+                                            (explicit-by
+                                             (if (cl-plusp by) '#'<= '#'>=))
+                                            (inclusive
+                                             (if decreasing '#'>= '#'<=))
+                                            (t  (if decreasing '#'> '#'<)))
+                                          ,var-val-holder ,end))))
+               ;; `end' is not a number.  `by' might be a number.
+               (end
+                `((loopy--iteration-vars (,end-val-holder ,end))
+                  ,(when (and (not number-by)
+                              (or key-by explicit-by))
+                     `(loopy--iteration-vars (,increment-val-holder ,by)))
+                  ,@(cond
+                     (key-test `((loopy--pre-conditions
+                                  ,(loopy--apply-function
+                                    key-test var-val-holder end-val-holder))))
+                     ((not explicit-by) ; `key-by' or default
+                      `((loopy--pre-conditions ,(loopy--apply-function
+                                                 (if inclusive
+                                                     (if decreasing '#'>= '#'<=)
+                                                   (if decreasing '#'> '#'<))
+                                                 var-val-holder end-val-holder))))
+                     (number-by
+                      `((loopy--pre-conditions ,(loopy--apply-function
+                                                 (if (cl-plusp by) '#'<= '#'>=)
+                                                 var-val-holder end-val-holder))))
+                     ;; Ambiguous, so need to check
+                     (t
+                      (let ((fn (gensym "nums-fn")))
+                        `((loopy--iteration-vars
+                           (,fn (if (cl-plusp ,increment-val-holder) #'<= #'>=)))
+                          (loopy--pre-conditions (funcall ,fn ,var-val-holder
+                                                          ,end-val-holder))))))))
+
+               ;; No `end'. We gave a non-number as `by', so we need a holding var.
+               ((and by (not number-by))
+                `((loopy--iteration-vars (,increment-val-holder ,by)))))))))))
 
 
 ;;;;;; Numbers Up
@@ -1173,10 +1198,10 @@ This is for decreasing indices.
                :downto ,(cl-first other-vals)
                :by ,(or by (cl-second other-vals))))))
 
-;;;;;; Repeat
+;;;;;; Cycle/repeat
 (cl-defun loopy--parse-cycle-command
     ((name var-or-count &optional (count nil count-given)))
-  "Parse the `repeat' loop command as (repeat [VAR] VAL).
+  "Parse the `cycle' loop command as (repeat [VAR] VAL).
 
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided.
@@ -1199,6 +1224,7 @@ NAME is the name of the command."
       (loopy--pre-conditions (< ,value-holder ,num-steps)))))
 
 ;;;;;; Seq
+;; TODO: Turn this into a function.
 (defmacro loopy--distribute-sequence-elements (&rest sequences)
   "Distribute the elements of SEQUENCES into a vector of lists.
 
@@ -1223,7 +1249,8 @@ For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
   "Parse the `seq' command as (seq VAR EXPR [EXPRS] &key KEYS).
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
-`:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.
+`:upfrom', `:to', `:downto', `:upto', `:above', `:below', and
+`:test'.
 
 - `:index' names a variable used to store the accessed index of
   the sequence.
@@ -1236,75 +1263,88 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
 If multiple sequence values are given, their elements are
 distributed using the function `loopy--distribute-sequence-elements'."
-  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :other-vals t
   :instructions
-  (let ((value-holder (gensym "seq-"))
-        (index-holder (or (plist-get opts :index)
-                          (gensym "seq-index-")))
-        (end-index-holder (gensym "seq-end-index-"))
-        (increment-holder (gensym "seq-increment-")))
+  (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                       :decreasing going-down :test test :test-given test-given)
 
-    (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
-                         :decreasing going-down :inclusive inclusive)
+      (loopy--find-start-by-end-dir-vals opts)
 
-        (loopy--find-start-by-end-dir-vals opts)
-
-      ;; Optimize for the case of traversing from start to end, as done in
-      ;; `cl-loop'.  Currently, all other case use `elt'.
-      (let ((optimize (and (not going-down)
-                           (and (numberp by) (= 1 by))
-                           (or (and (numberp starting-index)
-                                    (zerop starting-index))
-                               (null starting-index)))))
-
-        `((loopy--iteration-vars
-           (,value-holder ,(if other-vals
-                               `(loopy--distribute-sequence-elements
-                                 ,val ,@other-vals)
-                             val)))
-
-          (loopy--iteration-vars
-           (,index-holder ,(cond
-                            (starting-index)
-                            (going-down `(1- (length ,value-holder)))
-                            (t 0))))
-
-          (loopy--iteration-vars
-           (,end-index-holder ,(cond
-                                (ending-index)
-                                (going-down -1)
-                                ;; Only calculate length when actually needed.
-                                (optimize `(when (arrayp ,value-holder)
-                                             (length ,value-holder)))
-                                (t `(length ,value-holder)))))
-
-          ,@(loopy--generate-inc-idx-instructions
-             index-holder increment-holder by going-down)
-
-          ,@(cond
-             (optimize
-              `(,@(loopy--destructure-for-iteration-command
-                   var `(if (consp ,value-holder)
-                            (pop ,value-holder)
-                          (aref ,value-holder ,index-holder)))
-                (loopy--pre-conditions
-                 (and ,value-holder
-                      ,(if ending-index
-                           `(,(if inclusive #'<= #'<)
-                             ,index-holder ,end-index-holder)
-                         `(or (consp ,value-holder)
-                              (< ,index-holder ,end-index-holder)))))))
-
-             (t
-              `(,@(loopy--destructure-for-iteration-command
-                   var `(elt ,value-holder ,index-holder))
-                (loopy--pre-conditions (,(if (or (null ending-index)
-                                                 (not inclusive))
-                                             (if going-down '> '<)
-                                           (if going-down '>= '<=))
-                                        ,index-holder
-                                        ,end-index-holder))))))))))
+    ;; If we are going up, then we can use `nthcdr' for lists instead of
+    ;; searching from the beginning each time with `elt'.
+    ;;
+    ;; It's a bit weird in that if we're going up, we want to know the starting
+    ;; index before we calculate the initial value, so that we can call `nthcdr'
+    ;; if needed.  However, if we're going down, then the starting index is the
+    ;; 1 minus the length of the initial value, so we would like to have the
+    ;; initial value first.  To compromise, we just use a maybe-variable holding
+    ;; the the declared start or zero, which we may or may not use in the
+    ;; expansion.  Another option would be to duplicate most of the code and
+    ;; branch on that single condition, but the cost of the variable should be
+    ;; negligible.
+    (let ((optimize (and (not going-down) (not test-given))))
+      (loopy--instr-let-const* ((by by)
+                                (maybe-start (or starting-index 0))
+                                (test test))
+          loopy--iteration-vars
+        (loopy--instr-let-var* ((temp-val (if other-vals
+                                              `(loopy--distribute-sequence-elements
+                                                ,val ,@other-vals)
+                                            val))
+                                (is-list (if optimize
+                                             `(consp ,temp-val)
+                                           nil))
+                                (seq-val (if optimize
+                                             `(if (and ,is-list
+                                                       (> ,maybe-start 0))
+                                                  (nthcdr ,maybe-start ,temp-val)
+                                                ,temp-val)
+                                           temp-val))
+                                (seq-index (if optimize
+                                               maybe-start
+                                             (if starting-index
+                                                 maybe-start
+                                               `(1- (length ,seq-val))))
+                                           (plist-get opts :index)))
+            loopy--iteration-vars
+          (loopy--instr-let-const* ((end (cond
+                                          (ending-index)
+                                          (going-down 0)
+                                          ;; Only calculate length when actually needed.
+                                          (t `(unless ,is-list
+                                                (1- (length ,seq-val)))))))
+              loopy--iteration-vars
+            `((loopy--pre-conditions ,(if optimize
+                                          `(if ,is-list
+                                               (consp ,seq-val)
+                                             (funcall ,test ,seq-index ,end))
+                                        `(funcall ,test ,seq-index ,end)))
+              ,@(loopy--destructure-for-iteration-command
+                 var (if optimize
+                         `(if ,is-list
+                              (car ,seq-val)
+                            (aref ,seq-val ,seq-index))
+                       `(elt ,seq-val ,seq-index)))
+              (loopy--latter-body
+               ,(cond
+                 (test-given `(setq ,seq-index (+ ,seq-index ,by)))
+                 (going-down `(setq ,seq-index (- ,seq-index ,by)))
+                 ;; If the user intends to use the index, we need
+                 ;; to make sure that we're always updating it.
+                 ((plist-member opts :index)
+                  `(progn
+                     (when ,is-list
+                       (setq ,seq-val (nthcdr ,by ,seq-val)))
+                     (setq ,seq-index (,(if going-down #'- #'+)
+                                       ,seq-index ,by))))
+                 ;; Otherwise, we only have to update it
+                 ;; when not using the list.
+                 (t
+                  `(if ,is-list
+                       (setq ,seq-val (nthcdr ,by ,seq-val))
+                     (setq ,seq-index (,(if going-down #'- #'+)
+                                       ,seq-index ,by)))))))))))))
 
 ;;;;;; Seq Index
 (loopy--defiteration seq-index
@@ -1320,39 +1360,33 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
 
 `:downto' and `:downfrom' make the index decrease instead of increase."
 
-  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :instructions
-  (let ((value-holder (gensym "array-"))
-        (end-holder (gensym "array-end-"))
-        (index-holder (gensym "seq-index-index-"))
-        (increment-holder (gensym "array-increment"))
-        (with-bound (loopy--with-bound-p var)))
-
+  (let ((with-bound (loopy--with-bound-p var)))
     (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
-                         :decreasing decreasing :inclusive inclusive)
-
+                         :decreasing decreasing :test key-test)
         (loopy--find-start-by-end-dir-vals opts)
-
-      (unless with-bound (setq index-holder var))
-      `(,@(when with-bound
-            `((loopy--main-body      (setq ,var ,index-holder))
-              (loopy--iteration-vars (,var nil))))
-        (loopy--iteration-vars (,value-holder ,val))
-        (loopy--iteration-vars (,end-holder ,(or key-end
-                                                 (if decreasing
-                                                     -1
-                                                   `(length ,value-holder)))))
-        (loopy--iteration-vars (,index-holder ,(or key-start
-                                                   (if decreasing
-                                                       `(1- (length ,value-holder))
-                                                     0))))
-        ,@(loopy--generate-inc-idx-instructions
-           index-holder increment-holder by decreasing)
-        (loopy--pre-conditions (,(if (or (null key-end)
-                                         (not inclusive))
-                                     (if decreasing #'> #'<)
-                                   (if decreasing #'>= #'<=))
-                                ,index-holder ,end-holder))))))
+      (loopy--instr-let-var* ((seq-index-val val)
+                              (seq-index-index (cond (key-start)
+                                                     (decreasing `(1- (length ,seq-index-val)))
+                                                     (t 0))
+                                               (unless with-bound var)))
+          loopy--iteration-vars
+        (loopy--instr-let-const* ((seq-index-index-end (or key-end
+                                                           (if decreasing
+                                                               0
+                                                             `(1- (length ,seq-index-val)))))
+                                  (test key-test)
+                                  (by by))
+            loopy--iteration-vars
+          `((loopy--pre-conditions (funcall ,test ,seq-index-index ,seq-index-index-end))
+            ,@(when with-bound
+                `((loopy--iteration-vars (,var nil))
+                  (loopy--main-body (setq ,var ,seq-index-index))))
+            (loopy--latter-body
+             ,(cond
+               (decreasing `(setq ,seq-index-index (- ,seq-index-index ,by)))
+               (t          `(setq ,seq-index-index (+ ,seq-index-index ,by)))))))))))
 
 ;;;;;; Seq Ref
 (loopy--defiteration seq-ref
@@ -1367,42 +1401,88 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 - `:from', `:downfrom', and `:upfrom' name the starting index
 - `:to', `:downto', and `:upto' name the ending index (inclusive)
 - `:below' and `:above' name an exclusive ending index.
+- `:test' is the test function.
 
 `:downto' and `:downfrom' make the index decrease instead of increase."
-  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below)
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :instructions
-  (let ((value-holder (gensym "seq-ref-"))
-        (index-holder (or (plist-get opts :index)
-                          (gensym "seq-ref-index-")))
-        (end-index-holder (gensym "seq-ref-end-index-"))
-        (increment-holder (gensym "seq-ref-increment-")))
+  (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                       :decreasing going-down :test test :test-given test-given)
 
-    (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
-                         :decreasing going-down :inclusive inclusive)
+      (loopy--find-start-by-end-dir-vals opts)
 
-        (loopy--find-start-by-end-dir-vals opts)
-
-      `((loopy--iteration-vars (,value-holder ,val))
-        (loopy--iteration-vars
-         (,index-holder ,(or starting-index (if going-down
-                                                `(1- (length ,value-holder))
-                                              0))))
-        (loopy--iteration-vars
-         (,end-index-holder ,(or ending-index (if going-down
-                                                  -1
-                                                `(length ,value-holder)))))
-
-        ,@(loopy--generate-inc-idx-instructions
-           index-holder increment-holder by going-down)
-
-        ,@(loopy--destructure-for-generalized-command
-           var `(elt ,value-holder ,index-holder))
-        (loopy--pre-conditions (,(if (or (null ending-index)
-                                         (not inclusive))
-                                     (if going-down '> '<)
-                                   (if going-down '>= '<=))
-                                ,index-holder
-                                ,end-index-holder))))))
+    ;; If we are going up, then we can use `nthcdr' for lists instead of
+    ;; searching from the beginning each time with `elt'.
+    ;;
+    ;; It's a bit weird in that if we're going up, we want to know the starting
+    ;; index before we calculate the initial value, so that we can call `nthcdr'
+    ;; if needed.  However, if we're going down, then the starting index is the
+    ;; 1 minus the length of the initial value, so we would like to have the
+    ;; initial value first.  To compromise, we just use a maybe-variable holding
+    ;; the the declared start or zero, which we may or may not use in the
+    ;; expansion.  Another option would be to duplicate most of the code and
+    ;; branch on that single condition, but the cost of the variable should be
+    ;; negligible.
+    (let ((optimize (and (not going-down) (not test-given))))
+      (loopy--instr-let-const* ((by by)
+                                (maybe-start (or starting-index 0))
+                                (test test))
+          loopy--iteration-vars
+        (loopy--instr-let-var* ((temp-val val)
+                                (is-list (if optimize
+                                             `(consp ,temp-val)
+                                           nil))
+                                (seq-val (if optimize
+                                             `(if (and ,is-list
+                                                       (> ,maybe-start 0))
+                                                  (nthcdr ,maybe-start ,temp-val)
+                                                ,temp-val)
+                                           temp-val))
+                                (seq-index (if optimize
+                                               maybe-start
+                                             (if starting-index
+                                                 maybe-start
+                                               `(1- (length ,seq-val))))
+                                           (plist-get opts :index)))
+            loopy--iteration-vars
+          (loopy--instr-let-const* ((end (cond
+                                          (ending-index)
+                                          (going-down 0)
+                                          ;; Only calculate length when actually needed.
+                                          (t `(unless ,is-list
+                                                (1- (length ,seq-val)))))))
+              loopy--iteration-vars
+            `((loopy--pre-conditions ,(if optimize
+                                          `(if ,is-list
+                                               (consp ,seq-val)
+                                             (funcall ,test ,seq-index ,end))
+                                        `(funcall ,test ,seq-index ,end)))
+              ;; NOTE: Yes, we can use `if' with `setf', apparently.
+              ,@(loopy--destructure-for-generalized-command
+                 var (if optimize
+                         `(if ,is-list
+                              (car ,seq-val)
+                            (aref ,seq-val ,seq-index))
+                       `(elt ,seq-val ,seq-index)))
+              (loopy--latter-body
+               ,(cond
+                 (test-given `(setq ,seq-index (+ ,seq-index ,by)))
+                 (going-down `(setq ,seq-index (- ,seq-index ,by)))
+                 ;; If the user intends to use the index, we need
+                 ;; to make sure that we're always updating it.
+                 ((plist-member opts :index)
+                  `(progn
+                     (when ,is-list
+                       (setq ,seq-val (nthcdr ,by ,seq-val)))
+                     (setq ,seq-index (,(if going-down #'- #'+)
+                                       ,seq-index ,by))))
+                 ;; Otherwise, we only have to update it
+                 ;; when not using the list.
+                 (t
+                  `(if ,is-list
+                       (setq ,seq-val (nthcdr ,by ,seq-val))
+                     (setq ,seq-index (,(if going-down #'- #'+)
+                                       ,seq-index ,by)))))))))))))
 
 ;;;;; Accumulation
 ;;;;;; Compatibility
@@ -1449,7 +1529,7 @@ like the `:result-type' keyword argument of commands like
     (if-let ((existing-description
               (alist-get key loopy--accumulation-variable-info
                          nil nil #'equal)))
-        (seq-let (existing-category existing-command)
+        (cl-destructuring-bind (existing-category existing-command)
             existing-description
           (unless (eq category existing-category)
             (signal 'loopy-incompatible-accumulations
@@ -1521,8 +1601,8 @@ more efficient than repeatedly traversing the list."
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
     `((loopy--accumulation-vars (,last-link nil))
-      ,@(loopy--instr-let2* ((test-val test)
-                             (key-val key))
+      ,@(loopy--instr-let-const* ((test-val test)
+                                  (key-val key))
             loopy--accumulation-vars
           `((loopy--main-body
              ,(cl-once-only ((adjoin-value val))
@@ -1590,8 +1670,8 @@ more efficient than repeatedly traversing the list."
   ;; lists, but much faster for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
     `((loopy--accumulation-vars (,last-link nil))
-      ,@(loopy--instr-let2* ((test-val test)
-                             (key-val key))
+      ,@(loopy--instr-let-const* ((test-val test)
+                                  (key-val key))
             loopy--accumulation-vars
           `((loopy--main-body
              ,(cl-with-gensyms (new-items)
@@ -1868,6 +1948,9 @@ Warning trigger: %s"
 
 
 ;;;;;;; Accumulate
+;; TODO: Should the function be evaluated only once for `accumulate'?
+;;       It would produce faster code, by as an accumulation argument/value,
+;;       should it be able to change during the loop?
 (loopy--defaccumulation accumulate
   "Parse the `accumulate command' as (accumulate VAR VAL FUNC &key init)."
   :keywords (init)
@@ -1895,8 +1978,8 @@ Warning trigger: %s"
               ('end end))
         (loopy--get-accum-counts loop var 'adjoin)
       (let* ((at-start-instrs
-              (loopy--instr-let2* ((test-val test)
-                                   (key-val key))
+              (loopy--instr-let-const* ((test-val test)
+                                        (key-val key))
                   loopy--accumulation-vars
                 `((loopy--main-body
                    ,(cl-once-only ((adjoin-value val))
@@ -1958,8 +2041,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
            ((member pos '(start beginning 'start 'beginning))
-            (loopy--instr-let2* ((test-val test)
-                                 (key-val key))
+            (loopy--instr-let-const* ((test-val test)
+                                      (key-val key))
                 loopy--accumulation-vars
               `((loopy--main-body
                  ,(cl-once-only ((adjoin-value val))
@@ -2040,8 +2123,8 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           `((loopy--accumulation-vars (,var nil))
             (loopy--main-body
              (loopy--optimized-accum '( :loop ,loopy--loop-name
-                                       :var ,var :val ,val
-                                       :cmd ,cmd :name ,name :at ,pos)))))
+                                        :var ,var :val ,val
+                                        :cmd ,cmd :name ,name :at ,pos)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
@@ -2066,7 +2149,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     `((loopy--accumulation-vars (,var nil))
       (loopy--main-body
        (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var :val ,val
-                                 :cmd ,cmd :name ,name :at ,pos)))
+                                  :cmd ,cmd :name ,name :at ,pos)))
       (loopy--implicit-return ,var))))
 
 ;;;;;;; Collect
@@ -2437,8 +2520,8 @@ This function is used by `loopy--expand-optimized-accum'."
                        :key key :test test)
       plist
     (cl-flet ((make-at-start (reverse)
-                (loopy--instr-let2* ((key-val key)
-                                     (test-val test))
+                (loopy--instr-let-const* ((key-val key)
+                                          (test-val test))
                     loopy--accumulation-vars
                   `((loopy--main-body
                      (setq ,var
@@ -2501,8 +2584,8 @@ This function is used by `loopy--expand-optimized-accum'."
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
            ((member pos '(start beginning 'start 'beginning))
-            (loopy--instr-let2* ((test-val test)
-                                 (key-val key))
+            (loopy--instr-let-const* ((test-val test)
+                                      (key-val key))
                 loopy--accumulation-vars
               `((loopy--main-body
                  (setq ,var (nconc (cl-delete-if
@@ -2556,6 +2639,9 @@ This function is used by `loopy--expand-optimized-accum'."
   (loopy--parse-collect-command `(collect ,@(cdr arg) :at start)))
 
 ;;;;;;; Reduce
+;; TODO: Should the function be evaluated only once for `reduce'?
+;;       It would produce faster code, by as an accumulation argument/value,
+;;       should it be able to change during the loop?
 (loopy--defaccumulation reduce
   "Parse the `reduce' command as (reduce VAR VAL FUNC &key init).
 
@@ -2626,8 +2712,8 @@ This function is used by `loopy--expand-optimized-accum'."
                        :key key :test test)
       plist
     (cl-flet ((make-at-start (reverse)
-                (loopy--instr-let2* ((key-val key)
-                                     (test-val test))
+                (loopy--instr-let-const* ((key-val key)
+                                          (test-val test))
                     loopy--accumulation-vars
                   `((loopy--main-body
                      (setq ,var
@@ -2686,8 +2772,8 @@ This function is used by `loopy--expand-optimized-accum'."
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
            ((member pos '(start beginning 'start 'beginning))
-            (loopy--instr-let2* ((test-val test)
-                                 (key-val key))
+            (loopy--instr-let-const* ((test-val test)
+                                      (key-val key))
                 loopy--accumulation-vars
               `((loopy--main-body
                  (setq ,var (nconc (cl-delete-if

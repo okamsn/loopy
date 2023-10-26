@@ -705,7 +705,46 @@ For simplicity, the commands are described using the following notation:
 
 
 Generally, =VAR= is initialized to ~nil~, but not always.  This document tries
-to note when that is not the case.
+to note when that is not the case.  For when that is not the case, the variable
+can still be initialized to ~nil~ if it is set to ~nil~ using the =with= special
+macro argument.  These special cases allow for more efficient code and less
+indirection.
+
+#+begin_src emacs-lisp
+  ;; => (0 1 2 3)
+  (loopy (collect i)
+         (numbers i :from 0 :to 3))
+
+  ;; => (nil 0 1 2)
+  (loopy (with (i nil))
+         (collect i)
+         (numbers i :from 0 :to 3))
+#+end_src
+
+Unlike ~cl-loop~ in some cases, in Loopy, the values passed as keyword arguments
+are evaluated only once.  For example, the command =(list i some-list :by
+(get-function))= evaluates ~(get-function)~ only once.  It does not evaluate it
+repeatedly for each step of the loop.
+
+#+begin_src emacs-lisp
+  ;; Passes the assertion:
+  ;;
+  ;; => (0 1 2 3 4 5 6 7 8 9 10)
+  (loopy (with (times 0))
+         (list i (number-sequence 0 10) :by (progn
+                                              (cl-assert (= times 0))
+                                              (cl-incf times)
+                                              #'cdr))
+         (collect i))
+
+  ;; => Fails the assertion on the second step of the loop:
+  (cl-loop with times = 0
+           for i in (number-sequence 0 10) by (progn
+                                                (cl-assert (= times 0))
+                                                (cl-incf times)
+                                                #'cdr)
+           collect i)
+#+end_src
 
 ** Basic Destructuring
 :PROPERTIES:
@@ -1102,6 +1141,14 @@ error to use the same iteration variable for multiple iteration commands.
          (finally-return t))
 #+end_src
 
+Unlike ~cl-loop~ and like Common Lisp's ~iterate~, arguments of the iteration
+commands are evaluated only once.  For example, while iterating through numbers,
+you can't suddenly change the direction of the iteration in the middle of the
+loop, nor can you change the final numeric value.  Similarly, the function used
+to iterate through the list in the =list= command is the same for the entire
+loop.  This restriction allows for producing more efficient code.
+
+
 *** Generic Iteration
 :PROPERTIES:
 :CUSTOM_ID: generic-iteration
@@ -1364,7 +1411,8 @@ variants =numbers-up= and =numbers-down=.
   =from= and =to=; it cannot be used with keywords that already describe a
   direction and ending condition.  To match the behavior of ~cl-loop~, the
   default testing function is ~#'<=~.  When =test= is given, =by= can be
-  negative.
+  negative.  As there is no default end value when =test= is given, =to= must
+  also be given.
 
   #+begin_src emacs-lisp
     ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
@@ -1714,9 +1762,19 @@ source sequences.
   This command also has the aliases =seqing= and =sequencing=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
-  =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
-  used to store the index being accessed.  For others, see the =numbers=
-  command.
+  =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
+  variable used to store the index being accessed.  For the others, see the
+  =numbers= command.
+
+  #+ATTR_TEXINFO: :tag Warning
+  #+begin_quote
+  Array elements can be accessed in constant time, but not list elements.  For
+  lists, the =sequence= command is fastest when moving forwards through the
+  list.  In that case, the command does not have to search from the beginning of
+  the list each time to find the next element.  The =sequence= command can be
+  noticeably slower for lists when working backwards or when the =test=
+  parameter (for which direction cannot be assumed) is provided.
+  #+end_quote
 
   If multiple sequences are given, then these keyword arguments apply to the
   resulting sequence of distributed elements.
@@ -1794,10 +1852,10 @@ iterate.
   aliases =seqf=, =arrayf=, =listf=, and =stringf= of the =seq-ref= command.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
-  =downto=, =above=, =below=, and =by=.  For their meaning, see the =numbers=
-  command.  This command is very similar to =numbers=, except that it can
-  automatically end the loop when the final element is reached.  With
-  =numbers=, one would first need to explicitly calculate the length of the
+  =downto=, =above=, =below=, =by=, and =test=.  For their meaning, see the
+  =numbers= command.  This command is very similar to =numbers=, except that it
+  can automatically end the loop when the index of the final element is reached.
+  With =numbers=, one would first need to explicitly calculate the length of the
   sequence.
 
   Similar to =numbers=, for efficiency, =VAR= is initialized to the starting
@@ -2028,9 +2086,9 @@ the accessed index during the loop.
   ~setf~-able place.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
-  =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
-  used to store the index being accessed.  For others, see the =numbers=
-  command.
+  =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
+  variable used to store the index being accessed.  For others, see the
+  =numbers= command.
 
   #+BEGIN_SRC emacs-lisp
     ;; => (7 7 7 7)
