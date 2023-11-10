@@ -2526,11 +2526,13 @@ The commands are described in more detail below.
 
   This command also has the alias =reducing=.
 
-  When =VAR= does not have an explicit starting value (given with the special
-  macro argument =with=), the first accumulated value is =EXPR=.  The first
-  accumulated value is not the result of passing =VAR= and =EXPR= to =FUNC=.
-  Using the =with= special macro argument is similar to using ~cl-reduce~'s
-  =:initial-value= keyword argument.
+  Note that the first accumulated value depends on the initial value of =VAR=.
+  By default, the first accumulated value is the value of =EXPR=, not a result
+  of calling =FUNC=.  However, if =VAR= has an initial value given by the =with=
+  special macro argument, then the first accumulated value is the result of
+  ~(funcall FUNC VAR EXPR)~, as also done in the subsequent steps of the loop.
+  This use of =with= is similar to the =:initial-value= keyword argument used by
+  ~cl-reduce~.
 
   #+begin_src emacs-lisp
     ;; => 6

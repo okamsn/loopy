@@ -2645,7 +2645,15 @@ This function is used by `loopy--expand-optimized-accum'."
 (loopy--defaccumulation reduce
   "Parse the `reduce' command as (reduce VAR VAL FUNC &key init).
 
-With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil."
+With INIT, initialize VAR to INIT.  Otherwise, VAR starts as nil.
+
+By default, the first accumulated value is the value of VAL,
+not a result of calling FUNC.  However, if VAR has an initial
+value given by the =with= special macro argument, then the first
+accumulated value is the result of `(funcall FUNC VAR VAL)', as
+also done in the subsequent steps of the loop.  This use of
+`with' is similar to the `:initial-value' keyword argument used
+by `cl-reduce'."
   :num-args 3
   :keywords (init)
   :category generic
