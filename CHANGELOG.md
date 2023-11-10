@@ -79,9 +79,10 @@ This document describes the user-facing changes to Loopy.
          (list i '(4 5 6)))
   ```
 
-- In `adjoin`, `nunion`, and `union`, the `test` and `key` keywords are now
-  evaluated only once.  This is now consistent with passing function values of
-  other loop commands. See [#170] and [#177].
+- The keyword arguments of commands are now evaluated only once.  This is now
+  consistent with passing function values of other loop commands.  If constant
+  according to `macroexp-const-p`, then they are used directly.  Otherwise, the
+  value is first stored in a variable.  See [#170], [#177], [#176], and [#180].
 
 - In accumulation commands using the `test` keyword argument, the argument order
   of the two-argument test function is now document as `(SEQUENCE-ITEM,
@@ -161,9 +162,11 @@ This document describes the user-facing changes to Loopy.
   be more convenient and consistent with other commands ([#144]).
   - The commands now exit the loop without forcing a return value, which allows
     implicit return values to be finalized.
+
   - The commands now use variables to store the implicit return values of the
     loop, defaulting to `loopy-result` and which can be specified via `:into`,
     similar to accumulation commands.
+
     ```elisp
     ;; => "hello there"
     (loopy (list i '(1 1 1 1))
@@ -176,12 +179,15 @@ This document describes the user-facing changes to Loopy.
            (thereis i)
            (finally-return (+ loopy-result 4)))
     ```
+
   - As with other incompatible commands, an error is now signaled when trying to
     use `thereis` with `always` or `never` **when using the same variable**
     ([#144]).
 
-- Add a `:test` keyword argument to `numbers` ([#172]).  This is useful when the
-  direction of the iteration is not known ahead of time.
+- Add a `:test` keyword argument to `numbers`, `array`, `array-ref`, `sequence`,
+  `sequence-ref`, and `sequence-index` ([#172], [#180]).  This is useful when
+  the direction of the iteration is not known ahead of time.
+
   ```elisp
   ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
   (loopy (with (start 10)
@@ -191,6 +197,11 @@ This document describes the user-facing changes to Loopy.
          (numbers i :to end :from start :by step :test func)
          (collect i))
   ```
+
+- By using `macroexp-const-p`, Loopy now better uses constant values ([#176],
+  [#180]).  Instead of always creating a variable in some cases, it now better
+  uses the constant value directly, which Emacs can optimize to avoid some uses
+  of `funcall`.
 
 ### Other Changes
 
@@ -213,7 +224,9 @@ This document describes the user-facing changes to Loopy.
 [#171]: https://github.com/okamsn/loopy/pull/171
 [#172]: https://github.com/okamsn/loopy/pull/172
 [#173]: https://github.com/okamsn/loopy/pull/173
+[#176]: https://github.com/okamsn/loopy/issues/176
 [#177]: https://github.com/okamsn/loopy/pull/177
+[#180]: https://github.com/okamsn/loopy/pull/180
 
 ## 0.11.2
 

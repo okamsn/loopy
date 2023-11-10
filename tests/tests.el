@@ -1069,6 +1069,16 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((collect . collecting)
               (array . arraying)))
 
+(loopy-deftest array-keywords-:downfrom
+  :result '(10 8 6 4 2 0)
+  :body ((array i (vector 0 1 2 3 4 5 6 7 8 9 10)
+                :downfrom 10 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (collect array)
+  :iter-bare ((collect . collecting)
+              (array . arraying)))
+
 
 (loopy-deftest array-keywords-:from-:downto-:by
   :result  '(8 6 4 2)
@@ -1126,6 +1136,35 @@ Using numbers directly will use less variables and more efficient code."
   :iter-keyword (collect array)
   :iter-bare ((collect . collecting)
               (array . arraying)))
+
+(loopy-deftest array-:test
+  :result '(8 6 4 2)
+  :body ((with (start 8)
+               (end 2)
+               (step -2))
+         (array i [0 1 2 3 4 5 6 7 8 9 10]
+                :from start :to end :by step
+                :test #'>=)
+         (collect i))
+  :loopy t
+  :iter-keyword (array collect)
+  :iter-bare ((array . arraying)
+              (collect . collecting)))
+
+(loopy-deftest array-:test-just-once
+  :result '(2 4 6 8)
+  :body ((with (times 0))
+         (array i [0 1 2 3 4 5 6 7 8 9 10]
+                :from 2 :to 8 :by 2
+                :test (progn
+                        (cl-assert (= times 0))
+                        (cl-incf times)
+                        #'<=))
+         (collect i))
+  :loopy t
+  :iter-keyword (array collect)
+  :iter-bare ((array . arraying)
+              (collect . collecting)))
 
 ;;;;; Array Ref
 (loopy-deftest array-ref
@@ -1262,6 +1301,39 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((array-ref . arraying-ref)
               (do . ignore)))
 
+(loopy-deftest array-ref-:test
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (start 8)
+               (end 2)
+               (step -2)
+               (arr (vector 0 1 2 3 4 5 6 7 8 9 10)))
+         (array-ref i arr
+                    :from start :to end :by step
+                    :test #'>=)
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
+
+(loopy-deftest array-ref-:test-just-once
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (times 0)
+               (arr (vector 0 1 2 3 4 5 6 7 8 9 10)))
+         (array-ref i arr
+                    :from 2 :to 8 :by 2
+                    :test (progn
+                            (cl-assert (= times 0))
+                            (cl-incf times)
+                            #'<=))
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (array-ref do)
+  :iter-bare ((array-ref . arraying-ref)
+              (do . ignore)))
+
 ;;;;; Cons
 (loopy-deftest cons
   :result '((1 2 3 4) (2 3 4) (3 4) (4))
@@ -1288,6 +1360,22 @@ Using numbers directly will use less variables and more efficient code."
           (cons x '(1 2 3 4) :by f)
           (collect coll x)
           (finally-return coll))]
+  :loopy t
+  :iter-keyword (cons collect)
+  :iter-bare ((cons . consing)
+              (collect . collecting)))
+
+(loopy-deftest cons-:by-once-only
+  :doc "The function should be evaluated only once."
+  :result '((1 2 3 4) (3 4))
+  :body ((with (times 0))
+         (cons x '(1 2 3 4) :by (progn
+                                  (if (> times 0)
+                                      (error "Evaluated more than once")
+                                    (cl-incf times)
+                                    #'cddr)))
+         (collect coll x)
+         (finally-return coll))
   :loopy t
   :iter-keyword (cons collect)
   :iter-bare ((cons . consing)
@@ -1449,6 +1537,22 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((list . listing)
               (collect . collecting)))
 
+(loopy-deftest list-:by-once-only
+  :doc "The function should be evaluated only once."
+  :result '(1 3)
+  :body ((with (times 0))
+         (list x '(1 2 3 4) :by (progn
+                                  (if (> times 0)
+                                      (error "Evaluated more than once")
+                                    (cl-incf times)
+                                    #'cddr)))
+         (collect coll x)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
 (loopy-deftest list-destructuring
   :doc  "Check that `list' implements destructuring, not destructuring itself."
   :result '(5 6)
@@ -1491,7 +1595,7 @@ Using numbers directly will use less variables and more efficient code."
 ;;;;; List Ref
 (loopy-deftest list-ref
   :result '(7 7 7)
-  :body ((with (my-list '(1 2 3)))
+  :body ((with (my-list (list 1 2 3)))
          (list-ref i my-list)
          (do (setf i 7))
          (finally-return my-list))
@@ -1503,15 +1607,15 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest list-ref-:by
   :result '(7 2 7)
   :multi-body t
-  :body [((with (my-list '(1 2 3)))
+  :body [((with (my-list (list 1 2 3)))
           (list-ref i my-list :by #'cddr)
           (do (setf i 7))
           (finally-return my-list))
-         ((with (my-list '(1 2 3)))
+         ((with (my-list (list 1 2 3)))
           (list-ref i my-list :by (lambda (x) (cddr x)))
           (do (setf i 7))
           (finally-return my-list))
-         ((with (my-list '(1 2 3)) (f (lambda (x) (cddr x))))
+         ((with (my-list (list 1 2 3)) (f (lambda (x) (cddr x))))
           (list-ref i my-list :by f)
           (do (setf i 7))
           (finally-return my-list))]
@@ -1520,10 +1624,28 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((list-ref . listing-ref)
               (do . ignore)))
 
+(loopy-deftest list-ref-:by-once-only
+  :doc "The function should be evaluated only once."
+  :result '(7 2 7)
+  :body ((with (my-list (list 1 2 3))
+               (f (lambda (x) (cddr x)))
+               (times 0))
+         (list-ref i my-list :by (progn
+                                   (if (> times 0)
+                                       (error "Evaluated more than once")
+                                     (cl-incf times)
+                                     #'cddr)))
+         (do (setf i 7))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (list-ref do)
+  :iter-bare ((list-ref . listing-ref)
+              (do . ignore)))
+
 (loopy-deftest list-ref-destructuring
   :doc  "Check that `list-ref' implements destructuring, not destructuring itself."
   :result '((7 8 9) (7 8 9))
-  :body ((with (my-list '((1 2 3) (4 5 6))))
+  :body ((with (my-list (list (list 1 2 3) (list 4 5 6))))
          (list-ref (i j k) my-list)
          (do (setf i 7)
              (setf j 8)
@@ -2089,58 +2211,78 @@ Using numbers directly will use less variables and more efficient code."
   :iter-keyword (seq)
   :iter-bare ((seq . sequencing)))
 
-(loopy-deftest seq-opt-type-explicit-movement
-  :doc "Use type-specific movement when
-- step is 1
-- start is 0
-- going up
-Othe cases use `elt'."
-  :result '(1 2 3 4 5)
-  :multi-body t
-  :body [((sequence i '(1 2 3 4 5) :from 0 :by 1) (collect i))
-         ((sequence i [1 2 3 4 5] :from 0 :by 1) (collect i))]
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
-
-(loopy-deftest seq-vars-literal-:by
-  :doc "Literal `:by' should be used directly, even when not 1."
-  :result '(2 4 6 8 10)
-  :body (loopy (with (start 2) (arr (cl-coerce (number-sequence 0 10) 'vector)))
-               (sequence i arr :from start :by 2)
-               (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
-
-(loopy-deftest seq-vars-literal-:by-variable-:end
-  :result '(2 4 6 8)
-  :body (loopy (with (start 2) (end 8)
-                     (arr (cl-coerce (number-sequence 0 10) 'vector)))
-               (sequence i arr :from start :to end :by 2)
-               (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
-
-(loopy-deftest seq-vars-variable-:by-variable-:end
-  :result '(2 4 6 8)
-  :body (loopy (with (start 2) (end 8) (by 2)
-                     (arr (cl-coerce (number-sequence 0 10) 'vector)))
-               (sequence i arr :from start :to end :by by)
-               (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
-
 (loopy-deftest seq-:by
   :result '(0 2 4 6 8 10)
-  :body ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
-         (collect i))
+  :multi-body t
+  :body [((sequence i (list 0 1 2 3 4 5 6 7 8 9 10) :by 2)
+          (collect i))
+         ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:by-just-once
+  :doc "`:by' should only be evaluated once."
+  :result '(1 3 5)
+  :multi-body t
+  :body [((with (times 0))
+          (sequence i (vector 1 2 3 4 5 6) :by (progn
+                                                 (cl-assert (= times 0))
+                                                 (cl-incf times)
+                                                 2))
+          (collect i))
+
+         ((with (times 0))
+          (sequence i (list 1 2 3 4 5 6) :by (progn
+                                               (cl-assert (= times 0))
+                                               (cl-incf times)
+                                               2))
+          (collect i))]
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest seq-end-just-once
+  :doc "`:by' should only be evaluated once."
+  :result '(0 1 2)
+  :multi-body t
+  :body [((with (times 0))
+          (sequence i (vector 0 1 2 3 4 5 6) :to (progn
+                                                   (cl-assert (= times 0))
+                                                   (cl-incf times)
+                                                   2))
+          (collect i))
+
+         ((with (times 0))
+          (sequence i (vector 0 1 2 3 4 5 6) :upto (progn
+                                                     (cl-assert (= times 0))
+                                                     (cl-incf times)
+                                                     2))
+          (collect i))
+
+         ((with (times 0))
+          (sequence i (vector 2 1 0) :downto (progn
+                                               (cl-assert (= times 0))
+                                               (cl-incf times)
+                                               0))
+          (collect i))
+
+         ((with (times 0))
+          (sequence i (vector 0 1 2 3 4 5 6) :below (progn
+                                                      (cl-assert (= times 0))
+                                                      (cl-incf times)
+                                                      3))
+          (collect i))
+
+         (loopy (with (times 0))
+                (sequence i (vector 2 1 0) :above (progn
+                                                    (cl-assert (= times 0))
+                                                    (cl-incf times)
+                                                    -1))
+                (collect i))]
   :loopy t
   :iter-keyword (sequence collect)
   :iter-bare ((sequence . sequencing)
@@ -2148,8 +2290,11 @@ Othe cases use `elt'."
 
 (loopy-deftest seq-:index
   :result '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
-  :body ((sequence i [4 3 2 1 0] :index cat)
-         (collect (cons cat i)))
+  :multi-body t
+  :body [((sequence i [4 3 2 1 0] :index cat)
+          (collect (cons cat i)))
+         ((sequence i (list 4 3 2 1 0) :index cat)
+          (collect (cons cat i)))]
   :loopy t
   :iter-keyword (sequence collect)
   :iter-bare ((sequence . sequencing)
@@ -2210,6 +2355,24 @@ Othe cases use `elt'."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
+(loopy-deftest seq-:downfrom
+  :result '(5 4 3 2 1 0)
+  :body ((sequence i [0 1 2 3 4 5] :downfrom 5)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:upfrom
+  :result '(2 3 4 5)
+  :body ((sequence i [0 1 2 3 4 5] :upfrom 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
 (loopy-deftest seq-multi-seq
   :result '((1 3) (1 4) (2 3) (2 4))
   :body ((sequence i [1 2] '(3 4))
@@ -2223,6 +2386,53 @@ Othe cases use `elt'."
   :result '((1 3)  (2 3))
   :body ((sequence i [1 2] '(3 4) :by 2)
          (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest sequence-:test
+  :result '(8 6 4 2)
+  :multi-body t
+  :body [((with (start 8)
+                (end 2)
+                (step -2))
+          (sequence i [0 1 2 3 4 5 6 7 8 9 10]
+                    :from start :to end :by step
+                    :test #'>=)
+          (collect i))
+         ((with (start 8)
+                (end 2)
+                (step -2))
+          (sequence i '(0 1 2 3 4 5 6 7 8 9 10)
+                    :from start :to end :by step
+                    :test #'>=)
+          (collect i))]
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest sequence-:test-just-once
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (times 0))
+          (sequence i [0 1 2 3 4 5 6 7 8 9 10]
+                    :from 2 :to 8 :by 2
+                    :test (progn
+                            (cl-assert (= times 0))
+                            (cl-incf times)
+                            #'<=))
+          (collect i))
+
+         ((with (times 0))
+          (sequence i '(0 1 2 3 4 5 6 7 8 9 10)
+                    :from 2 :to 8 :by 2
+                    :test (progn
+                            (cl-assert (= times 0))
+                            (cl-incf times)
+                            #'<=))
+          (collect i))]
   :loopy t
   :iter-keyword (sequence collect)
   :iter-bare ((sequence . sequencing)
@@ -2260,6 +2470,69 @@ Othe cases use `elt'."
   :loopy t
   :iter-keyword (seq-index collect)
   :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
+
+(loopy-deftest seq-index-:by-only-once
+  :result '(0 2 4 6 8 10)
+  :body ((with (my-seq [0 1 2 3 4 5 6 7 8 9 10])
+               (times 0))
+         (seq-index i my-seq :by (progn
+                                   (cl-assert (= times 0))
+                                   (cl-incf times)
+                                   2))
+         (collect (elt my-seq i)))
+  :loopy t
+  :iter-keyword (seq-index collect)
+  :iter-bare ((seq-index . sequencing-index)
+              (collect . collecting)))
+
+(loopy-deftest seq-index-end-just-once-up
+  :result '(0 1 2)
+  :multi-body t
+  :body [((with (times 0))
+          (sequence-index i (vector 0 1 2 3 4 5 6) :to (progn
+                                                         (cl-assert (= times 0))
+                                                         (cl-incf times)
+                                                         2))
+          (collect i))
+
+         ((with (times 0))
+          (sequence-index i (vector 0 1 2 3 4 5 6) :upto (progn
+                                                           (cl-assert (= times 0))
+                                                           (cl-incf times)
+                                                           2))
+          (collect i))
+
+         ((with (times 0))
+          (sequence-index i (vector 0 1 2 3 4 5 6) :below (progn
+                                                            (cl-assert (= times 0))
+                                                            (cl-incf times)
+                                                            3))
+          (collect i))]
+  :loopy t
+  :iter-keyword (sequence-index collect)
+  :iter-bare ((sequence-index . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest seq-index-end-just-once-down
+  :result '(2 1 0)
+  :multi-body t
+  :body [((with (times 0))
+          (sequence-index i (vector 0 1 2) :downto (progn
+                                                     (cl-assert (= times 0))
+                                                     (cl-incf times)
+                                                     0))
+          (collect i))
+
+         ((with (times 0))
+          (sequence-index i (vector 0 1 2) :above (progn
+                                                    (cl-assert (= times 0))
+                                                    (cl-incf times)
+                                                    -1))
+          (collect i))]
+  :loopy t
+  :iter-keyword (sequence-index collect)
+  :iter-bare ((sequence-index . sequencing)
               (collect . collecting)))
 
 (loopy-deftest seq-index-:from-:downto-:by
@@ -2323,6 +2596,15 @@ Othe cases use `elt'."
   :iter-bare ((seq-index . sequencing-index)
               (collect . collecting)))
 
+(loopy-deftest seq-index-:downfrom
+  :result '(5 4 3 2 1 0)
+  :body ((sequence-index i [0 1 2 3 4 5 6 7 8 9] :downfrom 5)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence-index collect)
+  :iter-bare ((sequence-index . sequencing-index)
+              (collect . collecting)))
+
 (loopy-deftest seq-index-step-var
   :doc "If `:by' is a numeric literal, `seq-index' can use it directly."
   :result '(2 4 6 8)
@@ -2377,10 +2659,36 @@ Othe cases use `elt'."
   :iter-bare ((_cmd . (sequencing-ref))
               (do . ignore)))
 
-(loopy-deftest seq-ref-:by
+(loopy-deftest seq-ref-:by-array
   :result "a1a3a5a7a9"
   :body ((with (my-str "0123456789"))
          (seq-ref i my-str :by 2)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-list
+  :result '(99 1 99 3 99 5 99 7 99 9 99)
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9 10) ))
+         (seq-ref i my-list :by 2)
+         (do (setf i 99))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-just-once
+  :result "a1a3a5a7a9"
+  :body ((with (my-str "0123456789")
+               (times 0))
+         (seq-ref i my-str :by (progn
+                                 (cl-assert (= times 0))
+                                 (cl-incf times)
+                                 2))
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
@@ -2401,7 +2709,7 @@ Othe cases use `elt'."
 
 (loopy-deftest seq-ref-:from-:by
   :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
-  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
          (seq-ref i my-list :from 1 :by 2 )
          (do (setf i 'cat))
          (finally-return my-list))
@@ -2445,7 +2753,7 @@ Othe cases use `elt'."
 
 (loopy-deftest seq-ref-:above-list
   :result  '(0 1 2 3 4 5 cat cat cat cat)
-  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
          (seq-ref i my-list :above 5)
          (do (setf i 'cat))
          (finally-return my-list))
@@ -2478,13 +2786,24 @@ Othe cases use `elt'."
 
 (loopy-deftest seq-ref-:upfrom-:by-string
   :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
-  :body ((with (my-list '(0 1 2 3 4 5 6 7 8 9)))
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
          (seq-ref i my-list :upfrom 1 :by 2)
          (do (setf i 'cat))
          (finally-return my-list))
   :loopy t
   :iter-keyword (seq-ref do)
   :iter-bare ((seq-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest sequence-ref-:downfrom
+  :result '(0 cat 2 cat 4 cat 6 7 8 9)
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
+         (sequence-ref i my-list :downfrom 5 :by 2)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
 (loopy-deftest seq-ref-:by-literal

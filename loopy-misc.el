@@ -1062,6 +1062,9 @@ If not, then it is possible that FORM is a variable."
            (eq (car form-or-symbol) 'function)
            (eq (car form-or-symbol) 'cl-function))))
 
+;; TODO: Byte optimization for `funcall' with a quoted argument
+;;       should expand to (FUNC ARGS...), so we shouldn't need
+;;       this function.
 (defun loopy--apply-function (func &rest args)
   "Return an expansion to appropriately apply FUNC to ARGS.
 
@@ -1148,43 +1151,88 @@ KEY transforms those elements and ELEMENT."
       (_ form))))
 
 ;;;; Variable binding for instructions
+;; TODO: Check not using `pcase' in github errors.
 
-(defmacro loopy--instr-let2 (place sym exp &rest body)
+(defvar loopy--iteration-vars)
+(defvar loopy--accumulation-vars)
+(defvar loopy--other-vars)
+
+(defmacro loopy--instr-let-var (place sym exp name &rest body)
+  "Use SYM as EXP for BODY, creating an instruction to bind at PLACE.
+
+Use this for values that should change during iteration.
+
+For normal variables (that is, not needing instructions), see
+also `macroexp-let2' and `cl-once-only'."
+  (declare (indent 4)
+           (debug (sexp sexp form sexp body)))
+  (let ((bodysym (gensym "body"))
+        (expsym (gensym "exp")))
+    `(let* ((,expsym ,exp)
+            (,sym (or ,name (gensym (symbol-name (quote ,sym)))))
+            (,bodysym (progn ,@body)))
+       (cons (list (quote ,place)
+                   (list ,sym ,expsym))
+             ,bodysym))))
+
+(defmacro loopy--instr-let-var* (bindings place &rest body)
+  "A multi-binding version of `loopy--instr-let-var'.
+
+BINDINGS are variable-value pairs.  A third item in the list is
+an expression that evaluates to a symbol to use to generate a
+name to use in the binding.  PLACE is the Loopy variable to use
+as the head of the instruction.  BODY are the forms for which the
+binding exists."
+  (declare (indent 2)
+           (debug ((&rest (gate symbol form &optional form))
+                   symbol
+                   body)))
+  (cl-reduce (cl-function (lambda (res (var val &optional name))
+                            `(loopy--instr-let-var ,place ,var ,val ,name ,res)))
+             (reverse bindings)
+             :initial-value (macroexp-progn body)))
+
+(defmacro loopy--instr-let-const (place sym exp name &rest body)
   "Use SYM as EXP for BODY, maybe creating an instruction to bind at PLACE.
 
-See also `macroexp-let2'."
-  (declare (indent 3)
-           (debug (sexp sexp form body)))
+Use for values that are evaluated only once, such as the optional
+arguments to the iteration commands.  If the value of EXP is not
+null and is not constant according to `macroexp-const-p', then a
+binding is created.
+
+For normal variables (that is, not needing instructions), see
+also `macroexp-let2' and `cl-once-only'."
+  (declare (indent 4)
+           (debug (sexp sexp form sexp body)))
   (let ((bodysym (gensym "body"))
-        (expsym (gensym "exp"))
-        (val-holder (gensym (format "new-%s" sym))))
+        (expsym (gensym "exp")))
     `(let* ((,expsym ,exp)
-            (,sym (if (macroexp-const-p ,expsym)
+            (,sym (if (or (null ,expsym)
+                          (macroexp-const-p ,expsym))
                       ,expsym
-                    (quote ,val-holder)))
+                    (or ,name
+                        (gensym (symbol-name (quote ,sym))))))
             (,bodysym (progn ,@body)))
        (if (eq ,sym ,expsym)
            ,bodysym
          (cons (list (quote ,place)
-                     (list (quote ,val-holder) ,expsym))
+                     (list ,sym ,expsym))
                ,bodysym)))))
 
-(defmacro loopy--instr-let2* (bindings place &rest body)
-  "A multi-binding version of `loopy--instr-let2'.
+(defmacro loopy--instr-let-const* (bindings place &rest body)
+  "A multi-binding version of `loopy--instr-let-const'.
 
 BINDINGS are variable-value pairs.  PLACE is the Loopy variable to use
 as the head of the instruction.  BODY are the forms for which the
 binding exists."
   (declare (indent 2)
-           (debug ((&rest (gate symbol form))
+           (debug ((&rest (gate symbol form &optional form))
                    symbol
                    body)))
-  (cl-loop with res = (macroexp-progn body)
-           for (var val) in (reverse bindings)
-           do (setq res
-                    `(loopy--instr-let2 ,place ,var ,val
-                       ,res))
-           finally return res))
+  (cl-reduce (cl-function (lambda (res (var val &optional name))
+                            `(loopy--instr-let-const ,place ,var ,val ,name ,res)))
+             (reverse bindings)
+             :initial-value (macroexp-progn body)))
 
 (provide 'loopy-misc)
 ;;; loopy-misc.el ends here
