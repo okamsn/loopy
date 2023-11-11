@@ -81,7 +81,7 @@
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-dash--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
-            #'loopy--parse-destructuring-accumulation-command)))
+            #'loopy--parse-destructuring-accumulation-command-default)))
 
 (add-to-list 'loopy--flag-settings (cons 'dash #'loopy-dash--enable-flag-dash))
 (add-to-list 'loopy--flag-settings (cons '+dash #'loopy-dash--enable-flag-dash))

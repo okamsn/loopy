@@ -15,10 +15,11 @@ jobs:
     strategy:
       matrix:
         emacs-version:
-          - '27.1'
+          # - '27.1'
           - '27.2'
-          - '28.1'
+          # - '28.1'
           - '28.2'
+          - '29.2'
           - 'release-snapshot'
           # - 'snapshot'
     steps:
@@ -38,8 +39,11 @@ jobs:
     - name: Make folder for base package.
       run: |
          mkdir 'test-install'
-         cp loopy-commands.el loopy.el loopy-vars.el loopy-misc.el loopy-pkg.el test-install
-         cp loopy-iter.el loopy-pcase.el loopy-seq.el test-install
+         # Match all files of "loopy*.el" except for "loopy-dash.el".
+         echo Shell is $SHELL
+         shopt -s extglob
+         cp loopy!(-dash).el test-install
+         shopt -u extglob
     - name: Install packages
       run: emacs -batch -l tests/install-script.el
     - name: Basic tests

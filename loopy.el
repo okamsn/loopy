@@ -6,7 +6,7 @@
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
 ;; Version: 0.11.2
-;; Package-Requires: ((emacs "27.1") (map "3.0") (seq "2.22") (compat "29.1.3"))
+;; Package-Requires: ((emacs "27.1") (map "3.3.1") (seq "2.22") (compat "29.1.3"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs Edebug
 
@@ -121,6 +121,7 @@
 
 (require 'cl-lib)
 (require 'gv)
+(require 'macroexp)
 (require 'map)
 (require 'pcase)
 (require 'seq)
@@ -128,6 +129,8 @@
 (require 'loopy-misc)
 (require 'loopy-commands)
 (require 'loopy-vars)
+(require 'loopy-destructure)
+(require 'loopy-instrs)
 
 ;;;; Built-in flags
 
@@ -138,7 +141,7 @@
   (setq loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
-        #'loopy--parse-destructuring-accumulation-command))
+        #'loopy--parse-destructuring-accumulation-command-default))
 
 (cl-callf map-insert loopy--flag-settings 'default #'loopy--enable-flag-default)
 
@@ -155,90 +158,6 @@ this means that an explicit \"nil\" is always required."
 (defun loopy--ensure-valid-bindings (bindings)
   "Ensure BINDINGS valid according to `loopy--validate-binding'."
   (mapc #'loopy--validate-binding bindings))
-
-
-;;;###autoload
-(defmacro loopy-setq (&rest args)
-  "Use Loopy destructuring in a `setq' form.
-
-This macro supports only the built-in style of destructuring, and
-is unaffected by flags like `seq' or `pcase'.  For example, if
-you wish to use `pcase' destructuring, you should use `pcase-let'
-instead of this macro.
-
-\(fn SYM VAL SYM VAL ...)"
-  (declare (debug (&rest [sexp form])))
-  `(setq ,@(apply #'append
-                  (cl-loop for (var val . _) on args by #'cddr
-                           append (loopy--destructure-sequence var val)))))
-;;;###autoload
-(defalias 'loopy-dsetq 'loopy-setq) ; Named for Iterate's `dsetq'.
-
-;;;###autoload
-(defmacro loopy-let* (bindings &rest body)
-  "Use Loopy destructuring on BINDINGS in a `let*' form wrapping BODY.
-
-This macro supports only the built-in style of destructuring, and
-is unaffected by flags like `seq' or `pcase'.  For example, if
-you wish to use `pcase' destructuring, you should use `pcase-let'
-instead of this macro."
-  (declare (debug ((&rest [sexp form]) body))
-           (indent 1))
-  `(let* ,(cl-loop for (var val) in bindings
-                   append (loopy--destructure-sequence var val))
-     ,@body))
-
-;;;###autoload
-(defmacro loopy-ref (bindings &rest body)
-  "Destructure BINDINGS as `setf'-able places around BODY.
-
-This macro only creates references to those places via
-`cl-symbol-macrolet'.  It does /not/ create new variables or bind
-values.  Its behavior should not be mistaken with that of
-`cl-letf*', which temporarily binds values to those places.
-
-As these places are not true variable, BINDINGS is not
-order-sensitive.
-
-This macro supports only the built-in style of destructuring,
-and is unaffected by flags like `pcase' and `seq'."
-  (declare (debug ((&rest [sexp form]) body))
-           (indent 1))
-  `(cl-symbol-macrolet
-       ,(cl-loop for (var val) in bindings
-                 append (loopy--destructure-generalized-sequence
-                         var val))
-     ,@body))
-
-;;;###autoload
-(defmacro loopy-lambda (args &rest body)
-  "Create a `lambda' using `loopy' destructuring in the argument list.
-
-ARGS are the arguments of the lambda, which can be `loopy'
-destructuring patterns.  See the info node `(loopy)Loop Commands'
-for more on this.
-
-BODY is the `lambda' body."
-  (declare (debug (lambda-list body))
-           (indent 1))
-  (let ((lambda-args)
-        (destructurings))
-    (dolist (arg args)
-      (if (symbolp arg)
-          (push arg lambda-args)
-        (let ((arg-var (gensym)))
-          (push arg-var lambda-args)
-          (push (list arg arg-var) destructurings))))
-    `(lambda ,(nreverse lambda-args)
-       (loopy-let* ,(nreverse destructurings)
-         ,@body))))
-
-(defalias 'loopy--basic-builtin-destructuring #'loopy--destructure-sequence
-  "Destructure VALUE-EXPRESSION according to VAR.
-
-Return a list of variable-value pairs (not dotted), suitable for
-substituting into a `let*' form or being combined under a `setq'
-form.")
 
 (defun loopy--destructure-for-with-vars (bindings)
   "Destructure BINDINGS into bindings suitable for something like `let*'.
@@ -264,13 +183,46 @@ which will be used to wrap the loop and other code."
   "Destructure BINDINGS into bindings suitable for something like `let*'.
 
 Returns a list of two elements:
-1. The symbol `let*'.
+1. The symbol `pcase-let*'.
 2. A new list of bindings."
-  (list 'let*
-        (mapcan (cl-function
-                 (lambda ((var val))
-                   (loopy--destructure-sequence var val)))
-                bindings)))
+  ;; We do this instead of passing to `pcase-let*' so that:
+  ;; 1) We sure that variables are bound even when unmatched.
+  ;; 2) We can signal an error if the pattern doesn't match a value.
+  ;; This keeps the behavior of the old implementation.
+  ;;
+  ;; Note: Binding the found variables to `nil' would overwrite any values that
+  ;;       we might try to access while binding, so we can't do that like we do
+  ;;       for iteration commands in which we already know the scope.
+  ;; (let ((new-binds)
+  ;;       (all-set-exprs))
+  ;;   (dolist (bind bindings)
+  ;;     (cl-destructuring-bind (var val)
+  ;;         bind
+  ;;       (if (symbolp var)
+  ;;           (push `(,var ,val) new-binds)
+  ;;         (let ((sym (gensym)))
+  ;;           (push `(,sym ,val) new-binds)
+  ;;           (cl-destructuring-bind (set-expr found-vars)
+  ;;               (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
+  ;;             (dolist (v found-vars)
+  ;;               (push `(,v nil) new-binds))
+  ;;             (push set-expr all-set-exprs))))))
+  ;;   (list 'let* (nreverse new-binds) (macroexp-progn (nreverse
+  ;;                                                     all-set-exprs))))
+  (let ((new-binds))
+    (dolist (bind bindings)
+      (cl-destructuring-bind (var val)
+          bind
+        (if (symbolp var)
+            (push `(,var ,val) new-binds)
+          (let ((sym (gensym)))
+            (push `(,sym ,val) new-binds)
+            (cl-destructuring-bind (set-expr found-vars)
+                (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
+              (dolist (v found-vars)
+                (push `(,v nil) new-binds))
+              (push `(_ ,set-expr) new-binds))))))
+    (list 'let* (nreverse new-binds))))
 
 (cl-defun loopy--find-special-macro-arguments (names body)
   "Find any usages of special macro arguments NAMES in BODY, given aliases.
@@ -1023,9 +975,109 @@ see the Info node `(loopy)' distributed with this package."
    ;; in the correct order.
    (loopy--correct-var-structure)
 
-
    ;; Constructing/Creating the returned code.
    (loopy--expand-to-loop)))
+
+;;;;; Other features
+
+;; TODO: We didn't implement these using `loopy' to avoid a weird error about
+;;       `loopy--process-special-arg-loop-name' not being defined.  This error
+;;       doesn't seem to occur in `loopy-iter.el', in which we already use
+;;       `loopy'.
+
+;;;###autoload
+(defalias 'loopy-dsetq 'loopy-setq) ; Named for Iterate's `dsetq'.
+
+;;;###autoload
+(defmacro loopy-setq (&rest args)
+  "Use Loopy destructuring in a `setq' form.
+
+This macro supports only the built-in style of destructuring, and
+is unaffected by flags like `seq' or `pcase'.  For example, if
+you wish to use `pcase' destructuring, you should use `pcase-let'
+instead of this macro.
+
+\(fn SYM VAL SYM VAL ...)"
+  (declare (debug (&rest [sexp form])))
+  (macroexp-progn
+   (cl-loop for (var val) on args by #'cddr
+            collect (car (loopy--destructure-for-iteration-default var val)))))
+
+;;;###autoload
+(defmacro loopy-let* (bindings &rest body)
+  "Use Loopy destructuring on BINDINGS in a `let*' form wrapping BODY.
+
+This macro supports only the built-in style of destructuring, and
+is unaffected by flags like `seq' or `pcase'.  For example, if
+you wish to use `pcase' destructuring, you should use `pcase-let'
+instead of this macro."
+  (declare (debug ((&rest [sexp form]) body))
+           (indent 1))
+  ;; Because Emacs versions less than 28 weren't guaranteed to bind all
+  ;; variables in Pcase, we need to use the same approach we do for
+  ;; destructuring `with' bindings, instead of just passing the bindings to
+  ;; `pcase' directly.
+  (let ((new-binds))
+    (dolist (bind bindings)
+      (cl-destructuring-bind (var val)
+          bind
+        (if (symbolp var)
+            (push bind new-binds)
+          (let ((sym (gensym)))
+            (push `(,sym ,val) new-binds)
+            (cl-destructuring-bind (var-set-expr var-list)
+                (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
+              (dolist (var var-list)
+                (push var new-binds))
+              (push `(_ ,var-set-expr) new-binds))))))
+    `(let* ,(nreverse new-binds)
+       ,@body)))
+
+;;;###autoload
+(defmacro loopy-ref (bindings &rest body)
+  "Destructure BINDINGS as `setf'-able places around BODY.
+
+This macro only creates references to those places via
+`cl-symbol-macrolet'.  It does /not/ create new variables or bind
+values.  Its behavior should not be mistaken with that of
+`cl-letf*', which temporarily binds values to those places.
+
+As these places are not true variable, BINDINGS is not
+order-sensitive.
+
+This macro supports only the built-in style of destructuring,
+and is unaffected by flags like `pcase' and `seq'."
+  (declare (debug ((&rest [sexp form]) body))
+           (indent 1))
+  `(cl-symbol-macrolet
+       ,(cl-loop for (var val) in bindings
+                 append (loopy--destructure-generalized-sequence
+                          var val))
+     ,@body))
+
+;;;###autoload
+(defmacro loopy-lambda (args &rest body)
+  "Create a `lambda' using `loopy' destructuring in the argument list.
+
+ARGS are the arguments of the lambda, which can be `loopy'
+destructuring patterns.  See the info node `(loopy)Loop Commands'
+for more on this.
+
+BODY is the `lambda' body."
+  (declare (debug (lambda-list body))
+           (indent 1))
+  (let ((lambda-args)
+        (destructurings))
+    (dolist (arg args)
+      (if (symbolp arg)
+          (push arg lambda-args)
+        (let ((arg-var (gensym)))
+          (push arg-var lambda-args)
+          (push (list arg arg-var) destructurings))))
+    `(lambda ,(nreverse lambda-args)
+       (loopy-let* ,(nreverse destructurings)
+         ,@body))))
+
 
 (provide 'loopy)
 ;;; loopy.el ends here

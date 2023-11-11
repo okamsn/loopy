@@ -30,6 +30,7 @@
 (require 'loopy-vars)
 (require 'loopy-misc)
 (require 'loopy-commands)
+(require 'loopy-instrs)
 (require 'cl-lib)
 (require 'seq)
 (require 'map)

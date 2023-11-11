@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org9e6a997
+@float Listing,org668e9bc
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -780,7 +780,46 @@ value using @samp{:by SOME-EXPRESSION}.
 
 
 Generally, @samp{VAR} is initialized to @code{nil}, but not always.  This document tries
-to note when that is not the case.
+to note when that is not the case.  For when that is not the case, the variable
+can still be initialized to @code{nil} if it is set to @code{nil} using the @samp{with} special
+macro argument.  These special cases allow for more efficient code and less
+indirection.
+
+@lisp
+;; => (0 1 2 3)
+(loopy (collect i)
+       (numbers i :from 0 :to 3))
+
+;; => (nil 0 1 2)
+(loopy (with (i nil))
+       (collect i)
+       (numbers i :from 0 :to 3))
+@end lisp
+
+Unlike @code{cl-loop} in some cases, in Loopy, the values passed as keyword arguments
+are evaluated only once.  For example, the command @samp{(list i some-list :by
+(get-function))} evaluates @code{(get-function)} only once.  It does not evaluate it
+repeatedly for each step of the loop.
+
+@lisp
+;; Passes the assertion:
+;;
+;; => (0 1 2 3 4 5 6 7 8 9 10)
+(loopy (with (times 0))
+       (list i (number-sequence 0 10) :by (progn
+                                            (cl-assert (= times 0))
+                                            (cl-incf times)
+                                            #'cdr))
+       (collect i))
+
+;; => Fails the assertion on the second step of the loop:
+(cl-loop with times = 0
+         for i in (number-sequence 0 10) by (progn
+                                              (cl-assert (= times 0))
+                                              (cl-incf times)
+                                              #'cdr)
+         collect i)
+@end lisp
 
 @menu
 * Basic Destructuring::          How to destructure variables and values in loop commands.
@@ -805,20 +844,39 @@ Some differences include:
 @itemize
 @item
 Destructuring arrays
+
 @item
 Destructuring in accumulation commands (@ref{Accumulation})
+
 @item
 Destructuring in commands iterating through @code{setf}-able places in a sequence
 (@ref{Sequence Reference Iteration})
+
+@item
+The extended forms of the @samp{&optional} and @samp{&key} variables (such as default
+values like in @code{... &optional (var default) ...}) can be specified using
+square brackets as well as parentheses (such as @code{... &optional [var default]
+  ...}).  Since such variables can be further destructured by being written as
+sequences themselves, allowing both parentheses and brackets reduces confusion
+and improves consistency.
+
+@item
+A @samp{&map} construct, similar to @samp{&key}, but using @code{map-elt} instead of
+@code{plist-get} and which does not error when the map contains keys which aren't
+matched (in other words, there is no need for an equivalent of
+@samp{&allow-other-keys}).
 @end itemize
 
-In addition to what can be done in loop commands, several macros are available
-for using Loopy's destructuring outside of @code{loopy} loops (@ref{Destructuring Macros}).
 
 This section describes the basic built-in destructuring used by most loop
-commands, such as @samp{set} and @samp{list}.  Destructuring in accumulation commands and
-sequence-reference commands works slightly differently, and is described more in
-those sections.
+commands, such as @samp{set} and @samp{list}.  Destructuring in accumulation commands
+(@ref{Accumulation}) and sequence-reference commands
+(@ref{Sequence Reference Iteration}) works slightly differently, and is described
+more in those sections.
+
+In addition to what can be done in loop commands, several features are available
+for using Loopy's destructuring outside of @code{loopy} loops (@ref{Destructuring Macros}),
+including the @code{pcase} pattern @samp{loopy}.
 
 The last thing to note is that @code{loopy} loops can be made to use alternative
 destructuring systems, such as @code{seq-let} or @code{pcase-let}.  This is done by using
@@ -826,9 +884,10 @@ the @samp{flag} special macro argument (@ref{Using Flags}).  If you are familiar
 package @samp{dash} @footnote{@uref{https://github.com/magnars/dash.el}} and its Clojure-style destructuring, consider trying
 the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
+
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org866b582
+@float Listing,orgcba0f7c
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -843,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgedbe07f
+@float Listing,org87acf60
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -866,15 +925,66 @@ as the @samp{VAR} argument of a loop command.  Loopy supports destructuring list
 arrays (which includes strings and vectors).
 @itemize
 @item
-To destructure lists, use a list.
+To destructure lists, use a list, as in @samp{(a b c)}.
 @item
-To destructure arrays, use a vector.
+To destructure arrays, use a vector, as in @samp{[a b c]}.
 @end itemize
 
-This sequence of symbols can be shorter than the destructured sequence, @emph{but not
-longer}.  If shorter, the unassigned elements of the list are simply ignored.
 
-An element in the sequence @samp{VAR} can be one of the following:
+This sequence of symbols can be shorter than the destructured sequence, @emph{but not
+longer}.  If shorter, the unassigned elements of the destructured sequence are
+simply ignored.
+
+The content of this destructuring sequence is similar to @samp{cl-lib}, and is
+
+@example
+POSITIONAL-VARIABLES
+&optional OPTIONAL-VARIABLES
+&rest REST-VARIABLE
+&key KEY-VARIABLES [&allow-other-keys]
+&map MAP-VARIABLES
+&aux AUXILLIARY-VARIABLES
+@end example
+
+in which at least one of the above constructs must be provided.
+
+@lisp
+;; => (1 2 3
+;;     4 5 t
+;;     (:k1 111 :k2 222)
+;;     111 t
+;;     222
+;;     111
+;;     333 nil
+;;     4444 5555)
+(pcase (list 1 2 3 4 5 :k1 111 :k2 222)
+  ((loopy ( a b c
+            &optional
+            d
+            (e nil e-supplied)
+            &rest
+            r
+            &key
+            ((:k1 k1) nil k1-supplied)
+            k2
+            &map
+            (:k1 map1)
+            [:k3 map3 333 map3-supplied]
+            &aux
+            [x1 4444] (x2 5555)))
+   (list a b c
+         d
+         e e-supplied
+         r
+         k1 k1-supplied
+         k2
+         map1
+         map3 map3-supplied
+         x1 x2)))
+@end lisp
+
+
+In more detail, the elements of the destructuring sequence can be:
 
 @itemize
 @item
@@ -888,10 +998,13 @@ syntax for sequences.
 (loopy (list [i (j k)] '([1 (2 3)] [4 (5 6)]))
        (collect (list i j k)))
 @end lisp
+@end itemize
 
+@cindex _
+@itemize
 @item
-The symbol @samp{_} (an underscore): The symbol @samp{_} means to avoid creating a
-variable.  This can be more efficient.
+The symbol @samp{_} (an underscore) or a symbol beginning with an underscore: This
+means to ignore the element at this location.  This can be more efficient.
 
 @lisp
 ;; Only creates the variables `a' and `d':
@@ -907,10 +1020,13 @@ variable.  This can be more efficient.
        (collect a))
 
 ;; => (1 3)
-(loopy (array (a . _) [(1 2) (3 4)])
+(loopy (array (a . _ignored) [(1 2) (3 4)])
        (collect a))
 @end lisp
+@end itemize
 
+@cindex &whole
+@itemize
 @item
 The symbol @samp{&whole}: If @samp{&whole} is the first element in the sequence, then
 the second element of the sequence names a variable that holds the entire
@@ -931,11 +1047,38 @@ This is the same as when used in a CL @code{lambda} list.
                        (list both i j)))
         '((1 2) (3 4)))
 @end lisp
+@end itemize
 
+@cindex &rest
+@itemize
 @item
 The symbol @samp{&rest}: A variable named after @samp{&rest} contains the remaining
-elements of the destructured value.  When destructuring lists, one can also
-use dotted notation.  These variables can themselves be sequences.
+elements of the destructured value after any positional and optional values.
+When destructuring lists, one can also use dotted notation, as in a CL
+@code{lambda} list.  These variables can themselves be sequences to be further
+destructured.
+
+When used after optional values, the @samp{&rest} value is the subsequence starting
+at the index after any possible optional values, even when those optional
+values are not actually present.  If the sequence is not long enough, than the
+sub-sequence is empty.
+
+@lisp
+;; => (1 2 (3))
+(pcase (list 1 2 3)
+  ((loopy (a &optional b &rest c))
+   (list a b c)))
+
+;; => (1 nil nil)
+(pcase (list 1)
+  ((loopy (a &optional b &rest c))
+   (list a b c)))
+
+;; => (1 [])
+(pcase (vector 1)
+  ((loopy [a &optional _ _ _ _ &rest c])
+   (list a c)))
+@end lisp
 
 This @samp{&rest} is the same as when used in @code{seq-let}.
 
@@ -968,7 +1111,72 @@ This @samp{&rest} is the same as when used in @code{seq-let}.
 (loopy (list (i . [j k]) '((1 . [2 3]) (4 . [5 6])))
        (collect (list i j)))
 @end lisp
+@end itemize
 
+@cindex &optional
+@itemize
+@item
+The symbol @samp{&optional}: A variable named after @samp{&optional} is optional.  If
+the list is not long enough to bind the variable, then the variable is bound
+to @code{nil} or, if specified, a default value.  Additionally, one may bind a
+variable to record whether the list was long enough to contain the optional
+value.
+
+As in a CL @code{lambda-list}, the variable has the one of the following forms:
+
+@itemize
+@item
+@samp{(VAR DEFAULT SUPPLIED)} or @samp{[VAR DEFAULT SUPPLIED]}, in which @samp{VAR} itself
+can be a sequence
+
+@item
+@samp{(VAR DEFAULT)} or @samp{[VAR DEFAULT]}, in which @samp{VAR} itself can be a sequence
+
+@item
+@samp{(VAR)} or @samp{[VAR]}, in which @samp{VAR} itself can be a sequence
+
+@item
+a symbol @samp{VAR}
+@end itemize
+
+@lisp
+;; => (1 2 88 t nil)
+(loopy (array (a &optional ((b &optional (c 88 c-supplied))
+                            (list 77)
+                            bc-supplied))
+              [(1 (2))])
+       (collect (list a b c bc-supplied c-supplied)))
+
+;; => (1 2 3 t t)
+(loopy (array (a &optional ((b &optional (c 88 c-supplied))
+                            (list 77)
+                            bc-supplied))
+              [(1 (2 3))])
+       (collect (list a b c bc-supplied c-supplied)))
+@end lisp
+
+@samp{&optional} cannot be used after @samp{&rest}.
+
+@lisp
+;; => ((1 2 3 4 5)
+;;     1
+;;     2
+;;     3
+;;     (4 5))
+(loopy (array (&whole all a b &optional c &rest d)
+              [(1 2 3 4 5)])
+       (collect (list all a b c d)))
+
+;; Same as above:
+(loopy (array (&whole all a b &rest (c &rest d))
+              [(1 2 3 4 5)])
+       (collect (list all a b c d)))
+@end lisp
+@end itemize
+
+@cindex &key
+@cindex &keys
+@itemize
 @item
 The symbol @samp{&key} or @samp{&keys}: Variables named after @samp{&key} are transformed
 into keys whose values will be sought using @code{plist-get}, which returns @code{nil}
@@ -983,10 +1191,38 @@ Currently, only lists support this destructuring.
        (collect (list a b missing)))
 @end lisp
 
-If the key is not in the list, a default value can be provided by using a
-two-item list of the variable and the default value.  If a default value is
-provided, then keys are sought using @code{plist-member}. That way, a value of
-@code{nil} for a key is not the same as a missing key.
+Variables after @samp{&key} can be of the following forms:
+
+@itemize
+@item
+@samp{((VAR KEY) DEFAULT SUPPLIED)}, @samp{[[VAR KEY] DEFAULT SUPPLIED]}, @samp{([VAR KEY]
+    DEFAULT SUPPLIED)}, or @samp{[(VAR KEY) DEFAULT SUPPLIED]}, in which @samp{VAR} itself
+can be a sequence
+
+@item
+@samp{((VAR KEY) DEFAULT)}, @samp{[[VAR KEY] DEFAULT]}, @samp{([VAR KEY] DEFAULT)}, or
+@samp{[(VAR KEY) DEFAULT]}, in which @samp{VAR} itself can be a sequence
+
+@item
+@samp{((VAR KEY))}, @samp{[[VAR KEY]]}, @samp{([VAR KEY])}, or @samp{[(VAR KEY)]}, in which
+@samp{VAR} itself can be a sequence
+
+@item
+@samp{(VAR DEFAULT SUPPLIED)} or @samp{[VAR DEFAULT SUPPLIED]}, in which @samp{VAR} is a
+symbol
+
+@item
+@samp{(VAR DEFAULT)} or @samp{[VAR DEFAULT]}, in which @samp{VAR} is a symbol
+
+@item
+@samp{(VAR)} or @samp{[VAR]}, in which @samp{VAR} is a symbol
+
+@item
+a symbol @samp{VAR}
+@end itemize
+
+If a default value is provided, then keys are sought using @code{plist-member}.
+That way, a value of @code{nil} for a key is not the same as a missing key.
 
 @lisp
 ;; Note that `nil' is not the same as a missing value:
@@ -995,6 +1231,19 @@ provided, then keys are sought using @code{plist-member}. That way, a value of
 (loopy (list (&key a b (c 24) (missing 25)) '((:b 2 :c nil :a 1)
                                               (:a 4 :b 5)))
        (collect (list a b c missing)))
+@end lisp
+
+By default, the sought key is made by prepending a colon (``:'') to the symbol
+name.  For example, @samp{a} searches for @samp{:a} and @samp{b} searches for @samp{:b}.  Like in
+@samp{cl-lib}, an evaluated key can be sought by using a sub-sequence as the first
+element of the list.  When @samp{VAR} is a sequence, the key must be provided
+separately.
+
+@lisp
+;; => ((1 nil t))
+(loopy (list (&key ((:cat c)) ((:dog d) 27 dog-found))
+             '((:cat 1 :dog nil)))
+       (collect (list c d dog-found)))
 @end lisp
 
 Keys are sought in values after those bound to positional variables, which can
@@ -1028,6 +1277,129 @@ the dot in dotted lists.
 
 (loopy (array (a &key k1 . b) [(1 :k1 3)])
        (collect (list a b k1)))
+@end lisp
+
+Like in @samp{cl-lib}, if, after searching for the other keys, there remains an
+unmatched key in the destructured value, an error is signaled unless
+@samp{&allow-other-keys} is also used, or unless the key @samp{:allow-other-keys} is
+associated with a non-nil value in the property list, even when using @samp{&rest}.
+
+@lisp
+;; Error due to presence of `:k3':
+(cl-destructuring-bind (a b &rest c &key k1 k2)
+    (list 1 2 :k1 3 :k2 4 :k3 5)
+  (list a b c k1 k2))
+
+;; Works as expected:
+;;
+;; => (1 2 (:k1 3 :k2 4 :k3 5) 3 4)
+(cl-destructuring-bind (a b &rest c &key k1 k2 &allow-other-keys)
+    (list 1 2 :k1 3 :k2 4 :k3 5)
+  (list a b c k1 k2))
+@end lisp
+@end itemize
+
+@cindex &map
+@itemize
+@item
+The symbol @samp{&map}: Variables after @samp{&map} are bound similar to @code{map-let} from
+the library @samp{map.el}.  @samp{&map} works similarly to @samp{&key}, but has a few
+important differences:
+
+@enumerate
+@item
+Maps are more generic than property lists (``plists'').  A ``map'' is a generic
+structure which supports the function @code{map-elt}.  The built-in maps are
+arrays, property lists (``plists''), association lists (``alists''), and hash
+tables.  This generality means that it is slower than @samp{&key} for property
+lists, though the difference should be small.
+
+@item
+@samp{&map} will not signal an error if there are unused keys inside the
+destructured value; there is no @samp{&allow-other-keys} for @samp{map}.  In the same
+vein, it cannot be made to signal an error if there are unused keys.
+@end enumerate
+
+Variables after @samp{&map} can be of the following forms:
+
+@itemize
+@item
+@samp{(KEY VAR DEFAULT SUPPLIED)} or @samp{[KEY VAR DEFAULT SUPPLIED]}, in which @samp{VAR}
+itself can be a sequence
+
+@item
+@samp{(KEY VAR DEFAULT)} or @samp{[KEY VAR DEFAULT]}, in which @samp{VAR} itself can be a
+sequence
+
+@item
+@samp{(KEY VAR)} or @samp{[KEY VAR]}, in which @samp{VAR} itself can be a sequence
+
+@item
+@samp{(VAR)} or @samp{[VAR]}, in which @samp{VAR} is a symbol
+
+@item
+a symbol @samp{VAR}
+@end itemize
+
+When specifying @samp{KEY}, @samp{VAR} can be a sequence to perform further
+destructuring.  When @samp{KEY} is not given, then the key is the symbol @samp{VAR}, as
+in @code{(quote VAR)}.
+
+@lisp
+;; => ((1 2 3 4 27))
+(loopy (array (a b &map c ('dog d) (:elephant e 27))
+              [(1 2 c 3 dog 4)])
+       (collect (list a b c d e)))
+
+;; => ((1 2 3 4 27 33 nil))
+(loopy (array ( a b
+                &map
+                c
+                ('dog d)
+                (:elephant e 27)
+                (:fox f 33 fox-found))
+              [(1 2 (c . 3) (dog . 4))])
+       (collect (list a b c d e f fox-found)))
+
+;; => ((1 2 5 t))
+(loopy (array (a b &map (:fox f 33 fox-found))
+              [(1 2 (c . 3) (dog . 4) (:fox . 5))])
+       (collect (list a b f fox-found)))
+
+;; For arrays, the key is the index:
+;;
+;; => ((20 50))
+(loopy (list (&map (2 two-times-ten) (5 five-times-ten))
+             (list  [00 10 20 30 40 50 60 70 80 90 100]))
+       (collect (list two-times-ten five-times-ten)))
+@end lisp
+
+When @samp{&map} and @samp{&key} are used together, they search through the same
+values.  The use of both is normally redundant.
+
+@lisp
+;; => (1 2 (:k1 3 :k2 4)
+;;     3 4
+;;     3 4)
+(loopy (array ( a b
+                &rest c
+                &key ((:k1 key-k1)) ((:k2 key-k2))
+                &map (:k1 map-k1) (:k2 map-k2))
+              [(1 2 :k1 3 :k2 4)])
+       (collect (list a b c
+                      key-k1 key-k2
+                      map-k1 map-k2)))
+@end lisp
+
+@item
+The symbol @samp{&aux}: Variables named after @samp{&aux} are bound to the given values.
+Like in CL Lib, @samp{&aux} must come last in the list.
+
+@lisp
+;; => (7 7 7)
+(loopy (cycle 3)
+       (collect (&aux [coll 7]) 'ignored)
+       (finally-return coll))
 @end lisp
 @end itemize
 
@@ -1209,6 +1581,13 @@ error to use the same iteration variable for multiple iteration commands.
        (list i '(1 2 3))
        (finally-return t))
 @end lisp
+
+Unlike @code{cl-loop} and like Common Lisp's @code{iterate}, arguments of the iteration
+commands are evaluated only once.  For example, while iterating through numbers,
+you can't suddenly change the direction of the iteration in the middle of the
+loop, nor can you change the final numeric value.  Similarly, the function used
+to iterate through the list in the @samp{list} command is the same for the entire
+loop.  This restriction allows for producing more efficient code.
 
 @menu
 * Generic Iteration::            Looping a certain number of times.
@@ -1481,7 +1860,8 @@ argument, as in @code{(funcall TEST VAR FINAL-VAL)}.  @samp{test} can only be us
 @samp{from} and @samp{to}; it cannot be used with keywords that already describe a
 direction and ending condition.  To match the behavior of @code{cl-loop}, the
 default testing function is @code{#'<=}.  When @samp{test} is given, @samp{by} can be
-negative.
+negative.  As there is no default end value when @samp{test} is given, @samp{to} must
+also be given.
 
 @lisp
 ;; => (10 9.5 9.0 8.5 8.0 7.5 7.0 6.5 6.0 5.5)
@@ -1850,9 +2230,19 @@ library @samp{seq.el}.
 This command also has the aliases @samp{seqing} and @samp{sequencing}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
-@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
-used to store the index being accessed.  For others, see the @samp{numbers}
-command.
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
+variable used to store the index being accessed.  For the others, see the
+@samp{numbers} command.
+
+@quotation Warning
+Array elements can be accessed in constant time, but not list elements.  For
+lists, the @samp{sequence} command is fastest when moving forwards through the
+list.  In that case, the command does not have to search from the beginning of
+the list each time to find the next element.  The @samp{sequence} command can be
+noticeably slower for lists when working backwards or when the @samp{test}
+parameter (for which direction cannot be assumed) is provided.
+
+@end quotation
 
 If multiple sequences are given, then these keyword arguments apply to the
 resulting sequence of distributed elements.
@@ -1937,10 +2327,10 @@ The aliases @samp{seqi}, @samp{arrayi}, @samp{listi}, and @samp{stringi} are sim
 aliases @samp{seqf}, @samp{arrayf}, @samp{listf}, and @samp{stringf} of the @samp{seq-ref} command.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
-@samp{downto}, @samp{above}, @samp{below}, and @samp{by}.  For their meaning, see the @samp{numbers}
-command.  This command is very similar to @samp{numbers}, except that it can
-automatically end the loop when the final element is reached.  With
-@samp{numbers}, one would first need to explicitly calculate the length of the
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{test}.  For their meaning, see the
+@samp{numbers} command.  This command is very similar to @samp{numbers}, except that it
+can automatically end the loop when the index of the final element is reached.
+With @samp{numbers}, one would first need to explicitly calculate the length of the
 sequence.
 
 Similar to @samp{numbers}, for efficiency, @samp{VAR} is initialized to the starting
@@ -2009,16 +2399,29 @@ in the example above.
 
 @quotation Caution
 Be aware that using @code{setf} on an array sub-sequence named by @samp{&rest}
-will only overwrite values, not truncate or grow the array.
+will only overwrite values, not truncate or grow the array. 
 
 @end quotation
 
 @quotation Warning
 Unfortunately, not all kinds of recursive destructuring work on references.
-This is a limitation of how generic setters are implemented, and is not
-specific to @code{loopy}.
+This is a limitation of how generic setters are implemented, and not all
+limitations are specific to @code{loopy}.
 
-Currently, the variable after @samp{&rest} in arrays cannot be recursive.
+Currently:
+@itemize
+@item
+The variable after @samp{&rest} in arrays cannot be recursive.
+@item
+The variables after @samp{&map} cannot be recursive due to the current
+implementation of @samp{map.el} upstream.
+@item
+@samp{&optional} variables are not supported
+@item
+@samp{SUPPLIED} variables are not supported for @samp{&key} and @samp{&map}.
+@item
+Non-nil default values for @samp{&optional}, @samp{&key}, and @samp{&map} are not supported.
+@end itemize
 
 @end quotation
 
@@ -2179,9 +2582,9 @@ through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a
 @code{setf}-able place.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
-@samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
-used to store the index being accessed.  For others, see the @samp{numbers}
-command.
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
+variable used to store the index being accessed.  For others, see the
+@samp{numbers} command.
 
 @lisp
 ;; => (7 7 7 7)
@@ -2645,11 +3048,13 @@ first argument and @samp{EXPR} as the second argument.  This is unlike
 
 This command also has the alias @samp{reducing}.
 
-When @samp{VAR} does not have an explicit starting value (given with the special
-macro argument @samp{with}), the first accumulated value is @samp{EXPR}.  The first
-accumulated value is not the result of passing @samp{VAR} and @samp{EXPR} to @samp{FUNC}.
-Using the @samp{with} special macro argument is similar to using @code{cl-reduce}'s
-@samp{:initial-value} keyword argument.
+Note that the first accumulated value depends on the initial value of @samp{VAR}.
+By default, the first accumulated value is the value of @samp{EXPR}, not a result
+of calling @samp{FUNC}.  However, if @samp{VAR} has an initial value given by the @samp{with}
+special macro argument, then the first accumulated value is the result of
+@code{(funcall FUNC VAR EXPR)}, as also done in the subsequent steps of the loop.
+This use of @samp{with} is similar to the @samp{:initial-value} keyword argument used by
+@code{cl-reduce}.
 
 @lisp
 ;; => 6
@@ -4183,7 +4588,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org0290e68
+@float Listing,org748b4ce
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4608,12 +5013,9 @@ accumulation variables
 variables bound by the special macro argument @samp{with}
 @end itemize
 
-@quotation Note
 These flags do not affect the destructuring of generalized variables
 (@code{setf}-able places) as the libraries @samp{pcase.el}, @samp{seq.el}, and @samp{dash.el} do not
 yet provide the required functionality.
-
-@end quotation
 
 @lisp
 ;; => ((1 4)            coll1
@@ -4644,6 +5046,35 @@ yet provide the required functionality.
        (sum sum1 i)
        (sum sum2 j)
        (finally-return (+ sum1 v1) (+ sum2 v2)))
+@end lisp
+
+
+@quotation Warning
+For accumulation commands, there is no guarantee that a variable that was used
+in destructuring was meant to be user-facing.  Destructuring systems can create
+new variables as they please, which can be interpreted as accumulation
+variables.
+
+@end quotation
+
+
+Consider the below example in which a hypothetical @code{pcase} pattern creates the
+variable @code{temporary?} for destructuring.  Loopy has no way of knowing whether it
+was the user who create the variable, or the destructuring system.  As a result,
+@code{temporary?} is treated as an accumulation variable.  Such cases can be unwanted
+and produce inefficient code.
+
+
+@lisp
+;; Possibly unexpected behavior:
+;;
+;; => ((1 2 3) (2 4 6))
+(loopy (flag +pcase)
+       (list i '(1 2 3))
+       (collect (and whole
+                     (let temporary? (* 2 whole)))
+                i)
+       (finally-return whole temporary?))
 @end lisp
 
 @node Custom Aliases
