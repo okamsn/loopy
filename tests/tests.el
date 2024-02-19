@@ -11,6 +11,15 @@
       load-path)
 
 (require 'cl-lib)
+
+(require 'package)
+(unless (featurep 'compat)
+  (dolist (dir (cl-remove-if-not #'file-directory-p (directory-files (expand-file-name package-user-dir) t "compat")))
+    (push dir load-path)))
+
+(require 'subr-x)
+(require 'package)
+(require 'compat)
 (require 'map)
 (require 'ert)
 (require 'generator)
@@ -250,10 +259,13 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 
 (loopy-deftest with-destructuring
   :result -2
+  :wrap ((x . `(let ((e 7)) ,x)))
   :body ((with ((a b) '(1 2))
-               ([c d] `[,(1+ a) ,(1+ b)]))
+               ([c d] `[,(1+ a) ,(1+ b)])
+               ((e f) (list (1+ e) (1+ e))))
          (return (+ (- a b)
-                    (- c d))))
+                    (- c d)
+                    (- e f))))
   :loopy t
   :iter-bare ((return . returning)))
 

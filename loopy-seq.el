@@ -36,24 +36,21 @@
 ;; `seq-let' to produce values (which in turn uses `pcase-let') instead of
 ;; directly passing the variable list to `pcase-let'.
 
-(require 'loopy)
-(require 'loopy-misc)
-(require 'loopy-vars)
-(require 'seq)
-(require 'pcase)
-(require 'loopy-pcase)
-(require 'macroexp)
 (require 'cl-lib)
+(require 'seq)
+
+(require 'loopy)
+(require 'loopy-destructure)
+(require 'loopy-vars)
 
 (defun loopy-seq--enable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."
-  (setq
-   loopy--destructuring-for-iteration-function
-   #'loopy-seq--destructure-for-iteration
-   loopy--destructuring-for-with-vars-function
-   #'loopy-seq--destructure-for-with-vars
-   loopy--destructuring-accumulation-parser
-   #'loopy-seq--parse-destructuring-accumulation-command))
+  (setq loopy--destructuring-for-iteration-function
+        #'loopy-seq--destructure-for-iteration
+        loopy--destructuring-for-with-vars-function
+        #'loopy-seq--destructure-for-with-vars
+        loopy--destructuring-accumulation-parser
+        #'loopy-seq--parse-destructuring-accumulation-command))
 
 (defun loopy-seq--disable-flag-seq ()
   "Make this `loopy' loop use `seq-let' destructuring."
@@ -68,14 +65,21 @@
   (if (eq loopy--destructuring-accumulation-parser
           #'loopy-seq--parse-destructuring-accumulation-command)
       (setq loopy--destructuring-accumulation-parser
-            #'loopy--parse-destructuring-accumulation-command)))
+            #'loopy--parse-destructuring-accumulation-command-default)))
 
-(add-to-list 'loopy--flag-settings
-             (cons 'seq #'loopy-seq--enable-flag-seq))
-(add-to-list 'loopy--flag-settings
-             (cons '+seq #'loopy-seq--enable-flag-seq))
-(add-to-list 'loopy--flag-settings
-             (cons '-seq #'loopy-seq--disable-flag-seq))
+(add-to-list 'loopy--flag-settings (cons 'seq #'loopy-seq--enable-flag-seq))
+(add-to-list 'loopy--flag-settings (cons '+seq #'loopy-seq--enable-flag-seq))
+(add-to-list 'loopy--flag-settings (cons '-seq #'loopy-seq--disable-flag-seq))
+
+;; Same as `seq--make-pcase-patterns', copied in case of future changes.
+(defun loopy-seq--make-pcase-pattern (args)
+  "Return a list of `(seq ...)' pcase patterns from the argument list ARGS."
+  (cons 'seq
+        (seq-map (lambda (elt)
+                   (if (seqp elt)
+                       (seq--make-pcase-patterns elt)
+                     elt))
+                 args)))
 
 (defun loopy-seq--destructure-for-with-vars (bindings)
   "Return a way to destructure BINDINGS as if by a `seq-let*'.
@@ -106,7 +110,7 @@ variables."
                 result-is-one-expression t))))
     result))
 
-(cl-defun loopy-seq--destructure-for-iteration (var val)
+(defun loopy-seq--destructure-for-iteration (var val)
   "Destructure VAL according to VAR, as if by `seq-let'.
 
 Returns a list.  The elements are:
@@ -114,7 +118,7 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
-  (loopy-pcase--destructure-for-iteration (seq--make-pcase-patterns var) val))
+  (loopy--pcase-destructure-for-iteration (loopy-seq--make-pcase-pattern var) val))
 
 (cl-defun loopy-seq--parse-destructuring-accumulation-command
     ((name var val &rest args))
@@ -126,8 +130,8 @@ the value to accumulate."
   ;; Pcase macro, so we can use functions from loopy-pcase.el.  The `setq'
   ;; bindings in the instruction should not be order-sensitive for accumulation
   ;; commands; the bindings should be independent.
-  (loopy-pcase--parse-destructuring-accumulation-command
-   `(,name ,(seq--make-pcase-patterns var) ,val ,@args)))
+  (loopy--pcase-parse-for-destructuring-accumulation-command
+   `(,name ,(loopy-seq--make-pcase-pattern var) ,val ,@args)))
 
 (provide 'loopy-seq)
 ;;; loopy-seq.el ends here

@@ -3,6 +3,12 @@
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
 (require 'cl-lib)
+
+(require 'package)
+(unless (featurep 'compat)
+  (dolist (dir (cl-remove-if-not #'file-directory-p (directory-files (expand-file-name package-user-dir) t "compat")))
+    (push dir load-path)))
+
 (require 'ert)
 (require 'seq)
 (require 'loopy)

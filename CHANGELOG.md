@@ -64,6 +64,11 @@ This document describes the user-facing changes to Loopy.
                            (collecting (10+ j))))))
   ```
 
+- The documentation describes Loopy's default destructuring style as a super-set
+  of that of `cl-lib`.  `&key` now behaves more like it does in `cl-lib`,
+  signaling an error when appropriate ([#182]) and supporting the full form
+  `((KEY VAR) DEFAULT SUPPLIED)`.
+
 ### Breaking Changes
 
 - Fix how the first accumulated value is used in `reduce`.  See [#164] and the
@@ -88,6 +93,14 @@ This document describes the user-facing changes to Loopy.
   of the two-argument test function is now document as `(SEQUENCE-ITEM,
   TESTED-ITEM)`, similar to `seq-contains-p`.  The argument order was previously
   undocumented and not guaranteed. See [#170] and [#177].
+
+- Like in `cl-lib`, destructuring with `&key` will now signal an error if there
+  are unmatched keys and `&allow-other-keys` was not given or
+  `:allow-other-keys` is not present in the property list with a non-nil value
+  ([#182]).
+
+- The default destructuring style now uses `pcase` underneath ([#182]).  To
+  accomodate this, some of the defined errors and error detections have changed.
 
 #### Removals
 
@@ -203,11 +216,27 @@ This document describes the user-facing changes to Loopy.
   uses the constant value directly, which Emacs can optimize to avoid some uses
   of `funcall`.
 
+### Destructuring Improvements
+
+- A `loopy` `pcase` pattern has been added ([#182]).  Destructuring is now based
+  on `pcase`.
+- A `&map` construct was added for destructuring, analogous to `&key` but using
+  `map-elt` and the `map` `pcase` pattern ([#182]).  Extending the `map`
+  pattern, `&map` also has a `SUPPLIED` parameter, as in `(KEY VAR DEFAULT
+  SUPPLIED)`.
+- An `&optional` construct was added, like in `cl-lib` ([#182]).
+- `&key` now works like it does in `cl-lib`, including the `DEFAULT`,
+  `SUPPLIED`, and `KEY` values in the full form and signaling an error
+  when appropriate ([#182]).
+
 ### Other Changes
 
 - Add `loopy--other-vars`, given the more explicit restriction on
   `loopy--iteration-vars` ([#144]).  For example, these are the variables bound
   by the `set` command, which are allowed to occur in more than one command.
+
+- To reduce the maintenance burden, destructuring was re-implemented using
+  `pcase` ([#182]).
 
 [#144]: https://github.com/okamsn/loopy/issue/142
 [#144]: https://github.com/okamsn/loopy/pull/144
@@ -227,6 +256,7 @@ This document describes the user-facing changes to Loopy.
 [#176]: https://github.com/okamsn/loopy/issues/176
 [#177]: https://github.com/okamsn/loopy/pull/177
 [#180]: https://github.com/okamsn/loopy/pull/180
+[#182]: https://github.com/okamsn/loopy/pull/182
 
 ## 0.11.2
 

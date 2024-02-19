@@ -2,7 +2,18 @@
 ;; Run these tests from project dir using:
 ;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
 
+;; NOTE: Tests the `pcase' flag, not the `pcase' implementation of destructuring.
+
+(push (expand-file-name ".")
+      load-path)
+
 (require 'cl-lib)
+
+(require 'package)
+(unless (featurep 'compat)
+  (dolist (dir (seq-filter #'file-directory-p (directory-files (expand-file-name package-user-dir) t "compat")))
+    (push dir load-path)))
+
 (require 'ert)
 (require 'pcase)
 (require 'loopy)

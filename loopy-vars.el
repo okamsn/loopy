@@ -285,7 +285,7 @@ Unlike `loopy--destructuring-for-iteration-function', the
 function named by this variable returns instructions, not a list
 of variable-value pairs.
 
-If nil, use `loopy--parse-destructuring-accumulation-command'.")
+If nil, use `loopy--parse-destructuring-accumulation-command-default'.")
 
 ;;;;; For setting up flags
 (defvar loopy--flag-settings nil

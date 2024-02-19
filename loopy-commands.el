@@ -75,6 +75,8 @@
 (require 'generator)
 (require 'gv)
 (require 'loopy-misc)
+(require 'loopy-destructure)
+(require 'loopy-instrs)
 (require 'loopy-vars)
 (require 'map)
 (require 'macroexp)
@@ -93,44 +95,6 @@
 
 ;; If Emacs Lisp ever gets support for true multiple values (via `cl-values'),
 ;; this function might be a good candidate for use.
-(defun loopy--extract-main-body (instructions)
-  "Extract main-body expressions from INSTRUCTIONS.
-
-This returns a list of two sub-lists:
-
-1. A list of expressions (not instructions) that are meant to be
-   use in the main body of the loop.
-
-2. A list of instructions for places other than the main body.
-
-The lists will be in the order parsed (correct for insertion)."
-  (let ((wrapped-main-body)
-        (other-instructions))
-    (dolist (instruction instructions)
-      (if (eq (cl-first instruction) 'loopy--main-body)
-          (push (cl-second instruction) wrapped-main-body)
-        (push instruction other-instructions)))
-
-    ;; Return the sub-lists.
-    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
-
-;; We find ourselves doing this pattern a lot.
-(cl-defmacro loopy--bind-main-body ((main-expr other-instrs) value &rest body)
-  "Bind MAIN-EXPR and OTHER-INSTRS for those items in VALUE for BODY."
-  (declare (indent 2))
-  `(cl-destructuring-bind (,main-expr ,other-instrs)
-       (loopy--extract-main-body ,value)
-     ,@body))
-
-(defun loopy--convert-iteration-vars-to-other-vars (instructions)
-  "Convert instructions for `loopy--iteration-vars' to `loopy--other-vars'.
-
-INSTRUCTIONS is a list of instructions, which don't all have to be
-for `loopy--iteration-vars'."
-  (loopy--substitute-using-if
-   (cl-function (lambda ((_ init)) (list 'loopy--other-vars init)))
-   (lambda (x) (eq (car x) 'loopy--iteration-vars))
-   instructions))
 
 ;;;;; Working with Plists and Keyword Arguments
 
@@ -148,7 +112,6 @@ Any keyword not in CORRECT is considered invalid.
 
 CORRECT is a list of valid keywords.  The first item in LIST is
 assumed to be a keyword."
-  ;; (null (cl-set-difference (loopy--every-other list) correct))
   (null (cl-set-difference (loopy--extract-keywords list) correct)))
 
 ;;;;; Miscellaneous
@@ -1927,9 +1890,9 @@ Warning trigger: %s"
                      ;; If we need to destructure the sequence `var', we use the
                      ;; function named by
                      ;; `loopy--destructuring-accumulation-parser' or the function
-                     ;; `loopy--parse-destructuring-accumulation-command'.
+                     ;; `loopy--parse-destructuring-accumulation-command-default'.
                      (funcall (or loopy--destructuring-accumulation-parser
-                                  #'loopy--parse-destructuring-accumulation-command)
+                                  #'loopy--parse-destructuring-accumulation-command-default)
                               cmd)
 
                    (when (and (loopy--with-bound-p var)
@@ -3078,16 +3041,13 @@ Return a list of instructions for naming these `setf'-able places.
 VAR are the variables into to which to destructure the value of
 VALUE-EXPRESSION."
   (let ((destructurings
-         (loopy--destructure-generalized-variables var value-expression))
+         (loopy--destructure-generalized-sequence var value-expression))
         (instructions nil))
     (dolist (destructuring destructurings)
       (push (list 'loopy--generalized-vars
                   destructuring)
             instructions))
     (nreverse instructions)))
-
-(defalias 'loopy--destructure-generalized-variables
-  #'loopy--destructure-generalized-sequence)
 
 (defun loopy--destructure-for-iteration-default (var val)
   "Destructure VAL according to VAR.
@@ -3097,9 +3057,10 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
-  (let ((bindings (loopy--destructure-sequence var val)))
-    (list (cons 'setq (apply #'append bindings))
-          (cl-remove-duplicates (mapcar #'cl-first bindings)))))
+  (let ((res (loopy--pcase-destructure-for-iteration `(loopy ,var) val :error t)))
+    (if (null (cl-second res))
+        (signal 'loopy-destructure-vars-missing (list var val))
+      res)))
 
 ;; TODO: Rename these so that the current "iteration" features
 ;;       are "generic" and the new "iteration" features
@@ -3138,130 +3099,17 @@ A wrapper around `loopy--destructure-for-iteration-command'."
   (loopy--convert-iteration-vars-to-other-vars
    (loopy--destructure-for-iteration-command var value-expression)))
 
-(cl-defun loopy--parse-destructuring-accumulation-command
+(cl-defun loopy--parse-destructuring-accumulation-command-default
     ((name var val &rest args))
   "Return instructions for destructuring accumulation commands.
 
-Unlike `loopy--basic-builtin-destructuring', this function
+Unlike `loopy--destructure-for-iteration-command', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
-  (let* ((remaining-var var)
-         (value-holder (gensym (format "%s-destructured-seq-" name)))
-         (instructions `((loopy--iteration-vars (,value-holder nil))
-                         (loopy--main-body (setq ,value-holder ,val)))))
-
-    ;; Handle the whole var.
-    (when (eq (seq-first var) '&whole)
-      (dolist (instr (loopy--parse-loop-command
-                      `(,name ,(seq-elt var 1) ,value-holder ,@args)))
-        (push instr instructions))
-      (setq remaining-var (seq-drop remaining-var 2)))
-
-    ;; How variables are set depends on type.  For lists, we wish to use `pop'
-    ;; to avoid traversing the list more than once.  For arrays, we must use
-    ;; `aref'.
-    (cl-etypecase remaining-var
-      (symbol
-       (push `(loopy--accumulation-vars (,remaining-var ,value-holder))
-             instructions))
-      (list
-       (let ((key-vars)
-             (this-var)
-             (looking-at-key-vars)
-             (var-is-dotted (not (proper-list-p remaining-var))))
-
-         (while (car-safe remaining-var)
-
-           (setq this-var (car remaining-var))
-           (cond
-            ((eq this-var '_)         ; Do nothing in this case.
-             (push `(loopy--main-body (setq ,value-holder (cdr ,value-holder)))
-                   instructions)
-             (setq remaining-var (cdr remaining-var)))
-
-            ((eq this-var '&rest)
-             (setq looking-at-key-vars nil)
-             (when var-is-dotted
-               (signal 'loopy-&rest-dotted (list var)))
-             (dolist (instr (loopy--parse-loop-command
-                             `( ,name ,(cl-second remaining-var)
-                                ,value-holder ,@args)))
-               (push instr instructions))
-             (setq remaining-var (cddr remaining-var)))
-
-            ((memq this-var '(&key &keys))
-             (setq looking-at-key-vars t
-                   remaining-var (cdr remaining-var)))
-
-            (looking-at-key-vars
-             (push this-var key-vars)
-             (setq remaining-var (cdr remaining-var)))
-
-            (t
-             (dolist (instr (loopy--parse-loop-command
-                             `(,name ,this-var (pop ,value-holder) ,@args)))
-               (push instr instructions))
-             (setq remaining-var (cdr remaining-var)))))
-
-         ;; If `remaining-var' is not nil, then it is now the final atom of an
-         ;; improper list.
-         (when remaining-var
-           (dolist (instr (loopy--parse-loop-command
-                           `(,name ,remaining-var ,value-holder ,@args)))
-             (push instr instructions)))
-
-         ;; TODO: In Emacs 28, `pcase' was changed so that all named variables
-         ;; are at least bound to nil.  Before that version, we should make sure
-         ;; that `default' is bound.
-         (let ((default nil))
-           (ignore default)
-           (pcase-dolist ((or `(,kvar ,default)
-                              kvar)
-                          key-vars)
-             (dolist (instr
-                      (loopy--parse-loop-command
-                       `( ,name ,kvar
-                          ,(let ((key (intern (format ":%s" kvar))))
-                             (if default
-                                 `(if-let ((key-found (plist-member ,value-holder
-                                                                    ,key)))
-                                      (cl-second key-found)
-                                    ,default)
-                               `(plist-get ,value-holder ,key)))
-                          ,@args)))
-               (push instr instructions))))))
-
-      (array
-       (cl-loop named loop
-                with array-length = (length remaining-var)
-                for symbol-or-seq across remaining-var
-                for index from 0
-                do (cond
-                    ((eq symbol-or-seq '_))
-                    ((eq symbol-or-seq '&rest)
-                     (let* ((next-idx (1+ index))
-                            (next-var (aref remaining-var next-idx)))
-                       ;; Check that the var after `&rest' is the last:
-                       (when (> (1- array-length) next-idx)
-                         (signal 'loopy-&rest-multiple (list var)))
-
-                       (dolist (instr
-                                (loopy--parse-loop-command
-                                 `( ,name ,next-var
-                                    (cl-subseq ,value-holder ,index) ,@args)))
-                         (push instr instructions)))
-                     ;; Exit the loop.
-                     (cl-return-from loop))
-                    (t
-                     (dolist (instr
-                              (loopy--parse-loop-command
-                               `( ,name ,symbol-or-seq
-                                  (aref ,value-holder ,index) ,@args)))
-                       (push instr instructions)))))))
-
-    ;; Return the instructions in the correct order.
-    (nreverse instructions)))
+  (loopy--pcase-parse-for-destructuring-accumulation-command
+   `(,name (loopy ,var) ,val ,@args)
+   :error t))
 
 ;;;; Selecting parsers
 (defun loopy--parse-loop-command (command)
