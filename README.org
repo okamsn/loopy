@@ -30,7 +30,7 @@ please let me know.
 -----
 
  _Recent breaking changes:_
- - Unreleased:
+ - Version 0.12.0:
    - The boolean commands =always=, =never=, and =thereis= now behave more like
      accumulation commands and use ~loopy-result~ by default.
    - Using multiple conditions in =always=, =never=, and =thereis= is

@@ -1,4 +1,4 @@
-(define-package "loopy" "0.11.2"
+(define-package "loopy" "0.12.0"
   "A looping macro"
   '((emacs "27.1")
     (map   "3.3.1")
