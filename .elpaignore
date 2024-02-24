@@ -1,0 +1,10 @@
+tests
+Makefile
+examples
+.git
+.github
+.gitignore
+.elpaignore
+doc/loopy.info
+loopy-pkg.el
+loopy-dash.el
