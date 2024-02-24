@@ -8,3 +8,4 @@ examples
 doc/loopy.info
 loopy-pkg.el
 loopy-dash.el
+.dir-locals.el
