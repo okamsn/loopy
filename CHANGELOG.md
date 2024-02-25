@@ -2,6 +2,11 @@
 
 This document describes the user-facing changes to Loopy.
 
+## 0.12.1
+
+- Increase version number to so that the ELPA process uses the `.elpaignore`
+  file for the stable version of the package.
+
 ## 0.12.0
 
 ### Bugs Fixed
