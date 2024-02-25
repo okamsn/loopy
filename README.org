@@ -1,9 +1,9 @@
 #+title: Loopy Dash
 
-Copy of `loopy-dash` for Non-GNU ELPA.
+Copy of =loopy-dash= for Non-GNU ELPA.
 
 * Note
 
 This branch exists so that Non-GNU ELPA doesn't duplicate all of the files for the
-package `loopy`. Development for this package happens in the branch `master`, and 
-any changes to `master` are copied to this branch via GitHub Actions.
+package =loopy=. Development for this package happens in the branch =master=, and 
+any changes to =master= are copied to this branch via GitHub Actions.
