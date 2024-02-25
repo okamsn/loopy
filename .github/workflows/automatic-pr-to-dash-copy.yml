@@ -1,0 +1,34 @@
+name: Copy loopy-dash.el to other branch.
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  copy_file:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: master
+        path: loopy
+    - uses: actions/checkout@v3
+      with:
+        ref: loopy-dash-only
+        path: loopy-dash
+    - name: Copy file to directory
+      run: cp loopy/loopy-dash.el loopy-dash/loopy-dash.el
+    - name: Commit new changes and push.
+      run: |
+        cd loopy-dash
+        git config --local user.name "github-actions[bot]"
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add --force loopy-dash.el
+        git commit --allow-empty -m "Automatic commit of changes from master branch."
+        git push
+      env:
+        USERNAME: github-actions[bot]
