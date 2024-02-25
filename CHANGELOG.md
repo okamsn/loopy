@@ -2,6 +2,10 @@
 
 This document describes the user-facing changes to Loopy.
 
+## 0.12.2
+
+- Correct the `.elpaignore` file.
+
 ## 0.12.1
 
 - Increase version number to so that the ELPA process uses the `.elpaignore`
