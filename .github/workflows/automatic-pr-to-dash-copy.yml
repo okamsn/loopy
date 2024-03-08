@@ -15,20 +15,50 @@ jobs:
     - uses: actions/checkout@v3
       with:
         ref: master
-        path: loopy
+        path: loopy-master
     - uses: actions/checkout@v3
       with:
         ref: loopy-dash-only
-        path: loopy-dash
-    - name: Copy file to directory
-      run: cp loopy/loopy-dash.el loopy-dash/loopy-dash.el
-    - name: Commit new changes and push.
+        path: loopy-dash-only
+    - uses: actions/checkout@v3
+      with:
+        ref: loopy-only
+        path: loopy-only
+    - name: Copy commit message
       run: |
-        cd loopy-dash
+        cd loopy-master
+        git log \
+            --format='(GitHub Action) %s%n%nThis commit was copied from the master branch.%n%nCommit: %H%nAuthor: %an <%ae>%nDate: %ai%n%n%B' \
+            -n 1 --no-color --encoding=utf8 HEAD > ../commit-msg.txt
+        cd ..
+    - name: Copy file "loopy-dash.el" to directory "loopy-dash-only"
+      run: cp loopy-master/loopy-dash.el loopy-dash-only/loopy-dash.el
+    - name: Commit new changes and push for loopy-dash-only.
+      run: |
+        cd loopy-dash-only
         git config --local user.name "github-actions[bot]"
         git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add --force loopy-dash.el
-        git commit --allow-empty -m "Automatic commit of changes from master branch."
+        git commit --allow-empty -F ../commit-msg.txt
+        git push
+        cd ..
+      env:
+        USERNAME: github-actions[bot]
+    - name: Copy all other files to directory "loopy-only"
+      run: |
+        shopt -u dotglob
+        cd loopy-master
+        rm -rf .git*/**
+        rm loopy-seq.el
+        cp -t ../loopy-only -r **
+        cd ..
+    - name: Commit new changes and push for loopy-only.
+      run: |
+        cd loopy-only
+        git config --local user.name "github-actions[bot]"
+        git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add --force .
+        git commit --allow-empty -F ../commit-msg.txt
         git push
       env:
         USERNAME: github-actions[bot]
