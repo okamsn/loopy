@@ -30,6 +30,9 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - The deprecated =:init= keyword argument has been removed.  Use the =with=
+     special macro argument instead.
  - Version 0.12.0:
    - The boolean commands =always=, =never=, and =thereis= now behave more like
      accumulation commands and use ~loopy-result~ by default.
