@@ -734,16 +734,6 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-keyword (do return))
 
 ;;;;; Set
-(loopy-deftest set-init
-  :result 3
-  :body ((cycle 3)
-         (set var (1+ var) :init 0)
-         (finally-return var))
-  :loopy t
-  :iter-keyword (cycle set)
-  :iter-bare ((cycle . cycling)
-              (set . setting)))
-
 (loopy-deftest set-with
   :doc "Test to make sure that we can replace `:init' with `with'."
   :result 3
@@ -754,19 +744,6 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :loopy t
   :iter-keyword (cycle set)
   :iter-bare ((cycle . cycling)
-              (set . setting)))
-
-(loopy-deftest set-init-destr
-  :doc "Each variable is initialized to `:init', not a destructured part of `:init'."
-  :result '((0 0 0) (1 2 3))
-  :body ((collect (list i j k))
-         (set (i j k) '(1 2 3) :init 0)
-         (collect (list i j k))
-         (leave))
-  :loopy t
-  :iter-keyword (leave set collect)
-  :iter-bare ((collect . collecting)
-              (leave . leaving)
               (set . setting)))
 
 (loopy-deftest set-with-destr
@@ -903,11 +880,12 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
               (set-prev . setting-prev))
   :iter-keyword (list set-prev collect))
 
-(loopy-deftest set-prev-keyword-init
+(loopy-deftest set-prev-keyword-with
   :result '(first-val first-val 2 2 4 4 6 6 8 8)
-  :body ((numbers i 1 10)
+  :body ((with (j 'first-val))
+         (numbers i 1 10)
          (when (cl-oddp i)
-           (set-prev j i :init 'first-val))
+           (set-prev j i))
          (collect j))
   :loopy t
   :iter-bare ((numbers . numbering)
@@ -915,7 +893,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
               (set-prev . setting-prev))
   :iter-keyword (numbers set-prev collect))
 
-(loopy-deftest set-prev-:back-with
+(loopy-deftest set-prev-:back-with-destructure
   :doc "Special behavior in command for with-bound variables."
   :result '((first-val 22) (first-val 22) (1 2) (3 4))
   :body ((with (j 'first-val)
@@ -931,8 +909,10 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 
 (loopy-deftest set-prev-destructuring
   :result '((7 7 1 3) (7 7 2 4))
-  :body ((list i '((1 2) (3 4) (5 6) (7 8)))
-         (set-prev (a b) i :back 2 :init 7)
+  :body ((with (a 7)
+               (b 7))
+         (list i '((1 2) (3 4) (5 6) (7 8)))
+         (set-prev (a b) i :back 2)
          (collect c1 a)
          (collect c2 b)
          (finally-return c1 c2))
@@ -3033,16 +3013,6 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((list . listing)
               (accumulate . accumulating)))
 
-(loopy-deftest accumulate-:init
-  :result 10
-  :body ((list i '(2 3 4))
-         (accumulate my-accum i #'+ :init 1)
-         (finally-return my-accum))
-  :loopy t
-  :iter-keyword (accumulate list)
-  :iter-bare ((list . listing)
-              (accumulate . accumulating)))
-
 (loopy-deftest accumulate-destr
   :doc "Test that `accumulate' implements destructuring, not destructuring itself."
   :result  '((3 1) (4 2))
@@ -4484,14 +4454,14 @@ Using `start' and `end' in either order should give the same result."
 
 ;;;;; Reduce
 (loopy-deftest reduce
-  :result 6
+  :result '(1 2 3 4 5 6 7 8)
   :multi-body t
-  :body [((list i '(1 2 3))
-          (_cmd r i #'+ :init 0)
+  :body [((list i '((1 2 3) (4 5 6) (7 8)))
+          (_cmd r i #'append)
           (finally-return r))
 
-         ((list i '(1 2 3))
-          (_cmd r i #'+ :init 0)
+         ((list i '((1 2 3) (4 5 6) (7 8)))
+          (_cmd r i #'append)
           (finally-return r))]
   :repeat _cmd
   :loopy ((_cmd . (reduce reducing callf)))
@@ -4564,10 +4534,6 @@ This is how `cl-reduce' and `seq-reduce' work."
           (finally-return r1 r2))
 
          ((list i '((1 2) (3 4)))
-          (reduce (r1 r2) i #'+ :init 0)
-          (finally-return r1 r2))
-
-         ((list i '((1 2) (3 4)))
           (reduce (r1 r2) i #'+)
           (finally-return r1 r2))]
   :loopy t
@@ -4590,12 +4556,14 @@ This is how `cl-reduce' and `seq-reduce' work."
 (loopy-deftest set-accum-+
   :result 16
   :multi-body t
-  :body [((list i '(1 2 3))
-          (_cmd my-sum (+ my-sum i) :init 10)
+  :body [((with (my-sum 10))
+          (list i '(1 2 3))
+          (_cmd my-sum (+ my-sum i))
           (finally-return my-sum))
 
-         ((list i '(1 2 3))
-          (_cmd (+ loopy-result i) :init 10))]
+         ((with (loopy-result 10))
+          (list i '(1 2 3))
+          (_cmd (+ loopy-result i)))]
   :repeat _cmd
   :loopy ((_cmd . (set-accum setting-accum)))
   :iter-keyword ((list . list)

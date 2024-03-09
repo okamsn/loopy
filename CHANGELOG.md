@@ -2,6 +2,15 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Breaking Changes
+
+- The deprecated `:init` keyword argument has been removed ([#195], [#146]).
+  Use the `with` special macro argument instead.
+
+[#195]: https://github.com/okamsn/loopy/pull/195
+
 ## 0.12.2
 
 - Correct the `.elpaignore` file.
