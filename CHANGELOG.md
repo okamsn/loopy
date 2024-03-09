@@ -9,7 +9,12 @@ This document describes the user-facing changes to Loopy.
 - The deprecated `:init` keyword argument has been removed ([#195], [#146]).
   Use the `with` special macro argument instead.
 
+- The deprecated `:result-type` keyword argument has been removed ([#196],
+  [#154]).  Use the `finally-return` special macro argument instead in
+  combination with `cl-coerce`, `seq-into`, or a similar function.
+
 [#195]: https://github.com/okamsn/loopy/pull/195
+[#196]: https://github.com/okamsn/loopy/pull/196
 
 ## 0.12.2
 

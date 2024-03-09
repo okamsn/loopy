@@ -33,6 +33,9 @@ please let me know.
  - Unreleased:
    - The deprecated =:init= keyword argument has been removed.  Use the =with=
      special macro argument instead.
+   - The deprecated =:result-type= keyword argument has been removed.  Use the
+     =finally-return= special macro argument instead in combination with
+     ~cl-coerce~, ~seq-into~, or a similar function.
  - Version 0.12.0:
    - The boolean commands =always=, =never=, and =thereis= now behave more like
      accumulation commands and use ~loopy-result~ by default.

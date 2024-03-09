@@ -778,8 +778,7 @@ In `loopy', processing instructions is stateful."
        [":into" loopy--destr-var-name-edebug-spec]
        [":test" form]
        [":key" form]
-       [":init" form]
-       [":result-type" symbolp]])
+       [":init" form]])
 
 (def-edebug-spec loopy--command-edebug-specs
   [&or
