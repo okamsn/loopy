@@ -2841,23 +2841,75 @@ Using numbers directly will use less variables and more efficient code."
 ;;;; Accumulation Commands
 ;;;;; Final updates
 
-
 (loopy-deftest accumulation-conflicting-final-updates
-  :error loopy-incompatible-accumulation-final-updates
-  :multi-body t
-  :body [((list i '((1) (2) (3)))
-          (collect i)
-          (collect (1+ i) :result-type vector))
+  :doc "Check that commands of the same category but different updates error.
 
-         ((list i '((1) (2) (3)))
-          (collect coll2 i)
-          (collect (1+ i) :result-type vector :into coll2))]
+Previously, this was mostly concerned with using a different
+`:result-type' but in the same command type category.
+
+Wrapping with another eval to make sure variables are set by
+expansion time."
+  :error loopy-incompatible-accumulation-final-updates
+  :wrap (
+         (x . `(cl-labels ((my-loopy-sum-command1 ((&whole cmd _
+                                                           var-or-val
+                                                           &optional
+                                                           maybe-val))
+                             "Set TARGET to the sum of ITEMS."
+                             (let ((var)
+                                   (val))
+                               (if maybe-val
+                                   (setq var var-or-val
+                                         val maybe-val)
+                                 (setq var 'loopy-result
+                                       val var-or-val))
+                               (loopy--check-accumulation-compatibility
+                                loopy--loop-name
+                                var 'number cmd)
+                               `((loopy--accumulation-vars (,var nil))
+                                 (loopy--main-body (setq ,var (+ ,var ,val)))
+                                 (loopy--vars-final-updates
+                                  (,var . (setq ,var (1- ,var)))))))
+                           (my-loopy-sum-command2 ((&whole cmd _
+                                                           var-or-val
+                                                           &optional
+                                                           maybe-val))
+                             "Set TARGET to the sum of ITEMS."
+                             (let ((var)
+                                   (val))
+                               (if maybe-val
+                                   (setq var var-or-val
+                                         val maybe-val)
+                                 (setq var 'loopy-result
+                                       val var-or-val))
+                               (loopy--check-accumulation-compatibility
+                                loopy--loop-name
+                                var 'number cmd)
+                               `((loopy--accumulation-vars (,var nil))
+                                 (loopy--main-body (setq ,var (+ ,var ,val)))
+                                 (loopy--vars-final-updates
+                                  (,var . (setq ,var (- ,var 100))))))))
+                 (let ((loopy-command-parsers
+                        (thread-first loopy-command-parsers
+                                      (map-insert 'sum1
+                                                  #'my-loopy-sum-command1)
+                                      (map-insert 'sum2
+                                                  #'my-loopy-sum-command2)))
+                       (loopy-iter-bare-commands (append '(sum1 sum2)
+                                                         loopy-iter-bare-commands)))
+                   (eval (quote ,x) t)))))
+  :multi-body t
+  :body [((list i '(1 2 3 4 5))
+          (sum1 my-target i)
+          (sum2 my-target i)
+          (finally-return my-target))
+
+         ((list i '(1 2 3 4 5))
+          (sum1 i)
+          (sum2 i))]
   :loopy t
-  :iter-keyword (list append collect vconcat)
-  :iter-bare ((list . listing)
-              (append . appending)
-              (collect . collecting)
-              (vconcat . vconcating)))
+  :iter-keyword (sum1 sum2)
+  :iter-bare t)
 
 ;;;;; Into Argument
 (loopy-deftest accumulation-into-argument
@@ -2887,6 +2939,7 @@ Using numbers directly will use less variables and more efficient code."
 
 ;;;;; Command Compatibility
 (loopy-deftest accumulation-compatibility-lists
+  :doc "Check that commands with different accumulation types should raise error."
   :should t
   :macroexpand t
   :body ((list i '((1 2 3) (4 5 6)))
@@ -2908,6 +2961,7 @@ Using numbers directly will use less variables and more efficient code."
               (nconc . nconcing)))
 
 (loopy-deftest accumulation-compatibility-different-types
+  :doc "Check that commands with different accumulation types should raise error."
   :error loopy-incompatible-accumulations
   :macroexpand t
   :multi-body t
@@ -3131,46 +3185,6 @@ Using numbers directly will use less variables and more efficient code."
   :body ((list i '(((1 . 1) (1 . 2)) ((1 . 2) (2 . 3))))
          (adjoin (a1 a2) i)
          (finally-return a1 a2))
-  :loopy t
-  :iter-keyword (list adjoin)
-  :iter-bare ((list . listing)
-              (adjoin . adjoining)))
-
-(loopy-deftest adjoin-coerce-array/vector
-  :result [1 2 3 4 5]
-  :multi-body t
-  :body [((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type 'array))
-         ((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type array))
-         ((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type 'vector))
-         ((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type vector))]
-  :loopy t
-  :iter-keyword (list adjoin)
-  :iter-bare ((list . listing)
-              (adjoin . adjoining)))
-
-(loopy-deftest adjoin-coerce-list
-  :result '(1 2 3 4 5)
-  :multi-body t
-  :body [((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type 'list))
-         ((list i '(1 2 2 3 4 4 5))
-          (adjoin i :result-type list))]
-  :loopy t
-  :iter-keyword (list adjoin)
-  :iter-bare ((list . listing)
-              (adjoin . adjoining)))
-
-(loopy-deftest adjoin-coerce-string
-  :result "abcd"
-  :multi-body t
-  :body [((list i '(?a ?b ?c ?d))
-          (adjoin i :result-type 'string))
-         ((list i '(?a ?b ?c ?d))
-          (adjoin i :result-type string))]
   :loopy t
   :iter-keyword (list adjoin)
   :iter-bare ((list . listing)
@@ -3490,69 +3504,6 @@ Using `start' and `end' in either order should give the same result."
   :body ((list j '((1 2 3) (4 5 6)))
          (collect (coll1 . coll2) j)
          (finally-return coll1 coll2))
-  :loopy t
-  :iter-keyword (list collect)
-  :iter-bare ((list . listing)
-              (collect . collecting)))
-
-(loopy-deftest collect-coercion-vector
-  :result [1 2 3]
-  :multi-body t
-  :body [((list j '(1 2 3))
-          (collect v j :result-type 'vector)
-          (finally-return v))
-
-         ((list j '(1 2 3))
-          (collect v j :result-type vector)
-          (finally-return v))
-
-         ((list j '(1 2 3))
-          (collect j :result-type 'vector))
-
-         ((list j '(1 2 3))
-          (collect j :result-type vector))]
-  :loopy t
-  :iter-keyword (list collect)
-  :iter-bare ((list . listing)
-              (collect . collecting)))
-
-(loopy-deftest collect-coercion-list
-  :result '(1 2 3)
-  :multi-body t
-  :body [((list j '(1 2 3))
-          (collect v j :result-type 'list)
-          (finally-return v))
-
-         ((list j '(1 2 3))
-          (collect v j :result-type list)
-          (finally-return v))
-
-         ((list j '(1 2 3))
-          (collect j :result-type 'list))
-
-         ((list j '(1 2 3))
-          (collect j :result-type list))]
-  :loopy t
-  :iter-keyword (list collect)
-  :iter-bare ((list . listing)
-              (collect . collecting)))
-
-(loopy-deftest collect-coercion-string
-  :result "abc"
-  :multi-body t
-  :body [((list j '(?a ?b ?c))
-          (collect v j :result-type 'string)
-          (finally-return v))
-
-         ((list j '(?a ?b ?c))
-          (collect v j :result-type string)
-          (finally-return v))
-
-         ((list j '(?a ?b ?c))
-          (collect j :result-type 'string))
-
-         ((list j '(?a ?b ?c))
-          (collect j :result-type string))]
   :loopy t
   :iter-keyword (list collect)
   :iter-bare ((list . listing)
