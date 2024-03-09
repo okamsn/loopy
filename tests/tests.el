@@ -5206,9 +5206,18 @@ Not multiple of 3: 7"
 
 (loopy-deftest always-var
   :result 4
-  :body ((list i '(1 2 3))
-         (always i (numberp i) (1+ i) :into test-var)
-         (finally-return test-var))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (always (and i (numberp i) (1+ i)) :into test-var)
+          (finally-return test-var))
+
+         ((list i '(1 2 3))
+          (always test-var (and i (numberp i) (1+ i)))
+          (finally-return test-var))
+
+         ((list i '(1 2 3))
+          (always (and i (numberp i) (1+ i)))
+          (finally-return loopy-result))]
   :loopy t
   :iter-keyword (list always)
   :iter-bare ((list . listing)
@@ -5257,32 +5266,79 @@ Not multiple of 3: 7"
 
 (loopy-deftest never-var
   :result t
-  :body ((list i '(1 2 3))
-         (never (not (numberp i)) nil :into test-var)
-         (finally-return test-var))
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (never (not (numberp i)) :into test-var)
+          (finally-return test-var))
+
+         ((list i '(1 2 3))
+          (never test-var (not (numberp i)))
+          (finally-return test-var))
+
+         ((list i '(1 2 3))
+          (never (not (numberp i)))
+          (finally-return loopy-result))]
   :loopy t
   :iter-keyword (list never)
   :iter-bare ((list . listing)
               (never . never)))
 
 ;;;;; Thereis
-(loopy-deftest thereis-pass
+(loopy-deftest thereis-val
+  :doc "Make sure `thereis' sets the value correctly."
   :result 6
-  :body ((list i '(1 2 3 4 5 6))
-	 (thereis (and (> i 5) i)))
+  :multi-body t
+  :body [((list i '(1 2 3 4 5 6 7 8 9))
+	  (thereis (and (> i 5) i)))
+
+         ((list i '(1 2 3 4 5 6 7 8 9))
+	  (thereis var (and (> i 5) i))
+          (finally-return var))]
   :loopy t
   :iter-keyword (list thereis)
   :iter-bare ((list . listing)
               (thereis . thereis)))
 
-(loopy-deftest thereis-fail
-  :result nil
-  :body ((list i '(1 2 3 4 5 6))
-	 (thereis (> i 7)))
+(loopy-deftest thereis-pass
+  :doc "Make sure `thereis' ends the loop early when the conditions is non-nil."
+  :result '(6 (1 2 3 4 5 6))
+  :multi-body t
+  :body [((list i '(1 2 3 4 5 6 7 8 9))
+          (collect coll i)
+	  (thereis (and (> i 5) i))
+          (finally-return loopy-result coll))
+
+         ((list i '(1 2 3 4 5 6 7 8 9))
+          (collect i)
+	  (thereis var (and (> i 5) i))
+          (finally-return var loopy-result))]
   :loopy t
-  :iter-keyword (list thereis)
+  :iter-keyword (list thereis collect)
   :iter-bare ((list . listing)
-              (thereis . thereis)))
+              (thereis . thereis)
+              (collect . collecting)))
+
+(loopy-deftest thereis-fail
+  :doc "Make sure `thereis' does not end the loop early and does not set the value."
+  :result nil
+  :multi-body t
+  :body [((list i '(1 2 3 4 5 6))
+	  (thereis (> i 7)))
+
+         ((list i '(1 2 3 4 5 6))
+	  (thereis var (> i 7))
+          (finally-return var))
+
+         ((list i '(1 2 3 4 5 6))
+          (collect i)
+	  (thereis var (> i 7))
+          (finally-return (not (and (eq var nil)
+                                    (equal loopy-result '(1 2 3 4 5 6))))))]
+  :loopy t
+  :iter-keyword (list thereis collect)
+  :iter-bare ((list . listing)
+              (thereis . thereis)
+              (collect . collecting)))
 
 (loopy-deftest thereis-always-same-var
   :error loopy-incompatible-accumulations
@@ -5292,7 +5348,10 @@ Not multiple of 3: 7"
           (thereis i))
          ((list i '(1 2 3))
           (always i :into test)
-          (thereis i :into test))]
+          (thereis i :into test))
+         ((list i '(1 2 3))
+          (always  test i)
+          (thereis test i))]
   :loopy t
   :iter-keyword (list thereis always)
   :iter-bare ((list . listing)))
@@ -5305,7 +5364,10 @@ Not multiple of 3: 7"
            (thereis i))
           ((list i '(1 2 3))
            (never i :into test)
-           (thereis i :into test))]
+           (thereis i :into test))
+          ((list i '(1 2 3))
+           (never   test i)
+           (thereis test i))]
   :loopy t
   :iter-keyword (list thereis never)
   :iter-bare ((list . listing)))
@@ -5502,7 +5564,7 @@ Not multiple of 3: 7"
   :doc "Wrapping with another eval to make sure variables are set by expansion time.
 Also tests that post-conditions work as expected."
   :wrap ((x . `(cl-labels ((my--loopy-always-command-parser ((_ &rest conditions))
-                             "Parse a command of the form `(always [CONDITIONS])'.
+                             "Parse a command of the form `(my-always [CONDITIONS])'.
 If any condition is `nil', `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
                              ;; Return t if loop completes successfully.
@@ -5519,24 +5581,24 @@ Otherwise, `loopy' should return t."
                                   for condition in conditions
                                   collect `(loopy--post-conditions ,condition)))))
                  (let ((loopy-command-parsers
-                        (map-insert loopy-command-parsers 'target-sum
+                        (map-insert loopy-command-parsers 'my-always
                                     #'my--loopy-always-command-parser))
-                       (loopy-iter-bare-commands (cons 'always
+                       (loopy-iter-bare-commands (cons 'my-always
                                                        loopy-iter-bare-commands)))
                    (eval (quote ,x) t)))))
   :result t
   :body ((list i (number-sequence 1 9))
-         (always (< i 10)))
+         (my-always (< i 10) (< i 20)))
   :loopy t
-  :iter-keyword (list always)
+  :iter-keyword (list my-always)
   :iter-bare ((list . listing)
-              (always . always)))
+              (my-always . my-always)))
 
 (loopy-deftest custom-command-always-fail
   :doc "Wrapping with another eval to make sure variables are set by expansion time.
 Also tests that post-conditions work as expected."
   :wrap ((x . `(cl-labels ((my--loopy-always-command-parser ((_ &rest conditions))
-                             "Parse a command of the form `(always [CONDITIONS])'.
+                             "Parse a command of the form `(my-always [CONDITIONS])'.
 If any condition is `nil', `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
                              ;; Return t if loop completes successfully.
@@ -5553,19 +5615,19 @@ Otherwise, `loopy' should return t."
                                   for condition in conditions
                                   collect `(loopy--post-conditions ,condition)))))
                  (let ((loopy-command-parsers
-                        (map-insert loopy-command-parsers 'target-sum
+                        (map-insert loopy-command-parsers 'my-always
                                     #'my--loopy-always-command-parser))
-                       (loopy-iter-bare-commands (cons 'always
+                       (loopy-iter-bare-commands (cons 'my-always
                                                        loopy-iter-bare-commands)))
                    (eval (quote ,x) t)))))
   :result nil
   :body ((list i (number-sequence 1 9))
          (list j '(2 4 6 8 9))
-         (always (< i 10) (cl-evenp j)))
+         (my-always (< i 10) (cl-evenp j)))
   :loopy t
-  :iter-keyword (list always)
+  :iter-keyword (list my-always)
   :iter-bare ((list . listing)
-              (always . always)))
+              (my-always . my-always)))
 
 ;;; Repeated evaluation of macro
 
