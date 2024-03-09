@@ -49,7 +49,7 @@ jobs:
         shopt -u dotglob
         cd loopy-master
         rm -rf .git*/**
-        rm loopy-seq.el
+        rm loopy-dash.el
         cp -t ../loopy-only -r **
         cd ..
     - name: Commit new changes and push for loopy-only.
