@@ -1378,9 +1378,8 @@ VARIABLE is the accumulation variable.  CATEGORY is one of
 `list', `reverse-list', `string', `reverse-string', `vector',
 `reverse-vector', `boolean-thereis', `boolean-always-never',
 `number', and `generic'.  It describes how the accumulation is
-being built and its return type, ignoring special circumstances
-like the `:result-type' keyword argument of commands like
-`collect'.  COMMAND is the accumulation command.
+being built and its return type.  COMMAND is the accumulation
+command.
 
 - Strings are only made by `concat'.
 - Vectors are only made by `vconcat'.
@@ -1698,7 +1697,9 @@ you can use in the instructions:
               (setq explicit-category category
                     implicit-category category)
             (setq explicit-category (plist-get category :explicit)
-                  implicit-category (plist-get category :implicit))))
+                  implicit-category (plist-get category :implicit)))
+          (unless (and explicit-category implicit-category)
+            (error "Explicit or implicit accumulation category is nil.")))
         `(let ((args)
                (opts))
            ;; Compare with `loopy' for the equivalent code:
@@ -1722,15 +1723,6 @@ you can use in the instructions:
                       (setq args parser-args)))
 
            (ignore args opts)
-
-           (when (plist-member opts :result-type)
-             (warn "Loopy: `%s': Use of `:result-type' is deprecated.
-Instead, use a coercing function like `seq-into' in a special
-macro argument, such as `finally-return'.  See also `accum-opt' at the Info node
-`(loopy)Optimizing Accumulations'.
-Warning trigger: %s"
-                   name
-                   cmd))
 
            (let ((arg-length (length args)))
              (cond
@@ -1820,8 +1812,7 @@ Warning trigger: %s"
 (defun loopy--construct-accum-adjoin (plist)
   "Construct optimized accumulation for `adjoin' from PLIST."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
-                       :test test :key key :at pos
-                       :result-type (result-type 'list))
+                       :test test :key key :at pos)
       plist
     (map-let (('start start)
               ('end end))
@@ -1845,10 +1836,7 @@ Warning trigger: %s"
                   `(,@(if (eq pos 'start)
                           at-start-instrs
                         at-end-instrs)
-                    (loopy--vars-final-updates
-                     (,var . ,(if (eq 'list result-type)
-                                  nil
-                                `(setq ,var (cl-coerce ,var (quote ,result-type))))))))
+                    (loopy--vars-final-updates (,var . nil))))
 
               ;; Create list in reverse order.
               (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
@@ -1856,23 +1844,16 @@ Warning trigger: %s"
                       at-end-instrs
                     at-start-instrs)
                 (loopy--vars-final-updates
-                 (,var . (setq ,var  ,(if (eq 'list result-type)
-                                          `(nreverse ,var)
-                                        `(cl-coerce (nreverse ,var)
-                                                    (quote ,result-type)))))))))))))
+                 (,var . (setq ,var (nreverse ,var)))))))))))
 
 (loopy--defaccumulation adjoin
-  "Parse the `adjoin' command as (adjoin VAR VAL &key test key result-type at)
-
-RESULT-TYPE can be used to `cl-coerce' the return value."
-  :keywords (test key result-type at)
+  "Parse the `adjoin' command as (adjoin VAR VAL &key test key at)."
+  :keywords (test key at)
   ;; This is same as implicit behavior, so we only need to specify the explicit.
   :explicit
-  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end)
-                       :result-type (result-type 'list))
+  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos)
-          result-type (loopy--normalize-symbol result-type))
+    (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
       (signal 'loopy-bad-position-command-argument (list pos cmd)))
@@ -1883,8 +1864,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
           `((loopy--main-body
              (loopy--optimized-accum '( :cmd ,cmd :name ,name
                                         :var ,var :val ,val
-                                        :test ,test :key ,key :at ,pos
-                                        :result-type ,result-type)))))
+                                        :test ,test :key ,key :at ,pos)))))
 
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
@@ -1902,18 +1882,11 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
             (loopy--produce-adjoin-end-tracking var val :test test :key key))
            (t
             (signal 'loopy-bad-position-command-argument (list pos cmd))))
-        (loopy--vars-final-updates
-         (,var . ,(if (eq result-type 'list)
-                      nil
-                    `(setq ,var (cl-coerce ,var
-                                           (quote ,(loopy--get-quoted-symbol
-                                                    result-type))))))))))
+        (loopy--vars-final-updates (,var . nil)))))
   :implicit
-  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end)
-                       :result-type (result-type 'list))
+  (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos)
-          result-type (loopy--normalize-symbol result-type))
+    (setq pos (loopy--normalize-symbol pos))
     (when (eq pos 'beginning) (setq pos 'start))
     (unless (memq pos '(start beginning end))
       (signal 'loopy-bad-position-command-argument (list pos cmd)))
@@ -1921,8 +1894,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
                                   :var ,var :val ,val
-                                  :test ,test :key ,key :at ,pos
-                                  :result-type ,result-type)))
+                                  :test ,test :key ,key :at ,pos)))
       (loopy--implicit-return ,var))))
 
 ;;;;;;; Append
@@ -2004,9 +1976,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
 ;;;;;;; Collect
 (defun loopy--construct-accum-collect (plist)
   "Construct an optimized `collect' accumulation from PLIST."
-  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
-                       :at (pos 'end)
-                       :result-type (result-type 'list))
+  (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
     (setq pos (loopy--get-quoted-symbol pos))
     `((loopy--accumulation-vars (,var nil))
@@ -2020,13 +1990,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                 `(,@(if (eq pos 'start)
                         `((loopy--main-body (setq ,var (cons ,val ,var))))
                       (loopy--produce-collect-end-tracking var val))
-                  (loopy--vars-final-updates
-                   (,var . ,(if (eq result-type 'list)
-                                nil
-                              `(setq ,var
-                                     (cl-coerce ,var
-                                                (quote ,(loopy--get-quoted-symbol
-                                                         result-type)))))))))
+                  (loopy--vars-final-updates (,var . nil))))
 
             ;; Create list in reverse order.
             (loopy--check-accumulation-compatibility loop var 'reverse-list cmd)
@@ -2034,21 +1998,14 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     `((loopy--main-body (setq ,var (cons ,val ,var))))
                   (loopy--produce-collect-end-tracking var val))
               (loopy--vars-final-updates
-               (,var . (setq ,var
-                             ,(if (eq result-type 'list)
-                                  `(nreverse ,var)
-                                `(cl-coerce
-                                  (nreverse ,var)
-                                  (quote ,(loopy--get-quoted-symbol result-type)))))))))))))
+               (,var . (setq ,var (nreverse ,var))))))))))
 
 (loopy--defaccumulation collect
-  "Parse the `collect' command as (collect VAR VAL &key result-type at)."
-  :keywords (result-type at)
-  :explicit (loopy--plist-bind ( :at (pos (quote 'end))
-                                 :result-type (result-type 'list))
+  "Parse the `collect' command as (collect VAR VAL &key at)."
+  :keywords (at)
+  :explicit (loopy--plist-bind ( :at (pos (quote 'end)))
                 opts
-              (setq pos (loopy--normalize-symbol pos)
-                    result-type (loopy--normalize-symbol result-type))
+              (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
                 (signal 'loopy-bad-position-command-argument (list pos cmd)))
@@ -2058,8 +2015,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                     `((loopy--main-body
                        (loopy--optimized-accum
                         '( :loop ,loopy--loop-name :var ,var :val ,val
-                           :cmd ,cmd :name ,name :at ,pos
-                           :result-type ,result-type)))))
+                           :cmd ,cmd :name ,name :at ,pos)))))
                 (loopy--check-accumulation-compatibility
                  loopy--loop-name var 'list cmd)
                 `((loopy--accumulation-vars (,var nil))
@@ -2070,19 +2026,11 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
                       (loopy--produce-collect-end-tracking var val))
                      (t
                       (signal 'loopy-bad-position-command-argument (list pos cmd))))
-                  (loopy--vars-final-updates
-                   (,var . ,(if (eq result-type 'list)
-                                nil
-                              `(setq ,var
-                                     (cl-coerce ,var (quote
-                                                      ,(loopy--get-quoted-symbol
-                                                        result-type))))))))))
+                  (loopy--vars-final-updates (,var . ,nil)))))
 
-  :implicit (loopy--plist-bind ( :at (pos 'end)
-                                 :result-type (result-type 'list))
+  :implicit (loopy--plist-bind ( :at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos)
-                    result-type (loopy--normalize-symbol result-type))
+              (setq pos (loopy--normalize-symbol pos))
               (when (eq pos 'beginning) (setq pos 'start))
               (unless (memq pos '(start beginning end))
                 (signal 'loopy-bad-position-command-argument (list pos cmd)))
@@ -2090,8 +2038,7 @@ RESULT-TYPE can be used to `cl-coerce' the return value."
               `((loopy--main-body
                  (loopy--optimized-accum
                   '( :loop ,loopy--loop-name :var ,var :val ,val
-                     :cmd ,cmd :name ,name :at ,pos
-                     :result-type ,result-type)))
+                     :cmd ,cmd :name ,name :at ,pos)))
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Concat
