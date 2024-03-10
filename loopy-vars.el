@@ -475,14 +475,21 @@ returned by the macro if no other value is returned.")
 ;;;;; Loop Command Variables
 
 (defvar loopy-result nil
-  "The result of using implicit accumulation commands in `loopy'.
+  "The default variable used by accumulation and boolean commands in `loopy'.
 
-All accumulation commands with no given variable (such
-as `(collect my-val)') will accumulate into `loopy-result'.
+When a variable is not specified for accumulation commands (such
+as `collect') or for boolean commands (such as `always'), those
+commands will use `loopy-result' for their operation and set it
+as the implicit return value of the loop.
 
-While `loopy-result' is an implied return value, it need not be
-the only implied value, and can still be returned in a list with
-other implied return values, if any.")
+When optimized accumulation commands use `loopy-result', the
+variables value is finalized after the loop ends.  Therefore, in
+that situation, its value shouldn't be used while the loop is
+running.
+
+This variable can be safely referenced in code produced by
+special macro arguments (such as `finally-return') after the loop
+runs and its value is finalized.")
 
 (defvar loopy--generalized-vars nil
   "A list of symbols and macro expansions explicitly named in loop commands.

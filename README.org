@@ -36,6 +36,9 @@ please let me know.
    - The deprecated =:result-type= keyword argument has been removed.  Use the
      =finally-return= special macro argument instead in combination with
      ~cl-coerce~, ~seq-into~, or a similar function.
+   - The commands =always=, =never=, and =thereis= now have the signature
+     =(command [VAR] CONDITION &key into)=, similar to accumulation commands.
+     They no longer take multiple condition arguments.
  - Version 0.12.0:
    - The boolean commands =always=, =never=, and =thereis= now behave more like
      accumulation commands and use ~loopy-result~ by default.

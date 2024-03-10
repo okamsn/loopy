@@ -3454,61 +3454,26 @@ them to be so, you are recommended to use =accum-opt= on those variables.
 :END:
 
 {{{dfn(Boolean commands)}}} are used to test whether a condition holds true
-during the loop.  They work like a combination of iteration and accumulation
-commands, in that values are stored in ~loopy-result~ and that they can
-terminate the loop.
+during the loop.  They work like a combination of accumulation commands
+([[#accumulation-commands]]) and early-exit commands ([[#exiting-the-loop-early]]), in
+that values are by default stored in ~loopy-result~ and that they can terminate
+the loop without forcing a return value.
 
-Be aware of the following:
-
-- Currently, unlike accumulation commands, there is no non-keyword way to
-  specify a variable.  The first argument (the only required argument) of each
-  boolean command is a condition to check.
-
-- Like accumulation commands, the keyword =:into= can be used the specify a
-  variable other than ~loopy-result~.
-
-- The =always= and =never= commands must use the same variable to work
-  together correctly.  By default, the both use ~loopy-result~.
-
-- These commands exit the loop without forcing a return value
-  ([[#exiting-the-loop-early]]).  Therefore, optimized accumulation variables can be
-  finalized even when the loop ends, as happens with the =leave= command.
-  However, because the boolean commands already use ~loopy-result~, such
-  optimized accumulation variables must be created with the special macro
-  argument =accum-opt= and must be used explicitly, as in the below example.
-
-
-#+begin_src emacs-lisp
-  ;; => (nil (1 3 5))
-  (loopy (accum-opt coll)
-         (list i '(1 3 5 6 9))
-         (always (cl-oddp i))
-         (collect coll i)
-         (finally-return loopy-result coll))
-
-  ;; Works similarly, but forces the `nil' return value.
-  ;; Returns the collection if `always' doesn't trigger an exit.
-  ;; Attempting similar with CL's `iterate' will signal an error.
-  ;;
-  ;; => nil
-  (cl-loop for i in '(1 3 5 6 9)
-           always (cl-oddp i)
-           collect i)
-#+end_src
-
-#+attr_texinfo: :tag Warn
-#+begin_quote
-Using the command =thereis= for a variable is incompatible with using the
-commands =always= and =never= on that same variable, as this would create
-conflicting initial values for the implicit return value (both using
-~loopy-result~).
-#+end_quote
+#+ATTR_TEXINFO: :tag Note
+#+BEGIN_QUOTE
+Due to how the commands work, there are restrictions to how their target
+variables can be used.  First, the =always= and =never= commands must use the
+same variable to work together correctly.  Second, using the command =thereis=
+with the same variable as =always= (and/or =never=) is an error, as this would
+create conflicting initial values for the implicit return value.
+#+END_QUOTE
 
 
 #+findex: always
-- =(always EXPR &key into)= :: Check the result of the condition =EXPR=.  If the
-  condition evaluates to ~nil~, end the loop.  Otherwise, the loop returns the
-  final value of the condition or ~t~ if the command is never run.
+- =(always [VAR] EXPR &key into)= :: Check the result of the condition =EXPR=.
+  If the condition evaluates to ~nil~, end the loop.  If the command was run,
+  return the value of the condition via =VAR=.  Otherwise, if the command was
+  never run, return ~t~ via =VAR=.
 
   The steps are thus:
   1. The variable (by default, ~loopy-result~) is initially bound to ~t~, using
@@ -3547,15 +3512,15 @@ conflicting initial values for the implicit return value (both using
   #+END_SRC
 
 #+findex: never
-- =(never EXPR &key into)= :: Check the condition =EXPR=.  If the condition is
-  ever non-nil, then the loop is exited and returns ~nil~.  Otherwise the loop
-  returns ~t~.
+- =(never [VAR] EXPR &key into)= :: Check the condition =EXPR=.  If the
+  condition is ever non-~nil~, then the loop is exited and returns ~nil~ via
+  =VAR=.  Otherwise the loop returns ~t~ via =VAR=.
 
   The steps are thus:
   1. The variable (by default, ~loopy-result~) is initialized to ~t~ and used as
      the loop's implicit return value.
   2. The value of the condition is checked.
-  3. If the condition is non-nil, then the variable is set to ~nil~
+  3. If the condition is non-~nil~, then the variable is set to ~nil~
      and the loop is exited.
 
 
@@ -3588,15 +3553,15 @@ conflicting initial values for the implicit return value (both using
   #+end_src
 
 #+findex: thereis
-- =(thereis EXPR &key into)= :: Check the result of the condition =EXPR=.  If
-  the condition evaluates to a non-~nil~ value, the loop returns that value.
-  Otherwise, the loop returns nil.
+- =(thereis [VAR] EXPR &key into)= :: Check the result of the condition =EXPR=.
+  If the condition evaluates to a non-~nil~ value, the loop returns that value
+  via =VAR=.  Otherwise, the loop returns ~nil~ via =VAR=.
 
   The steps are thus:
   1. The variable (by default, ~loopy-result~) is initialized to ~nil~ and used
      as the implicit return value of the loop.
   2. The value of the condition is stored in the variable.
-  3. If the value of the variable is non-nil, the loop exits.
+  3. If the value of the variable is non-~nil~, the loop exits.
 
 
   #+BEGIN_SRC emacs-lisp
