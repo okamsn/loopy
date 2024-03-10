@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org668e9bc
+@float Listing,orga8850f4
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgcba0f7c
+@float Listing,org2f13e54
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org87acf60
+@float Listing,orgb1a31ca
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1122,7 +1122,7 @@ to @code{nil} or, if specified, a default value.  Additionally, one may bind a
 variable to record whether the list was long enough to contain the optional
 value.
 
-As in a CL @code{lambda-list}, the variable has the one of the following forms:
+As in a CL @code{lambda} list, the variable has the one of the following forms:
 
 @itemize
 @item
@@ -3727,69 +3727,28 @@ them to be so, you are recommended to use @samp{accum-opt} on those variables.
 @section Checking Conditions
 
 @dfn{Boolean commands} are used to test whether a condition holds true
-during the loop.  They work like a combination of iteration and accumulation
-commands, in that values are stored in @code{loopy-result} and that they can
-terminate the loop.
+during the loop.  They work like a combination of accumulation commands
+(@ref{Accumulation}) and early-exit commands (@ref{Early Exit}), in
+that values are by default stored in @code{loopy-result} and that they can terminate
+the loop without forcing a return value.
 
-Be aware of the following:
-
-@itemize
-@item
-Currently, unlike accumulation commands, there is no non-keyword way to
-specify a variable.  The first argument (the only required argument) of each
-boolean command is a condition to check.
-
-@item
-Like accumulation commands, the keyword @samp{:into} can be used the specify a
-variable other than @code{loopy-result}.
-
-@item
-The @samp{always} and @samp{never} commands must use the same variable to work
-together correctly.  By default, the both use @code{loopy-result}.
-
-@item
-These commands exit the loop without forcing a return value
-(@ref{Early Exit}).  Therefore, optimized accumulation variables can be
-finalized even when the loop ends, as happens with the @samp{leave} command.
-However, because the boolean commands already use @code{loopy-result}, such
-optimized accumulation variables must be created with the special macro
-argument @samp{accum-opt} and must be used explicitly, as in the below example.
-@end itemize
-
-
-@lisp
-;; => (nil (1 3 5))
-(loopy (accum-opt coll)
-       (list i '(1 3 5 6 9))
-       (always (cl-oddp i))
-       (collect coll i)
-       (finally-return loopy-result coll))
-
-;; Works similarly, but forces the `nil' return value.
-;; Returns the collection if `always' doesn't trigger an exit.
-;; Attempting similar with CL's `iterate' will signal an error.
-;;
-;; => nil
-(cl-loop for i in '(1 3 5 6 9)
-         always (cl-oddp i)
-         collect i)
-@end lisp
-
-@quotation Warn
-Using the command @samp{thereis} for a variable is incompatible with using the
-commands @samp{always} and @samp{never} on that same variable, as this would create
-conflicting initial values for the implicit return value (both using
-@code{loopy-result}).
+@quotation Note
+Due to how the commands work, there are restrictions to how their target
+variables can be used.  First, the @samp{always} and @samp{never} commands must use the
+same variable to work together correctly.  Second, using the command @samp{thereis}
+with the same variable as @samp{always} (and/or @samp{never}) is an error, as this would
+create conflicting initial values for the implicit return value.
 
 @end quotation
 
 
 @findex always
 @table @asis
-@item @samp{(always EXPR &key into)}
-Check the result of the condition @samp{EXPR}.  If the
-condition evaluates to @code{nil}, end the loop.  Otherwise, the loop returns the
-final value of the condition or @code{t} if the command is never run.
+@item @samp{(always [VAR] EXPR &key into)}
+Check the result of the condition @samp{EXPR}.
+If the condition evaluates to @code{nil}, end the loop.  If the command was run,
+return the value of the condition via @samp{VAR}.  Otherwise, if the command was
+never run, return @code{t} via @samp{VAR}.
 
 The steps are thus:
 @enumerate
@@ -3836,10 +3795,10 @@ remain @code{t}.
 
 @findex never
 @table @asis
-@item @samp{(never EXPR &key into)}
-Check the condition @samp{EXPR}.  If the condition is
-ever non-nil, then the loop is exited and returns @code{nil}.  Otherwise the loop
-returns @code{t}.
+@item @samp{(never [VAR] EXPR &key into)}
+Check the condition @samp{EXPR}.  If the
+condition is ever non-@code{nil}, then the loop is exited and returns @code{nil} via
+@samp{VAR}.  Otherwise the loop returns @code{t} via @samp{VAR}.
 
 The steps are thus:
 @enumerate
@@ -3849,7 +3808,7 @@ the loop's implicit return value.
 @item
 The value of the condition is checked.
 @item
-If the condition is non-nil, then the variable is set to @code{nil}
+If the condition is non-@code{nil}, then the variable is set to @code{nil}
 and the loop is exited.
 @end enumerate
 @end table
@@ -3885,10 +3844,10 @@ the same variable.
 
 @findex thereis
 @table @asis
-@item @samp{(thereis EXPR &key into)}
-Check the result of the condition @samp{EXPR}.  If
-the condition evaluates to a non-@code{nil} value, the loop returns that value.
-Otherwise, the loop returns nil.
+@item @samp{(thereis [VAR] EXPR &key into)}
+Check the result of the condition @samp{EXPR}.
+If the condition evaluates to a non-@code{nil} value, the loop returns that value
+via @samp{VAR}.  Otherwise, the loop returns @code{nil} via @samp{VAR}.
 
 The steps are thus:
 @enumerate
@@ -3898,7 +3857,7 @@ as the implicit return value of the loop.
 @item
 The value of the condition is stored in the variable.
 @item
-If the value of the variable is non-nil, the loop exits.
+If the value of the variable is non-@code{nil}, the loop exits.
 @end enumerate
 @end table
 
@@ -4588,7 +4547,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org748b4ce
+@float Listing,org5bba81f
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

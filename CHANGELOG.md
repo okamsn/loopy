@@ -13,8 +13,14 @@ This document describes the user-facing changes to Loopy.
   [#154]).  Use the `finally-return` special macro argument instead in
   combination with `cl-coerce`, `seq-into`, or a similar function.
 
+- The commands `always`, `never`, and `thereis` now have the signature
+  `(command [VAR] CONDITION &key into)`, similar to accumulation commands
+  ([#197], [#145]).  These commands no longer take multiple conditions in the
+  same command.
+
 [#195]: https://github.com/okamsn/loopy/pull/195
 [#196]: https://github.com/okamsn/loopy/pull/196
+[#197]: https://github.com/okamsn/loopy/pull/197
 
 ## 0.12.2
 

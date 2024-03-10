@@ -2667,119 +2667,52 @@ This function is called by `loopy--expand-optimized-accum'."
 
 ;;;;; Boolean Commands
 ;;;;;; Always
-(cl-defun loopy--parse-always-command
-    ((&whole cmd _ condition &rest other-conditions-or-var))
-  "Parse a command of the form `(always CONDITION [CONDITIONS] &key into)'.
+(loopy--defaccumulation always
+  "Parse a command of the form `(always VAR CONDITION &key into)'.
 
-If any condition is nil, `loopy' should immediately return nil.
-Otherwise, `loopy' should return the final value of CONDITIONS,
+If CONDITION is nil, `loopy' should immediately return nil.
+Otherwise, `loopy' should return the final value of CONDITION,
 or t if the command is never evaluated."
-  (let* ((var 'loopy-result)
-         (other-conditions nil)
-         (final-two-cond (last other-conditions-or-var 2)))
-
-    (if (eq :into (cl-first final-two-cond))
-        (setq var (cl-second final-two-cond)
-              other-conditions (butlast other-conditions-or-var 2))
-      (setq other-conditions other-conditions-or-var))
-
-    (when other-conditions
-      (warn "Loopy: `always': Use of multiple conditions is deprecated.
-This command's behavior will be changed to be (always [VAR] CONDITION &key into),
-like accumulation commands.
-Warning trigger: %s" cmd))
-
-    (loopy--check-accumulation-compatibility
-     loopy--loop-name var 'boolean-always-never cmd)
-
-    `((loopy--accumulation-vars (,var t))
-      (loopy--implicit-return ,var)
-      (loopy--main-body (setq ,var
-                              ,(if other-conditions
-                                   `(and ,condition ,@other-conditions)
-                                 condition)))
-      ,@(cl-destructuring-bind (main-body rest)
-            (loopy--extract-main-body (loopy--parse-leave-command 'ignored-arg))
-          (cons `(loopy--main-body (unless ,var ,@main-body))
-                rest)))))
+  :category boolean-always-never
+  :explicit `((loopy--accumulation-vars (,var t))
+              (loopy--implicit-return ,var)
+              (loopy--main-body (setq ,var ,val))
+              ,@(loopy--bind-main-body (main-body rest)
+                    (loopy--parse-leave-command 'ignored-arg)
+                  (cons `(loopy--main-body (unless ,var ,@main-body))
+                        rest))))
 
 ;;;;;; Never
-(cl-defun loopy--parse-never-command
-    ((&whole cmd _ condition &rest other-conditions-or-var))
-  "Parse a command of the form `(never CONDITION [CONDITIONS] &key into)'.
+(loopy--defaccumulation never
+  "Parse a command of the form `(never VAR CONDITION &key into)'.
 
-If any condition is t, `loopy' should immediately return nil.
+If CONDITION is t, `loopy' should immediately return nil.
 Otherwise, `loopy' should return t."
-  ;; Unlike `always', we don't set `loopy-result' to the conditions' values,
-  ;; since they are expected to all be `nil' anyway.
-  (let* ((var 'loopy-result)
-         (other-conditions nil)
-         (final-two-cond (last other-conditions-or-var 2)))
-
-    (if (eq :into (cl-first final-two-cond))
-        (setq var (cl-second final-two-cond)
-              other-conditions (butlast other-conditions-or-var 2))
-      (setq other-conditions other-conditions-or-var))
-
-    (when other-conditions
-      (warn "Loopy: `never': Use of multiple conditions is deprecated.
-This command's behavior will be changed to be (never [VAR] CONDITION &key into),
-like accumulation commands.
-Warning trigger: %s" cmd))
-
-    (loopy--check-accumulation-compatibility
-     loopy--loop-name var 'boolean-always-never cmd)
-
-    `((loopy--accumulation-vars (,var t))
-      (loopy--implicit-return ,var)
-      ,@(cl-destructuring-bind (main-body rest)
-            (loopy--extract-main-body (loopy--parse-leave-command 'ignored-arg))
-          (cons `(loopy--main-body (when ,(if other-conditions
-                                              `(or ,condition ,@other-conditions)
-                                            condition)
-                                     (setq ,var nil)
-                                     ,@main-body))
-                rest)))))
+  :category boolean-always-never
+  :explicit `((loopy--accumulation-vars (,var t))
+              (loopy--implicit-return ,var)
+              ,@(loopy--bind-main-body (main-body rest)
+                    (loopy--parse-leave-command 'ignored-arg)
+                  (cons `(loopy--main-body (when ,val
+                                             (setq ,var nil)
+                                             ,@main-body))
+                        rest))))
 
 ;;;;;; Thereis
-(cl-defun loopy--parse-thereis-command
-    ((&whole cmd _ condition &rest other-conditions-or-var))
-  "Parse the `thereis' command as (thereis CONDITION [CONDITIONS] &key into).
+(loopy--defaccumulation thereis
+  "Parse the `thereis' command as (thereis VAR CONDITION &key into).
 
-If any condition is non-nil, its value is immediately returned
+If CONDITION is non-nil, its value is immediately returned
 and the loop is exited.  Otherwise the loop continues and nil is
 returned."
-  (let* ((var 'loopy-result)
-         (other-conditions nil)
-         (final-two-cond (last other-conditions-or-var 2)))
-
-    (if (eq :into (cl-first final-two-cond))
-        (setq var (cl-second final-two-cond)
-              other-conditions (butlast other-conditions-or-var 2))
-      (setq other-conditions other-conditions-or-var))
-
-    (when other-conditions
-      (warn "Loopy: `thereis': Use of multiple conditions is deprecated.
-This command's behavior will be changed to be (thereis [VAR] CONDITION &key into),
-like accumulation commands.
-Warning trigger: %s" cmd))
-
-    (loopy--check-accumulation-compatibility
-     loopy--loop-name var 'boolean-thereis cmd)
-
-    `((loopy--accumulation-vars (,var nil))
-      (loopy--implicit-return ,var)
-      (loopy--main-body (setq ,var ,(if other-conditions
-                                        `(and ,condition ,@other-conditions)
-                                      condition)))
-      ,@(cl-destructuring-bind (main-body rest)
-            (loopy--extract-main-body (loopy--parse-leave-command 'ignored-arg))
-          (cons `(loopy--main-body (when ,(if other-conditions
-                                              `(or ,condition ,@other-conditions)
-                                            condition)
-                                     ,@main-body))
-                rest)))))
-
+  :category boolean-thereis
+  :explicit `((loopy--accumulation-vars (,var nil))
+              (loopy--implicit-return ,var)
+              (loopy--main-body (setq ,var ,val))
+              ,@(loopy--bind-main-body (main-body rest)
+                    (loopy--parse-leave-command 'ignored-arg)
+                  (cons `(loopy--main-body (when ,val ,@main-body))
+                        rest))))
 
 ;;;;; Exiting and Skipping
 ;;;;;; Leave
