@@ -46,6 +46,7 @@ libraries @samp{seq} (@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref
 * Custom Commands::              Extending `loopy' with personal commands.
 * Comparing to @code{cl-loop}::  Why `loopy' instead of `cl-loop'.
 * Translating to and from @samp{cl-loop}:: Converting `cl-loop' to `loopy', and vice versa.
+* Translating to and from Common Lisp's @samp{iterate}::
 * Macro Argument and Loop Command Index::
 * Variable Index::
 * Concept Index::
@@ -104,6 +105,29 @@ Translating to and from @samp{cl-loop}
 * Iteration Clauses::
 * Accumulation Clauses::
 * Other Clauses::
+
+Translating to and from Common Lisp's @samp{iterate}
+
+* Clauses::
+* Variable Binding and Setting::
+* Gathering Clauses::
+
+Clauses
+
+* Drivers::
+
+Drivers
+
+* Numerical Iteration::
+* Sequence Iteration: Sequence Iteration (1). 
+* Generalized Drivers::
+* Generators::
+* Previous Values of Driver Variables::
+
+Gathering Clauses
+
+* Reductions::
+* Accumulations::
 
 @end detailmenu
 @end menu
@@ -705,7 +729,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orga8850f4
+@float Listing,org1e54862
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +911,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org2f13e54
+@float Listing,orgfb3390c
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +926,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgb1a31ca
+@float Listing,org5acc6f7
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -4547,7 +4571,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org5bba81f
+@float Listing,org431c20f
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -6183,6 +6207,313 @@ special form @code{cond}.
 @tab @samp{(do EXPRS)} as a loop command
 @item @samp{return EXPR}
 @tab @samp{(return EXPR)} as a loop command
+@end multitable
+
+@node Translating to and from Common Lisp's @samp{iterate}
+@chapter Translating to and from Common Lisp's @samp{iterate}
+
+There are several features in the package Loopy inspired by the Common Lisp package
+Iterate, but it is important to note the Loopy is not a port of Iterate to
+Emacs Lisp.
+
+Because Loopy's macro @code{loopy-iter} is more similar to Iterate's macro @code{iter}
+than Loopy's macro @code{loopy} is, this section compares @code{iter} and @code{loopy-iter},
+not @code{iter} and @code{loopy}, using the ``bare names'' allowed in @code{loopy-iter} for
+Loopy's looping constructs.  Therefore, before reading this section, first read
+the documentation of @code{loopy-iter} (@ref{The @code{loopy-iter} Macro}) to understand its differences
+with @code{loopy}.  Basic concepts are not repeated in this section.
+
+This section follows a similar layout as the iterate manual available online
+(@uref{https://iterate.common-lisp.dev/doc/index.html}).  Like in that manual, although
+clauses are surrounded by parentheses when used in the macro, for space reasons,
+the parentheses are excluded from the comparisons.
+
+@menu
+* Clauses::
+* Variable Binding and Setting::
+* Gathering Clauses::
+@end menu
+
+@node Clauses
+@section Clauses
+
+Loopy names a difference between constructs which affected the generated loop
+(``loop commands'') and constructs which affect code surrounding the loop
+(``special macro arguments'').  Iterate calls both kinds of constructs ``clauses''.
+
+@menu
+* Drivers::
+@end menu
+
+@node Drivers
+@subsection Drivers
+
+The Iterate manual describes a ``driver'' as a clause the ``causes the iteration to
+go forward''.  Loopy calls these ``iteration commands'' or ``iteration loop
+commands''.
+
+@multitable {aaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{repeat N}
+@tab @samp{repeating N}, @samp{cycling N}
+@end multitable
+
+@menu
+* Numerical Iteration::
+* Sequence Iteration: Sequence Iteration (1). 
+* Generalized Drivers::
+* Generators::
+* Previous Values of Driver Variables::
+@end menu
+
+@node Numerical Iteration
+@subsubsection Numerical Iteration
+
+The Loopy command @samp{numbering} supports the same keywords used for numerical
+iteration in Iterate.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{for i upfrom 0}
+@tab @samp{numbering i :upfrom 0}
+@item @samp{for i from 5}
+@tab @samp{numbering i :from 5}
+@item @samp{for i downfrom 0}
+@tab @samp{numbering i :downfrom 0}
+@item @samp{for i from 1 to 3}
+@tab @samp{numbering i :from 1 :to 3}
+@item @samp{for i from 1 below 3}
+@tab @samp{numbering i :from 1 :below 3}
+@item @samp{for i from 1 to 3 by 2}
+@tab @samp{numbering i :from 1 :to 3 :by 2}
+@item @samp{for i from 1 below 3 by 2}
+@tab @samp{numbering i :from 1 :below 3 by 2}
+@item @samp{for i from 5 downto 3}
+@tab @samp{numbering i :from 5 :downto 3}
+@end multitable
+
+@node Sequence Iteration (1)
+@subsubsection Sequence Iteration
+
+In Loopy, sequence iteration is divided into ``sequence iteration''
+(@ref{Sequence Iteration}), ``sequence reference iteration''
+(@ref{Sequence Reference Iteration}), and ``sequence index iteration''
+(@ref{Sequence Index Iteration}).
+
+The commands @samp{sequence}, @samp{sequence-ref}, @samp{sequence-index}, @samp{array}, @samp{array-ref},
+and their corresponding aliases support the same keywords as the @samp{numbers}
+commands (@ref{Numeric Iteration}).
+
+Loopy does not implement any constructs for working files, streams, or package
+namespaces.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{for var in list &optional by step-function}
+@tab @samp{listing VAR LIST :by FUNC}
+@item @samp{for var on list &optional by step-function}
+@tab @samp{consing VAR LIST :by FUNC}
+@item @samp{for var in-vector vector &sequence}
+@tab @samp{arraying-ref VAR ARRAY &keys}
+@item @samp{for var in-sequence seq &sequence}
+@tab @samp{sequencing-ref VAR STRING &keys}
+@item @samp{for var in-string string &sequence}
+@tab @samp{stringing-ref VAR STRING &keys}
+@item @samp{for var index-of-vector vector &sequence}
+@tab @samp{arraying-index VAR ARRAY &keys}
+@item @samp{for var index-of-sequence sequence &sequence}
+@tab @samp{sequencing-index VAR ARRAY &keys}
+@item @samp{for var index-of-string string &sequence}
+@tab @samp{stringing-index VAR ARRAY &keys}
+@item @samp{for (key value) in-hashtable table}
+@tab @samp{mapping-pairs (KEY . VALUE} TABLE=
+@item @samp{for var in-package package &optional external-only ext}
+@tab Not implemented.
+@item @samp{for var in-packages &optional having-access symbol-types}
+@tab Not implemented.
+@item @samp{for var in-file name &optional using reader}
+@tab Not implemented.
+@item @samp{for var in-stream stream &optional using reader}
+@tab Not implemented.
+@end multitable
+
+@node Generalized Drivers
+@subsubsection Generalized Drivers
+
+Loopy does not currently implement something like Iterate's generalized drivers,
+though it does provide constructs for the underlying features.  Updates of
+generic variables can be done with the @samp{set} command.  Exiting the loop can be
+done with the @samp{leave} command.  The Iterate manual's provided example
+
+@lisp
+;; => (1 2 3 4 5 6 7 8 9 10 11)
+(iterate::iter
+  (initially (setq i 0))
+  (for i next (if (> i 10) (terminate) (incf i)))
+  (collecting i))
+@end lisp
+
+could in Loopy be done as
+
+@lisp
+;; => (1 2 3 4 5 6 7 8 9 10 11)
+(loopy-iter (with (i 0))
+            (if (> i 10)
+                (leaving)
+              (cl-incf i))
+            (collecting i))
+
+;; => (1 2 3 4 5 6 7 8 9 10 11)
+(loopy (set i 1 (1+ i))
+       (when (> i 10)
+         (leave))
+       (collect i))
+@end lisp
+
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{for var next expr}
+@tab Not implemented exactly the same.
+@item @samp{for var do-next form}
+@tab Not implemented exactly the same.
+@end multitable
+
+@node Generators
+@subsubsection Generators
+
+Loopy supports iterating through Emacs Lisp iterators and generators
+(@ref{Generators,,,elisp,}) via the command @samp{iter}.  However, Loopy does not
+currently provide a feature to turn loop commands into generators.
+
+@node Previous Values of Driver Variables
+@subsubsection Previous Values of Driver Variables
+
+Previous values can be gotten using the command @samp{set-prev}.  Setting the initial
+value of the given variable is done using the @samp{with} special macro argument.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{for pvar previous var &optional initially init back n}
+@tab @samp{set-prev VAR VAL &key back}
+@end multitable
+
+@node Variable Binding and Setting
+@section Variable Binding and Setting
+
+To set initial values, Loopy uses the @samp{with} special macro argument.  To set
+variable values during the loop, Loopy uses the @samp{set} command, which can be used
+below the top level of the loop (in other words, within other constructs).
+The @samp{set} command can take multiple values, with the final value being used
+repeated after the preceeding values are used.  This would be like
+if Iterate or @code{cl-loop} allowed multiple @samp{then THEN-EXPR} forms.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{with var &optional = value}
+@tab @samp{with (var value)}
+@item @samp{for var = expr}
+@tab @samp{setting VAR EXPR}
+@item @samp{for var initially init-expr then then-expr}
+@tab @samp{(with (VAR INIT-EXPR)) (setting VAR THEN-EXPR)}
+@item @samp{for var first first-expr then then-expr}
+@tab @samp{setting VAR FIRST-EXPR THEN-EXPR}
+@end multitable
+
+@node Gathering Clauses
+@section Gathering Clauses
+
+Iterate's ``gathering clauses'' are named ``accumulation commands''.  Loopy
+accumulation commands support the keyword argument @samp{:into}, but the idiomatic
+behavior is to use the accumulation variable as the first argument to the
+command.
+
+For the @samp{reduce} command, the initial value is controlled by the @samp{with} special
+macro argument.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{sum expr &optional into var}
+@tab @samp{summing [VAR] EXPR}
+@item @samp{multiply expr &optional into var}
+@tab @samp{multiplying [VAR] EXPR}
+@item @samp{counting expr &optional into var}
+@tab @samp{counting [VAR] EXPR}
+@item @samp{maximize expr &optional into var}
+@tab @samp{maximizing [VAR] EXPR}
+@item @samp{minimize expr &optional into var}
+@tab @samp{minimizing [VAR] EXPR}
+@item @samp{reducing expr by func &optional initial-value init-val into var}
+@tab @samp{reducing [VAR] EXPR FUNC}
+@end multitable
+
+@menu
+* Reductions::
+* Accumulations::
+@end menu
+
+@node Reductions
+@subsection Reductions
+
+In Loopy, the initial value of the @samp{reduce} accumulation command (and the other
+accumulation commands) can be set via the @samp{with} special macro argument.  There
+is no keyword argument for setting the initial value.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{sum expr &optional into var}
+@tab @samp{summing [VAR] EXPR}
+@item @samp{multiply expr &optional into var}
+@tab @samp{multiplying [VAR] EXPR}
+@item @samp{counting expr &optional into var}
+@tab @samp{counting [VAR] EXPR}
+@item @samp{maximize expr &optional into var}
+@tab @samp{maximizing [VAR] EXPR}
+@item @samp{minimize expr &optional into var}
+@tab @samp{minimiing [VAR] EXPR}
+@item @samp{reducing expr by func &optional initial-value init-val into var}
+@tab @samp{reducing [VAR] EXPR :by FUNC}
+@end multitable
+
+@node Accumulations
+@subsection Accumulations
+
+For accumulations, Loopy does not provide a @samp{:result-type} keyword.  Because the
+accumulation variable (by default, @code{loopy-result}) is always known and one can
+specify when an accumulation is optimized using the @samp{accum-opt} special macro
+argument, one can simply use the usual functions like @code{seq-into} and @code{cl-coerce}
+to operate on loop results, including when using multiple optimized
+accumulations.
+
+Loopy supports the same places as Iterate (@samp{start} and @samp{end}) for list-based
+accumulations, which can be used with @samp{accum-opt} to specify how an optimized
+accumulation should work.
+
+@multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+@headitem @code{iter}
+@tab @code{loopy-iter}
+@item @samp{collect expr &optional}
+@tab @samp{collecting [VAR] EXPR}
+@item @samp{adjoining expr &optional into var test test at place result-type type}
+@tab @samp{adjoining [VAR] EXPR :at PLACE}
+@item @samp{appending expr &optional into var at place}
+@tab @samp{appending [VAR] EXPR :at PLACE}
+@item @samp{nconcing expr &optional into var at place}
+@tab @samp{nconcing [VAR] EXPR :at PLACE}
+@item @samp{unioning expr &optional into var test test at place}
+@tab @samp{unioning [VAR] EXPR :at PLACE :test TEST}
+@item @samp{nunioning expr &optional into var test test at place}
+@tab @samp{nunioning [VAR] EXPR :at PLACE :test TEST}
+@item @samp{accumulate expr by func &optional initial-value init-val into var}
+@tab =accumulating [VAR] EXPR FUNC
 @end multitable
 
 @node Macro Argument and Loop Command Index

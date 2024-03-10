@@ -84,6 +84,20 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   - [[#iteration-clauses][Iteration Clauses]]
   - [[#accumulation-clauses][Accumulation Clauses]]
   - [[#other-clauses][Other Clauses]]
+- [[#translating-to-and-from-common-lisps-iterate][Translating to and from Common Lisp's =iterate=]]
+  - [[#clauses][Clauses]]
+    - [[#drivers][Drivers]]
+      - [[#numerical-iteration][Numerical Iteration]]
+      - [[#sequence-iteration-1][Sequence Iteration]]
+      - [[#generalized-drivers][Generalized Drivers]]
+      - [[#generators][Generators]]
+      - [[#previous-values-of-driver-variables][Previous Values of Driver Variables]]
+  - [[#variable-binding-and-setting][Variable Binding and Setting]]
+  - [[#gathering-clauses][Gathering Clauses]]
+    - [[#reductions][Reductions]]
+    - [[#accumulations][Accumulations]]
+    - [[#finders][Finders]]
+    - [[#aggregated-boolean-tests][Aggregated Boolean Tests]]
 - [[#macro-argument-and-loop-command-index][Macro Argument and Loop Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
@@ -5547,6 +5561,283 @@ special form ~cond~.
 | =do EXPRS=             | =(do EXPRS)= as a loop command                |
 | =return EXPR=          | =(return EXPR)= as a loop command             |
 
+* Translating to and from Common Lisp's =iterate=
+
+There are several features in the package Loopy inspired by the Common Lisp package
+Iterate, but it is important to note the Loopy is not a port of Iterate to
+Emacs Lisp.
+
+Because Loopy's macro ~loopy-iter~ is more similar to Iterate's macro ~iter~
+than Loopy's macro ~loopy~ is, this section compares ~iter~ and ~loopy-iter~,
+not ~iter~ and ~loopy~, using the "bare names" allowed in ~loopy-iter~ for
+Loopy's looping constructs.  Therefore, before reading this section, first read
+the documentation of ~loopy-iter~ ([[#loopy-iter]]) to understand its differences
+with ~loopy~.  Basic concepts are not repeated in this section.
+
+This section follows a similar layout as the iterate manual available online
+([[https://iterate.common-lisp.dev/doc/index.html]]).  Like in that manual, although
+clauses are surrounded by parentheses when used in the macro, for space reasons,
+the parentheses are excluded from the comparisons.
+
+** Clauses
+
+Loopy names a difference between constructs which affected the generated loop
+("loop commands") and constructs which affect code surrounding the loop
+("special macro arguments").  Iterate calls both kinds of constructs "clauses".
+
+*** Drivers
+
+The Iterate manual describes a "driver" as a clause the "causes the iteration to
+go forward".  Loopy calls these "iteration commands" or "iteration loop
+commands".
+
+| ~iter~     | ~loopy-iter~               |
+|------------+----------------------------|
+| =repeat N= | =repeating N=, =cycling N= |
+
+
+**** Numerical Iteration
+
+The Loopy command =numbering= supports the same keywords used for numerical
+iteration in Iterate.
+
+| ~iter~                      | ~loopy-iter~                        |
+|-----------------------------+-------------------------------------|
+| =for i upfrom 0=            | =numbering i :upfrom 0=             |
+| =for i from 5=              | =numbering i :from 5=               |
+| =for i downfrom 0=          | =numbering i :downfrom 0=           |
+| =for i from 1 to 3=         | =numbering i :from 1 :to 3=         |
+| =for i from 1 below 3=      | =numbering i :from 1 :below 3=      |
+| =for i from 1 to 3 by 2=    | =numbering i :from 1 :to 3 :by 2=   |
+| =for i from 1 below 3 by 2= | =numbering i :from 1 :below 3 by 2= |
+| =for i from 5 downto 3=     | =numbering i :from 5 :downto 3=     |
+
+**** Sequence Iteration
+
+In Loopy, sequence iteration is divided into "sequence iteration"
+([[#sequence-iteration]]), "sequence reference iteration"
+([[#sequence-reference-iteration]]), and "sequence index iteration"
+([[#sequence-index-iteration]]).
+
+The commands =sequence=, =sequence-ref=, =sequence-index=, =array=, =array-ref=,
+and their corresponding aliases support the same keywords as the =numbers=
+commands ([[#numeric-iteration]]).
+
+Loopy does not implement any constructs for working files, streams, or package
+namespaces.
+
+| ~iter~                                                     | ~loopy-iter~                        |
+|------------------------------------------------------------+-------------------------------------|
+| =for var in list &optional by step-function=               | =listing VAR LIST :by FUNC=         |
+| =for var on list &optional by step-function=               | =consing VAR LIST :by FUNC=         |
+| =for var in-vector vector &sequence=                       | =arraying-ref VAR ARRAY &keys=      |
+| =for var in-sequence seq &sequence=                        | =sequencing-ref VAR STRING &keys=   |
+| =for var in-string string &sequence=                       | =stringing-ref VAR STRING &keys=    |
+| =for var index-of-vector vector &sequence=                 | =arraying-index VAR ARRAY &keys=    |
+| =for var index-of-sequence sequence &sequence=             | =sequencing-index VAR ARRAY &keys=  |
+| =for var index-of-string string &sequence=                 | =stringing-index VAR ARRAY &keys=   |
+| =for (key value) in-hashtable table=                       | =mapping-pairs (KEY . VALUE= TABLE= |
+| =for var in-package package &optional external-only ext=   | Not implemented.                    |
+| =for var in-packages &optional having-access symbol-types= | Not implemented.                    |
+| =for var in-file name &optional using reader=              | Not implemented.                    |
+| =for var in-stream stream &optional using reader=          | Not implemented.                    |
+
+**** Generalized Drivers
+
+Loopy does not currently implement something like Iterate's generalized drivers,
+though it does provide constructs for the underlying features.  Updates of
+generic variables can be done with the =set= command.  Exiting the loop can be
+done with the =leave= command.  The Iterate manual's provided example
+
+#+begin_src common-lisp
+  ;; => (1 2 3 4 5 6 7 8 9 10 11)
+  (iterate::iter
+    (initially (setq i 0))
+    (for i next (if (> i 10) (terminate) (incf i)))
+    (collecting i))
+#+end_src
+
+could in Loopy be done as
+
+#+begin_src emacs-lisp
+  ;; => (1 2 3 4 5 6 7 8 9 10 11)
+  (loopy-iter (with (i 0))
+              (if (> i 10)
+                  (leaving)
+                (cl-incf i))
+              (collecting i))
+
+  ;; => (1 2 3 4 5 6 7 8 9 10 11)
+  (loopy (set i 1 (1+ i))
+         (when (> i 10)
+           (leave))
+         (collect i))
+#+end_src
+
+
+| ~iter~                 | ~loopy-iter~                      |
+|------------------------+-----------------------------------|
+| =for var next expr=    | Not implemented exactly the same. |
+| =for var do-next form= | Not implemented exactly the same. |
+
+**** Generators
+
+Loopy supports iterating through Emacs Lisp iterators and generators
+([[info:elisp#Generators]]) via the command =iter=.  However, Loopy does not
+currently provide a feature to turn loop commands into generators.
+
+**** Previous Values of Driver Variables
+
+Previous values can be gotten using the command =set-prev=.  Setting the initial
+value of the given variable is done using the =with= special macro argument.
+
+| ~iter~                                                  | ~loopy-iter~                 |
+|---------------------------------------------------------+------------------------------|
+| =for pvar previous var &optional initially init back n= | =set-prev VAR VAL &key back= |
+
+** Variable Binding and Setting
+
+To set initial values, Loopy uses the =with= special macro argument.  To set
+variable values during the loop, Loopy uses the =set= command, which can be used
+below the top level of the loop (in other words, within other constructs).
+The =set= command can take multiple values, with the final value being used
+repeated after the preceeding values are used.  This would be like
+if Iterate or ~cl-loop~ allowed multiple =then THEN-EXPR= forms.
+
+| ~iter~                                       | ~loopy-iter~                                     |
+|----------------------------------------------+--------------------------------------------------|
+| =with var &optional = value=                 | =with (var value)=                               |
+| =for var = expr=                             | =setting VAR EXPR=                               |
+| =for var initially init-expr then then-expr= | =(with (VAR INIT-EXPR)) (setting VAR THEN-EXPR)= |
+| =for var first first-expr then then-expr=    | =setting VAR FIRST-EXPR THEN-EXPR=               |
+
+
+** Gathering Clauses
+
+Iterate's "gathering clauses" are named "accumulation commands".  Loopy
+accumulation commands support the keyword argument =:into=, but the idiomatic
+behavior is to use the accumulation variable as the first argument to the
+command.
+
+For the =reduce= command, the initial value is controlled by the =with= special
+macro argument.
+
+| ~iter~                                                            | ~loopy-iter~               |
+|-------------------------------------------------------------------+----------------------------|
+| =sum expr &optional into var=                                     | =summing [VAR] EXPR=      |
+| =multiply expr &optional into var=                                | =multiplying [VAR] EXPR=   |
+| =counting expr &optional into var=                                | =counting [VAR] EXPR=      |
+| =maximize expr &optional into var=                                | =maximizing [VAR] EXPR=    |
+| =minimize expr &optional into var=                                | =minimizing [VAR] EXPR=    |
+| =reducing expr by func &optional initial-value init-val into var= | =reducing [VAR] EXPR FUNC= |
+
+*** Reductions
+
+In Loopy, the initial value of the =reduce= accumulation command (and the other
+accumulation commands) can be set via the =with= special macro argument.  There
+is no keyword argument for setting the initial value.
+
+| ~iter~                                                            | ~loopy-iter~                   |
+|-------------------------------------------------------------------+--------------------------------|
+| =sum expr &optional into var=                                     | =summing [VAR] EXPR=           |
+| =multiply expr &optional into var=                                | =multiplying [VAR] EXPR=       |
+| =counting expr &optional into var=                                | =counting [VAR] EXPR=          |
+| =maximize expr &optional into var=                                | =maximizing [VAR] EXPR=        |
+| =minimize expr &optional into var=                                | =minimiing [VAR] EXPR=         |
+| =reducing expr by func &optional initial-value init-val into var= | =reducing [VAR] EXPR :by FUNC= |
+
+*** Accumulations
+
+For accumulations, Loopy does not provide a =:result-type= keyword.  Because the
+accumulation variable (by default, ~loopy-result~) is always known and one can
+specify when an accumulation is optimized using the =accum-opt= special macro
+argument, one can simply use the usual functions like ~seq-into~ and ~cl-coerce~
+to operate on loop results, including when using multiple optimized
+accumulations.
+
+Loopy supports the same places as Iterate (=start= and =end=) for list-based
+accumulations, which can be used with =accum-opt= to specify how an optimized
+accumulation should work.
+
+In Loopy, the initial value of the =accumulate= accumulation command (and the other
+accumulation commands) can be set via the =with= special macro argument.  There
+is no keyword argument for setting the initial value.
+
+In Loopy, unlike in Iterate, the value of an accumulation is not guaranteed to
+be correct during the loop if the accumulation is optimized.  For example, the
+default behavior of the =collect= command is to build the resulting list in
+reverse and to finalize ~loopy-result~ after the loop ends.  However, if an
+accumulation variable is specified (including ~loopy-result~) and that variable
+is not listed in =accum-opt=, then the accumulation will not be optimized and
+the value of the variable will be in the correct order during the loop at the
+cost of slower code.
+
+| ~iter~                                                                  | ~loopy-iter~                                |
+|-------------------------------------------------------------------------+---------------------------------------------|
+| =collect EXPR &optional into VAR at PLACE result-type TYPE=             | =collecting [VAR] EXPR=                     |
+| =adjoining EXPR &optional into VAR test TEST at PLACE result-type TYPE= | =adjoining [VAR] EXPR :at PLACE :test TEST= |
+| =appending EXPR &optional into VAR at PLACE=                            | =appending [VAR] EXPR :at PLACE=            |
+| =nconcing EXPR &optional into VAR at PLACE=                             | =nconcing [VAR] EXPR :at PLACE=             |
+| =unioning EXPR &optional into VAR test TEST at PLACE=                   | =unioning [VAR] EXPR :at PLACE :test TEST=  |
+| =nunioning EXPR &optional into VAR test TEST at PLACE=                  | =nunioning [VAR] EXPR :at PLACE :test TEST= |
+| =accumulate EXPR by FUNC &optional initial-value INIT-VAL into VAR=     | =accumulating [VAR] EXPR FUNC=              |
+
+*** Finders
+
+Loopy does not currently implement the "maximizing" and "minimizing" versions
+of Iterate's =finding= clause.
+
+| ~iter~                                                                      | ~loopy-iter~                                        |
+|-----------------------------------------------------------------------------+-----------------------------------------------------|
+| =finding EXPR such-that TEST &optionally into VAR on-failure FAILURE-VALUE= | =finding [VAR] EXPR TEST :on-failure FAILURE-VALUE= |
+| =finding EXPR maximizing m-expr &optional into VAR=                         | Not implemented.                                    |
+| =finding EXPR minimizing m-expr &optional into VAR=                         | Not implemented.                                    |
+
+*** COMMENT Boolean Tests
+
+Loopy does not currently implement features exactly equivalent to Iterate's
+~first-iteration-p~ and ~first-time-p~.  For ~first-iteration-p~, one can use
+the =set= command, as in
+
+#+begin_src emacs-lisp
+  ;; => ((1) (2 3 4))
+  (loopy-iter (listing i '(1 2 3 4))
+              (setting first t nil)
+              (if first
+                  (collecting car i)
+                (collecting cdr i))
+              (finally-return car cdr))
+#+end_src
+
+For ~first-time-p~, one can use a closure, as in
+
+#+begin_src emacs-lisp
+  ;; => ((1) (2 3 4))
+  (loopy-iter (with (fn (let ((first t))
+                          (lambda ()
+                            (prog1
+                                first
+                              (setq first nil))))))
+              (listing i '(1 2 3 4))
+              (if (funcall fn)
+                  (collecting car i)
+                (collecting cdr i))
+              (finally-return car cdr))
+#+end_src
+
+*** Aggregated Boolean Tests
+
+In Loopy, unlike in Iterate, one can specify a variable to hold the value of the
+test after the loop ends.  By default, this is ~loopy-result~.
+
+| ~iter~         | ~loopy-iter~         |
+|----------------+----------------------|
+| =always EXPR=  | =always [VAR] EXPR=  |
+| =never EXPR=   | =never [VAR] EXPR=   |
+| =thereis EXPR= | =thereis [VAR] EXPR= |
+
+
+
 * Macro Argument and Loop Command Index
   :PROPERTIES:
   :INDEX: fn
@@ -5581,4 +5872,4 @@ for more.
 # org-adapt-indentation: nil
 # End:
 
-#  LocalWords:  alists plists Loopy's CL's
+#  LocalWords:  alists plists Loopy's CL's Iterate's
