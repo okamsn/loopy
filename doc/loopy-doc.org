@@ -98,6 +98,11 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#accumulations][Accumulations]]
     - [[#finders][Finders]]
     - [[#aggregated-boolean-tests][Aggregated Boolean Tests]]
+  - [[#control-flow-1][Control Flow]]
+  - [[#code-placement][Code Placement]]
+  - [[#other-features][Other Features]]
+    - [[#multiple-accumulations][Multiple Accumulations]]
+    - [[#named-blocks][Named Blocks]]
 - [[#macro-argument-and-loop-command-index][Macro Argument and Loop Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
@@ -5836,6 +5841,62 @@ test after the loop ends.  By default, this is ~loopy-result~.
 | =never EXPR=   | =never [VAR] EXPR=   |
 | =thereis EXPR= | =thereis [VAR] EXPR= |
 
+** Control Flow
+
+Unfortunately, for a few constructs, Loopy and Iterate use the same name for
+different things.  In Iterate, =leave= exists the loop without running any code
+after the loop (the "epilogue code", as the Iterate manual puts it) and is
+equivalent to using the CL function ~return-from~.  In Loopy, the =leave=
+command exits the Loop while allowing the epilogue code to run.  It is different
+from the =return= command, which is equivalent to using the Emacs Lisp function
+~cl-return~.  Instead, Loopy's =leave= is the same as Iterate's =finish=.
+
+
+
+| ~iter~                              | ~loopy-iter~               |
+|-------------------------------------+----------------------------|
+| =finish=                            | =leaving=                  |
+| =leave [EXPR]=                      | =returning [EXPR]=         |
+| =next-iteration=                    | =skipping= or =continuing= |
+| =while EXPR=                        | =while EXPR=               |
+| =until EXPR=                        | =until EXPR=               |
+| =if-first-time then &optional else= | No direct translation.     |
+
+** Code Placement
+
+In Loopy, there is currently no equivalent of Iterate's =after-each= form.
+However, commands places at the end of the loop body are executed at the end of
+the loop body as expected.  Loopy also places restrictions on were some features
+can be used.  For example, the =before-do= special macro argument can only be
+used at the top level of the macro body, and special macro arguments are
+explicitly processed before loop commands.  Similarly, most keyword arguments
+for Loopy's loop commands are explicitly evaluated only once, before running the
+loop.
+
+
+| ~iter~                    | ~loopy-iter~              |
+|---------------------------+---------------------------|
+| =initially FORMS=         | =before-do FORMS=         |
+| =after-each FORMS=        | No special feature.       |
+| =else FORMS=              | =else-do FORMS=           |
+| =finally FORMS=           | =finally-do FORMS=        |
+| =finally-protected FORMS= | =finally-protected FORMS= |
+
+** Other Features
+
+*** Multiple Accumulations
+
+Like Iterate, Loopy allows using the same accumulation variable with multiple
+accumulation commands if the commands are compatible.  However, which commands
+are compatible can differ. In Loopy, commands are currently categorized by the
+type of the accumulate value.  For example, the =sum= and =maximize= commands
+are currently compatible in Loopy because the both work on numbers.
+
+Currently, in Loopy, command compatibility is an implementation detail that is
+subject to change.  When incompatible commands are used, an error is signalled
+during macro expansion.
+
+*** Named Blocks
 
 
 * Macro Argument and Loop Command Index
