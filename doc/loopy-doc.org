@@ -5898,6 +5898,16 @@ during macro expansion.
 
 *** Named Blocks
 
+In Loopy, blocks are named by using a symbol as the first argument or by using
+the =named= special macro argument.  These names are used with ~cl-block~,
+meaning that named loops can interact with the function ~cl-return-from~ and the
+commands =return-from=, =leave-from=, and =at=.
+
+| ~iter~                    | ~loopy-iter~                                                 |
+|---------------------------+--------------------------------------------------------------|
+| ~return-from NAME [EXPR]~ | ~cl-return-from NAME [EXPR]~ or =returning-from NAME [EXPR]= |
+| =in NAME [FORMS]=         | =at NAME FORM [FORMS]=                                       |
+
 
 * Macro Argument and Loop Command Index
   :PROPERTIES:
