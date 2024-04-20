@@ -103,6 +103,8 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   - [[#other-features][Other Features]]
     - [[#multiple-accumulations][Multiple Accumulations]]
     - [[#named-blocks][Named Blocks]]
+    - [[#destructuring][Destructuring]]
+    - [[#on-line-documentation][On-Line Documentation]]
 - [[#macro-argument-and-loop-command-index][Macro Argument and Loop Command Index]]
 - [[#variable-index][Variable Index]]
 - [[#concept-index][Concept Index]]
@@ -5908,6 +5910,25 @@ commands =return-from=, =leave-from=, and =at=.
 | ~return-from NAME [EXPR]~ | ~cl-return-from NAME [EXPR]~ or =returning-from NAME [EXPR]= |
 | =in NAME [FORMS]=         | =at NAME FORM [FORMS]=                                       |
 
+*** Destructuring
+
+Loopy provides destructuring similar to =cl-lib= and can be configured to use
+the ~pcase~ patterns from =seq.el= and =pcase.el=.  It also provides
+destructuring for generalized variables and features for using the built-in
+destructuring outside of the ~loopy~ ~loopy-iter~ macros.
+
+However, because Emacs Lisp does not support multiple return values like Common
+Lisp, there is no equivalent of Iterate's =values= destructuring pattern.  In
+Emacs Lisp, ~cl-values~ just returns a list, which can destructured normally.
+
+| ~iter~                                                   | ~loopy-iter~                            |
+|----------------------------------------------------------+-----------------------------------------|
+| =for (key . item) in alist=                              | =listing (key . item) alist=            |
+| =for (values (a . b) c d) = (three-valued-function ...)= | Not supported in Emacs Lisp.            |
+| ~dsetq DESTRUCTURING-PATTERN EXPR~                       | ~loopy-setq DESTRUCTURING-PATTERN EXRP~ |
+
+
+*** On-Line Documentation
 
 * Macro Argument and Loop Command Index
   :PROPERTIES:
