@@ -2348,13 +2348,8 @@ will only overwrite values, not truncate or grow the array.
 #+attr_texinfo: :tag Warning
 #+begin_quote
 Unfortunately, not all kinds of recursive destructuring work on references.
-This is a limitation of how generic setters are implemented, and not all
-limitations are specific to ~loopy~.
 
 Currently:
-- The variable after =&rest= in arrays cannot be recursive.
-- The variables after =&map= cannot be recursive due to the current
-  implementation of =map.el= upstream.
 - =&optional= variables are not supported
 - =SUPPLIED= variables are not supported for =&key= and =&map=.
 - Non-nil default values for =&optional=, =&key=, and =&map= are not supported.

@@ -534,132 +534,263 @@ The valid keys are:
 
 (ert-deftest destructure-&seq-array-refs ()
   (should (equal [1 2 3]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&seq a b c] arr))
                      (setf a 1 b 2 c 3))
                    arr)))
 
-  ;; FIXME: This won't work until we implement the recursive setters.
-  ;; (should (equal [1 2 3]
-  ;;                (let ((arr [7 7 7 27]))
-  ;;                  (loopy-ref (([&seq a b c &map [0 d]] arr))
-  ;;                    (setf a 1 b 2 c 3 d 99))
-  ;;                  arr)))
+  (should (equal [1 2 3 99]
+                 (let ((arr (vector 7 7 7 27)))
+                   (loopy-ref (([&seq a b c &map [0 d]] arr))
+                     (setf a 1 b 2 c 3 d 99))
+                   arr)))
 
   (should (equal [2 3 4]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&seq &whole whole a b c] arr))
                      (setf a 1 b 2 c 3
                            whole (cl-map 'vector #'1+ whole)))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c [d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c [&seq d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c (&seq d e)] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
-  ;; TODO: This test currently doesn't pass due to Elisp limitations.
-  ;; (should (equal [1 2 3 4 5]
-  ;;                (eval (quote
-  ;;                       (let ((arr [7 7 7 7 7]))
-  ;;                         (loopy-ref (([a b c &rest [d e]] arr))
-  ;;                           (setf a 1 b 2 c 3 d 4 e 5))
-  ;;                         arr)))))
-
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([&seq a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
 
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([&seq a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
 
-  ;; NOTE: This currently doesn't work due to upstream implementations.
-  ;;       See issue #184.
-  ;; (should (equal [1 2 3 4 0 0 16]
-  ;;                (let ((arr (vector 7 7 7 7 0 0 6)))
-  ;;                  (loopy-ref (([&seq a b c &rest d &map (3 sub-idx-3)] arr))
-  ;;                    (setf a 1 b 2 c 3 d [4])
-  ;;                    (cl-incf sub-idx-3 10))
-  ;;                  arr)))
-
   (should (equal [2 3]
-                 (let ((arr [7 7]))
+                 (let ((arr (vector 7 7)))
                    (loopy-ref (([&seq &whole cat a b] arr))
                      (setf a 1 b 2
                            cat (cl-map 'vector #'1+ cat)))
                    arr))))
 
+(ert-deftest recursive-gv-setting-tests ()
+  "These found in issue #184.
+
+The current solution is to use custom GV setters via wrappers for the
+builtin `aref', `seq-drop', and the custom
+`loopy--destructure-seq-drop'."
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote
+                        (let ((arr (list 7 7 7 7 7)))
+                          (loopy-ref (([&seq a b c &rest [&seq d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal '(7 7 7 4 7)
+                 (let ((arr (list 7 7 7 7 7)))
+                   (setf (loopy--destructure-seq-elt
+                          (loopy--destructure-nthcdr 3 arr)
+                          0)
+                         4)
+                   arr)))
+
+  (should (equal '(7 7 7 4 7)
+                 (let ((arr (list 7 7 7 7 7)))
+                   (setf (loopy--destructure-nth
+                          0 (loopy--destructure-nthcdr 3 arr))
+                         4)
+                   arr)))
+
+  (should (equal '(7 7 7 4 7)
+                 (let ((arr (list 7 7 7 7 7)))
+                   (setf (loopy--destructure-nth
+                          0
+                          (loopy--destructure-seq-drop arr 3))
+                         4)
+                   arr)))
+
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7)))
+                          (loopy-ref (([&seq a b c &rest [&seq d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal [7 7 7 4 7]
+                 (let ((arr (vector 7 7 7 7 7)))
+                   (setf (loopy--destructure-seq-elt
+                          (loopy--destructure-seq-drop arr 3)
+                          0)
+                         4)
+                   arr)))
+
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7)))
+                          (loopy-ref (([&seq a b c &rest [d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal [7 7 7 4 7]
+                 (let ((arr (vector 7 7 7 7 7)))
+                   (setf (loopy--destructure-seq-elt
+                          (cl-subseq arr 3)
+                          0)
+                         4)
+                   arr)))
+
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7)))
+                          (loopy-ref (([a b c &rest [&seq d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal [7 7 7 4 7]
+                 (let ((arr (vector 7 7 7 7 7)))
+                   (setf (loopy--destructure-seq-elt
+                          (loopy--destructure-seq-drop arr 3)
+                          0)
+                         4)
+                   arr)))
+
+  (should (equal [7 7 7 4 7]
+                 (let ((arr (vector 7 7 7 7 7)))
+                   (setf (loopy--destructure-aref
+                          (loopy--destructure-seq-drop arr 3)
+                          0)
+                         4)
+                   arr)))
+
+  (should (equal '(7 7 7 4 7)
+                 (let ((lst (list 7 7 7 7 7)))
+                   (setf (nth 0 (loopy--destructure-seq-drop lst 3))
+                         4)
+                   lst)))
+
+  (should (equal [1 2 3 4 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (loopy-ref (([&seq a b c &rest d &map (3 sub-idx-3)] arr))
+                     (setf a 1 b 2 c 3 d [4])
+                     (cl-incf sub-idx-3 10))
+                   arr)))
+
+  (should (equal [7 7 7 7 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (cl-incf (loopy--destructure-map-elt
+                             (loopy--destructure-seq-drop arr 3)
+                             3)
+                            10)
+                   arr)))
+
+  (should (equal [1 2 3 4 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (loopy-ref (([a b c &rest d &map (3 sub-idx-3)] arr))
+                     (setf a 1 b 2 c 3 d [4])
+                     (cl-incf sub-idx-3 10))
+                   arr)))
+
+  (should (equal [7 7 7 7 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (cl-incf (loopy--destructure-map-elt
+                             (loopy--destructure-cl-subseq arr 3)
+                             3)
+                            10)
+                   arr)))
+
+  (should (equal [1 2 3 4 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (loopy-ref (([&seq a b c &rest d &map (3 sub-idx-3)] arr))
+                     (setf a 1 b 2 c 3 d [4])
+                     (cl-incf sub-idx-3 10))
+                   arr)))
+
+  (should (equal [7 7 7 7 0 0 16]
+                 (let ((arr (vector 7 7 7 7 0 0 6)))
+                   (cl-incf (loopy--destructure-map-elt
+                             (loopy--destructure-seq-drop arr 3)
+                             3)
+                            10)
+                   arr))))
+
 (ert-deftest destructure-array-refs ()
   (should (equal [1 2 3]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([a b c] arr))
                      (setf a 1 b 2 c 3))
                    arr)))
 
   (should (equal [2 3 4]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&whole whole a b c] arr))
                      (setf a 1 b 2 c 3
                            whole (cl-map 'vector #'1+ whole)))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([a b c [d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
-  ;; TODO: This test currently doesn't pass due to Elisp limitations.
-  ;; (should (equal [1 2 3 4 5]
-  ;;                (eval (quote
-  ;;                       (let ((arr [7 7 7 7 7]))
-  ;;                         (loopy-ref (([a b c &rest [d e]] arr))
-  ;;                           (setf a 1 b 2 c 3 d 4 e 5))
-  ;;                         arr)))))
+  ;; NOTE: These two test currently passes due to how we simplify array indexing
+  ;;       to avoid creating new objects, but it doesn't work in the general
+  ;;       case, such as with `&seq'.
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7)))
+                          (loopy-ref (([a b c &rest [d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal [1 2 3 4 5 6]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7 7)))
+                          (loopy-ref (([a b c &rest [d &rest [e f]]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5 f 6))
+                          arr)))))
+
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7 ))
+                              (key1 0)
+                              (key2 1))
+                          (loopy-ref (([a b c &rest [&map (key1 d) (key2 e)]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
 
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
 
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
 
-  ;; NOTE: This currently doesn't work due to upstream implementations.
-  ;;       See issue #184.
-  ;; (should (equal [1 2 3 4 0 0 16]
-  ;;                (let ((arr (vector 7 7 7 7 0 0 6)))
-  ;;                  (loopy-ref (([a b c &rest d &map (3 sub-idx-3)] arr))
-  ;;                    (setf a 1 b 2 c 3 d [4])
-  ;;                    (cl-incf sub-idx-3 10))
-  ;;                  arr)))
-
   (should (equal [2 3]
-                 (let ((arr [7 7]))
+                 (let ((arr (vector 7 7)))
                    (loopy-ref (([&whole cat a b] arr))
                      (setf a 1 b 2
                            cat (cl-map 'vector #'1+ cat)))
