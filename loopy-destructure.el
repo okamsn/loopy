@@ -831,6 +831,131 @@ an error should be signaled if the pattern doesn't match."
 
 ;;;; Destructuring Generalized Variables
 
+(define-inline loopy--destructure-map-elt (map key &optional default)
+  "A wrapper for `map-elt' so that `setf' places can be recursive."
+  (declare (gv-expander
+            (lambda (do)
+              (gv-letplace (mgetter msetter) `(gv-delay-error ,map)
+                (macroexp-let2* nil
+                    ;; Eval them once and for all in the right order.
+                    ((key key) (default default))
+                  (funcall do
+                           `(map-elt ,mgetter ,key ,default)
+                           (lambda (v)
+                             (macroexp-let2 nil v v
+                               `(condition-case nil
+                                    ,(macroexp-let2 nil m mgetter
+                                       `(progn
+                                          (map-put! ,m ,key ,v)
+                                          ,(funcall msetter m)
+                                          ,v))
+                                  (map-not-inplace
+                                   ,(funcall msetter
+                                             `(map-insert ,mgetter ,key ,v))
+                                   ;; Always return the value.
+                                   ,v))))))))))
+  (inline-letevals (map key default)
+    (inline-quote (map-elt ,map ,key ,default))))
+
+(define-inline loopy--destructure-seq-subseq (sequence start &optional end)
+  "A wrapper for `seq-subseq' so that `setf' places can be recursive."
+  (declare (gv-expander
+            (lambda (do)
+              (gv-letplace (getter setter) `(gv-delay-error ,sequence)
+                (macroexp-let2* nil ((start start) (end end))
+                  (funcall do
+                           `(seq-subseq ,getter ,start ,end)
+                           (lambda (v)
+                             (macroexp-let2 nil v v
+                               `(progn
+                                  ,(funcall setter
+                                            `(loopy--destructure-seq-replace
+                                              ,getter ,v ,start ,end))
+                                  ,v)))))))))
+  (inline-letevals (sequence start end)
+    (inline-quote (seq-subseq ,sequence ,start ,end))))
+
+;; TODO: This has been proposed upstream.  One of the maintainers
+;;       recommends using a specialized method for each combination of
+;;       built-in sequences.
+(cl-defgeneric loopy--destructure-seq-replace (sequence replacements start &optional end)
+  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
+END is exclusive."
+  (let* ((len (seq-length sequence))
+         (signal-fn (lambda ()
+                      (signal 'args-out-of-range
+                              (if end
+                                  (list sequence start end)
+                                (list sequence start)))))
+         (signal-or-val-fn (lambda (val)
+                             (cond
+                              ((> val len)
+                               (funcall signal-fn))
+                              ((< val 0)
+                               (let ((val2 (+ val len)))
+                                 (if (< val2 0)
+                                     (funcall signal-fn)
+                                   val2)))
+                              (t
+                               val))))
+         (idx-start (funcall signal-or-val-fn start))
+         (idx-end (if (null end)
+                      len
+                    (funcall signal-or-val-fn end))))
+    (if (> idx-start idx-end)
+        (funcall signal-fn)
+      (let ((replacement-idx 0)
+            (replacement-len (seq-length replacements)))
+        (seq-into (seq-map-indexed (lambda (elem idx)
+                                     (if (and (<= idx-start idx)
+                                              (< idx idx-end)
+                                              (< replacement-idx replacement-len))
+                                         (prog1
+                                             (seq-elt replacements replacement-idx)
+                                           (setq replacement-idx (1+ replacement-idx)))
+                                       elem))
+                                   sequence)
+                  (if (listp sequence)
+                      'list
+                    (type-of sequence)))))))
+
+(cl-defmethod loopy--destructure-seq-replace (sequence (replacements list) start &optional end)
+  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
+END is exclusive."
+  (let* ((len (seq-length sequence))
+         (signal-fn (lambda ()
+                      (signal 'args-out-of-range
+                              (if end
+                                  (list sequence start end)
+                                (list sequence start)))))
+         (signal-or-val-fn (lambda (val)
+                             (cond
+                              ((> val len)
+                               (funcall signal-fn))
+                              ((< val 0)
+                               (let ((val2 (+ val len)))
+                                 (if (< val2 0)
+                                     (funcall signal-fn)
+                                   val2)))
+                              (t
+                               val))))
+         (idx-start (funcall signal-or-val-fn start))
+         (idx-end (if (null end)
+                      len
+                    (funcall signal-or-val-fn end))))
+    (if (> idx-start idx-end)
+        (funcall signal-fn)
+      (seq-into (seq-map-indexed (lambda (elem idx)
+                                   (if (and (<= idx-start idx)
+                                            (< idx idx-end)
+                                            replacements)
+                                       (pop replacements)
+                                     elem))
+                                 sequence)
+                (if (listp sequence)
+                    'list
+                  (type-of sequence))))))
+
 (defun loopy--destructure-generalized-sequence (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR as `setf'-able places.
 
@@ -880,9 +1005,10 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (signal 'loopy-&optional-generalized-variable
                   (list var-form value-expression)))
       ,@(when rest-var
-	  (let ((rest-val `(cl-subseq ,value-expression
-                                      ,(+ (length pos-vars)
-					  (length opt-vars)))))
+	  (let ((rest-val `(loopy--destructure-seq-subseq
+                            ,value-expression
+                            ,(+ (length pos-vars)
+                                (length opt-vars)))))
 	    (if (seqp rest-var)
 		(loopy--destructure-generalized-sequence rest-var rest-val)
 	      `((,rest-var ,rest-val)))))
@@ -894,10 +1020,11 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop
 	   for elem in map-vars
            for (key var2 default supplied) = (loopy--get-&map-spec elem)
-           for expr = `(map-elt (cl-subseq ,value-expression
-					   ,(+ (length pos-vars)
-					       (length opt-vars)))
-				,key ,default)
+           for expr = `(loopy--destructure-map-elt (loopy--destructure-seq-subseq
+                                                    ,value-expression
+                                                    ,(+ (length pos-vars)
+                                                        (length opt-vars)))
+				                   ,key ,default)
            if default
            do (signal 'loopy-generalized-default
                       (list var-form value-expression))
@@ -973,10 +1100,10 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop for elem in map-vars
                    for (key var2 default supplied) =
                    (loopy--get-&map-spec elem)
-                   for expr = `(map-elt (nthcdr ,(+ (length pos-vars)
-						    (length opt-vars))
-						,value-expression)
-					,key ,default)
+                   for expr = `(loopy--destructure-map-elt (nthcdr ,(+ (length pos-vars)
+						                       (length opt-vars))
+						                   ,value-expression)
+					                   ,key ,default)
                    if default
                    do (signal 'loopy-generalized-default
                               (list var-form value-expression))
