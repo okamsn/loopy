@@ -492,7 +492,7 @@ new values of the earlier variables."
                    arr)))
 
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
