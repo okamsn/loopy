@@ -1358,6 +1358,31 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
                    for (var val) = (loopy--get-&aux-spec elem)
                    collect `(,var ,val))))))
 
+(defmacro loopy--destructure-gv-array-rest (val start)
+  "Get the array sub-sequence in VAL from START to END exclusive."
+  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
+      `(loopy--destructure-gv-array-rest ,(cl-second val) ,(+ start (cl-third val)))
+    ;; Don't use `substring' here.  It's `setf' effects aren't the same as
+    ;; `cl-subseq'.
+    `(cl-subseq ,val ,start)))
+
+(defmacro loopy--destructure-gv-array-map (val key default)
+  "Get the array sub-sequence in VAL from START to END exclusive."
+  (pcase (car-safe val)
+    ;; Map is same as Elt for arrays, but we don't know the numeric value
+    ;; of the key ahead of time.
+    ('loopy--destructure-gv-array-rest
+     `(loopy--destructure-gv-array-map ,(cl-second val) (+ ,key ,(cl-third val))
+                                       ,default))
+    ((or _ 'loopy--destructure-gv-array-map)
+     `(map-elt ,val ,key ,default))))
+
+(defmacro loopy--destructure-gv-array-elt (val idx)
+  "Get the array sub-sequence in VAL from IDX to END exclusive."
+  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
+      `(loopy--destructure-gv-array-elt ,(cl-second val) ,(+ idx (cl-third val)))
+    `(aref ,val ,idx)))
+
 (defun loopy--destructure-generalized-array (var-form value-expression)
   "Destructure VALUE-EXPRESSION according to VAR-FORM as `setf'-able places.
 
@@ -1384,7 +1409,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
       ,@(when pos-vars
           (cl-loop for v in pos-vars
                    for n from 0
-                   for expr = `(aref ,value-expression ,n)
+                   for expr = `(loopy--destructure-gv-array-elt ,value-expression ,n)
                    if (seqp v)
                    append (loopy--destructure-generalized-sequence
                            v expr)
@@ -1394,7 +1419,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (signal 'loopy-&optional-generalized-variable
                   (list var-form value-expression)))
       ,@(when rest-var
-	  (let ((rest-val `(loopy--destructure-seq-subseq
+	  (let ((rest-val `(loopy--destructure-gv-array-rest
                             ,value-expression
                             ,(+ (length pos-vars)
                                 (length opt-vars)))))
@@ -1409,11 +1434,11 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop
 	   for elem in map-vars
            for (key var2 default supplied) = (loopy--get-&map-spec elem)
-           for expr = `(loopy--destructure-map-elt (loopy--destructure-seq-subseq
-                                                    ,value-expression
-                                                    ,(+ (length pos-vars)
-                                                        (length opt-vars)))
-				                   ,key ,default)
+           for expr = `(loopy--destructure-gv-array-map
+                        (loopy--destructure-gv-array-rest ,value-expression
+                                                          ,(+ (length pos-vars)
+                                                              (length opt-vars)))
+                        ,key ,default)
            if default
            do (signal 'loopy-generalized-default
                       (list var-form value-expression))
