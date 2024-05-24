@@ -129,6 +129,10 @@
               "Loopy: `&whole' in bad position"
               'loopy-bad-desctructuring)
 
+(define-error 'loopy-&seq-bad-position
+              "Loopy: `&seq' in bad position"
+              'loopy-bad-desctructuring)
+
 (define-error 'loopy-&rest-missing
               "Loopy: `&rest' variable is missing"
               'loopy-bad-desctructuring)
@@ -193,6 +197,10 @@
               "Loopy: Use of `&key' in array"
               'loopy-bad-desctructuring)
 
+(define-error 'loopy-&key-seq
+              "Loopy: Use of `&key' for generic `&seq' sequence"
+              'loopy-bad-desctructuring)
+
 (define-error 'loopy-&key-key-from-sequence
               "Loopy: Can't create `&key' key from a sequence"
               'loopy-bad-desctructuring)
@@ -228,6 +236,10 @@
 (define-error 'loopy-destructure-vars-missing
   "Loopy: No variables bound"
   'loopy-bad-desctructuring)
+
+(define-error 'loopy-substream-not-&seq
+              "Loopy: `substream' values can only be destructured via `&seq'"
+              '(loopy-bad-desctructuring loopy-bad-command-arguments))
 
 ;;;;; Errors on Quoted Forms
 (define-error 'loopy-bad-function-form
