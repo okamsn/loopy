@@ -157,8 +157,10 @@ Without these keywords, one must use one of the names given in
     stringing
     stringing-index
     stringing-ref
-    thereis
+    streaming
+    substreaming
     summing
+    thereis
     unioning
     vconcating)
   "Commands recognized in `loopy-iter' without a preceding keyword.

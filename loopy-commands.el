@@ -83,6 +83,7 @@
 (require 'pcase)
 (require 'seq)
 (require 'subr-x)
+(require 'stream)
 
 (declare-function loopy--bound-p "loopy")
 (declare-function loopy--process-instructions "loopy")
@@ -1087,6 +1088,8 @@ NAME is the name of the command."
          (num-steps (if count-given
                         count
                       var-or-count)))
+    ;; TODO: If we know at compile-time that num-steps is 1,
+    ;;       can we avoid creating the loop?
     `((loopy--iteration-vars (,value-holder 0))
       ,(when bound-and-given
          `(loopy--main-body (setq ,var-or-count ,value-holder)))
@@ -1353,6 +1356,58 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
                        (setq ,seq-val (nthcdr ,by ,seq-val))
                      (setq ,seq-index (,(if going-down #'- #'+)
                                        ,seq-index ,by)))))))))))))
+
+;;;;;; Substream
+(loopy--defiteration substream
+  "Parse the `substream' command as (substream VAR STREAM &keys by length).
+
+Iterate through the sub-streams of STREAM, similar to the command `cons'.
+
+If STREAM is not destructured, VAR is not `with' bound, and
+LENGTH is not given, then VAR can be initialized as STREAM.
+
+`:by' is a numeric value telling which substream to move to (default: 1).
+`:length' is a numeric value that, if given, limits the length of the stream
+bound to VAR."
+  :keywords (:by :length)
+  :instructions
+  (progn
+    (when (and (seqp var)
+               (or (null loopy--destructuring-for-iteration-function)
+                   (eq loopy--destructuring-for-iteration-function
+                       #'loopy--destructure-for-iteration-default))
+               (not (eq '&seq (seq-first var))))
+      (signal 'loopy-substream-not-&seq (list cmd)))
+    (let ((optimized (not (or length (seqp var) (loopy--with-bound-p var)))))
+      (loopy--instr-let-const* ((step-holder (or by 1))
+                                (len length))
+          loopy--iteration-vars
+        (loopy--instr-let-var* ((value-holder `(stream-delay ,val)
+                                              (when optimized
+                                                var)))
+            loopy--iteration-vars
+          `((loopy--pre-conditions (not (stream-empty-p ,value-holder)))
+            ,@(unless optimized
+                (loopy--destructure-for-iteration-command
+                 var (if len
+                         `(seq-take ,value-holder ,len)
+                       value-holder)))
+            (loopy--latter-body
+             (setq ,value-holder (seq-drop ,value-holder ,step-holder)))))))))
+
+;;;;;; Stream
+(loopy--defiteration stream
+  "Parse the `stream' command as (stream VAR STREAM &keys by).
+
+Iterate through the elements of STREAM, similar to the command `list'.
+
+`:by' is a numeric value telling which element to move to (default: 1)."
+  :keywords (:by)
+  :instructions
+  (let ((value-holder (gensym "stream-holder")))
+    `(,@(loopy--parse-substream-command `(substream ,value-holder ,val :by ,by))
+      ,@(loopy--destructure-for-iteration-command
+         var `(stream-first ,value-holder)))))
 
 ;;;;; Accumulation
 ;;;;;; Compatibility
@@ -2820,9 +2875,11 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
-  (funcall (or loopy--destructuring-for-iteration-function
-               #'loopy--destructure-for-iteration-default)
-           var val))
+  (pcase-let ((`(,expr ,vars)
+               (funcall (or loopy--destructuring-for-iteration-function
+                            #'loopy--destructure-for-iteration-default)
+                        var val)))
+    (list expr (seq-uniq vars #'eq))))
 
 ;; TODO: Rename these so that the current "iteration" features
 ;;       are "generic" and the new "iteration" features

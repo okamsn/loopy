@@ -6,7 +6,7 @@
 ;; Created: November 2020
 ;; URL: https://github.com/okamsn/loopy
 ;; Version: 0.12.3
-;; Package-Requires: ((emacs "27.1") (map "3.3.1") (seq "2.22") (compat "29.1.3"))
+;; Package-Requires: ((emacs "27.1") (map "3.3.1") (seq "2.22") (compat "29.1.3") (stream "2.3.0"))
 ;; Keywords: extensions
 ;; LocalWords:  Loopy's emacs Edebug
 

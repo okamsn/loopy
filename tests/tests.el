@@ -13,9 +13,14 @@
 (require 'cl-lib)
 
 (require 'package)
-(unless (featurep 'compat)
-  (dolist (dir (cl-remove-if-not #'file-directory-p (directory-files (expand-file-name package-user-dir) t "compat")))
-    (push dir load-path)))
+(dolist (feature '(compat stream))
+  (unless (featurep feature)
+    (dolist (dir (seq-filter #'file-directory-p
+                             (directory-files
+                              (expand-file-name package-user-dir)
+                              t
+                              (symbol-name feature))))
+      (push dir load-path))))
 
 (require 'subr-x)
 (require 'package)
@@ -2837,6 +2842,167 @@ Using numbers directly will use less variables and more efficient code."
   :iter-keyword (seq-ref do)
   :iter-bare ((seq-ref . sequencing-ref)
               (do . ignore)))
+
+;;;;; Stream
+(loopy-deftest stream-names
+  :result '(0 1 2)
+  :body ((_cmd i (stream [0 1 2]))
+         (collect i))
+  :repeat _cmd
+  :loopy ((_cmd . (stream streaming))
+          (collect . collect))
+  :iter-keyword ((_cmd . (stream streaming))
+                 (collect . collect))
+  :iter-bare ((_cmd . (streaming))
+              (collect . collecting)))
+
+(loopy-deftest stream-destr
+  :result '((0 1 2)
+            (3 4 5))
+  :body ((stream (i j k) (loopy-test-escape (stream [(0 1 2) (3 4 5)])))
+         (collect (list i j k)))
+  :loopy t
+  :iter-keyword (stream collect)
+  :iter-bare ((stream . streaming)
+              (collect . collecting)))
+
+(loopy-deftest stream-:by-const
+  :result '(0 2 4 6)
+  :body ((stream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (stream collect)
+  :iter-bare ((stream . streaming)
+              (collect . collecting)))
+
+(loopy-deftest stream-:by-only-once
+  :doc "Keywords like `length' should only be evaluated once."
+  :result '(0 2 4 6)
+  :body ((with (times 0))
+         (stream i (loopy-test-escape (stream [0 1 2 3 4 5 6]))
+                 :by (progn
+                       (cl-assert (= times 0))
+                       (cl-incf times)
+                       2))
+         (collect i))
+  :loopy t
+  :iter-keyword (stream collect set)
+  :iter-bare ((set . setting)
+              (stream . streaming)
+              (collect . collecting)))
+
+;;;;; Substream
+
+(loopy-deftest substream-no-&seq-error
+  :doc "Although implemented as lists, substream can only be destructured by `&seq'."
+  :error loopy-substream-not-&seq
+  :body ((substream (i) (loopy-test-escape (stream (vector 0 1 2))))
+         (collect i))
+  :loopy t
+  :iter-keyword (substream collect)
+  :iter-bare ((substream . substreaming)
+              (collect . collecting)))
+
+(loopy-deftest substream-no-&seq-no-error
+  :doc "We shouldn't signal an error if we're not using the default system."
+  :result '(0 1 2)
+  :wrap ((x . `(progn (require 'loopy-seq) ,x)))
+  :body ((flag seq)
+         (substream (i) (loopy-test-escape (stream (vector 0 1 2))))
+         (collect i))
+  :loopy t
+  :iter-keyword (substream collect)
+  :iter-bare ((substream . substreaming)
+              (collect . collecting)))
+
+(loopy-deftest substream-names
+  :result '(0 1 2)
+  :body ((_cmd i (loopy-test-escape (stream [0 1 2])))
+         (collect (stream-first i)))
+  :repeat _cmd
+  :loopy ((_cmd . (substream substreaming))
+          (collect . collect))
+  :iter-keyword ((_cmd . (substream substreaming))
+                 (collect . collect))
+  :iter-bare ((_cmd . (substreaming))
+              (collect . collecting)))
+
+(loopy-deftest substream-destr
+  :result '((0 1 2)
+            (1 2 nil)
+            (2 nil nil))
+  :body ((substream (&seq i j k) (loopy-test-escape (stream [0 1 2])))
+         (collect (list i j k)))
+  :loopy t
+  :iter-keyword (substream collect)
+  :iter-bare ((substream . substreaming)
+              (collect . collecting)))
+
+(loopy-deftest substream-:length-const
+  :result '((0 1 2) (1 2 3) (2 3 4) (3 4 5) (4 5 6) (5 6) (6))
+  :body ((substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :length 3)
+         (set res nil)
+         (do (seq-do (lambda (x) (push x res))
+                     i))
+         (collect (reverse res)))
+  :loopy t
+  :iter-keyword (substream collect set do)
+  :iter-bare ((set . setting)
+              (substream . substreaming)
+              (collect . collecting)
+              (do      . progn)))
+
+(loopy-deftest substream-:length-only-once
+  :doc "Keywords like `length' should only be evaluated once."
+  :result '((0 1 2) (1 2 3) (2 3 4) (3 4 5) (4 5 6) (5 6) (6))
+  :body ((with (times 0))
+         (substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :length (progn
+                                                                             (cl-assert (= times 0))
+                                                                             (cl-incf times)
+                                                                             3))
+         (set res nil)
+         (do (seq-do (lambda (x) (push x res))
+                     i))
+         (collect (reverse res)))
+  :loopy t
+  :iter-keyword (substream collect set do)
+  :iter-bare ((set . setting)
+              (substream . substreaming)
+              (collect . collecting)
+              (do      . progn)))
+
+(loopy-deftest substream-:by-const
+  :result '((0 1 2 3 4 5 6) (2 3 4 5 6) (4 5 6) (6))
+  :body ((substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :by 2)
+         (set res nil)
+         (do (seq-do (lambda (x) (push x res))
+                     i))
+         (collect (reverse res)))
+  :loopy t
+  :iter-keyword (substream collect set do)
+  :iter-bare ((set . setting)
+              (substream . substreaming)
+              (collect . collecting)
+              (do      . progn)))
+
+(loopy-deftest substream-:by-only-once
+  :doc "Keywords like `length' should only be evaluated once."
+  :result '((0 1 2 3 4 5 6) (2 3 4 5 6) (4 5 6) (6))
+  :body ((with (times 0))
+         (substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :by (progn
+                                                                         (cl-assert (= times 0))
+                                                                         (cl-incf times)
+                                                                         2))
+         (set res nil)
+         (do (seq-do (lambda (x) (push x res))
+                     i))
+         (collect (reverse res)))
+  :loopy t
+  :iter-keyword (substream collect set do)
+  :iter-bare ((set . setting)
+              (substream . substreaming)
+              (collect . collecting)
+              (do      . progn)))
 
 ;;;; Accumulation Commands
 ;;;;; Final updates

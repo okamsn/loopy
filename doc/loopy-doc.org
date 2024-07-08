@@ -721,6 +721,7 @@ indirection.
          (numbers i :from 0 :to 3))
 #+end_src
 
+#+cindex: keyword evaluation
 Unlike ~cl-loop~ in some cases, in Loopy, the values passed as keyword arguments
 are evaluated only once.  For example, the command =(list i some-list :by
 (get-function))= evaluates ~(get-function)~ only once.  It does not evaluate it
@@ -832,7 +833,9 @@ as the =VAR= argument of a loop command.  Loopy supports destructuring lists and
 arrays (which includes strings and vectors).
 - To destructure lists, use a list, as in =(a b c)=.
 - To destructure arrays, use a vector, as in =[a b c]=.
-
+- To destructure sequences generically using =seq.el= (mainly via ~seq-elt~ and
+  ~seq-drop~), use a vector or a list whose first element is =&seq=, as in
+  =[&seq a b c]= and =(&seq a b c)=.
 
 This sequence of symbols can be shorter than the destructured sequence, /but not
 longer/.  If shorter, the unassigned elements of the destructured sequence are
@@ -891,8 +894,7 @@ In more detail, the elements of the destructuring sequence can be:
 
 - A positional variable which will be bound to the corresponding element in the
   sequence.  These variables can themselves be sequences, but must be of the
-  correct type.  Unlike ~seq-let~, Loopy does not currently have a generic
-  syntax for sequences.
+  correct type.
 
   #+begin_src emacs-lisp
     ;; ((1 2 3) (4 5 6))
@@ -923,9 +925,9 @@ In more detail, the elements of the destructuring sequence can be:
   #+end_src
 
 #+cindex: &whole
-- The symbol =&whole=: If =&whole= is the first element in the sequence, then
-  the second element of the sequence names a variable that holds the entire
-  value of what is destructured.
+- The symbol =&whole=: If =&whole= is the first element in the sequence (or the
+  second element if =&seq= is the first), then the following element of the
+  sequence names a variable that holds the entire value of what is destructured.
 
   This is the same as when used in a CL ~lambda~ list.
 
@@ -952,7 +954,7 @@ In more detail, the elements of the destructuring sequence can be:
 
   When used after optional values, the =&rest= value is the subsequence starting
   at the index after any possible optional values, even when those optional
-  values are not actually present.  If the sequence is not long enough, than the
+  values are not actually present.  If the sequence is not long enough, then the
   sub-sequence is empty.
 
   #+begin_src emacs-lisp
@@ -1005,11 +1007,11 @@ In more detail, the elements of the destructuring sequence can be:
   #+end_src
 
 #+cindex: &optional
-- The symbol =&optional=: A variable named after =&optional= is optional.  If
-  the list is not long enough to bind the variable, then the variable is bound
-  to ~nil~ or, if specified, a default value.  Additionally, one may bind a
-  variable to record whether the list was long enough to contain the optional
-  value.
+- The symbol =&optional=: A variable named after =&optional= is bound if the
+  sequence is long enough to have a value at that position.  If the sequence is
+  not long enough, then the variable is bound to ~nil~ or, if specified, a
+  default value.  Additionally, one may bind a variable to record whether the
+  sequence was long enough to contain the optional value.
 
   As in a CL ~lambda~ list, the variable has the one of the following forms:
 
@@ -1062,7 +1064,7 @@ In more detail, the elements of the destructuring sequence can be:
   into keys whose values will be sought using ~plist-get~, which returns ~nil~
   if the key isn't found in the list.
 
-  Currently, only lists support this destructuring.
+  Only lists support this destructuring.
 
   #+begin_src emacs-lisp
     ;; => ((1 2 nil) (4 5 nil))
@@ -1153,7 +1155,7 @@ In more detail, the elements of the destructuring sequence can be:
   Like in =cl-lib=, if, after searching for the other keys, there remains an
   unmatched key in the destructured value, an error is signaled unless
   =&allow-other-keys= is also used, or unless the key =:allow-other-keys= is
-  associated with a non-nil value in the property list, even when using =&rest=.
+  associated with a non-nil value in the property list.
 
   #+begin_src emacs-lisp
     ;; Error due to presence of `:k3':
@@ -1170,8 +1172,8 @@ In more detail, the elements of the destructuring sequence can be:
   #+end_src
 
 #+cindex: &map
-- The symbol =&map=: Variables after =&map= are bound similar to ~map-let~ from
-  the library =map.el=.  =&map= works similarly to =&key=, but has a few
+- The symbol =&map=: Variables after =&map= are bound similarly to ~map-let~
+  from the library =map.el=.  =&map= works similarly to =&key=, but has a few
   important differences:
 
   1. Maps are more generic than property lists ("plists").  A "map" is a generic
@@ -1198,9 +1200,8 @@ In more detail, the elements of the destructuring sequence can be:
 
   - a symbol =VAR=
 
-  When specifying =KEY=, =VAR= can be a sequence to perform further
-  destructuring.  When =KEY= is not given, then the key is the symbol =VAR=, as
-  in ~(quote VAR)~.
+  When =KEY= is not given, then the key is the symbol =VAR=, as in ~(quote
+  VAR)~.  Unlike with =&key=, it is not prepended with a colon.
 
   #+begin_src emacs-lisp
     ;; => ((1 2 3 4 27))
@@ -1249,13 +1250,31 @@ In more detail, the elements of the destructuring sequence can be:
   #+end_src
 
 - The symbol =&aux=: Variables named after =&aux= are bound to the given values.
-  Like in CL Lib, =&aux= must come last in the list.
+  Like in CL Lib, =&aux= must come last in the sequence.
 
   #+begin_src emacs-lisp
     ;; => (7 7 7)
     (loopy (cycle 3)
            (collect (&aux [coll 7]) 'ignored)
            (finally-return coll))
+  #+end_src
+
+- The symbol =&seq=: If the first symbol in the sequence is =&seq=, then the
+  sequence will be destructured as a generic sequence using the generic-sequence
+  library =seq.el=.  Specifically, destructuring is similar to using ~seq-elt~
+  and ~seq-drop~.  This form is less efficient than destructuring a sequence as
+  an array or as a list, when applicable.
+
+  Sequences destructured using =&seq= can still use =&whole=, =&optional=,
+  =&rest=, and =&map=.  However, lists destructured using =&seq= cannot be
+  destructured using =&key=.
+
+  #+begin_src emacs-lisp
+    ;; => ((0 1 2 nil nil)
+    ;;     (3 4 5 [6 7])
+    ;;     (?a ?b ?c ""))
+    (loopy (list [&seq i j &optional k &rest r] '((0 1) [3 4 5 6 7] "abc"))
+           (collect (list i j k r)))
   #+end_src
 
 
@@ -2098,6 +2117,96 @@ source sequences.
     (loopy (sequence i [1 2] '(3 4) :by 2)
            (collect i))
   #+END_SRC
+
+#+findex: stream
+#+findex: streaming
+- =(stream VAR EXPR &key by)= :: Iterate through the elements for the stream
+  =EXPR=.  If =by= is non-nil (default: 1), then move to the next n-th element
+  during each iteration.  This command is a special case of the =substream=
+  command (described below), setting =VAR= to the first element of each
+  substream.  For more information, see the command =substream=.
+
+  This command also has the alias =streaming=.
+
+  #+begin_src emacs-lisp
+    ;; => (0 1 2)
+    (loopy (stream i (stream [0 1 2]))
+           (collect i))
+
+    ;; Same as the above:
+    ;; => (0 1 2)
+    (loopy (substream i (stream [0 1 2]))
+           (collect (stream-first i)))
+  #+end_src
+
+#+findex: substream
+#+findex: substreaming
+- =(substream VAR EXPR &key by length)= :: Iterate through the sub-streams of
+  stream =EXPR=, similar to the command =cons=.  If =by= is non-nil (default:
+  1), then move to the next n-th substream during each iteration.  If =length=
+  is given, then the substream bound to =VAR= is only the specified length.
+
+  This command operates on the =stream= type defined by the library =stream=
+  [[https://elpa.gnu.org/packages/stream.html][from GNU ELPA]], which is not to be confused with the Emacs Lisp "input streams"
+  and "output streams" used for reading and printing text ([[info:elisp#Read and
+  Print]]).  The "streams" defined by the =stream= library are like lazy sequences
+  and are compatible with features from the built-in =seq= library, such as
+  ~seq-elt~ and ~seq-do~.
+
+  For efficiency, when possible, =VAR= is initialized to the value of =EXPR=,
+  not ~nil~, and is updated at the end of each step in the loop.  This is not
+  possible when destructuring.  Such initialization can be overridden by using
+  the =with= special macro argument, which can result in slower code.
+
+  Sub-streams can only be destructured using the =&seq= feature of the default
+  destructuring method ([[#basic-destructuring][Basic Destructuring]]), or by using the =seq= flag
+  ([[#flags][Using Flags]]).  Streams are neither lists nor arrays.
+
+  This command also has the alias =substreaming=.
+
+  #+begin_src emacs-lisp
+    (require 'stream)
+
+    ;; => (0 1 2)
+    (loopy (substream i (stream [0 1 2]))
+           (collect (stream-first i)))
+
+    ;; => ((0 1 2)
+    ;;     (1 2 nil)
+    ;;     (2 nil nil))
+    (loopy (substream [&seq i j k] (stream [0 1 2]))
+           (collect (list i j k)))
+
+    ;; => ((0 1)
+    ;;     (1 2)
+    ;;     (2 3)
+    ;;     (3 nil))
+    (loopy (flag seq)
+           ;; Using the `seq.el' library to destructure,
+           ;; not destructuring as a list:
+           (substream (i j) (stream '(0 1 2 3)))
+           (collect (list i j)))
+
+    ;; => ((0 1 2 3 4 5)
+    ;;     (2 3 4 5)
+    ;;     (4 5))
+    (loopy (substream i (stream [0 1 2 3 4 5]) :by 2)
+           (set inner-result nil)
+           (do (seq-do (lambda (x) (push x inner-result))
+                       i))
+           (collect (reverse inner-result)))
+
+    ;; => ((0 1)
+    ;;     (2 3)
+    ;;     (4 5))
+    (loopy (set inner-result nil)
+           ;; Using `:length' limits the length of the substream
+           ;; bound to `i'.
+           (substream i (stream [0 1 2 3 4 5]) :by 2 :length 2)
+           (do (seq-do (lambda (x) (push x inner-result))
+                       i))
+           (collect (reverse inner-result)))
+  #+end_src
 
 *** Sequence Index Iteration
 :PROPERTIES:
