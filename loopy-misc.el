@@ -457,11 +457,12 @@ KEY transforms those elements and ELEMENT."
 Prior to Emacs 28, it was not guaranteed that `pcase-let' bound
 unmatched variables."
   (declare (indent 1))
-  (if (eval-when-compile (< emacs-major-version 28))
+  (static-if (< emacs-major-version 28)
       `(let ,(mapcar (lambda (sym) `(,sym nil))
                      variables)
          ,(cons 'ignore variables)
          ,form)
+    (ignore variables)
     form))
 
 (provide 'loopy-misc)
