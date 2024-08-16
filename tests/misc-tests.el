@@ -1167,14 +1167,14 @@ The valid keys are:
 
 ;; FIXME: This test fails on Emacs 27 because the tests don't install the
 ;;       correct version of Map.el.
-(when (> emacs-major-version 27)
-  (loopy-def-pcase-test pcase-tests-loopy-&optional-ignored-6
-    :result (list 1 2 [] 14 nil)
-    :val   (vector 1 2)
-    :var (a b e k1 k2)
-    :pat [a b &optional _ _ &rest e &map [:k1 k1 14] (:k2 k2)]
-    :list nil
-    :convert nil))
+(static-if (> emacs-major-version 27)
+    (loopy-def-pcase-test pcase-tests-loopy-&optional-ignored-6
+      :result (list 1 2 [] 14 nil)
+      :val   (vector 1 2)
+      :var (a b e k1 k2)
+      :pat [a b &optional _ _ &rest e &map [:k1 k1 14] (:k2 k2)]
+      :list nil
+      :convert nil))
 
 (loopy-def-pcase-test pcase-tests-loopy-&whole-1
   :result (list (list 1 2 3) 1 2 3)

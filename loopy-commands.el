@@ -139,7 +139,7 @@ handled by `loopy-iter'."
 
 ;;;;; Genereric Evaluation
 ;;;;;; Set
-(cl-defun loopy--parse-set-command ((&whole cmd _ var &rest vals))
+(cl-defun loopy--parse-set-command ((_ var &rest vals))
   "Parse the `set' command.
 
 - VAR is the variable to assign.
@@ -190,7 +190,7 @@ handled by `loopy-iter'."
 ;;       being known at compile time (but still only being evaluated once.)
 ;;       (#194)
 (cl-defun loopy--parse-set-prev-command
-    ((&whole cmd _ var val &key back))
+    ((_ var val &key back))
   "Parse the `set-prev' command as (set-prev VAR VAL &key back).
 
 VAR is set to a version of VAL in a past loop cycle.  With BACK,
@@ -1777,7 +1777,7 @@ you can use in the instructions:
                               args (nreverse args-holding))
                       (setq args parser-args)))
 
-           (ignore args opts)
+           (ignore name args opts)
 
            (let ((arg-length (length args)))
              (cond

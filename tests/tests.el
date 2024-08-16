@@ -5803,7 +5803,7 @@ Otherwise, `loopy' should return t."
   ;; Emacs 27 had a byte-compilation error that was fixed in
   ;; commit a0f60293d79cda858c033db4ae074e5e5560aab2.
   ;; See: https://git.savannah.gnu.org/cgit/emacs.git/commit/?id=a0f60293d97cda858c033db4ae074e5e5560aab2.
-  :expected-result (if (= emacs-major-version 27)
+  :expected-result (static-if (= emacs-major-version 27)
                        :failed
                      :passed)
   (should
