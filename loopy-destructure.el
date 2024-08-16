@@ -384,6 +384,15 @@ Type is one of `list' or `array'."
 
 ;;;; Pcase pattern
 
+(defun loopy--pcase-flip (fn arg2)
+  "Wrapper macro for compatibility with obsoletion of `pcase--flip'.
+
+FN is the function.  ARG2 is the argument to move to the second
+postion of the call to FN in the pattern."
+  (static-if (>= emacs-major-version 30)
+      `(,fn _ ,arg2)
+    `(pcase--flip ,fn ,arg2)))
+
 (defun loopy--get-var-pattern (var)
   "Get the correct variable pattern.
 
@@ -397,7 +406,7 @@ return `(loopy VAR)'.  In all other cases, VAR is returned."
 
 ;; TODO: Use this in `list' pattern.
 (defun loopy--pcase-let-nil-list (pat)
-  "Return a list of patterns binding variables in PAT to `nil'."
+  "Return a list of patterns binding variables in PAT to nil."
   ;; Need to quote `nil' for it to be a `pcase' pattern.
   (pcase pat
     (`(loopy ,(and (pred seqp) seq))
@@ -422,7 +431,7 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                    (cdr pos-vars) opt-vars
                                    rest-var map-or-key-vars))))
    (opt-vars (loopy--pcase-let-workaround (var default supplied)
-               (pcase-let* ((`(,var ,default ,supplied ,length)
+               (pcase-let* ((`(,var ,default ,supplied ,_length)
                              (loopy--get-&optional-spec (car opt-vars)))
                             (var2 (loopy--get-var-pattern var)))
                  `(and (pred listp)
@@ -457,10 +466,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
         (opt-len (length opt-vars)))
     ;; We allow the variable form to be shorter than the
     ;; destructured sequence.
-    `(and (pred (pcase--flip ,(compat-function length>) ,(1- pos-len)))
+    `(and (pred ,(loopy--pcase-flip (compat-function length>) (1- pos-len)))
           ,@(cl-loop for var in pos-vars
                      for idx from 0
-                     collect `(app (pcase--flip aref ,idx)
+                     collect `(app ,(loopy--pcase-flip 'aref idx)
                                    ,(loopy--get-var-pattern var)))
           ,@(when opt-vars
               (let ((opt-var-specs (seq-into (mapcar #'loopy--get-&optional-spec
@@ -477,8 +486,8 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                  ;; the one variable was not supplied and we
                                  ;; need to check the remaining ones.
                                  `(and ,(if use->=
-                                            `(pred (pcase--flip ,(compat-function length>) ,(1- checked-len)))
-                                          `(pred (pcase--flip ,(compat-function length=) ,checked-len)))
+                                            `(pred ,(loopy--pcase-flip (compat-function length>) (1- checked-len)))
+                                          `(pred ,(loopy--pcase-flip (compat-function length=) checked-len)))
                                        ;; Variables that should be bound with the value in
                                        ;; the array.
                                        ,@(cl-loop
@@ -488,10 +497,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                                                (aref opt-var-specs spec-idx2))
                                                               (var3 (loopy--get-var-pattern var2)))
                                                    (if (= len2 3)
-                                                       `((app (pcase--flip aref ,arr-idx)
+                                                       `((app ,(loopy--pcase-flip 'aref arr-idx)
                                                               ,var3)
                                                          (let ,supplied2 t))
-                                                     `((app (pcase--flip aref ,arr-idx)
+                                                     `((app ,(loopy--pcase-flip 'aref arr-idx)
                                                             ,var3)))))
                                        ;; Variables that should be bound to nil or their
                                        ;; default.
@@ -529,18 +538,20 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                     (rest-pat (loopy--get-var-pattern rest-var))
                     (seqsym (gensym "seqsym")))
                 ;; Rec-checking the length is fast for arrays.
-                `((or (and (pred (pcase--flip ,(compat-function length>) ,len-sum))
-                           (app (pcase--flip substring ,len-sum) ; 0-indexed
+                `((or (and (pred ,(loopy--pcase-flip (compat-function length>) len-sum))
+                           (app ,(loopy--pcase-flip 'substring len-sum) ; 0-indexed
                                 ,rest-pat))
                       (app (lambda (,seqsym) (substring ,seqsym 0 0))
                            ,rest-pat))))))))
 
 (defun loopy--seq-length= (seq n)
+  "Check whether the length of SEQ is equal to N."
   (if (sequencep seq)
       (compat-call length= seq n)
     (= (seq-length seq) n)))
 
 (defun loopy--seq-length> (seq n)
+  "Check whether the length of SEQ is greater than to N."
   (cond
    ((sequencep seq)
     (compat-call length> seq n))
@@ -567,14 +578,14 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
     (cl-labels ((make-pos-pats ()
                   (cl-loop for v in pos-vars
                            for i from 0
-                           collect `(app (pcase--flip seq-elt ,i)
+                           collect `(app ,(loopy--pcase-flip 'seq-elt i)
                                          ,(loopy--get-var-pattern v)))))
       `(and
         ;; If there are optional values, then we can avoid the length check here
         ;; by running the length check for the optional values, which we need to
         ;; do anyway.
         ,@(when (null opt-vars)
-            `((pred (pcase--flip loopy--seq-length> ,(1- pos-len)))
+            `((pred ,(loopy--pcase-flip 'loopy--seq-length> (1- pos-len)))
               ,@(make-pos-pats)))
         ;; Optional variables may or may not be expensive for generic
         ;; sequences.  This is the same logic as for arrays, just using the
@@ -595,8 +606,8 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                ;; the one variable was not supplied and we
                                ;; need to check the remaining ones.
                                `(and ,(if use->=
-                                          `(pred (pcase--flip loopy--seq-length> ,(1- checked-len)))
-                                        `(pred (pcase--flip loopy--seq-length= ,checked-len)))
+                                          `(pred ,(loopy--pcase-flip 'loopy--seq-length> (1- checked-len)))
+                                        `(pred ,(loopy--pcase-flip 'loopy--seq-length= checked-len)))
                                      ,@(when pos-vars
                                          (make-pos-pats))
                                      ;; Variables that should be bound with the value in
@@ -607,10 +618,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                         append (pcase-let* ((`(,var2 ,_ ,supplied2) (aref opt-var-specs spec-idx2))
                                                             (var3 (loopy--get-var-pattern var2)))
                                                  (if supplied2
-                                                     `((app (pcase--flip seq-elt ,arr-idx)
+                                                     `((app ,(loopy--pcase-flip 'seq-elt arr-idx)
                                                             ,var3)
                                                        (let ,supplied2 t))
-                                                   `((app (pcase--flip seq-elt ,arr-idx)
+                                                   `((app ,(loopy--pcase-flip 'seq-elt arr-idx)
                                                           ,var3)))))
                                      ;; Variables that should be bound to nil or their
                                      ;; default.
@@ -630,7 +641,7 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                                     ))))))
                     ;; A pattern for when nothing matches.
                     (and ,@(cl-loop for spec across opt-var-specs
-                                    append (pcase-let* ((`(,var2 ,default2 ,supplied2 ,len2) spec)
+                                    append (pcase-let* ((`(,var2 ,default2 ,supplied2 ,_len2) spec)
                                                         (var3 (loopy--get-var-pattern var2)))
                                              `(,@(when supplied2
                                                    `((let ,supplied2 nil)))
@@ -643,10 +654,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                                                ;;     `((let ,var3 ,default2))))
                                                )))
                          ,@(when pos-vars
-                             `((pred (pcase--flip loopy--seq-length> ,(1- pos-len)))
+                             `((pred ,(loopy--pcase-flip 'loopy--seq-length> (1- pos-len)))
                                ,@(make-pos-pats))))))))
         ,@(when rest-var
-            `((app (pcase--flip seq-drop ,(+ pos-len opt-len))
+            `((app ,(loopy--pcase-flip 'seq-drop (+ pos-len opt-len))
                    ,(loopy--get-var-pattern rest-var))))))))
 
 (defun loopy--pcase-pat-&key-pattern (key-vars allow-other-keys)
@@ -684,7 +695,7 @@ holding the property list."
                                                ,default)))
                                          ,var))
                                   (t
-                                   `(app (pcase--flip plist-get ,key)
+                                   `(app ,(loopy--pcase-flip 'plist-get key)
                                          ,var)))))
                         key-vars))
       ;; If we are checking whether there are no other keys in EXPVAL,
@@ -770,7 +781,7 @@ holding the property list."
                             `(app (lambda (,mapsym) (map-elt ,mapsym ,key ,default))
                                   ,var))
                            (t
-                            `(app (pcase--flip map-elt ,key) ,var))))))
+                            `(app ,(loopy--pcase-flip 'map-elt key) ,var))))))
                     map-vars))))
 
 (defun loopy--pcase-pat-&aux-pattern (aux-vars)
@@ -858,8 +869,8 @@ See the Info node `(loopy)Basic Destructuring'."
                        `(app (lambda (_) ,rest-var)
                              ,(loopy--pcase-pat-&map-pattern map-vars)))
                       ((or pos-vars opt-vars)
-                       `(app (pcase--flip seq-drop ,(+ (length pos-vars)
-                                                       (length opt-vars)))
+                       `(app ,(loopy--pcase-flip 'seq-drop (+ (length pos-vars)
+                                                              (length opt-vars)))
                              ,(loopy--pcase-pat-&map-pattern map-vars)))
                       (t
                        (loopy--pcase-pat-&map-pattern map-vars))))
