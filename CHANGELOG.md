@@ -2,7 +2,7 @@
 
 This document describes the user-facing changes to Loopy.
 
-## Unreleased
+## 0.13.0
 
 ### Breaking Changes
 
