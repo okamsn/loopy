@@ -876,9 +876,20 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 
 (loopy-deftest set-prev-keyword-back
   :result '(nil nil nil 1 2)
-  :body ((list i '(1 2 3 4 5))
-         (set-prev j i :back 3)
-         (collect j))
+  :multi-body t
+  :body [((list i '(1 2 3 4 5))
+          (set-prev j i :back 3)
+          (collect j))
+
+         ((with (n 3)
+                (first-time t))
+          (list i '(1 2 3 4 5))
+          (set-prev j i :back (if first-time
+                                  (progn
+                                    (setq first-time nil)
+                                    n)
+                                (error "Evaluated more than once.")))
+          (collect j))]
   :loopy t
   :iter-bare ((list . listing)
               (collect . collecting)
