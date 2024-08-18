@@ -18,9 +18,20 @@ This document describes the user-facing changes to Loopy.
   ([#197], [#145]).  These commands no longer take multiple conditions in the
   same command.
 
+### Bugs Fixed
+
+- Allow `back` in `set-prev` to not be known at compile time ([#202]).
+
+### Documentation Improvements
+
+- State explicitly that `set-prev` records values from the end
+  of each loop cycle and that it does not modify its variable
+  until the specified cycle ([#202]).
+
 [#195]: https://github.com/okamsn/loopy/pull/195
 [#196]: https://github.com/okamsn/loopy/pull/196
 [#197]: https://github.com/okamsn/loopy/pull/197
+[#202]: https://github.com/okamsn/loopy/pull/202
 
 ## 0.12.2
 

@@ -1370,9 +1370,11 @@ value and do no affect how the loop iterates.
 #+findex: prev
 - =(set-prev|prev-expr VAR VAL &key back)= :: Bind =VAR= to a value =VAL= from a
   previous cycle in the loop.  With =BACK= (default: 1), use the value from that
-  many cycles previous.  This command /does not/ work like a queue; it always
-  uses the value from the =BACK=-th previous cycle, regardless of when the
-  command is run.
+  many cycles previous.  _If not enough cycles have passed yet, then the value
+  of =VAR= is not modified._  This command /does not/ work like a queue for
+  recording =VAL=; it always uses the value from the =BACK=-th previous cycle,
+  regardless of when the command is run.  The value used is always the value at
+  the end of the cycle.
 
   This command also has the aliases =setting-prev=, =prev-set=, and =prev=.
 
@@ -1383,10 +1385,13 @@ value and do no affect how the loop iterates.
            (collect j))
 
     ;; => (nil nil nil 1 2)
-    (loopy (list i '(1 2 3 4 5))
-           (set-prev j i :back 3)
+    (loopy (with (n 3))
+           (list i '(1 2 3 4 5))
+           (set-prev j i :back n)
            (collect j))
 
+    ;; NOTE: `j' isn't overwritten until the correct cycle:
+    ;;
     ;; => ((first-val nil) (first-val nil) (1 2) (3 4))
     (loopy (with (j 'first-val))
            (list i '((1 . 2) (3 . 4) (5 . 6) (7 . 8)))
@@ -1401,6 +1406,16 @@ value and do no affect how the loop iterates.
            (numbers i :from 1 :to 10)
            (when (cl-oddp i)
              (set-prev j i))
+           (collect j))
+
+    ;; NOTE: `j' is always bound to the previous value of `i'
+    ;;       from the end of the specified cycle.
+    ;;
+    ;; => (nil 101 102 103)
+    (loopy (numbers i :from 1 :to 4)
+           (set i2 i)
+           (set-prev j i2)
+           (set i2 (+ i 100))
            (collect j))
   #+end_src
 
