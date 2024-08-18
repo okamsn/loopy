@@ -190,52 +190,75 @@ handled by `loopy-iter'."
 ;;       being known at compile time (but still only being evaluated once.)
 ;;       (#194)
 (cl-defun loopy--parse-set-prev-command
-    ((_ var val &key back))
+    ((_ var val &key (back 1)))
   "Parse the `set-prev' command as (set-prev VAR VAL &key back).
 
 VAR is set to a version of VAL in a past loop cycle.  With BACK,
 wait that many cycle before beginning to update VAR.
 
+This command records the value of VAL at the end of the cycle,
+not when the command is run.
+
 This command does not wait for VAL to change before updating VAR."
-  (let* ((holding-vars (cl-loop for i from 1 to (or back 1)
-                                collect (gensym "set-prev-hold")))
-         (using-destructuring (seqp var))
-         (with-bound (if using-destructuring
-                         (cl-some #'loopy--with-bound-p
-                                  (cl-second (loopy--destructure-for-iteration var val)))
-                       (loopy--with-bound-p var)))
-         ;; We don't use `cl-shiftf' in the main body because we want the
-         ;; holding variables to update regardless of whether we update
-         ;; VAR.
-         (holding-vars-setq `(loopy--latter-body
-                              (cl-shiftf ,@holding-vars ,val))))
-    (if with-bound
-        (if using-destructuring
-            (let ((cnt-holder (gensym "count"))
-                  (back-holder (gensym "back")))
-              `((loopy--other-vars (,cnt-holder 0))
-                (loopy--latter-body (setq ,cnt-holder (1+ ,cnt-holder)))
-                (loopy--other-vars (,back-holder ,back))
-                ,@(mapcar (lambda (x) `(loopy--other-vars (,x nil)))
-                          holding-vars)
-                ,@(loopy--bind-main-body (main-exprs rest-instr)
-                      (loopy--destructure-for-other-command
-                       var (car holding-vars))
-                    `((loopy--main-body (when (>= ,cnt-holder ,back-holder)
-                                          ,@main-exprs))
-                      ,@rest-instr))
-                ,holding-vars-setq))
-          (let ((val-holder (gensym "set-prev-val")))
-            `((loopy--other-vars (,val-holder ,var))
-              ,@(mapcar (lambda (x) `(loopy--other-vars (,x ,val-holder)))
-                        holding-vars)
-              (loopy--main-body (setq ,var ,(car holding-vars)))
-              ,holding-vars-setq)))
-      `(,@(mapcar (lambda (x) `(loopy--other-vars (,x nil)))
-                  holding-vars)
-        ,@(loopy--destructure-for-other-command
-           var (car holding-vars))
-        ,holding-vars-setq))))
+  (if (not (numberp back))
+      ;; When we don't know ahead of time how far back we need to go, we have to
+      ;;  use a queue.  This code is adapted from Irreal's blog
+      ;;  (https://irreal.org/blog/?p=40) where they give an example of a simple
+      ;;  FIFO queue in Scheme.  It uses two lists.  The "front" lists contains
+      ;;  values for popping off.  The "back" list contains values for pushing
+      ;;  on.  When the "front"  list is exhausted, values are moved from the
+      ;;  "back" list in reverse.
+      (loopy--instr-let-const* ((prev back))
+          loopy--other-vars
+        (loopy--instr-let-var* ((cnt 0)
+                                (queue-front nil)
+                                (queue-end nil))
+            loopy--other-vars
+          ;; We generate a main-body expression for binding the variables to the
+          ;; desired values and for setting them to nil.  There is overlap in the
+          ;; remaining expressions, which initialize the variables.
+          (loopy--bind-main-body (main-exprs init-instr)
+              (loopy--destructure-for-other-command
+               var `(or (pop ,queue-front)
+                        (progn
+                          (setq ,queue-front (reverse ,queue-end)
+                                ,queue-end nil)
+                          (pop ,queue-front))))
+            `((loopy--main-body (when (>= ,cnt ,prev)
+                                  ,(macroexp-progn main-exprs)))
+              ,@init-instr
+              (loopy--latter-body (push ,val ,queue-end))
+              (loopy--latter-body (setq ,cnt (1+ ,cnt)))))))
+
+    ;; When we know ahead of time how far we need to go back, we can use a chain
+    ;; of `setq's for storing values instead of queue.  However, except when
+    ;; BACK is 1, we still need to use a count, in case one of the variables is
+    ;; initialized in `with'.
+
+    (if (= back 1)
+        (loopy--instr-let-var* ((hold-var nil)
+                                (run nil))
+            loopy--other-vars
+          `(,@(loopy--bind-main-body (main-exprs init-instrs)
+                  (loopy--destructure-for-other-command var hold-var)
+                `((loopy--main-body (when ,run
+                                      ,@main-exprs))
+                  ,@init-instrs))
+            (loopy--latter-body (setq ,hold-var ,val))
+            (loopy--latter-body (setq ,run t))))
+      (let ((hold-vars (cl-loop for i from 1 to back
+                                collect (gensym "hold-var"))))
+        (loopy--instr-let-var* ((cnt 0))
+            loopy--other-vars
+          `(,@(mapcar (lambda (x) `(loopy--other-vars (,x nil)))
+                      hold-vars)
+            ,@(loopy--bind-main-body (main-exprs init-instrs)
+                  (loopy--destructure-for-other-command var (car hold-vars))
+                `((loopy--main-body (when (>= ,cnt ,back)
+                                      ,@main-exprs))
+                  ,@init-instrs))
+            (loopy--latter-body (cl-shiftf ,@hold-vars ,val))
+            (loopy--latter-body (setq ,cnt (1+ ,cnt)))))))))
 
 ;;;;;; Group
 (cl-defun loopy--parse-group-command ((_ &rest body))
