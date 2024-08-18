@@ -18,6 +18,9 @@ This document describes the user-facing changes to Loopy.
   ([#197], [#145]).  These commands no longer take multiple conditions in the
   same command.
 
+- The built-in destructuring system was switched to use `pcase` internally,
+  so some warnings and errors are now reportedly differently ([#199]).
+
 ### Bugs Fixed
 
 - Allow `back` in `set-prev` to not be known at compile time ([#202]).
