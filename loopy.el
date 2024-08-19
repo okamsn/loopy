@@ -648,9 +648,24 @@ macro `loopy' itself."
 
       (loopy--accumulation-vars
        (loopy--validate-binding instruction-value)
-       ;; Don't want to accidentally rebind variables to `nil'.
-       (unless (loopy--bound-p (cl-first instruction-value))
-         (push instruction-value loopy--accumulation-vars)))
+       ;; Don't want to accidentally rebind variables to `nil'
+       ;; or to accidentally mis-use commands that need
+       ;; different initial values.
+       (loopy--pcase-let-workaround (var new-val)
+         (pcase-let ((`(,var ,new-val) instruction-value))
+           (pcase var
+             ((pred loopy--with-bound-p) nil)
+             ((and (app loopy--command-bound-p `(,_place . ,old-val))
+                   (guard (not (equal new-val old-val))))
+              ;; TODO: Switch from raising a warning to raising an error.
+              ;; (signal 'loopy-incompatible-accumulation-initializations
+              ;;         (list :in place :var var :old old-val :new new-val))
+              (display-warning
+               'loopy
+               (format "loopy: Conflicting accumulation starting values: `%s', %s, %s\nThis will be an error in the future.  To resolve this error, use `with' to explicitly specify a starting value."
+                       var old-val new-val)
+               :warning))
+             (_ (push instruction-value loopy--accumulation-vars))))))
 
       (loopy--other-vars
        (loopy--validate-binding instruction-value)

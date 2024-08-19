@@ -2558,37 +2558,6 @@ Keep in mind that it is an error to modify accumulation variables outside of
 accumulation commands.  This restriction allows accumulations to be much faster.
 #+end_quote
 
-#+cindex: accumulation initial values
-Like with other loop commands, variables created by accumulation commands (such
-as ~coll~ in the above example) are initialized to ~nil~ unless stated
-otherwise.  When otherwise, such as for the commands =sum= and =multiply=, the
-initial value of a variable depends on the first accumulation command using that
-variable in the arguments given to the macro.  Remember that a variable's
-initial value can be controlled using the =with= special macro argument.
-
-#+begin_src emacs-lisp
-  ;; => 27
-  (loopy (numbers i :from 1 :to 3)
-         (sum my-accum i) ; Starts at 0.
-         (multiply my-accum i)
-         (finally-return my-accum))
-
-  ;; => 21
-  (loopy (numbers i :from 1 :to 3)
-         (multiply my-accum i) ; Starts at 1.
-         (sum my-accum i)
-         (finally-return my-accum))
-
-  ;; Using `with':
-  ;;
-  ;; => 87
-  (loopy (with (my-accum 10))
-         (numbers i :from 1 :to 3)
-         (sum my-accum i) ; Starts at 0.
-         (multiply my-accum i)
-         (finally-return my-accum))
-#+end_src
-
 #+cindex: accumulation destructuring
 Similar to iteration commands, accumulation commands can also use destructuring.
 In accumulation commands, the values resulting from destructuring are
@@ -2703,9 +2672,44 @@ other hand, =sum= and =multiply= are compatible, since they both act on numbers.
 
   ;; Compatible commands:
   ;; => 27
-  (loopy (numbers i :from 1 :to 3)
+  (loopy (with (loopy-result 0))
+         (numbers i :from 1 :to 3)
          (sum i)
          (multiply i))
+#+end_src
+
+#+cindex: accumulation initial values
+Each accumulation command has a default initialization value for the
+accumulation variable.  For most commands, this is ~nil~.  This documentation
+tries to note when it is not ~nil~.  For example, the default starting value for
+the =sum= command is ~0~ and the default starting value for the =multiply=
+command is ~1~.  The default initialization value used by an accumulation
+command can be overridden using the =with= special macro argument.
+
+#+attr_texinfo: :tag Warning
+#+begin_quote
+Currently, a warning is raised when the default initial values of accumulation
+commands conflict.  In the future, this will be an error.  To resolve this
+conflict, use the =with= special macro argument, as noted above.
+#+end_quote
+
+#+begin_src emacs-lisp
+  ;; Raises a warning. Will raise an error in the future.
+  ;;
+  ;; => 27
+  (loopy (numbers i :from 1 :to 3)
+         (sum my-accum i) ; Defaults to 0.
+         (multiply my-accum i) ; Defaults to 1.
+         (finally-return my-accum))
+
+  ;; No warning because using `with':
+  ;;
+  ;; => 87
+  (loopy (with (my-accum 10))
+         (numbers i :from 1 :to 3)
+         (sum my-accum i) ; Default not used.
+         (multiply my-accum i) ; Default not used.
+         (finally-return my-accum))
 #+end_src
 
 By default, one must specify separate accumulation variables to be able to
@@ -2866,7 +2870,7 @@ all described below.
   #+begin_quote
   This argument is similar to the =:test= argument used by =cl-lib=, but is
   closer to the optional =testfn= argument used by =seq= (for example, in
-  ~seq-contains-p~).  This are two important differences:
+  ~seq-contains-p~).  There are two important differences:
   1. Tests default to ~equal~, like in other Emacs Lisp libraries, not ~eql~.
   2. The first argument is the existing value or sequence and the second
      argument is the tested value.  This is the /opposite/ of the order used by
@@ -2888,7 +2892,7 @@ all described below.
   #+end_src
 
 #+cindex: accumulation keyword key
-- =key= :: A one-argument function that transforms the _both_ tested value and
+- =key= :: A one-argument function that transforms _both_ the tested value and
   the value from sequence used by the =test= keyword.
 
   The keyword =key= is useful to avoid applying a transforming function to the
