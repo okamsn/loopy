@@ -30,6 +30,9 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - Conflicting initialization values for accumulation variables now signal
+     a warning.  In the future, they will signal an error.
  - Version 0.13.0:
    - The deprecated =:init= keyword argument has been removed.  Use the =with=
      special macro argument instead.
