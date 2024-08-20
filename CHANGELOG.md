@@ -2,6 +2,22 @@
 
 This document describes the user-facing changes to Loopy.
 
+## Unreleased
+
+### Breaking Changes
+
+- Conflicting starting values for accumulation variables, such as from using
+  `sum` (value: 0) and `multiply` (value: 1), now signal an error ([#169],
+  [#203]).  In the future, they will signal an error.
+
+  For now, Loopy continues the behavior of using the first found starting value
+  from the macro arguments.  To silence this warning and to avoid this future
+  error, use the `with` special macro argument to explicitly state a starting
+  value for the accumulation variable.
+
+[#169]: https://github.com/okamsn/loopy/issues/169
+[#203]: https://github.com/okamsn/loopy/pull/203
+
 ## 0.13.0
 
 ### Breaking Changes

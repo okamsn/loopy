@@ -629,7 +629,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-keyword (array loopy))
 
 (loopy-deftest at-disagreeing-accum-types
-  :error loopy-incompatible-accumulations
+  :error loopy-incompatible-accumulation-types
   :macroexpand t
   :multi-body t
   :body ((outer
@@ -3137,9 +3137,38 @@ expansion time."
               (nunion . nunioning)
               (nconc . nconcing)))
 
+;; TODO: Enable these tests in a future version.
+;;
+;; (loopy-deftest accumulation-compatibility-different-inits-1
+;;   :doc "Check that accumulation commands with different initial values raise an error.
+;; This should apply even when they're compatible types."
+;;   :error loopy-incompatible-accumulation-initializations
+;;   :macroexpand t
+;;   :body ((list i '(1 2 3 4 5))
+;;          (sum i)
+;;          (multiply i))
+;;   :loopy t
+;;   :iter-keyword (list sum multiply)
+;;   :iter-bare ((list . listing)
+;;               (sum . summing)
+;;               (multiply . multiplying)))
+;;
+;; (loopy-deftest accumulation-compatibility-different-inits-2
+;;   :doc "Check that `with' on the variable (see test 1) avoids the error."
+;;   :result 27
+;;   :body ((with (loopy-result 0))
+;;          (list i '(1 2 3))
+;;          (sum i)
+;;          (multiply i))
+;;   :loopy t
+;;   :iter-keyword (list sum multiply)
+;;   :iter-bare ((list . listing)
+;;               (sum . summing)
+;;               (multiply . multiplying)))
+
 (loopy-deftest accumulation-compatibility-different-types
   :doc "Check that commands with different accumulation types should raise error."
-  :error loopy-incompatible-accumulations
+  :error loopy-incompatible-accumulation-types
   :macroexpand t
   :multi-body t
   :body [((list i '((1 2) (3 4) (5 6)))
@@ -5518,7 +5547,7 @@ Not multiple of 3: 7"
               (collect . collecting)))
 
 (loopy-deftest thereis-always-same-var
-  :error loopy-incompatible-accumulations
+  :error loopy-incompatible-accumulation-types
   :multi-body t
   :body [((list i '(1 2 3))
           (always i)
@@ -5534,7 +5563,7 @@ Not multiple of 3: 7"
   :iter-bare ((list . listing)))
 
 (loopy-deftest thereis-never-same-var
-  :error loopy-incompatible-accumulations
+  :error loopy-incompatible-accumulation-types
   :multi-body t
   :body  [((list i '(1 2 3))
            (never i)

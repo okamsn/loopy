@@ -71,12 +71,16 @@
               '(loopy-error loopy-bad-command-arguments))
 
 ;;;;; Errors on Accumulations
-(define-error 'loopy-incompatible-accumulations
-              "Loopy: Incompatible accumulations"
+(define-error 'loopy-incompatible-accumulation-types
+              "Loopy: Incompatible accumulation types"
+              'loopy-error)
+
+(define-error 'loopy-incompatible-accumulation-initializations
+              "Loopy: Incompatible initial values for accumulations"
               'loopy-error)
 
 (define-error 'loopy-incompatible-accumulation-final-updates
-              "Loopy: Incompatible accumulations"
+              "Loopy: Incompatible expectations for accumulations"
               'loopy-error)
 
 (define-error 'loopy-missing-accum-counters

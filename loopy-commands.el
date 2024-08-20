@@ -1479,7 +1479,7 @@ command.
         (cl-destructuring-bind (existing-category existing-command)
             existing-description
           (unless (eq category existing-category)
-            (signal 'loopy-incompatible-accumulations
+            (signal 'loopy-incompatible-accumulation-types
                     (list existing-command
                           command))))
       (push (cons key (list category command))
