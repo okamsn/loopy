@@ -1643,7 +1643,7 @@ variants =numbers-up= and =numbers-down=.
   #+begin_src emacs-lisp
     ;; => (7 8 9 10 11 12 13 14 15 16)
     (loopy (cycle 10)
-           (numbers i 7)
+           (numbers i :from 7)
            (collect i))
   #+end_src
 
@@ -1657,13 +1657,9 @@ variants =numbers-up= and =numbers-down=.
     (loopy (numbers i :from 1 :to 5 :by 2)
            (collect i))
 
-    ;; => (1 3 5)
-    (loopy (numbers i 1 5 2)
-           (collect i))
-
     ;; => (7 9 11 13 15 17 19 21 23 25)
     (loopy (cycle 10)
-           (numbers i 7 :by 2)
+           (numbers i :from 7 :by 2)
            (collect i))
 
     ;; => (1 2.5 4.0)
@@ -1675,9 +1671,9 @@ variants =numbers-up= and =numbers-down=.
   whether the value should be increasing or decreasing when using the =:by=
   keyword, one can use the keywords =:downfrom=, =:downto=, =:upfrom=, =:upto=,
   =:above=, and =:below=.  The keywords =:from= and =:to= don't by themselves
-  specify a direction, and they can be used with the keyword arguments that do
-  without conflict.  Using arguments that contradict one another will signal an
-  error.
+  specify a direction, and they can be used without conflict with the keyword
+  arguments that do.  Using arguments that contradict one another will signal
+  an error.
 
   #+begin_src emacs-lisp
     ;; => (3 2 1)
@@ -1701,7 +1697,7 @@ variants =numbers-up= and =numbers-down=.
     (loopy (numbers i :from 1 :upto 7)
            (collect i))
 
-    ;; => Signals an error:
+    ;; Signals an error:
     (loopy (numbers i :downfrom 10 :upto 20)
            (collect i))
   #+end_src
@@ -1771,7 +1767,7 @@ are simple wrappers of the above =numbers= command.
 #+findex: numbers-down
 #+findex: numbering-down
 - =(numbers-down|nums-down VAR START [END] &key by)= :: Equivalent to =(numbers
-  VAR START [:downto END] &key by)=.  This command exists only for convenience.
+  VAR :from START [:downto END] &key by)=.  This command exists only for convenience.
 
   This command also has the aliases =numsdown= and =numbering-down=.
 
@@ -1789,7 +1785,7 @@ are simple wrappers of the above =numbers= command.
 #+findex: numbers-up
 #+findex: numbering-up
 - =(numbers-up|nums-up VAR START [END] &key by)= :: Equivalent to =(numbers VAR
-  START [END] &key by)=.  This command exists only for convenience.
+  :from START [END] &key by)=.  This command exists only for convenience.
 
   This command also has the aliases =numsup= and =numbering-up=.
 
