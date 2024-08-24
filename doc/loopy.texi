@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org60882dd
+@float Listing,org04e7c72
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -888,7 +888,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orge44397f
+@float Listing,orga4486aa
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -903,7 +903,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org9267070
+@float Listing,orgea59f47
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1803,7 +1803,7 @@ end.
 @lisp
 ;; => (7 8 9 10 11 12 13 14 15 16)
 (loopy (cycle 10)
-       (numbers i 7)
+       (numbers i :from 7)
        (collect i))
 @end lisp
 
@@ -1817,13 +1817,9 @@ whether the variable is incremented or decremented.
 (loopy (numbers i :from 1 :to 5 :by 2)
        (collect i))
 
-;; => (1 3 5)
-(loopy (numbers i 1 5 2)
-       (collect i))
-
 ;; => (7 9 11 13 15 17 19 21 23 25)
 (loopy (cycle 10)
-       (numbers i 7 :by 2)
+       (numbers i :from 7 :by 2)
        (collect i))
 
 ;; => (1 2.5 4.0)
@@ -1835,9 +1831,9 @@ By default, the variable's value starts at 0 and increases by 1.  To specify
 whether the value should be increasing or decreasing when using the @samp{:by}
 keyword, one can use the keywords @samp{:downfrom}, @samp{:downto}, @samp{:upfrom}, @samp{:upto},
 @samp{:above}, and @samp{:below}.  The keywords @samp{:from} and @samp{:to} don't by themselves
-specify a direction, and they can be used with the keyword arguments that do
-without conflict.  Using arguments that contradict one another will signal an
-error.
+specify a direction, and they can be used without conflict with the keyword
+arguments that do.  Using arguments that contradict one another will signal
+an error.
 
 @lisp
 ;; => (3 2 1)
@@ -1861,7 +1857,7 @@ error.
 (loopy (numbers i :from 1 :upto 7)
        (collect i))
 
-;; => Signals an error:
+;; Signals an error:
 (loopy (numbers i :downfrom 10 :upto 20)
        (collect i))
 @end lisp
@@ -1933,7 +1929,7 @@ are simple wrappers of the above @samp{numbers} command.
 @table @asis
 @item @samp{(numbers-down|nums-down VAR START [END] &key by)}
 Equivalent to @samp{(numbers
-  VAR START [:downto END] &key by)}.  This command exists only for convenience.
+  VAR :from START [:downto END] &key by)}.  This command exists only for convenience.
 
 This command also has the aliases @samp{numsdown} and @samp{numbering-down}.
 
@@ -1953,7 +1949,7 @@ This command also has the aliases @samp{numsdown} and @samp{numbering-down}.
 @table @asis
 @item @samp{(numbers-up|nums-up VAR START [END] &key by)}
 Equivalent to @samp{(numbers VAR
-  START [END] &key by)}.  This command exists only for convenience.
+  :from START [END] &key by)}.  This command exists only for convenience.
 
 This command also has the aliases @samp{numsup} and @samp{numbering-up}.
 
@@ -4682,7 +4678,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org0f10623
+@float Listing,org5fa2cde
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

@@ -33,6 +33,8 @@ please let me know.
  - Unreleased:
    - Conflicting initialization values for accumulation variables now signal
      a warning.  In the future, they will signal an error.
+   - The positional arguments to the =numbers= command have been removed,
+     being deprecated since version 0.12.0.
  - Version 0.13.0:
    - The deprecated =:init= keyword argument has been removed.  Use the =with=
      special macro argument instead.

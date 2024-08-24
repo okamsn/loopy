@@ -15,8 +15,11 @@ This document describes the user-facing changes to Loopy.
   error, use the `with` special macro argument to explicitly state a starting
   value for the accumulation variable.
 
+- Remove the deprecated positional arguments to the `numbers` command ([#205]).
+
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#203]: https://github.com/okamsn/loopy/pull/203
+[#205]: https://github.com/okamsn/loopy/pull/205
 
 ## 0.13.0
 

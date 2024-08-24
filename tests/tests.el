@@ -899,7 +899,7 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 (loopy-deftest set-prev-keyword-with
   :result '(first-val first-val 2 2 4 4 6 6 8 8)
   :body ((with (j 'first-val))
-         (numbers i 1 10)
+         (numbers i :from 1 :to 10)
          (when (cl-oddp i)
            (set-prev j i))
          (collect j))
@@ -1833,7 +1833,7 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest numbers
   :result '(1 2 3 4 5)
   :repeat _cmd
-  :body ((_cmd i 1 5)
+  :body ((_cmd i :from 1 :to 5)
          (collect i))
   :loopy ((_cmd . (nums numbers num number)))
   :iter-keyword ((_cmd . (nums numbers num number))
@@ -1841,23 +1841,15 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((_cmd . (numbering))
               (collect . collecting)))
 
-(loopy-deftest numbers-pos-nokey-step
-  :result '(1 3 5)
+(loopy-deftest numbers-keywords-pos-args-should-error
+  :doc "Make sure an error is signaled when using the now removed positional arguments."
+  :error loopy-wrong-number-of-command-arguments-or-bad-keywords
   :body ((numbers i 1 5 2)
          (collect i))
   :loopy t
-  :iter-keyword (numbers collect)
-  :iter-bare ((numbers . numbering)
-              (collect . collecting)))
-
-(loopy-deftest numbers-neg-nokey-step
-  :result '(5 3 1)
-  :body (loopy (numbers i 5 1 -2)
-               (collect i))
-  :loopy t
-  :iter-keyword (numbers collect)
-  :iter-bare ((numbers . numbering)
-              (collect . collecting)))
+  :iter-keyword (collect numbers)
+  :iter-bare ((collect . collecting)
+              (numbers . numbering)))
 
 ;;;;; Nums Keywords
 
@@ -1996,17 +1988,13 @@ Using numbers directly will use less variables and more efficient code."
   :iter-keyword (numbers)
   :iter-bare ((numbers . numbering)))
 
-;;;;; Nums With Vars
+;;;;; Numbers With Vars
 (loopy-deftest numbers-literal-by-and-literal-end
   :doc "Check the optimizing for non-variable `:by' and `:to' doesn't fail."
   :result '(2 4 6 8)
-  :multi-body t
-  :body [((with (start 2))
-          (numbers i start 8 2)
-          (collect i))
-         ((with (start 2))
-          (numbers i start :to 8 :by 2)
-          (collect i))]
+  :body ((with (start 2))
+         (numbers i :from start :to 8 :by 2)
+         (collect i))
   :loopy t
   :iter-keyword (numbers collect)
   :iter-bare ((numbers . numbering)
@@ -2015,13 +2003,9 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest numbers-literal-by-with-var-end
   :doc "Check the optimizing for non-variable `:by' and variable `:to' doesn't fail."
   :result '(2 4 6 8)
-  :multi-body t
-  :body [((with (start 2) (end 8))
-          (numbers i start end 2)
-          (collect i))
-         ((with (start 2) (end 8))
-          (numbers i start :to end :by 2)
-          (collect i))]
+  :body ((with (start 2) (end 8))
+         (numbers i :from start :to end :by 2)
+         (collect i))
   :loopy t
   :iter-keyword (numbers collect)
   :iter-bare ((numbers . numbering)
@@ -2030,13 +2014,9 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest numbers-var-by-with-var-end
   :doc "Check the optimizing for variable `:by' and variable `:to' doesn't fail."
   :result '(2 4 6 8)
-  :multi-body t
-  :body [((with (start 2) (by 2) (end 8))
-          (numbers i start end by)
-          (collect i))
-         ((with (start 2) (by 2) (end 8))
-          (numbers i start :to end :by by)
-          (collect i))]
+  :body ((with (start 2) (by 2) (end 8))
+         (numbers i :from start :to end :by by)
+         (collect i))
   :loopy t
   :iter-keyword (numbers collect)
   :iter-bare ((numbers . numbering)
@@ -2047,7 +2027,7 @@ Using numbers directly will use less variables and more efficient code."
   :result '(2 4 6 8)
   :body ((with (start 2))
          (cycle 4)
-         (numbers i start :by 2)
+         (numbers i :from start :by 2)
          (collect i))
   :loopy t
   :iter-keyword (numbers collect cycle)
@@ -2060,7 +2040,7 @@ Using numbers directly will use less variables and more efficient code."
   :result '(2 4 6 8)
   :body ((with (start 2) (by 2))
          (cycle 4)
-         (numbers i start :by by)
+         (numbers i :from start :by by)
          (collect i))
   :loopy t
   :iter-keyword (numbers collect cycle)

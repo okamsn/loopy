@@ -99,21 +99,25 @@
 
 ;;;;; Working with Plists and Keyword Arguments
 
-;; Loopy uses property lists to handle keyword arguments.
-(defun loopy--extract-keywords (list)
-  "Extract the keywords from LIST according to `keywordp'."
-  (cl-loop for i in list
-           if (keywordp i)
-           collect i))
-
-(defun loopy--only-valid-keywords-p (correct list)
+(cl-defun loopy--only-valid-keywords-p (correct list)
   "Return nil if a keyword in LIST is not in CORRECT.
 
-Any keyword not in CORRECT is considered invalid.
+CORRECT is a list of valid keywords.
 
-CORRECT is a list of valid keywords.  The first item in LIST is
-assumed to be a keyword."
-  (null (cl-set-difference (loopy--extract-keywords list) correct)))
+Any keyword not in CORRECT is considered invalid.  Any element
+not in a keyword position that is not a keyword is invalid.  If
+LIST does not contain an even number of elements, it is invalid."
+  ;; `cl-loop' is broken for this use-case. See Emacs bug #72753.
+  (let ((length 0))
+    (let ((this-pos nil))
+      (dolist (i list)
+        (cl-incf length)
+        (setq this-pos (not this-pos))
+        (when (let ((kwp (keywordp i)))
+                (or (and this-pos (not kwp))
+                    (and kwp (not (memq i correct)))))
+          (cl-return-from loopy--only-valid-keywords-p nil))))
+    (cl-evenp length)))
 
 ;;;; Included parsing functions.
 ;;;;; Sub-Loops
@@ -442,6 +446,13 @@ instructions:
   (when (nlistp keywords)
     (setq keywords (list keywords)))
 
+  (when (or (eq other-vals 0)
+            (eq other-vals '(0)))
+    (setq other-vals nil))
+
+  (when (null required-vals)
+    (setq required-vals 0))
+
   ;; Make sure `keywords' are all prefixed with a colon.
   (setq keywords (mapcar (lambda (x)
                            (if (eq ?: (aref (symbol-name x) 0))
@@ -478,7 +489,7 @@ instructions:
             ,@(if keywords
                   (if other-vals
                       '(&rest args)
-                    `(&key ,@var-keys))
+                    `(&rest opts))
                 (when other-vals
                   '(&rest other-vals)))))
        ,doc-string
@@ -493,29 +504,34 @@ instructions:
                         (opts nil))
                     ;; These can be referred to directly, but we'll keep
                     ;; the option open for using `opts'.
-                    `((opts (list ,@(cl-loop for sym in keywords
-                                             for var in var-keys
-                                             append (list sym var))))))
+                    (cl-loop for sym in keywords
+                             for var in var-keys
+                             collect `(,var (compat-call plist-get opts ,sym #'eq)))
+                    ;; `((opts (list ,@(cl-loop for sym in keywords
+                    ;;                          for var in var-keys
+                    ;;                          append (list sym var)))))
+                    )
                 nil)
 
          ;; We only want to run this code if the values of `opts' and
          ;; `other-vals' are contained in `args'.  For other cases, the
          ;; function arguments perform this step for us.
-         ,@(when (and other-vals keywords)
-             `(;; Set `opts' as starting from the first keyword and `other-vals'
-               ;; as everything before that.
-               (cl-loop with other-val-holding = nil
-                        for cons-cell on args
-                        for arg = (car cons-cell)
-                        until (keywordp arg)
-                        do (push arg other-val-holding)
-                        finally do (setq opts cons-cell
-                                         other-vals (nreverse other-val-holding)))
+         ,(when (and other-vals keywords)
+            ;; Set `opts' as starting from the first keyword and `other-vals'
+            ;; as everything before that.
+            `(cl-loop with other-val-holding = nil
+                      for cons-cell on args
+                      for arg = (car cons-cell)
+                      until (keywordp arg)
+                      do (push arg other-val-holding)
+                      finally do (setq opts cons-cell
+                                       other-vals (nreverse other-val-holding))))
 
-               ;; Validate any keyword arguments:
-               (unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
-                 (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
-                         (list cmd)))))
+         ;; Validate any keyword arguments:
+         ,(when keywords
+            `(unless (loopy--only-valid-keywords-p (quote ,keywords) opts)
+               (signal 'loopy-wrong-number-of-command-arguments-or-bad-keywords
+                       (list cmd))))
 
          ,(when (consp other-vals)
             `(unless (cl-member (length other-vals)
@@ -526,8 +542,9 @@ instructions:
 
          (ignore cmd name
                  ;; We can only ignore variables if they're defined.
-                 ,(if other-vals 'other-vals)
-                 ,(if keywords 'opts))
+                 ,@(when (and keywords (null other-vals)) var-keys)
+                 ,(when other-vals 'other-vals)
+                 ,(when keywords 'opts))
 
          ,instructions))))
 
@@ -546,7 +563,8 @@ iteration command.  The supported keywords are:
 - `:above' (exclusive end)
 - `:below' (exclusive end)
 - `:by' (increment)
-- `:test' (comparison function)
+- `:test' (comparison function, being already in PLIST or calculated)
+- `:test-given' (whether `:test' was given)
 
 CMD is the command usage for error reporting."
 
@@ -925,6 +943,7 @@ map's keys.  Duplicate keys are ignored."
       (loopy--latter-body (setq ,key-list (cdr ,key-list))))))
 
 ;;;;;; Numbers
+
 (loopy--defiteration numbers
   "Parse the `numbers' command as (numbers VAR &key KEYS).
 
@@ -947,108 +966,44 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 `:downto' and `:downfrom' make the index decrease instead of increase."
   :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :required-vals 0
-  :other-vals (0 1 2 3)
+  :other-vals 0
   :instructions
-  ;; TODO: Use `loopy--instr-let-const*' to simplify, after the non-keyword arguments
-  ;;       have been removed.
-  (cl-destructuring-bind (&optional explicit-start explicit-end explicit-by)
-      other-vals
-    (loopy--plist-bind ( :start key-start :end key-end :by key-by
-                         :decreasing decreasing :inclusive inclusive)
+  (loopy--plist-bind ( :start key-start :end key-end :by key-by
+                       :decreasing decreasing
+                       :test key-test
+                       :test-given test-given)
 
-        (condition-case nil
-            (loopy--find-start-by-end-dir-vals opts)
-          (loopy-conflicting-command-arguments
-           (signal 'loopy-conflicting-command-arguments (list cmd))))
+      (loopy--find-start-by-end-dir-vals opts cmd)
 
-      ;; We have to do this here because of how we treat the explicit arguments.
-      ;; Once they are removed, we can move this into the above
-      ;; `loopy--plist-bind'.
-      (let ((key-test (plist-get opts :test)))
+    (loopy--instr-let-const* ((increment-val-holder (or key-by 1))
+                              (test-val-holder key-test))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((var-val-holder (or key-start 0)
+                                              (if (loopy--with-bound-p var)
+                                                  (gensym "num-test-var")
+                                                var)))
+          loopy--iteration-vars
+        `(,(when (loopy--with-bound-p var)
+             `(loopy--main-body (setq ,var ,var-val-holder)))
 
-        ;; Warn that the non-keyword arguments are deprecated.
-        (when (or explicit-start
-                  explicit-end
-                  explicit-by)
-          (warn "`loopy': `numbers': The non-keyword arguments are deprecated.
-  Instead, use the keyword arguments, possibly including the new `:test' argument.
-  Warning trigger: %s" cmd))
+          (loopy--latter-body
+           (setq ,var-val-holder
+                 ,(cond (test-given
+                         `(+ ,var-val-holder ,increment-val-holder))
+                        ((eq increment-val-holder 1)
+                         (if decreasing
+                             `(1- ,var-val-holder)
+                           `(1+ ,var-val-holder)))
+                        (t
+                         `(,(if decreasing #'- #'+)
+                           ,var-val-holder ,increment-val-holder)))))
 
-        ;; Check that nothing conflicts.
-        (when (or (and explicit-start key-start)
-                  (and explicit-end   key-end)
-                  (and explicit-by    key-by))
-          (signal 'loopy-conflicting-command-arguments (list cmd)))
-
-        (let* ((end (or explicit-end key-end))
-               (end-val-holder (gensym "nums-end"))
-               (start (or explicit-start key-start 0))
-               (by (or explicit-by key-by 1))
-               (number-by (numberp by))
-               (number-by-and-end (and number-by (numberp end)))
-               (increment-val-holder (gensym "nums-increment"))
-               (var-val-holder (if (loopy--with-bound-p var)
-                                   (gensym "num-test-var")
-                                 var)))
-
-          `((loopy--iteration-vars (,var-val-holder ,start))
-            ,(when (loopy--with-bound-p var)
-               `(loopy--main-body (setq ,var ,var-val-holder)))
-
-            (loopy--latter-body
-             (setq ,var-val-holder
-                   ,(let ((inc (if number-by
-                                   by
-                                 increment-val-holder)))
-                      (cond (explicit-by `(+ ,var-val-holder ,inc))
-                            (key-test        `(+ ,var-val-holder ,inc))
-                            (key-by      `(,(if decreasing #'- #'+)
-                                           ,var-val-holder ,inc))
-                            (decreasing  `(1- ,var-val-holder))
-                            (t           `(1+ ,var-val-holder))))))
-
-            ,@(cond
-               (number-by-and-end
-                `((loopy--pre-conditions (funcall
-                                          ,(cond
-                                            (key-test key-test)
-                                            (explicit-by
-                                             (if (cl-plusp by) '#'<= '#'>=))
-                                            (inclusive
-                                             (if decreasing '#'>= '#'<=))
-                                            (t  (if decreasing '#'> '#'<)))
-                                          ,var-val-holder ,end))))
-               ;; `end' is not a number.  `by' might be a number.
-               (end
-                `((loopy--iteration-vars (,end-val-holder ,end))
-                  ,(when (and (not number-by)
-                              (or key-by explicit-by))
-                     `(loopy--iteration-vars (,increment-val-holder ,by)))
-                  ,@(cond
-                     (key-test `((loopy--pre-conditions
-                                  ,(loopy--apply-function
-                                    key-test var-val-holder end-val-holder))))
-                     ((not explicit-by) ; `key-by' or default
-                      `((loopy--pre-conditions ,(loopy--apply-function
-                                                 (if inclusive
-                                                     (if decreasing '#'>= '#'<=)
-                                                   (if decreasing '#'> '#'<))
-                                                 var-val-holder end-val-holder))))
-                     (number-by
-                      `((loopy--pre-conditions ,(loopy--apply-function
-                                                 (if (cl-plusp by) '#'<= '#'>=)
-                                                 var-val-holder end-val-holder))))
-                     ;; Ambiguous, so need to check
-                     (t
-                      (let ((fn (gensym "nums-fn")))
-                        `((loopy--iteration-vars
-                           (,fn (if (cl-plusp ,increment-val-holder) #'<= #'>=)))
-                          (loopy--pre-conditions (funcall ,fn ,var-val-holder
-                                                          ,end-val-holder))))))))
-
-               ;; No `end'. We gave a non-number as `by', so we need a holding var.
-               ((and by (not number-by))
-                `((loopy--iteration-vars (,increment-val-holder ,by)))))))))))
+          ,@(when key-end
+              (loopy--instr-let-const* ((end-val-holder key-end))
+                  loopy--iteration-vars
+                `((loopy--pre-conditions (funcall ,test-val-holder
+                                                  ,var-val-holder
+                                                  ,end-val-holder))))))))))
 
 
 ;;;;;; Numbers Up
