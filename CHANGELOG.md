@@ -17,9 +17,36 @@ This document describes the user-facing changes to Loopy.
 
 - Remove the deprecated positional arguments to the `numbers` command ([#205]).
 
+- To cut back on an over-abundance of choice and to simplify documentation, the
+  following built-in aliases have been made obsolete ([#126], [#206]).  They can
+  still be added manually via `loopy-defalias`.
+  - `array`: `across`
+  - `array-ref`: `arrayf`, `arrayingf`, `stringf`, `stringingf`, `across-ref`
+  - `cons`: `on`
+  - `list`: `in`
+  - `list-ref`: `listf`, `listingf`, `in-ref`
+  - `map-ref`: `mapf`, `mappingf`
+  - `numbers`: `num`, `nums`
+  - `numbers-down`: `nums-down`, `numdown`, `num-down`, `numsdown`
+  - `numbers-up`: `nums-up`, `numup`, `num-up`, `numsup`
+  - `set-prev`: `prev`
+  - `sequence`: `elements`
+  - `sequence-index`: `sequencei`, `seqi`, `listi`, `arrayi`, `stringi`
+  - `sequence-ref`: `seqf`, `sequencef`, `sequencingf`, `elements-ref`
+
+- Make `sequence` the default name and `seq` an alias ([#126, #206]).
+
+- Make `sequence-ref` the default name and `seq-ref` an alias ([#126, #206]).
+
+- Make `sequence-index` the default name and `seq-index` an alias ([#126, #206]).
+
+
+[#126]: https://github.com/okamsn/loopy/issues/126
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#203]: https://github.com/okamsn/loopy/pull/203
 [#205]: https://github.com/okamsn/loopy/pull/205
+[#206]: https://github.com/okamsn/loopy/pull/206
+
 
 ## 0.13.0
 
