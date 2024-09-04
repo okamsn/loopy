@@ -74,26 +74,39 @@ Definition must exist.  Neither argument need be quoted."
          ;; Add the alias for the new target name.
          (push alias (map-elt loopy-aliases true-name)))))))
 
+(defvar loopy--obsolete-aliases
+  '((array across)
+    (array-ref arrayf arrayingf stringf stringingf across-ref)
+    (cons on)
+    (list in)
+    (list-ref listf listingf in-ref)
+    (map-ref mapf mappingf)
+    (numbers num nums)
+    (numbers-down nums-down numdown num-down numsdown)
+    (numbers-up nums-up numup num-up numsup)
+    (set-prev prev)
+    (sequence elements)
+    (sequence-index sequencei seqi listi arrayi stringi)
+    (sequence-ref seqf sequencef sequencingf elements-ref))
+  "Aliases to be removed from the documentation.")
+
 ;;;###autoload
 (defcustom loopy-aliases
   ;; TODO: Is there a faster way to search for aliases?
   ;;       Would using a hash table with a flatter structure be better?
   ;;       Using `map-do' on a hash table seemed to be a bit slower for what
   ;;       we want?
-  '((accumulate      . (callf2 accumulating))
+  '((accumulate      . (accumulating callf2))
     (adjoin          . (adjoining))
     (after-do        . (else after else-do))
     (append          . (appending))
-    (array           . (arraying string stringing across))
-    (array-ref       . ( arraying-ref arrayf arrayingf
-                         stringf stringingf
-                         string-ref stringing-ref
-                         across-ref))
+    (array           . (arraying string stringing))
+    (array-ref       . (arraying-ref string-ref stringing-ref))
     (at              . (atting))
     (before-do       . (initially-do initially before))
     (collect         . (collecting))
     (concat          . (concating))
-    (cons            . (conses consing on))
+    (cons            . (conses consing))
     (count           . (counting))
     (cycle           . (cycling repeat repeating))
     (finally-do      . (finally))
@@ -103,10 +116,10 @@ Definition must exist.  Neither argument need be quoted."
     (iter            . (iterating))
     (leave           . (leaving))
     (leave-from      . (leaving-from))
-    (list            . (listing each in))
-    (list-ref        . (listf listingf listing-ref in-ref))
+    (list            . (listing each))
+    (list-ref        . (listing-ref))
     (map             . (mapping map-pairs mapping-pairs))
-    (map-ref         . (mapf mappingf mapping-ref))
+    (map-ref         . (mapping-ref))
     (max             . (maximizing maximize maxing))
     ;; Unlike "maxing", there doesn't seem to be much on-line about the word
     ;; "minning", but the double-N follows conventional spelling rules, such as
@@ -114,11 +127,9 @@ Definition must exist.  Neither argument need be quoted."
     (min             . (minimizing minimize minning))
     (multiply        . (multiplying))
     (nconc           . (nconcing))
-    (numbers            . (num nums number numbering))
-    (numbers-down       . ( nums-down numdown  number-down num-down numsdown
-                            numbering-down))
-    (numbers-up         . ( nums-up numup number-up num-up  numsup
-                            numbering-up))
+    (numbers         . (number numbering))
+    (numbers-down    . (number-down numbering-down))
+    (numbers-up      . (number-up numbering-up))
     (nunion          . (nunioning))
     (opt-accum       . (accum-opt))
     (prepend         . (prepending))
@@ -128,16 +139,14 @@ Definition must exist.  Neither argument need be quoted."
     (return-from     . (returning-from))
     (set             . (setting exprs expr))
     (set-accum       . (setting-accum))
-    (set-prev        . (setting-prev prev prev-expr prev-set))
-    (seq             . (seqing sequence sequencing elements))
-    (seq-index       . ( sequence-index seqing-index sequencing-index
-                         sequencing-index sequencei seqi list-index listing-index
-                         listi array-index arraying-index arrayi
-                         string-index stringing-index stringi))
-    (seq-ref         . ( seqf seqing-ref
-                         sequencef sequencingf sequence-ref
-                         sequencing-ref
-                         elements-ref))
+    (set-prev        . (setting-prev prev-expr prev-set))
+    (sequence        . (sequencing seq seqing))
+    (sequence-index       . ( seq-index seqing-index
+                              sequencing-index
+                              list-index listing-index
+                              array-index arraying-index
+                              string-index stringing-index))
+    (sequence-ref    . (seqing-ref seq-ref sequencing-ref))
     (skip            . (skipping continue continuing))
     (skip-from       . (skipping-from continue-from continuing-from))
     (stream          . (streaming))
@@ -203,9 +212,9 @@ true names and lists of aliases.
     (reduce       . loopy--parse-reduce-command)
     (return       . loopy--parse-return-command)
     (return-from  . loopy--parse-return-from-command)
-    (seq          . loopy--parse-seq-command)
-    (seq-index    . loopy--parse-seq-index-command)
-    (seq-ref      . loopy--parse-seq-ref-command)
+    (sequence       . loopy--parse-seq-command)
+    (sequence-index . loopy--parse-seq-index-command)
+    (sequence-ref   . loopy--parse-seq-ref-command)
     (set          . loopy--parse-set-command)
     (set-prev     . loopy--parse-set-prev-command)
     (skip         . loopy--parse-skip-command)
@@ -781,6 +790,12 @@ This predicate checks for presence in the list
                   (when (memq name v)
                     (cl-return-from loopy--get-true-name k)))
                 loopy-aliases)
+        (map-do (lambda (k v)
+                  (when (memq name v)
+                    (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, use `loopy-defalias'."
+                          name k)
+                    (cl-return-from loopy--get-true-name k)))
+                loopy--obsolete-aliases)
         nil)
       name))
 

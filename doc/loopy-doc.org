@@ -2080,7 +2080,7 @@ source sequences.
   library =seq.el=.
   #+end_quote
 
-  This command also has the aliases =seqing= and =sequencing=.
+  This command also has the aliases =sequencing= and =seqing=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
@@ -2235,32 +2235,25 @@ same keywords as the =numbers= command ([[#numeric-iteration]]) for working with
 the index and choosing a range of the sequence elements through which to
 iterate.
 
-#+findex: seq-index
-#+findex: seqi
-#+findex: seqing-index
+#+findex: sequence-index
 #+findex: sequencing-index
-#+findex: seqi
+#+findex: seq-index
+#+findex: seqing-index
 #+findex: array-index
 #+findex: arraying-index
-#+findex: arrayi
 #+findex: list-index
 #+findex: listing-index
-#+findex: listi
 #+findex: string-index
 #+findex: stringing-index
-#+findex: stringi
-- =(seq-index VAR EXPR &key KEYS)= :: Iterate through the indices of =EXPR=.
+- =(sequence-index VAR EXPR &key KEYS)= :: Iterate through the indices of =EXPR=.
 
   There is only one implementation of this command; there are no
   type-specific versions.  This command also has the following aliases:
-  - =array-index=, =arraying-index=, =arrayi=
-  - =list-index=, =listing-index=, =listi=
-  - =string-index=, =stringing-index=, =stringi=
-  - =sequence-index=, =sequenceing-index=, =sequencei=, =seqi=, =seqing-index=
+  - =array-index=, =arraying-index=
+  - =list-index=, =listing-index=
+  - =string-index=, =stringing-index=
+  - =sequencing-index=, =seq-index=, =seqing-index=
 
-
-  The aliases =seqi=, =arrayi=, =listi=, and =stringi= are similar to the
-  aliases =seqf=, =arrayf=, =listf=, and =stringf= of the =seq-ref= command.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, and =test=.  For their meaning, see the
@@ -2290,7 +2283,7 @@ iterate.
 
   #+begin_src emacs-lisp
     ;; => (0 1 2)
-    (loopy (seq-index i [1 2 3])
+    (loopy (sequence-index i [1 2 3])
            (collect i))
 
     ;; => (0 1 2)
@@ -2303,7 +2296,7 @@ iterate.
 
     ;; => (8 6 4 2)
     (loopy (with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-           (seq-index idx my-seq :from 8 :downto 1 :by 2)
+           (sequence-index idx my-seq :from 8 :downto 1 :by 2)
            (collect (elt my-seq idx)))
   #+end_src
 
@@ -2365,17 +2358,13 @@ they also have an =index= keyword, which names the variable used to store
 the accessed index during the loop.
 
 #+findex: array-ref
-#+findex: arrayf
 #+findex: string-ref
-#+findex: stringf
 #+findex: arraying-ref
-#+findex: arrayingf
 #+findex: stringing-ref
-#+findex: stringingf
-#+findex: across-ref
-- =(array-ref|arrayf|string-ref|stringf VAR EXPR &key KEYS)= :: Loop
-  through the elements of the array =EXPR=, binding =VAR= as a ~setf~-able
-  place.
+- =(array-ref|string-ref VAR EXPR &key KEYS)= :: Loop through the elements of
+  the array =EXPR=, binding =VAR= as a ~setf~-able place.
+
+  This command also has the aliases =arraying-ref= and =stringing-ref=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, and =index=.  =index= names the variable
@@ -2404,12 +2393,11 @@ the accessed index during the loop.
 
 #+findex: list-ref
 #+findex: listing-ref
-#+findex: listf
-#+findex: listingf
-#+findex: in-ref
-- =(list-ref|listf VAR EXPR &key by)= :: Loop through the elements of
-  the list =EXPR=, binding =VAR= as a ~setf~-able place.  Optionally, update
-  the list via function =by= instead of ~cdr~.
+- =(list-ref VAR EXPR &key by)= :: Loop through the elements of the list =EXPR=,
+  binding =VAR= as a ~setf~-able place.  Optionally, update the list via
+  function =by= instead of ~cdr~.
+
+  This command also has the aliases =listing-ref=.
 
   #+BEGIN_SRC emacs-lisp
     ;; => (7 7 7)
@@ -2439,11 +2427,11 @@ the accessed index during the loop.
 
 #+findex: map-ref
 #+findex: mapping-ref
-#+findex: mapf
-#+findex: mappingf
-- =(map-ref|mapf VAR EXPR &key key unique)= :: Loop through the values of
-  map =EXPR=, binding =VAR= as a ~setf~-able place.  Like the command =map=,
-  this command uses the =map.el= library.
+- =(map-ref VAR EXPR &key key unique)= :: Loop through the values of map =EXPR=,
+  binding =VAR= as a ~setf~-able place.  Like the command =map=, this command
+  uses the =map.el= library.
+
+  This command also has the alias =mapping-ref=.
 
   =key= is a variable in which to store the current key for the ~setf~-able
   place referred to by =VAR=.  This is similar to the =index= keyword parameter
@@ -2491,16 +2479,15 @@ the accessed index during the loop.
            (finally-return map loopy-result))
   #+end_src
 
-#+findex: seq-ref
-#+findex: seqf
 #+findex: sequence-ref
 #+findex: sequencing-ref
-#+findex: sequencef
-#+findex: sequencingf
-#+findex: elements-ref
-- =(sequence-ref|sequencef|seq-ref|seqf VAR EXPR &key KEYS)= :: Loop
+#+findex: seq-ref
+#+findex: seqing-ref
+- =(sequence-ref|seq-ref VAR EXPR &key KEYS)= :: Loop
   through the elements of the sequence =EXPR=, binding =VAR= as a
   ~setf~-able place.
+
+  This command also has the aliases =sequencing-ref= and =seqing-ref=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
