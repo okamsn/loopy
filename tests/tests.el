@@ -844,20 +844,20 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   :iter-bare ((set . setting)
               (return . returning)))
 
-;;;;; Group
-(loopy-deftest group
+;;;;; command-do
+(loopy-deftest command-do
   :result '((2 4 6) (2 4 6))
   :body ((list i '(1 2 3 4 5 6))
          (if (cl-evenp i)
-             (_group (collect c1 i)
-                     (collect c2 i)))
+             (_command-do (collect c1 i)
+                          (collect c2 i)))
          (finally-return c1 c2))
-  :repeat _group
-  :loopy ((_group . (group command-do)))
+  :repeat _command-do
+  :loopy ((_command-do . (command-do command-do)))
   ;; Technically don't need to test (and wouldn't work if we used `for' inside,
   ;; anyway).
   :iter-keyword ((list . list)
-                 (_group . (group command-do))))
+                 (_command-do . (command-do command-do))))
 
 ;;;;; Set-Prev
 (loopy-deftest set-prev

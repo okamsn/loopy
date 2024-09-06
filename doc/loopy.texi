@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org04e7c72
+@float Listing,org5119497
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -716,12 +716,11 @@ is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 @end float
 
 For convenience and understanding, the same command might have multiple names,
-called @dfn{aliases}.  For example, the command @samp{set} has an alias @samp{expr},
-because @samp{set} is used to @emph{set} a variable to the value of an @emph{expression}.
-Similary, the @samp{array} command has the alias @samp{string}, because the @samp{array}
-command can be used to iterate through the elements of an array or string@footnote{Strings being a kind of array.  See @ref{Sequences Arrays Vectors,,,elisp,}
-for more.}.
-You can define custom aliases using the macro @code{loopy-defalias} (@ref{Custom Aliases}).
+called @dfn{aliases}.  Similary, the @samp{array} command has the alias
+@samp{string}, because the @samp{array} command can be used to iterate through the
+elements of an array or string@footnote{Strings being a kind of array.  See @ref{Sequences Arrays Vectors,,,elisp,}
+for more.}.  You can define custom aliases using the
+macro @code{loopy-defalias} (@ref{Custom Aliases}).
 
 Similar to other libraries, many commands have an alias of the
 present-participle form (the ``-ing'' form).  A few examples are seen in the table
@@ -749,7 +748,7 @@ For simplicity, the commands are described using the following notation:
 @itemize
 @item
 If a command has multiple names, the names are separated by a vertical bar,
-such as in @samp{set|expr}.
+such as in @samp{array|string}.
 @item
 @samp{VAR} is an unquoted symbol that will be used as a variable name, such as @samp{i}
 in @samp{(list i my-list)}.
@@ -888,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orga4486aa
+@float Listing,orgf3a9f7c
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -903,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgea59f47
+@float Listing,org1bf5dc0
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1449,10 +1448,9 @@ To use loopy commands in arbitrary code, use the macro @code{loopy-iter} instead
 @end lisp
 @end table
 
-@findex group
 @findex command-do
 @table @asis
-@item @samp{(group|command-do [CMDS])}
+@item @samp{(command-do [CMDS])}
 Evaluate multiple loop commands, as if in a
 @samp{progn}.  This is similar to @samp{do}, but runs commands instead of normal Lisp
 expressions.  Currently, this command is only useful when used within the
@@ -1461,15 +1459,6 @@ expressions.  Currently, this command is only useful when used within the
 @lisp
 ;; Report whether an even number is found, or return the sum of
 ;; the list's elements.  To be clear, this is not an idiomatic example.
-
-;; Returns sum:
-;; => 9
-(loopy (list i '(1 3 5))
-       (if (cl-evenp i)
-           (group
-            (do (message "Even found."))
-            (return i))
-         (sum i)))
 
 ;; Returns the detected even number:
 ;; => 2
@@ -1487,12 +1476,12 @@ expressions.  Currently, this command is only useful when used within the
 @findex expr
 @findex exprs
 @table @asis
-@item @samp{(set|expr VAR [EXPRS])}
+@item @samp{(set VAR [EXPRS])}
 Bind @samp{VAR} to each @samp{EXPR} in order.  Once the last
 @samp{EXPR} is reached, it is used repeatedly for the rest of the loop.  With no
 @samp{EXPR}, @samp{VAR} is bound to @code{nil} during each iteration of the loop.
 
-This command also has the aliases @samp{setting} and @samp{exprs}.
+This command also has the aliases @samp{setting}.
 
 Unlike the Emacs Lisp function @code{set}, the variable name should not be quoted.
 Unlike the Emacs Lisp special form @code{setq}, the command @samp{set} only sets one
@@ -1518,19 +1507,18 @@ argument @samp{without} (@ref{Special Macro Arguments}).
 @findex set-prev
 @findex setting-prev
 @findex prev-set
-@findex prev-expr
-@findex prev
 @table @asis
-@item @samp{(set-prev|prev-expr VAR VAL &key back)}
-Bind @samp{VAR} to a value @samp{VAL} from a
-previous cycle in the loop.  With @samp{BACK} (default: 1), use the value from that
-many cycles previous.  If not enough cycles have passed yet, then the value
-of @samp{VAR} is not modified.  This command @emph{does not} work like a queue for
+@item @samp{(set-prev VAR VAL &key back)}
+Bind @samp{VAR} to a value @samp{VAL} from a previous
+cycle in the loop.  With @samp{BACK} (default: 1), use the value from that many
+cycles previous.  If not enough cycles have passed yet, then the value of
+@samp{VAR} is not modified.  This command @emph{does not} work like a queue for
 recording @samp{VAL}; it always uses the value from the @samp{BACK}-th previous cycle,
 regardless of when the command is run.  The value used is always the value at
 the end of the cycle.
 
-This command also has the aliases @samp{setting-prev}, @samp{prev-set}, and @samp{prev}.
+This command also has the aliases @samp{setting-prev} and, for typo tolerance,
+@samp{prev-set}.
 
 @lisp
 ;; => (nil 1 2 3 4)
@@ -2259,7 +2247,7 @@ library @samp{seq.el}.
 
 @end quotation
 
-This command also has the aliases @samp{seqing} and @samp{sequencing}.
+This command also has the aliases @samp{sequencing} and @samp{seqing}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
@@ -2417,41 +2405,34 @@ same keywords as the @samp{numbers} command (@ref{Numeric Iteration}) for workin
 the index and choosing a range of the sequence elements through which to
 iterate.
 
-@findex seq-index
-@findex seqi
-@findex seqing-index
+@findex sequence-index
 @findex sequencing-index
-@findex seqi
+@findex seq-index
+@findex seqing-index
 @findex array-index
 @findex arraying-index
-@findex arrayi
 @findex list-index
 @findex listing-index
-@findex listi
 @findex string-index
 @findex stringing-index
-@findex stringi
 @table @asis
-@item @samp{(seq-index VAR EXPR &key KEYS)}
+@item @samp{(sequence-index VAR EXPR &key KEYS)}
 Iterate through the indices of @samp{EXPR}.
 
 There is only one implementation of this command; there are no
 type-specific versions.  This command also has the following aliases:
 @itemize
 @item
-@samp{array-index}, @samp{arraying-index}, @samp{arrayi}
+@samp{array-index}, @samp{arraying-index}
 @item
-@samp{list-index}, @samp{listing-index}, @samp{listi}
+@samp{list-index}, @samp{listing-index}
 @item
-@samp{string-index}, @samp{stringing-index}, @samp{stringi}
+@samp{string-index}, @samp{stringing-index}
 @item
-@samp{sequence-index}, @samp{sequenceing-index}, @samp{sequencei}, @samp{seqi}, @samp{seqing-index}
+@samp{sequencing-index}, @samp{seq-index}, @samp{seqing-index}
 @end itemize
 @end table
 
-
-The aliases @samp{seqi}, @samp{arrayi}, @samp{listi}, and @samp{stringi} are similar to the
-aliases @samp{seqf}, @samp{arrayf}, @samp{listf}, and @samp{stringf} of the @samp{seq-ref} command.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{test}.  For their meaning, see the
@@ -2481,7 +2462,7 @@ This command does not support destructuring.
 
 @lisp
 ;; => (0 1 2)
-(loopy (seq-index i [1 2 3])
+(loopy (sequence-index i [1 2 3])
        (collect i))
 
 ;; => (0 1 2)
@@ -2494,7 +2475,7 @@ This command does not support destructuring.
 
 ;; => (8 6 4 2)
 (loopy (with (my-seq [0 1 2 3 4 5 6 7 8 9 10]))
-       (seq-index idx my-seq :from 8 :downto 1 :by 2)
+       (sequence-index idx my-seq :from 8 :downto 1 :by 2)
        (collect (elt my-seq idx)))
 @end lisp
 
@@ -2560,19 +2541,15 @@ they also have an @samp{index} keyword, which names the variable used to store
 the accessed index during the loop.
 
 @findex array-ref
-@findex arrayf
 @findex string-ref
-@findex stringf
 @findex arraying-ref
-@findex arrayingf
 @findex stringing-ref
-@findex stringingf
-@findex across-ref
 @table @asis
-@item @samp{(array-ref|arrayf|string-ref|stringf VAR EXPR &key KEYS)}
-Loop
-through the elements of the array @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able
-place.
+@item @samp{(array-ref|string-ref VAR EXPR &key KEYS)}
+Loop through the elements of
+the array @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.
+
+This command also has the aliases @samp{arraying-ref} and @samp{stringing-ref}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, and @samp{index}.  @samp{index} names the variable
@@ -2602,14 +2579,13 @@ command.
 
 @findex list-ref
 @findex listing-ref
-@findex listf
-@findex listingf
-@findex in-ref
 @table @asis
-@item @samp{(list-ref|listf VAR EXPR &key by)}
-Loop through the elements of
-the list @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Optionally, update
-the list via function @samp{by} instead of @code{cdr}.
+@item @samp{(list-ref VAR EXPR &key by)}
+Loop through the elements of the list @samp{EXPR},
+binding @samp{VAR} as a @code{setf}-able place.  Optionally, update the list via
+function @samp{by} instead of @code{cdr}.
+
+This command also has the aliases @samp{listing-ref}.
 
 @lisp
 ;; => (7 7 7)
@@ -2640,13 +2616,13 @@ the list via function @samp{by} instead of @code{cdr}.
 
 @findex map-ref
 @findex mapping-ref
-@findex mapf
-@findex mappingf
 @table @asis
-@item @samp{(map-ref|mapf VAR EXPR &key key unique)}
-Loop through the values of
-map @samp{EXPR}, binding @samp{VAR} as a @code{setf}-able place.  Like the command @samp{map},
-this command uses the @samp{map.el} library.
+@item @samp{(map-ref VAR EXPR &key key unique)}
+Loop through the values of map @samp{EXPR},
+binding @samp{VAR} as a @code{setf}-able place.  Like the command @samp{map}, this command
+uses the @samp{map.el} library.
+
+This command also has the alias @samp{mapping-ref}.
 
 @samp{key} is a variable in which to store the current key for the @code{setf}-able
 place referred to by @samp{VAR}.  This is similar to the @samp{index} keyword parameter
@@ -2695,18 +2671,17 @@ duplicate's value.
 @end lisp
 @end table
 
-@findex seq-ref
-@findex seqf
 @findex sequence-ref
 @findex sequencing-ref
-@findex sequencef
-@findex sequencingf
-@findex elements-ref
+@findex seq-ref
+@findex seqing-ref
 @table @asis
-@item @samp{(sequence-ref|sequencef|seq-ref|seqf VAR EXPR &key KEYS)}
+@item @samp{(sequence-ref|seq-ref VAR EXPR &key KEYS)}
 Loop
 through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a
 @code{setf}-able place.
+
+This command also has the aliases @samp{sequencing-ref} and @samp{seqing-ref}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
@@ -4678,7 +4653,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org5fa2cde
+@float Listing,orgb546acb
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
@@ -4786,7 +4761,7 @@ options @code{loopy-iter-bare-commands} and
 By default, the following commands are not recognized:
 @itemize
 @item
-@samp{do} and @samp{group}, which are not needed.
+@samp{do} and @samp{command-do}, which are not needed.
 
 @item
 Commands that exists only as a command version of an existing Lisp feature,

@@ -658,11 +658,10 @@ is assigned a value from the list after collecting =i= into =coll=.
 #+END_SRC
 
 For convenience and understanding, the same command might have multiple names,
-called {{{dfn(aliases)}}}.  For example, the command =set= has an alias =expr=,
-because =set= is used to /set/ a variable to the value of an /expression/.
-Similary, the =array= command has the alias =string=, because the =array=
-command can be used to iterate through the elements of an array or string[fn:1].
-You can define custom aliases using the macro ~loopy-defalias~ ([[#custom-aliases][Custom Aliases]]).
+called {{{dfn(aliases)}}}.  Similary, the =array= command has the alias
+=string=, because the =array= command can be used to iterate through the
+elements of an array or string[fn:1].  You can define custom aliases using the
+macro ~loopy-defalias~ ([[#custom-aliases][Custom Aliases]]).
 
 Similar to other libraries, many commands have an alias of the
 present-participle form (the "-ing" form).  A few examples are seen in the table
@@ -682,7 +681,7 @@ command iterates through the elements in the list.
 For simplicity, the commands are described using the following notation:
 
 - If a command has multiple names, the names are separated by a vertical bar,
-  such as in =set|expr=.
+  such as in =array|string=.
 - =VAR= is an unquoted symbol that will be used as a variable name, such as =i=
   in =(list i my-list)=.
 - =FUNC= is a quoted Lisp function name, such as ~#'my-func~ or ~'my-func~, a
@@ -1303,9 +1302,8 @@ value and do no affect how the loop iterates.
            (do (message "%d" i)))
   #+END_SRC
 
-#+findex: group
 #+findex: command-do
-- =(group|command-do [CMDS])= :: Evaluate multiple loop commands, as if in a
+- =(command-do [CMDS])= :: Evaluate multiple loop commands, as if in a
   =progn=.  This is similar to =do=, but runs commands instead of normal Lisp
   expressions.  Currently, this command is only useful when used within the
   =if= command.
@@ -1313,15 +1311,6 @@ value and do no affect how the loop iterates.
   #+begin_src emacs-lisp
     ;; Report whether an even number is found, or return the sum of
     ;; the list's elements.  To be clear, this is not an idiomatic example.
-
-    ;; Returns sum:
-    ;; => 9
-    (loopy (list i '(1 3 5))
-           (if (cl-evenp i)
-               (group
-                (do (message "Even found."))
-                (return i))
-             (sum i)))
 
     ;; Returns the detected even number:
     ;; => 2
@@ -1337,11 +1326,11 @@ value and do no affect how the loop iterates.
 #+findex: setting
 #+findex: expr
 #+findex: exprs
-- =(set|expr VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.  Once the last
+- =(set VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.  Once the last
   =EXPR= is reached, it is used repeatedly for the rest of the loop.  With no
   =EXPR=, =VAR= is bound to ~nil~ during each iteration of the loop.
 
-  This command also has the aliases =setting= and =exprs=.
+  This command also has the aliases =setting=.
 
   Unlike the Emacs Lisp function ~set~, the variable name should not be quoted.
   Unlike the Emacs Lisp special form ~setq~, the command =set= only sets one
@@ -1366,17 +1355,16 @@ value and do no affect how the loop iterates.
 #+findex: set-prev
 #+findex: setting-prev
 #+findex: prev-set
-#+findex: prev-expr
-#+findex: prev
-- =(set-prev|prev-expr VAR VAL &key back)= :: Bind =VAR= to a value =VAL= from a
-  previous cycle in the loop.  With =BACK= (default: 1), use the value from that
-  many cycles previous.  _If not enough cycles have passed yet, then the value
-  of =VAR= is not modified._  This command /does not/ work like a queue for
+- =(set-prev VAR VAL &key back)= :: Bind =VAR= to a value =VAL= from a previous
+  cycle in the loop.  With =BACK= (default: 1), use the value from that many
+  cycles previous.  _If not enough cycles have passed yet, then the value of
+  =VAR= is not modified._  This command /does not/ work like a queue for
   recording =VAL=; it always uses the value from the =BACK=-th previous cycle,
   regardless of when the command is run.  The value used is always the value at
   the end of the cycle.
 
-  This command also has the aliases =setting-prev=, =prev-set=, and =prev=.
+  This command also has the aliases =setting-prev= and, for typo tolerance,
+  =prev-set=.
 
   #+begin_src emacs-lisp
     ;; => (nil 1 2 3 4)
@@ -4411,7 +4399,7 @@ options ~loopy-iter-bare-commands~ and
 ~loopy-iter-bare-special-macro-arguments~.
 
 By default, the following commands are not recognized:
-- =do= and =group=, which are not needed.
+- =do= and =command-do=, which are not needed.
 
 - Commands that exists only as a command version of an existing Lisp feature,
   such as =if=, =cond=, =when=, and =unless=.
