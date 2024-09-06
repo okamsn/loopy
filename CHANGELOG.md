@@ -18,10 +18,11 @@ This document describes the user-facing changes to Loopy.
 - Remove the deprecated positional arguments to the `numbers` command ([#205]).
 
 - To cut back on an over-abundance of choice and to simplify documentation, the
-  following built-in aliases have been made obsolete ([#126], [#206]).  They can
-  still be added manually via `loopy-defalias`.
+  following built-in aliases have been made obsolete ([#126], [#168], [#206],
+  [#207]).  They can still be added manually via `loopy-defalias`.
   - `array`: `across`
   - `array-ref`: `arrayf`, `arrayingf`, `stringf`, `stringingf`, `across-ref`
+  - `command-do`: `group`
   - `cons`: `on`
   - `list`: `in`
   - `list-ref`: `listf`, `listingf`, `in-ref`
@@ -29,7 +30,8 @@ This document describes the user-facing changes to Loopy.
   - `numbers`: `num`, `nums`
   - `numbers-down`: `nums-down`, `numdown`, `num-down`, `numsdown`
   - `numbers-up`: `nums-up`, `numup`, `num-up`, `numsup`
-  - `set-prev`: `prev`
+  - `set`: `expr`, `exprs`
+  - `set-prev`: `prev`, `prev-expr`
   - `sequence`: `elements`
   - `sequence-index`: `sequencei`, `seqi`, `listi`, `arrayi`, `stringi`
   - `sequence-ref`: `seqf`, `sequencef`, `sequencingf`, `elements-ref`
@@ -42,10 +44,12 @@ This document describes the user-facing changes to Loopy.
 
 
 [#126]: https://github.com/okamsn/loopy/issues/126
+[#168]: https://github.com/okamsn/loopy/issues/168
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#203]: https://github.com/okamsn/loopy/pull/203
 [#205]: https://github.com/okamsn/loopy/pull/205
 [#206]: https://github.com/okamsn/loopy/pull/206
+[#207]: https://github.com/okamsn/loopy/pull/207
 
 
 ## 0.13.0

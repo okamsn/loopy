@@ -265,8 +265,8 @@ This command does not wait for VAL to change before updating VAR."
             (loopy--latter-body (setq ,cnt (1+ ,cnt)))))))))
 
 ;;;;;; Group
-(cl-defun loopy--parse-group-command ((_ &rest body))
-  "Parse the `group' loop command.
+(cl-defun loopy--parse-command-do-command ((_ &rest body))
+  "Parse the `command-do' loop command.
 
 BODY is one or more commands to be grouped by a `progn' form.
 This command is suitable for using as the first sub-command in an
