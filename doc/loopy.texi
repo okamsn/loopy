@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org5119497
+@float Listing,orgfa9540f
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgf3a9f7c
+@float Listing,orgb706e77
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org1bf5dc0
+@float Listing,orgcc60e47
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2150,9 +2150,10 @@ In general, as a map in not necessarily a sequence, you should not rely on the
 order in which the key-value pairs are found.  There is no guarantee that they
 be in the same order each time.
 
-These pairs are created before the loop begins.  In other words, the map
-@samp{EXPR} is not processed progressively, but all at once.  Therefore, this
-command can have a noticeable start-up cost when working with very large maps.
+These pairs are created before the loop begins via @code{map-pairs}.  In other
+words, the map @samp{EXPR} is not processed progressively, but all at once.
+Therefore, this command can have a noticeable start-up cost when working with
+very large maps.
 
 @lisp
 ;; => ((a . 1) (b . 2))
@@ -2629,8 +2630,8 @@ place referred to by @samp{VAR}.  This is similar to the @samp{index} keyword pa
 of other commands.  This is not the same as the @samp{key} keyword parameter of the
 accumulation commands.
 
-Like in the command @samp{map}, the keys of the map are generated before the
-loop is run, which can be expensive for large maps.
+Like in the command @samp{map}, the keys of the map are generated via the function
+@code{map-keys} before the loop is run, which can be expensive for large maps.
 
 Similar to @samp{map}, any duplicate keys are ignored by default.  This can be
 disabled by setting the @samp{unique} keyword argument to nil, though note that
@@ -4653,7 +4654,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgb546acb
+@float Listing,orgab882ee
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

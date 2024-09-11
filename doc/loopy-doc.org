@@ -1978,9 +1978,10 @@ source sequences.
   order in which the key-value pairs are found.  There is no guarantee that they
   be in the same order each time.
 
-  These pairs are created before the loop begins.  In other words, the map
-  =EXPR= is not processed progressively, but all at once.  Therefore, this
-  command can have a noticeable start-up cost when working with very large maps.
+  These pairs are created before the loop begins via ~map-pairs~.  In other
+  words, the map =EXPR= is not processed progressively, but all at once.
+  Therefore, this command can have a noticeable start-up cost when working with
+  very large maps.
 
   #+begin_src emacs-lisp
     ;; => ((a . 1) (b . 2))
@@ -2426,8 +2427,8 @@ the accessed index during the loop.
   of other commands.  This is not the same as the =key= keyword parameter of the
   accumulation commands.
 
-  Like in the command =map=, the keys of the map are generated before the
-  loop is run, which can be expensive for large maps.
+  Like in the command =map=, the keys of the map are generated via the function
+  ~map-keys~ before the loop is run, which can be expensive for large maps.
 
   Similar to =map=, any duplicate keys are ignored by default.  This can be
   disabled by setting the =unique= keyword argument to nil, though note that

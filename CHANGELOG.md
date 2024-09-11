@@ -42,14 +42,24 @@ This document describes the user-facing changes to Loopy.
 
 - Make `sequence-index` the default name and `seq-index` an alias ([#126, #206]).
 
+- Allow the `unique` keyword argument of the commands `map` and `map-ref` to be
+  evaluable at run time, instead of just checked at compile time ([#209]).
+
+### Improvements
+
+- The `map` and `map-ref` commands now check for duplicate keys step by step,
+  instead of all at once at the start of the loop ([#209], [#179]).  Testing
+  showed that this is consistently faster than the old method.
 
 [#126]: https://github.com/okamsn/loopy/issues/126
 [#168]: https://github.com/okamsn/loopy/issues/168
 [#169]: https://github.com/okamsn/loopy/issues/169
+[#179]: https://github.com/okamsn/loopy/issues/179
 [#203]: https://github.com/okamsn/loopy/pull/203
 [#205]: https://github.com/okamsn/loopy/pull/205
 [#206]: https://github.com/okamsn/loopy/pull/206
 [#207]: https://github.com/okamsn/loopy/pull/207
+[#209]: https://github.com/okamsn/loopy/pull/209
 
 
 ## 0.13.0
