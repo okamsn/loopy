@@ -1442,14 +1442,14 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest iter-single-var-with-bound
   :doc "When single var is `with'-bound, `iter' must be indirect."
   :result '(27 1 1 2 2 3)
-  :body (loopy (with (iter-maker (iter-lambda ()
-                                   (iter-yield 1)
-                                   (iter-yield 2)
-                                   (iter-yield 3)))
-                     (i 27))
-               (collect i)
-               (iter i (funcall iter-maker))
-               (collect i))
+  :body ((with (iter-maker (iter-lambda ()
+                             (iter-yield 1)
+                             (iter-yield 2)
+                             (iter-yield 3)))
+               (i 27))
+         (collect i)
+         (iter i (funcall iter-maker))
+         (collect i))
   :loopy t
   :iter-keyword (iter collect)
   :iter-bare ((iter . iterating)
@@ -1564,9 +1564,9 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest list-destructuring
   :doc  "Check that `list' implements destructuring, not destructuring itself."
   :result '(5 6)
-  :body (loopy (list (a . b)
-                     '((1 . 2) (3 . 4) (5 . 6)))
-               (finally-return a b))
+  :body ((list (a . b)
+               '((1 . 2) (3 . 4) (5 . 6)))
+         (finally-return a b))
   :loopy t
   :iter-keyword (list)
   :iter-bare ((list . listing)))
@@ -1692,9 +1692,9 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest map-vector
   :result '((0 . a) (1 . b) (2 . c) (3 . d))
   :repeat _map
-  :body (loopy (_map pair [a b c d])
-               (collect coll pair)
-               (finally-return coll))
+  :body ((_map pair [a b c d])
+         (collect coll pair)
+         (finally-return coll))
   :loopy ((_map . (map map-pairs)))
   :iter-keyword ((_map . (map map-pairs))
                  (collect . collect))
@@ -1803,10 +1803,10 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest map-ref-:unique-nil
   :doc "Fist `:a' becomes 15 because it gets found twice by `setf'."
   :result '(:a 15 :a 2 :b 10)
-  :body (loopy (with (map (list :a 1 :a 2 :b 3)))
-               (map-ref i map :unique nil)
-               (do (cl-incf i 7))
-               (finally-return map))
+  :body ((with (map (list :a 1 :a 2 :b 3)))
+         (map-ref i map :unique nil)
+         (do (cl-incf i 7))
+         (finally-return map))
   :loopy t
   :iter-keyword (map-ref do collect)
   :iter-bare ((map-ref . mapping-ref)
@@ -2265,12 +2265,12 @@ Using numbers directly will use less variables and more efficient code."
                                                       3))
           (collect i))
 
-         (loopy (with (times 0))
-                (sequence i (vector 2 1 0) :above (progn
-                                                    (cl-assert (= times 0))
-                                                    (cl-incf times)
-                                                    -1))
-                (collect i))]
+         ((with (times 0))
+          (sequence i (vector 2 1 0) :above (progn
+                                              (cl-assert (= times 0))
+                                              (cl-incf times)
+                                              -1))
+          (collect i))]
   :loopy t
   :iter-keyword (sequence collect)
   :iter-bare ((sequence . sequencing)
@@ -2625,9 +2625,9 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest seq-index-init-no-with
   :doc "`seq-index' can default to the starting index if not with-bound."
   :result '(0 0 1 1 2 2 3 3)
-  :body (loopy (collect i)
-               (seq-index i [1 2 3 4])
-               (collect i))
+  :body ((collect i)
+         (seq-index i [1 2 3 4])
+         (collect i))
   :loopy t
   :iter-keyword (seq-index collect)
   :iter-bare ((seq-index . sequencing-index)
@@ -4430,11 +4430,11 @@ Using `start' and `end' in either order should give the same result."
 (loopy-deftest nunion-end-tracking-:at-start-twice
   :result '(10 8 9 7 5 6 4 1 2 3)
   :multi-body t
-  :body [(loopy (array i (vector (list 1 2 3) (list 1 2 3)
-                                 (list 4 5 6) (list 7 8 9)))
-                (nunion coll (copy-sequence i) :at start)
-                (nunion coll (mapcar #'1+ i) :at start)
-                (finally-return coll))
+  :body [((array i (vector (list 1 2 3) (list 1 2 3)
+                           (list 4 5 6) (list 7 8 9)))
+          (nunion coll (copy-sequence i) :at start)
+          (nunion coll (mapcar #'1+ i) :at start)
+          (finally-return coll))
 
          ((array i (vector (list 1 2 3) (list 1 2 3)
                            (list 4 5 6) (list 7 8 9)))
@@ -4447,12 +4447,12 @@ Using `start' and `end' in either order should give the same result."
 
 (loopy-deftest nunion-end-tracking-accum-opt-start-:at-end
   :result '(1 2 3 4 5 6 7 8 9 10)
-  :body (loopy (accum-opt (coll start))
-               (array i (vector (list 1 2 3) (list 1 2 3)
-                                (list 4 5 6) (list 7 8 9)))
-               (nunion coll (copy-sequence i) :at end)
-               (nunion coll (mapcar #'1+ i) :at end)
-               (finally-return coll))
+  :body ((accum-opt (coll start))
+         (array i (vector (list 1 2 3) (list 1 2 3)
+                          (list 4 5 6) (list 7 8 9)))
+         (nunion coll (copy-sequence i) :at end)
+         (nunion coll (mapcar #'1+ i) :at end)
+         (finally-return coll))
   :loopy t
   :iter-keyword (array nunion)
   :iter-bare ((array . arraying)
@@ -4461,12 +4461,12 @@ Using `start' and `end' in either order should give the same result."
 ;; TODO: Fail.  Fix in optimized constructor, same as others.
 (loopy-deftest nunion-end-tracking-accum-opt-end-:at-start
   :result '(10 8 9 7 5 6 4 1 2 3)
-  :body (loopy (accum-opt (coll end))
-               (array i (vector (list 1 2 3) (list 1 2 3)
-                                (list 4 5 6) (list 7 8 9)))
-               (nunion coll (copy-sequence i) :at start)
-               (nunion coll (mapcar #'1+ i) :at start)
-               (finally-return coll))
+  :body ((accum-opt (coll end))
+         (array i (vector (list 1 2 3) (list 1 2 3)
+                          (list 4 5 6) (list 7 8 9)))
+         (nunion coll (copy-sequence i) :at start)
+         (nunion coll (mapcar #'1+ i) :at start)
+         (finally-return coll))
   :loopy t
   :iter-keyword (array nunion)
   :iter-bare ((array . arraying)
@@ -4799,13 +4799,13 @@ This is how `cl-reduce' and `seq-reduce' work."
 (loopy-deftest union-:key
   :result '((a . 1))
   :multi-body t
-  :body [(loopy (array i [((a . 1)) ((a . 2))])
-                (union var i :key #'car)
-                (finally-return var))
+  :body [((array i [((a . 1)) ((a . 2))])
+          (union var i :key #'car)
+          (finally-return var))
 
-         (loopy (with (func #'car))
-                (array i [((a . 1)) ((a . 2))])
-                (union i :key func))]
+         ((with (func #'car))
+          (array i [((a . 1)) ((a . 2))])
+          (union i :key func))]
   :loopy t
   :iter-keyword (union array)
   :iter-bare ((union . unioning)
@@ -4900,10 +4900,10 @@ This is how `cl-reduce' and `seq-reduce' work."
           (union coll (mapcar (lambda (x) (+ x 10)) i) :at end)
           (finally-return coll))
 
-         (loopy (list i '((1 2 3 4) (8 7 6 5)))
-                (union coll (mapcar (lambda (x) (+ x 10)) i) :at end)
-                (union coll i :at start)
-                (finally-return coll))
+         ((list i '((1 2 3 4) (8 7 6 5)))
+          (union coll (mapcar (lambda (x) (+ x 10)) i) :at end)
+          (union coll i :at start)
+          (finally-return coll))
 
          ((list i '((1 2 3 4) (8 7 6 5)))
           (union i :at start)
@@ -5382,9 +5382,9 @@ Not multiple of 3: 7"
 
 (loopy-deftest always-multiple-commands
   :result t
-  :body (loopy (list i '(1 3 5 7))
-               (always (cl-oddp i))
-               (always (< i 10)))
+  :body ((list i '(1 3 5 7))
+         (always (cl-oddp i))
+         (always (< i 10)))
   :loopy t
   :iter-keyword (list always)
   :iter-bare ((list . listing)
@@ -5430,9 +5430,9 @@ Not multiple of 3: 7"
 
 (loopy-deftest multiple-never
   :result t
-  :body (loopy (list i '(1 3 5 7))
-               (never (cl-evenp i))
-               (never (> i 10)))
+  :body ((list i '(1 3 5 7))
+         (never (cl-evenp i))
+         (never (> i 10)))
   :loopy t
   :iter-keyword (list never)
   :iter-bare ((list . listing)
