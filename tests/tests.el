@@ -1717,7 +1717,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((_map . (mapping mapping-pairs))
               (collect . collecting)))
 
-(loopy-deftest map-:unique-t
+(loopy-deftest map-:unique-t-1
   :doc "`:unique' it `t' by default."
   :result '((a . 1) (b . 2) (c . 3))
   :multi-body t
@@ -1732,10 +1732,44 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((map-pairs . mapping-pairs)
               (collect . collecting)))
 
-(loopy-deftest map-:unique-nil
+(loopy-deftest map-:unique-t-2
+  :doc "Check that optimization to avoid `funcall' works."
+  :result t
+  :wrap ((x . `(not (string-match-p
+                     "funcall"
+                     (format "%S" (macroexpand-all (quote ,x) nil))))))
+  :body ((map-pairs i map :unique t))
+  :loopy t
+  :iter-keyword (map-pairs)
+  :iter-bare ((map-pairs . mapping-pairs)))
+
+(loopy-deftest map-:unique-nil-1
   :doc "`:unique' it `t' by default.  Test when `nil'."
   :result '((a . 1) (a . 27) (b . 2) (c . 3))
   :body ((map-pairs pair '((a . 1) (a . 27) (b . 2) (c . 3)) :unique nil)
+         (collect coll pair)
+         (finally-return coll))
+  :loopy t
+  :iter-keyword (map-pairs collect)
+  :iter-bare ((map-pairs . mapping-pairs)
+              (collect . collecting)))
+
+(loopy-deftest map-:unique-nil-2
+  :doc "Check that optimization to avoid `funcall' works."
+  :result t
+  :wrap ((x . `(not (string-match-p
+                     "funcall"
+                     (format "%S" (macroexpand-all (quote ,x) nil))))))
+  :body ((map-pairs i map :unique nil))
+  :loopy t
+  :iter-keyword (map-pairs)
+  :iter-bare ((map-pairs . mapping-pairs)))
+
+(loopy-deftest map-:unique-var
+  :doc "`:unique' it `t' by default.  Test when `nil'."
+  :result '((a . 1) (a . 27) (b . 2) (c . 3))
+  :body ((with (cat nil))
+         (map-pairs pair '((a . 1) (a . 27) (b . 2) (c . 3)) :unique cat)
          (collect coll pair)
          (finally-return coll))
   :loopy t
@@ -1782,7 +1816,7 @@ Using numbers directly will use less variables and more efficient code."
               (do . ignore)
               (collect . collecting)))
 
-(loopy-deftest map-ref-:unique-t
+(loopy-deftest map-ref-:unique-t-1
   :doc "`:unique' is `t' by default."
   :result '(:a 8 :a 2 :b 10)
   :multi-body t
@@ -1800,11 +1834,47 @@ Using numbers directly will use less variables and more efficient code."
               (do . ignore)
               (collect . collecting)))
 
-(loopy-deftest map-ref-:unique-nil
+(loopy-deftest map-ref-:unique-t-2
+  :doc "Check that optimization to avoid `funcall' works."
+  :result t
+  :wrap ((x . `(not (string-match-p
+                     "funcall"
+                     (format "%S" (macroexpand-all (quote ,x) nil))))))
+  :body ((map-ref i map :unique t))
+  :loopy t
+  :iter-keyword (map-ref)
+  :iter-bare ((map-ref . mapping-ref)))
+
+(loopy-deftest map-ref-:unique-nil-1
   :doc "Fist `:a' becomes 15 because it gets found twice by `setf'."
   :result '(:a 15 :a 2 :b 10)
   :body ((with (map (list :a 1 :a 2 :b 3)))
          (map-ref i map :unique nil)
+         (do (cl-incf i 7))
+         (finally-return map))
+  :loopy t
+  :iter-keyword (map-ref do collect)
+  :iter-bare ((map-ref . mapping-ref)
+              (do . ignore)
+              (collect . collecting)))
+
+(loopy-deftest map-ref-:unique-nil-2
+  :doc "Check that optimization to avoid `funcall' works."
+  :result t
+  :wrap ((x . `(not (string-match-p
+                     "funcall"
+                     (format "%S" (macroexpand-all (quote ,x) nil))))))
+  :body ((map-ref i map :unique nil))
+  :loopy t
+  :iter-keyword (map-ref)
+  :iter-bare ((map-ref . mapping-ref)))
+
+(loopy-deftest map-ref-:unique-var
+  :doc "Fist `:a' becomes 15 because it gets found twice by `setf'."
+  :result '(:a 15 :a 2 :b 10)
+  :body ((with (map (list :a 1 :a 2 :b 3))
+               (cat nil))
+         (map-ref i map :unique cat)
          (do (cl-incf i 7))
          (finally-return map))
   :loopy t

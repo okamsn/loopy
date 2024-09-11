@@ -897,30 +897,48 @@ BY is the function to use to move through the list (default `cdr')."
          (setq ,list-val (funcall ,list-func ,list-val)))))))
 
 ;;;;;; Map
-;; TODO: Instead of using `seq-uniq' at the start,
-;;       check as we go.
 (cl-defun loopy--parse-map-command ((name var val &key (unique t)))
-  "Parse the `map' loop command.
+  "Parse the `map' loop command as `(map VAR EXPR &key (unique t))'.
 
 Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
 vector using the library `map.el'."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map))
-  (let ((value-holder (gensym "map-")))
-    `((loopy--iteration-vars
-       (,value-holder ,(if unique
-                           `(seq-uniq (map-pairs ,val) #'loopy--car-equal-car)
-                         `(map-pairs ,val))))
-      ,@(loopy--destructure-for-iteration-command var `(car ,value-holder))
-      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+  (loopy--instr-let-var* ((value-holder `(map-pairs ,val)))
+      loopy--iteration-vars
+    `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
       ;;       at least for some commands.
       (loopy--pre-conditions (consp ,value-holder))
-      (loopy--latter-body (setq ,value-holder (cdr ,value-holder))))))
+      (loopy--latter-body (setq ,value-holder (cdr ,value-holder)))
+      ,@(pcase unique
+          ('nil
+           (loopy--destructure-for-iteration-command var `(car ,value-holder)))
+          ('t
+           (loopy--instr-let-var* ((key-list nil))
+               loopy--iteration-vars
+             (loopy--destructure-for-iteration-command
+              var `(progn
+                     (while (member (caar ,value-holder) ,key-list)
+                       (setq ,value-holder (cdr ,value-holder)))
+                     (push (caar ,value-holder) ,key-list)
+                     (car ,value-holder)))))
+          (_
+           (loopy--instr-let-var* ((key-list nil)
+                                   (test-fn `(if ,unique
+                                                 #'member
+                                               #'ignore)))
+               loopy--iteration-vars
+             (loopy--destructure-for-iteration-command
+              var `(progn
+                     (while (funcall ,test-fn (caar ,value-holder) ,key-list)
+                       (setq ,value-holder (cdr ,value-holder)))
+                     (push (caar ,value-holder) ,key-list)
+                     (car ,value-holder)))))))))
 
 ;;;;;; Map-Ref
 (cl-defun loopy--parse-map-ref-command ((name var val &key key (unique t)))
-  "Parse the `map-ref' command as (map-ref VAR VAL).
+  "Parse the `map-ref' command as (map-ref VAR VAL &key key (unique t)).
 
 KEY is a variable name in which to store the current key.
 
@@ -928,19 +946,37 @@ Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.  Duplicate keys are ignored."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map-ref))
-  (let ((key-list (gensym "map-ref-keys")))
-    `((loopy--iteration-vars (,key-list ,(if unique
-                                             `(seq-uniq (map-keys ,val))
-                                           `(map-keys ,val))))
+  (loopy--instr-let-var* ((key-list `(map-keys ,val)))
+      loopy--iteration-vars
+    `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+      ;;       at least for some commands.
+      (loopy--pre-conditions (consp ,key-list))
+      (loopy--latter-body (setq ,key-list (cdr ,key-list)))
+      ,@(pcase unique
+          ;; We don't need to do anything if we don't care about uniqueness.
+          ('nil nil)
+          ;; If UNIQUE is not evaluable code and is not `nil', then we know that
+          ;; we can use `member' directly.
+          ('t
+           (loopy--instr-let-var* ((found-keys nil))
+               loopy--iteration-vars
+             `((loopy--main-body (while (member (car ,key-list) ,found-keys)
+                                   (setq ,key-list (cdr ,key-list))))
+               (loopy--main-body (push (car ,key-list) ,found-keys)))))
+          (_
+           (loopy--instr-let-var* ((found-keys nil)
+                                   (test-fn `(if ,unique
+                                                 #'member
+                                               #'ignore)))
+               loopy--iteration-vars
+             `((loopy--main-body (while (funcall ,test-fn (car ,key-list) ,found-keys)
+                                   (setq ,key-list (cdr ,key-list))))
+               (loopy--main-body (push (car ,key-list) ,found-keys))))))
       ,@(when key
           `((loopy--iteration-vars (,key nil))
             (loopy--main-body (setq ,key (car ,key-list)))))
       ,@(loopy--destructure-for-generalized-command
-         var `(map-elt ,val ,(or key `(car ,key-list))))
-      ;; NOTE: The benchmarks show that `consp' is faster than no `consp',
-      ;;       at least for some commands.
-      (loopy--pre-conditions (consp ,key-list))
-      (loopy--latter-body (setq ,key-list (cdr ,key-list))))))
+         var `(map-elt ,val ,(or key `(car ,key-list)))))))
 
 ;;;;;; Numbers
 
