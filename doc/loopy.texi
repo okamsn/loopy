@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgfa9540f
+@float Listing,orgcd9d132
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgb706e77
+@float Listing,orgf148300
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgcc60e47
+@float Listing,orgff97ac8
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1668,13 +1668,17 @@ iterator object produced by a calling a generator function.  If given, @samp{VAR
 holds the value yielded by the iterator. The loop ends when the iterator
 finishes.
 
+@samp{close} is whether the generator should be closed via @code{iter-close} after the
+loop ends.  The default is @code{t}.  Note that Emacs will eventually close
+un-closed, un-reachable generators during garbage collection.  To be
+consistent with other commands, @samp{close} is evaluated at the start of the loop,
+even though it's value is only used after the loop finishes.
+
 @samp{yield-result} is the optional second argument to the function @code{iter-next},
 which is the value of @code{iter-yield} in the iterator (not to be confused with
-the value yielded by calling @code{iter-next}).
-
-@samp{close} is whether the generator should be  closed via @code{iter-close} after the
-loop ends.  The default is @code{t}.  Note that Emacs will eventually close
-un-closed, un-reachable generators during garbage collection.
+the value yielded by calling @code{iter-next}).  Unlike @samp{close}, which is evaluated
+once, @samp{yield-result} is an expression which is substituted into the loop body.
+Therefore, @samp{yield-result} can be used to repeatedly call functions.
 
 For efficiency, when possible, @samp{VAR} is bound to the yielded value before each
 step of the loop, which is used to detect whether the iterator signals that it
@@ -1687,6 +1691,7 @@ This command also has the name @samp{iterating}.
 
 @lisp
 ;; With var:
+;;
 ;; => ((1 . 4) (2 . 5) (3 . 6))
 (loopy (with (iter-maker (iter-lambda (x)
                            (while x
@@ -1696,6 +1701,7 @@ This command also has the name @samp{iterating}.
        (collect (cons i j)))
 
 ;; Without var:
+;;
 ;; => (1 2 3)
 (loopy (iter (funcall (iter-lambda ()
                         ;; These yielded values are all ignored.
@@ -1704,6 +1710,21 @@ This command also has the name @samp{iterating}.
                         (iter-yield 'third-yield))))
        (set i 1 (1+ i))
        (collect i))
+
+;; Using `yield-result':
+;;
+;; => (3 2 1)
+(loopy (with (yield-results nil))
+       (set i 1 (1+ i))
+       (iter (funcall (iter-lambda ()
+                        ;; The value from the expression specified by
+                        ;; `:yield-result' is `push'-ed:
+                        (push (iter-yield 'first-yield) yield-results)
+                        (push (iter-yield 'second-yield) yield-results)
+                        (push (iter-yield 'third-yield) yield-results)))
+             ;; Note that the value of `i' evaluated each time:
+             :yield-result i)
+       (finally-return yield-results))
 @end lisp
 
 @quotation Warning
@@ -2306,7 +2327,7 @@ Iterate through the elements for the stream
 @samp{EXPR}.  If @samp{by} is non-nil (default: 1), then move to the next n-th element
 during each iteration.  This command is a special case of the @samp{substream}
 command (described below), setting @samp{VAR} to the first element of each
-substream.  For more information, see the command @samp{substream}.
+substream.  For more information on streams, see the command @samp{substream}.
 
 This command also has the alias @samp{streaming}.
 
@@ -3678,6 +3699,9 @@ If the loop is left early and @samp{TEST} was never non-nil, this is the same as
 normal failure and @samp{VAR} will be set to the value of @samp{ON-FAILURE}, if
 provided.
 
+To be consistent with other commands, @samp{ON-FAILURE} is evaluated at the
+start of the loop, even though that is not necessarily where it is used.
+
 @lisp
 ;; => (13 (1 2))
 (loopy (list i '(1 2 3 4 5 6 7 8))
@@ -3701,6 +3725,13 @@ provided.
 ;; => nil
 (loopy (list i '(1 2 3 4 5 6))
        (find nil (> i 3) :on-failure 27))
+
+;; Value of `:on-failure' gotten at the start of the loop:
+;; => 27
+(loopy (with (on-fail 27))
+       (list i '(1 2 3))
+       (set on-fail 33)
+       (find i (> i 4) :on-failure on-fail))
 @end lisp
 @end table
 
@@ -4654,7 +4685,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgab882ee
+@float Listing,org7411b6a
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

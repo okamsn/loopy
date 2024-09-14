@@ -39,8 +39,15 @@ please let me know.
      list of built-in aliases in the future.  They can still be added to the
      list of known aliases using ~loopy-defalias~.  See the changelog for more
      information.
-   - The =:unique= keyword argument of the =map= and =map-ref= commands can now
-     be evaluable at run time, similar to most other keyword arguments.
+   - Improved consistency of some keyword arguments:
+     - The =:unique= keyword argument of the =map= and =map-ref= commands can now
+       be evaluable at run time.
+     - The =:close= argument of the =iter= command is now evaluable, instead of
+       only being used during macro expansion.
+     - The =:close= argument of the =iter= command is now evaluated at the
+       beginning of the loop.
+     - The =:on-failure= argument of the =find= command is now evaluated at the
+       beginning of the loop.
  - Version 0.13.0:
    - The deprecated =:init= keyword argument has been removed.  Use the =with=
      special macro argument instead.
