@@ -1489,6 +1489,34 @@ Using numbers directly will use less variables and more efficient code."
               (collect . collecting)
               (leave . leaving)))
 
+(loopy-deftest iter-close-value
+  :doc "Check that `close' is respected when it's a variable."
+  :result t
+  :body (loopy (with (some-val nil)
+                     (iter-maker (iter-lambda ()
+                                   (iter-yield 1)
+                                   (iter-yield 2)
+                                   (iter-yield 3)))
+                     (gen (funcall iter-maker)))
+               (iter i gen :close some-val)
+               (leave) ; Should not preventing closing or final updates.
+               (finally-return
+                ;; Older versions of Emacs don't have the `:success' clause,
+                ;; so we work around it.
+                (let ((val (condition-case err
+                               (iter-next gen)
+                             (iter-end-of-sequence 'fail)
+                             (error
+                              (signal (car err) (cdr err))))))
+                  (if (eq val 'fail)
+                      nil
+                    (iter-close gen)
+                    t))))
+  :loopy t
+  :iter-keyword (iter leave)
+  :iter-bare ((iter . iterating)
+              (leave . leaving)))
+
 (loopy-deftest iter-same-gen
   :doc "Check that `iter' doesn't reset iterator objects."
   :result  '((1 . 2) (3 . 4))
@@ -5675,6 +5703,26 @@ Not multiple of 3: 7"
   :loopy t
   :iter-keyword (list find)
   :iter-bare ((list . listing)
+              (find . finding)))
+
+(loopy-deftest find-onfail-at-beginning
+  :doc "Make sure `:on-failure' is evaluated at the beginning."
+  :result 27
+  :multi-body t
+  :body [((with (on-fail 27))
+          (list i '(1 2 3))
+          (set on-fail 33)
+	  (find res i (> i 4) :on-failure on-fail)
+          (finally-return res))
+
+         ((with (on-fail 27))
+          (list i '(1 2 3))
+          (set on-fail 33)
+	  (find i (> i 4) :on-failure on-fail))]
+  :loopy t
+  :iter-keyword (list set find)
+  :iter-bare ((list . listing)
+              (set . setting)
               (find . finding)))
 
 (loopy-deftest find-fail-onfail

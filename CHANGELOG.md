@@ -42,8 +42,15 @@ This document describes the user-facing changes to Loopy.
 
 - Make `sequence-index` the default name and `seq-index` an alias ([#126, #206]).
 
-- Allow the `unique` keyword argument of the commands `map` and `map-ref` to be
-  evaluable at run time, instead of just checked at compile time ([#209]).
+- Review when the values of keyword arguments are taken and used ([#210]):
+  - Make the `close` keyword argument of the `iter` command able to be evaluated
+    during run time ([#211]).  It was previously only used during macro expansion.
+  - Make the `close` keyword argument of the `iter` command evaluated at the
+    start of the loop to be consistent with other commands ([#211]).
+  - Make the `on-failure` keyword argument of the `find` command evaluated at the
+    start of the loop to be consistent with other commands ([#211]).
+  - Allow the `unique` keyword argument of the commands `map` and `map-ref` to be
+    evaluable at run time, instead of just checked at compile time ([#209]).
 
 ### Improvements
 
@@ -60,7 +67,8 @@ This document describes the user-facing changes to Loopy.
 [#206]: https://github.com/okamsn/loopy/pull/206
 [#207]: https://github.com/okamsn/loopy/pull/207
 [#209]: https://github.com/okamsn/loopy/pull/209
-
+[#210]: https://github.com/okamsn/loopy/issues/210
+[#211]: https://github.com/okamsn/loopy/pull/211
 
 ## 0.13.0
 
