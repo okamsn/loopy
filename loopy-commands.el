@@ -782,8 +782,9 @@ is a function by which to update VAR (default `cdr')."
 
 VAR is the variable.  VAL is an generator-producing function, as
 from `iter-defun' or `iter-lambda'.  YIELD-RESULT is the optional
-value of `iter-next'. CLOSE is whether the iterator should be
-closed after the loop completes."
+value of `iter-next' and is an expression, not a value.  CLOSE is
+whether the iterator should be closed after the loop completes
+and is a value."
   :required-vals 0 ;; Require values /after/ `var'.
   :other-vals (0 1)
   :keywords (:yield-result :close)
@@ -825,11 +826,16 @@ closed after the loop completes."
                    (iter-next ,obj-holder ,yield-result)
                  (iter-end-of-sequence nil)
                  (:success t))))))
-        ,(when close
-           `(loopy--vars-final-updates
-             (,obj-holder . (iter-close ,obj-holder))))))))
-
-
+        ,@(pcase close
+            ('nil nil)
+            ('t `((loopy--vars-final-updates
+                   (,obj-holder . (iter-close ,obj-holder)))))
+            (_
+             (loopy--instr-let-const* ((close2 close))
+                 loopy--iteration-vars
+               `((loopy--vars-final-updates
+                  (,obj-holder . (when ,close2
+                                   (iter-close ,obj-holder))))))))))))
 
 ;;;;;; List
 ;; TODO: Make this a normal function.
@@ -2197,57 +2203,64 @@ This function is called by `loopy--expand-optimized-accum'."
 
 ;;;;;;; Find
 (loopy--defaccumulation find
-  "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'."
+  "Parse a command of the form `(finding VAR EXPR TEST &key ON-FAILURE)'.
+
+ON-FAILURE is evaluated at the beginning of the loop, even though
+it is only meaningful at the end."
   :num-args 3
   :keywords (on-failure)
   :explicit (let* ((test-arg (cl-third args))
                    (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
-                   (of-used (plist-member opts :on-failure))
+                   (on-failure-given (plist-member opts :on-failure))
                    (on-failure (plist-get opts :on-failure))
                    (tag-name (loopy--produce-non-returning-exit-tag-name
                               loopy--loop-name))
                    (found (gensym "found")))
 
-              `((loopy--non-returning-exit-used ,tag-name)
-                (loopy--accumulation-vars (,var nil))
-                ,@(if of-used
-                      ;; If TEST always nil, bind to ON-FAILURE.
-                      `((loopy--accumulation-vars (,found nil))
-                        (loopy--main-body (when ,test-form
-                                            (setq ,var ,val
-                                                  ,found t)
-                                            (throw (quote ,tag-name) t)))
-                        (loopy--vars-final-updates
-                         (,var . (unless ,found (setq ,var ,on-failure)))))
-                    `((loopy--main-body (when ,test-form
-                                          (setq ,var ,val)
-                                          (throw (quote ,tag-name) t)))))))
+              (loopy--instr-let-const* ((on-failure2 on-failure))
+                  loopy--accumulation-vars
+                `((loopy--non-returning-exit-used ,tag-name)
+                  (loopy--accumulation-vars (,var nil))
+                  ,@(if on-failure-given
+                        ;; If TEST always nil, bind to ON-FAILURE.
+                        `((loopy--accumulation-vars (,found nil))
+                          (loopy--main-body (when ,test-form
+                                              (setq ,var ,val
+                                                    ,found t)
+                                              (throw (quote ,tag-name) t)))
+                          (loopy--vars-final-updates
+                           (,var . (unless ,found (setq ,var ,on-failure2)))))
+                      `((loopy--main-body (when ,test-form
+                                            (setq ,var ,val)
+                                            (throw (quote ,tag-name) t))))))))
   :implicit (let* ((test-arg (cl-second args))
                    (test-form (if (loopy--quoted-form-p test-arg)
                                   `(,(loopy--get-function-symbol test-arg) ,val)
                                 test-arg))
-                   (of-used (plist-member opts :on-failure))
+                   (on-failure-given (plist-member opts :on-failure))
                    (on-failure (plist-get opts :on-failure))
                    (found (gensym "found"))
                    (tag-name (loopy--produce-non-returning-exit-tag-name
                               loopy--loop-name)))
-              `((loopy--non-returning-exit-used ,tag-name)
-                (loopy--accumulation-vars (,var nil))
-                ,@(if of-used
-                      ;; If TEST always nil, bind to ON-FAILURE.
-                      `((loopy--accumulation-vars (,found nil))
-                        (loopy--main-body (when ,test-form
-                                            (setq ,var ,val
-                                                  ,found t)
-                                            (throw (quote ,tag-name) t)))
-                        (loopy--vars-final-updates
-                         (,var . (unless ,found (setq ,var ,on-failure)))))
-                    `((loopy--main-body (when ,test-form
-                                          (setq ,var ,val)
-                                          (throw (quote ,tag-name) t)))))
-                (loopy--implicit-return   ,var))))
+              (loopy--instr-let-const* ((on-failure2 on-failure))
+                  loopy--accumulation-vars
+                `((loopy--non-returning-exit-used ,tag-name)
+                  (loopy--accumulation-vars (,var nil))
+                  ,@(if on-failure-given
+                        ;; If TEST always nil, bind to ON-FAILURE.
+                        `((loopy--accumulation-vars (,found nil))
+                          (loopy--main-body (when ,test-form
+                                              (setq ,var ,val
+                                                    ,found t)
+                                              (throw (quote ,tag-name) t)))
+                          (loopy--vars-final-updates
+                           (,var . (unless ,found (setq ,var ,on-failure2)))))
+                      `((loopy--main-body (when ,test-form
+                                            (setq ,var ,val)
+                                            (throw (quote ,tag-name) t)))))
+                  (loopy--implicit-return   ,var)))))
 
 ;;;;;;; Set Accum
 (loopy--defaccumulation set-accum
