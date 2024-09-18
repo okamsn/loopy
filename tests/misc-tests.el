@@ -534,39 +534,39 @@ The valid keys are:
 
 (ert-deftest destructure-&seq-array-refs ()
   (should (equal [1 2 3]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&seq a b c] arr))
                      (setf a 1 b 2 c 3))
                    arr)))
 
   ;; FIXME: This won't work until we implement the recursive setters.
   ;; (should (equal [1 2 3]
-  ;;                (let ((arr [7 7 7 27]))
+  ;;                (let ((arr (vector 7 7 7 27)))
   ;;                  (loopy-ref (([&seq a b c &map [0 d]] arr))
   ;;                    (setf a 1 b 2 c 3 d 99))
   ;;                  arr)))
 
   (should (equal [2 3 4]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&seq &whole whole a b c] arr))
                      (setf a 1 b 2 c 3
                            whole (cl-map 'vector #'1+ whole)))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c [d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c [&seq d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([&seq a b c (&seq d e)] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
@@ -574,20 +574,20 @@ The valid keys are:
   ;; TODO: This test currently doesn't pass due to Elisp limitations.
   ;; (should (equal [1 2 3 4 5]
   ;;                (eval (quote
-  ;;                       (let ((arr [7 7 7 7 7]))
-  ;;                         (loopy-ref (([a b c &rest [d e]] arr))
+  ;;                       (let ((arr (vector 7 7 7 7 7)))
+  ;;                         (loopy-ref (([&seq a b c &rest [&seq d e]] arr))
   ;;                           (setf a 1 b 2 c 3 d 4 e 5))
   ;;                         arr)))))
 
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([&seq a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
 
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([&seq a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
@@ -602,7 +602,7 @@ The valid keys are:
   ;;                  arr)))
 
   (should (equal [2 3]
-                 (let ((arr [7 7]))
+                 (let ((arr (vector 7 7)))
                    (loopy-ref (([&seq &whole cat a b] arr))
                      (setf a 1 b 2
                            cat (cl-map 'vector #'1+ cat)))
@@ -610,20 +610,20 @@ The valid keys are:
 
 (ert-deftest destructure-array-refs ()
   (should (equal [1 2 3]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([a b c] arr))
                      (setf a 1 b 2 c 3))
                    arr)))
 
   (should (equal [2 3 4]
-                 (let ((arr [7 7 7]))
+                 (let ((arr (vector 7 7 7)))
                    (loopy-ref (([&whole whole a b c] arr))
                      (setf a 1 b 2 c 3
                            whole (cl-map 'vector #'1+ whole)))
                    arr)))
 
   (should (equal [1 2 3 [4 5]]
-                 (let ((arr [7 7 7 [7 7]]))
+                 (let ((arr (vector 7 7 7 (vector 7 7))))
                    (loopy-ref (([a b c [d e]] arr))
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
@@ -638,7 +638,7 @@ The valid keys are:
 
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
-                 (let ((arr [7 7 7 7 7]))
+                 (let ((arr (vector 7 7 7 7 7)))
                    (loopy-ref (([a b c &rest d] arr))
                      (setf a 1 b 2 c 3 d [4]))
                    arr)))
@@ -659,7 +659,7 @@ The valid keys are:
   ;;                  arr)))
 
   (should (equal [2 3]
-                 (let ((arr [7 7]))
+                 (let ((arr (vector 7 7)))
                    (loopy-ref (([&whole cat a b] arr))
                      (setf a 1 b 2
                            cat (cl-map 'vector #'1+ cat)))
