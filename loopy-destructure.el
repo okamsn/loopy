@@ -1359,7 +1359,12 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
                    collect `(,var ,val))))))
 
 (defmacro loopy--destructure-gv-array-rest (val start)
-  "Get the array sub-sequence in VAL from START to END exclusive."
+  "Get the array sub-sequence in VAL from START to END exclusive.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-array as a complete array.  Instead of producing a sub-array and then
+passing that sub-array to `aref', we can pass the super-array
+and a shifted index."
   (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
       `(loopy--destructure-gv-array-rest ,(cl-second val) ,(+ start (cl-third val)))
     ;; Don't use `substring' here.  It's `setf' effects aren't the same as
@@ -1367,7 +1372,15 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
     `(cl-subseq ,val ,start)))
 
 (defmacro loopy--destructure-gv-array-map (val key default)
-  "Get the array sub-sequence in VAL from START to END exclusive."
+  "Get the element at position KEY from the array VAL.
+
+DEFAULT is the return value when KEY is not found, which should
+never happen.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-array as a map.  Instead of producing a sub-array and then
+passing that sub-array to `map-elt', we can pass the super-array
+and a shifted index."
   (pcase (car-safe val)
     ;; Map is same as Elt for arrays, but we don't know the numeric value
     ;; of the key ahead of time.
@@ -1375,10 +1388,13 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
      `(loopy--destructure-gv-array-map ,(cl-second val) (+ ,key ,(cl-third val))
                                        ,default))
     ((or _ 'loopy--destructure-gv-array-map)
+     ;; Using `map-elt' here is fine, since we don't want to recreate the logic
+     ;; for checking for the presence of the key.  It will become a use of
+     ;; `aref'.
      `(map-elt ,val ,key ,default))))
 
 (defmacro loopy--destructure-gv-array-elt (val idx)
-  "Get the array sub-sequence in VAL from IDX to END exclusive."
+  "Get the element at position IDX in array VAL."
   (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
       `(loopy--destructure-gv-array-elt ,(cl-second val) ,(+ idx (cl-third val)))
     `(aref ,val ,idx)))

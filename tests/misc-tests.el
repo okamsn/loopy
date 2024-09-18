@@ -628,13 +628,31 @@ The valid keys are:
                      (setf a 1 b 2 c 3 d 4 e 5))
                    arr)))
 
-  ;; TODO: This test currently doesn't pass due to Elisp limitations.
-  ;; (should (equal [1 2 3 4 5]
-  ;;                (eval (quote
-  ;;                       (let ((arr [7 7 7 7 7]))
-  ;;                         (loopy-ref (([a b c &rest [d e]] arr))
-  ;;                           (setf a 1 b 2 c 3 d 4 e 5))
-  ;;                         arr)))))
+  ;; NOTE: These two test currently passes due to how we simplify array indexing
+  ;;       to avoid creating new objects, but it doesn't work in the general
+  ;;       case, such as with `&seq'.
+  (should (equal [1 2 3 4 5]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7)))
+                          (loopy-ref (([a b c &rest [d e]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
+
+  (should (equal [1 2 3 4 5 6]
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7 7)))
+                          (loopy-ref (([a b c &rest [d &rest [e f]]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5 f 6))
+                          arr)))))
+
+  (should (equal '(1 2 3 4 5)
+                 (eval (quote
+                        (let ((arr (vector 7 7 7 7 7 ))
+                              (key1 0)
+                              (key2 1))
+                          (loopy-ref (([a b c &rest [&map (key1 d) (key2 e)]] arr))
+                            (setf a 1 b 2 c 3 d 4 e 5))
+                          arr)))))
 
   ;; NOTE: Setting a variable after `&rest' in an array will not truncate the array.
   (should (equal [1 2 3 4 7]
