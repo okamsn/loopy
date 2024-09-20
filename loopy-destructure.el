@@ -1368,11 +1368,13 @@ This macro is used when `&rest' is followed by destructuring the
 sub-array as a complete array.  Instead of producing a sub-array and then
 passing that sub-array to `aref', we can pass the super-array
 and a shifted index."
-  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest-simplifier)
-      `(loopy--destructure-gv-array-rest-simplifier ,(cl-second val) ,(+ start (cl-third val)))
-    ;; Don't use `substring' here.  It's `setf' effects aren't the same as
-    ;; `cl-subseq'.
-    `(cl-subseq ,val ,start)))
+  (pcase val
+    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
+     `(loopy--destructure-gv-array-rest-simplifier ,super-array ,(+ start sub-array-start)))
+    (_
+     ;; Don't use `substring' here.  It's `setf' effects aren't the same as
+     ;; `cl-subseq'.
+     `(cl-subseq ,val ,start))))
 
 
 (defmacro loopy--destructure-gv-array-map-simplifier (val key default)
@@ -1383,18 +1385,18 @@ never happen.
 
 This macro is used when `&rest' is followed by destructuring the
 sub-array as a map.  Instead of producing a sub-array and then
-passing that sub-array to `loopy--destructure-map-elt', we can pass the super-array
-and a shifted index."
-  (pcase (car-safe val)
-    ;; Map is same as Elt for arrays, but we don't know the numeric value
-    ;; of the key ahead of time.
-    ('loopy--destructure-gv-array-rest-simplifier
-     `(loopy--destructure-gv-array-map-simplifier ,(cl-second val) (+ ,key ,(cl-third val))
+passing that sub-array to `loopy--destructure-map-elt', we can
+pass the super-array and a shifted index."
+  (pcase val
+    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
+     ;; Map is same as Elt for arrays, but we don't know the numeric value
+     ;; of the key ahead of time.  For Elt, the index is determined
+     ;; by the destructuring function.
+     `(loopy--destructure-gv-array-map-simplifier ,super-array (+ ,key ,sub-array-start)
                                                   ,default))
-    ((or _ 'loopy--destructure-gv-array-map-simplifier)
-     ;; Using `map-elt' here is fine, since we don't want to recreate the logic
-     ;; for checking for the presence of the key.  It will become a use of
-     ;; `aref'.
+    (_
+     ;; Using `loopy--destructure-map-elt' to support the expected
+     ;; recursive generic-variable setting.
      `(loopy--destructure-map-elt ,val ,key ,default))))
 
 (defmacro loopy--destructure-gv-array-elt-simplifier (val idx)
@@ -1402,9 +1404,11 @@ and a shifted index."
 
 If the array is a sub-array, then we can simplify it by shifting
 IDX to a large value for the super-array."
-  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest-simplifier)
-      `(loopy--destructure-gv-array-elt-simplifier ,(cl-second val) ,(+ idx (cl-third val)))
-    `(aref ,val ,idx)))
+  (pcase val
+    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
+     `(loopy--destructure-gv-array-elt-simplifier ,super-array ,(+ idx sub-array-start)))
+    (_
+     `(aref ,val ,idx))))
 
 (defun loopy--destructure-generalized-array (var-form value-expression)
   "Destructure VALUE-EXPRESSION according to VAR-FORM as `setf'-able places.
