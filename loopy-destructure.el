@@ -1336,7 +1336,10 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop
 	   for elem in map-vars
            for (key var2 default supplied) = (loopy--get-&map-spec elem)
-           for expr = `(map-elt
+           ;; NOTE: This is calling `map-elt' on an unknown sequence type,
+           ;;       so we can't optimize it here like we do
+           ;;       for arrays.
+           for expr = `(loopy--destructure-map-elt
                         (loopy--destructure-seq-drop ,value-expression
 					             ,(+ (length pos-vars)
 					                 (length opt-vars)))
@@ -1358,20 +1361,21 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
                    for (var val) = (loopy--get-&aux-spec elem)
                    collect `(,var ,val))))))
 
-(defmacro loopy--destructure-gv-array-rest (val start)
+(defmacro loopy--destructure-gv-array-rest-simplifier (val start)
   "Get the array sub-sequence in VAL from START to END exclusive.
 
 This macro is used when `&rest' is followed by destructuring the
 sub-array as a complete array.  Instead of producing a sub-array and then
 passing that sub-array to `aref', we can pass the super-array
 and a shifted index."
-  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
-      `(loopy--destructure-gv-array-rest ,(cl-second val) ,(+ start (cl-third val)))
+  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest-simplifier)
+      `(loopy--destructure-gv-array-rest-simplifier ,(cl-second val) ,(+ start (cl-third val)))
     ;; Don't use `substring' here.  It's `setf' effects aren't the same as
     ;; `cl-subseq'.
     `(cl-subseq ,val ,start)))
 
-(defmacro loopy--destructure-gv-array-map (val key default)
+
+(defmacro loopy--destructure-gv-array-map-simplifier (val key default)
   "Get the element at position KEY from the array VAL.
 
 DEFAULT is the return value when KEY is not found, which should
@@ -1379,24 +1383,27 @@ never happen.
 
 This macro is used when `&rest' is followed by destructuring the
 sub-array as a map.  Instead of producing a sub-array and then
-passing that sub-array to `map-elt', we can pass the super-array
+passing that sub-array to `loopy--destructure-map-elt', we can pass the super-array
 and a shifted index."
   (pcase (car-safe val)
     ;; Map is same as Elt for arrays, but we don't know the numeric value
     ;; of the key ahead of time.
-    ('loopy--destructure-gv-array-rest
-     `(loopy--destructure-gv-array-map ,(cl-second val) (+ ,key ,(cl-third val))
-                                       ,default))
-    ((or _ 'loopy--destructure-gv-array-map)
+    ('loopy--destructure-gv-array-rest-simplifier
+     `(loopy--destructure-gv-array-map-simplifier ,(cl-second val) (+ ,key ,(cl-third val))
+                                                  ,default))
+    ((or _ 'loopy--destructure-gv-array-map-simplifier)
      ;; Using `map-elt' here is fine, since we don't want to recreate the logic
      ;; for checking for the presence of the key.  It will become a use of
      ;; `aref'.
-     `(map-elt ,val ,key ,default))))
+     `(loopy--destructure-map-elt ,val ,key ,default))))
 
-(defmacro loopy--destructure-gv-array-elt (val idx)
-  "Get the element at position IDX in array VAL."
-  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest)
-      `(loopy--destructure-gv-array-elt ,(cl-second val) ,(+ idx (cl-third val)))
+(defmacro loopy--destructure-gv-array-elt-simplifier (val idx)
+  "Get the element at position IDX in array VAL.
+
+If the array is a sub-array, then we can simplify it by shifting
+IDX to a large value for the super-array."
+  (if (eq (car-safe val) 'loopy--destructure-gv-array-rest-simplifier)
+      `(loopy--destructure-gv-array-elt-simplifier ,(cl-second val) ,(+ idx (cl-third val)))
     `(aref ,val ,idx)))
 
 (defun loopy--destructure-generalized-array (var-form value-expression)
@@ -1410,7 +1417,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 - `&whole' references the entire place.
 - `&optional' is not supported.
 - `&map' references the values in the map.
-- `&key' references the values in the property list."
+- `&key' references the values in the property list,
+  which is an error for arrays."
   (map-let (('whole whole-var)
             ('pos   pos-vars)
             ('opt   opt-vars)
@@ -1425,7 +1433,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
       ,@(when pos-vars
           (cl-loop for v in pos-vars
                    for n from 0
-                   for expr = `(loopy--destructure-gv-array-elt ,value-expression ,n)
+                   for expr = `(loopy--destructure-gv-array-elt-simplifier ,value-expression ,n)
                    if (seqp v)
                    append (loopy--destructure-generalized-sequence
                            v expr)
@@ -1435,7 +1443,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (signal 'loopy-&optional-generalized-variable
                   (list var-form value-expression)))
       ,@(when rest-var
-	  (let ((rest-val `(loopy--destructure-gv-array-rest
+	  (let ((rest-val `(loopy--destructure-gv-array-rest-simplifier
                             ,value-expression
                             ,(+ (length pos-vars)
                                 (length opt-vars)))))
@@ -1450,10 +1458,11 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop
 	   for elem in map-vars
            for (key var2 default supplied) = (loopy--get-&map-spec elem)
-           for expr = `(loopy--destructure-gv-array-map
-                        (loopy--destructure-gv-array-rest ,value-expression
-                                                          ,(+ (length pos-vars)
-                                                              (length opt-vars)))
+           for expr = `(loopy--destructure-gv-array-map-simplifier
+                        (loopy--destructure-gv-array-rest-simplifier
+                         ,value-expression
+                         ,(+ (length pos-vars)
+                             (length opt-vars)))
                         ,key ,default)
            if default
            do (signal 'loopy-generalized-default
