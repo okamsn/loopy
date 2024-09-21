@@ -1050,6 +1050,8 @@ an error should be signaled if the pattern doesn't match."
 
 ;;;; Destructuring Generalized Variables
 
+
+;;;;; Definitions for recursive destructuring support
 (define-inline loopy--destructure-map-elt (map key &optional default)
   "A wrapper for `map-elt' so that `setf' places can be recursive."
   (declare (gv-expander
@@ -1076,36 +1078,50 @@ an error should be signaled if the pattern doesn't match."
   (inline-letevals (map key default)
     (inline-quote (map-elt ,map ,key ,default))))
 
-(define-inline loopy--destructure-seq-subseq (sequence start &optional end)
-  "A wrapper for `seq-subseq' so that `setf' places can be recursive."
+
+(define-inline loopy--destructure-seq-drop (sequence n)
+  "A wrapper for `seq-drop' so that `setf' places can be recursive."
   (declare (gv-expander
             (lambda (do)
               (gv-letplace (getter setter) `(gv-delay-error ,sequence)
-                (macroexp-let2* nil ((start start) (end end))
+                (macroexp-let2* nil ((n n))
                   (funcall do
-                           `(seq-subseq ,getter ,start ,end)
+                           `(seq-drop ,getter ,n)
                            (lambda (v)
                              (macroexp-let2 nil v v
                                `(progn
                                   ,(funcall setter
                                             `(loopy--destructure-seq-replace
-                                              ,getter ,v ,start ,end))
+                                              ,getter ,v ,n))
                                   ,v)))))))))
-  (inline-letevals (sequence start end)
-    (inline-quote (seq-subseq ,sequence ,start ,end))))
+  (inline-letevals (sequence n)
+    (inline-quote (seq-drop ,sequence ,n))))
 
-;; TODO: This has been proposed upstream.  One of the maintainers
-;;       recommends using a specialized method for each combination of
-;;       built-in sequences.
-(cl-defgeneric loopy--destructure-seq-replace (sequence replacements start &optional end)
-  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
-END is exclusive."
+;; TODO: Fix this logic.  How does this interact with (setf (looppy--seq-drop)) ?
+(cl-defgeneric loopy--destructure-seq-replace (sequence replacements start)
+  "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  (seq-concatenate (if (listp sequence)
+                       'list
+                     (type-of sequence))
+                   replacements
+                   (seq-drop sequence start)))
+
+(loopy--destructure-seq-replace (list 1 2 3 4) (vector 10 11) 0)
+
+(cl-defmethod loopy--destructure-seq-replace ((sequence array) (replacements array) start)
+  "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+
+  (seq-concatenate (if (listp sequence)
+                       'list
+                     (type-of sequence))
+                   replacements
+                   (seq-drop sequence start)))
+
+(cl-defmethod loopy--destructure-seq-replace (sequence (replacements list) start)
+  "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
   (let* ((len (seq-length sequence))
          (signal-fn (lambda ()
-                      (signal 'args-out-of-range
-                              (if end
-                                  (list sequence start end)
-                                (list sequence start)))))
+                      (signal 'args-out-of-range (list sequence start))))
          (signal-or-val-fn (lambda (val)
                              (cond
                               ((> val len)
@@ -1118,50 +1134,7 @@ END is exclusive."
                               (t
                                val))))
          (idx-start (funcall signal-or-val-fn start))
-         (idx-end (if (null end)
-                      len
-                    (funcall signal-or-val-fn end))))
-    (if (> idx-start idx-end)
-        (funcall signal-fn)
-      (let ((replacement-idx 0)
-            (replacement-len (seq-length replacements)))
-        (seq-into (seq-map-indexed (lambda (elem idx)
-                                     (if (and (<= idx-start idx)
-                                              (< idx idx-end)
-                                              (< replacement-idx replacement-len))
-                                         (prog1
-                                             (seq-elt replacements replacement-idx)
-                                           (setq replacement-idx (1+ replacement-idx)))
-                                       elem))
-                                   sequence)
-                  (if (listp sequence)
-                      'list
-                    (type-of sequence)))))))
-
-(cl-defmethod loopy--destructure-seq-replace (sequence (replacements list) start &optional end)
-  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
-END is exclusive."
-  (let* ((len (seq-length sequence))
-         (signal-fn (lambda ()
-                      (signal 'args-out-of-range
-                              (if end
-                                  (list sequence start end)
-                                (list sequence start)))))
-         (signal-or-val-fn (lambda (val)
-                             (cond
-                              ((> val len)
-                               (funcall signal-fn))
-                              ((< val 0)
-                               (let ((val2 (+ val len)))
-                                 (if (< val2 0)
-                                     (funcall signal-fn)
-                                   val2)))
-                              (t
-                               val))))
-         (idx-start (funcall signal-or-val-fn start))
-         (idx-end (if (null end)
-                      len
-                    (funcall signal-or-val-fn end))))
+         (idx-end len))
     (if (> idx-start idx-end)
         (funcall signal-fn)
       (seq-into (seq-map-indexed (lambda (elem idx)
@@ -1189,102 +1162,6 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'."
     ((pred listp)   (loopy--destructure-generalized-list var value-expression))
     ((pred arrayp)  (loopy--destructure-generalized-array var value-expression))
     (_      (signal 'loopy-destructure-type (list var)))))
-
-(define-inline loopy--destructure-seq-drop (sequence n)
-  "A wrapper for `seq-drop' so that `setf' places can be recursive."
-  (declare (gv-expander
-            (lambda (do)
-              (gv-letplace (getter setter) `(gv-delay-error ,sequence)
-                (macroexp-let2* nil ((n n))
-                  (funcall do
-                           `(seq-drop ,getter ,n)
-                           (lambda (v)
-                             (macroexp-let2 nil v v
-                               `(progn
-                                  ,(funcall setter
-                                            `(loopy--destructure-seq-replace
-                                              ,getter ,v ,n))
-                                  ,v)))))))))
-  (inline-letevals (sequence n)
-    (inline-quote (seq-drop ,sequence ,n))))
-
-(cl-defgeneric loopy--destructure-seq-replace (sequence replacements start &optional end)
-  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
-END is exclusive."
-  (let* ((len (seq-length sequence))
-         (signal-fn (lambda ()
-                      (signal 'args-out-of-range
-                              (if end
-                                  (list sequence start end)
-                                (list sequence start)))))
-         (signal-or-val-fn (lambda (val)
-                             (cond
-                              ((> val len)
-                               (funcall signal-fn))
-                              ((< val 0)
-                               (let ((val2 (+ val len)))
-                                 (if (< val2 0)
-                                     (funcall signal-fn)
-                                   val2)))
-                              (t
-                               val))))
-         (idx-start (funcall signal-or-val-fn start))
-         (idx-end (if (null end)
-                      len
-                    (funcall signal-or-val-fn end))))
-    (if (> idx-start idx-end)
-        (funcall signal-fn)
-      (let ((replacement-idx 0)
-            (replacement-len (seq-length replacements)))
-        (seq-into (seq-map-indexed (lambda (elem idx)
-                                     (if (and (<= idx-start idx)
-                                              (< idx idx-end)
-                                              (< replacement-idx replacement-len))
-                                         (prog1
-                                             (seq-elt replacements replacement-idx)
-                                           (setq replacement-idx (1+ replacement-idx)))
-                                       elem))
-                                   sequence)
-                  (if (listp sequence)
-                      'list
-                    (type-of sequence)))))))
-
-(cl-defmethod loopy--destructure-seq-replace (sequence (replacements list) start &optional end)
-  "Replace elements of SEQUENCE from START to END with elements of REPLACEMENTS.
-END is exclusive."
-  (let* ((len (seq-length sequence))
-         (signal-fn (lambda ()
-                      (signal 'args-out-of-range
-                              (if end
-                                  (list sequence start end)
-                                (list sequence start)))))
-         (signal-or-val-fn (lambda (val)
-                             (cond
-                              ((> val len)
-                               (funcall signal-fn))
-                              ((< val 0)
-                               (let ((val2 (+ val len)))
-                                 (if (< val2 0)
-                                     (funcall signal-fn)
-                                   val2)))
-                              (t
-                               val))))
-         (idx-start (funcall signal-or-val-fn start))
-         (idx-end (if (null end)
-                      len
-                    (funcall signal-or-val-fn end))))
-    (if (> idx-start idx-end)
-        (funcall signal-fn)
-      (seq-into (seq-map-indexed (lambda (elem idx)
-                                   (if (and (<= idx-start idx)
-                                            (< idx idx-end)
-                                            replacements)
-                                       (pop replacements)
-                                     elem))
-                                 sequence)
-                (if (listp sequence)
-                    'list
-                  (type-of sequence))))))
 
 (defun loopy--destructure-generalized-&seq (var-form value-expression)
   "Destructure VALUE-EXPRESSION according to VAR-FORM as `setf'-able places.
