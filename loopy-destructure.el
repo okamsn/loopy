@@ -1097,56 +1097,62 @@ an error should be signaled if the pattern doesn't match."
   (inline-letevals (sequence n)
     (inline-quote (seq-drop ,sequence ,n))))
 
-;; TODO: Fix this logic.  How does this interact with (setf (looppy--seq-drop)) ?
 (cl-defgeneric loopy--destructure-seq-replace (sequence replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
-  (seq-concatenate (if (listp sequence)
-                       'list
-                     (type-of sequence))
-                   replacements
-                   (seq-drop sequence start)))
+  ;; For a generic sequence, there doesn't seem to be a good way
+  ;; to avoid calculating the length of the original sequence.
+  (let ((len-old (seq-length sequence)))
+    (cl-block loop
+      (seq-map (let ((idx start))
+                 (lambda (new-elt)
+                   (if (>= idx len-old)
+                       (cl-return-from loop)
+                     (setf (seq-elt sequence idx) new-elt)
+                     (cl-incf idx))))
+               replacements))
+    sequence))
 
-(loopy--destructure-seq-replace (list 1 2 3 4) (vector 10 11) 0)
-
-(cl-defmethod loopy--destructure-seq-replace ((sequence array) (replacements array) start)
+(cl-defmethod loopy--destructure-seq-replace ((sequence array) replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  (let ((len-old (length sequence)))
+    (cl-block loop
+      (seq-map-indexed (lambda (new-elt idx)
+                         (let ((rep-idx (+ start idx)))
+                           (if (>= rep-idx len-old)
+                               (cl-return-from loop)
+                             (aset sequence rep-idx new-elt))))
+                       replacements))
+    sequence))
 
-  (seq-concatenate (if (listp sequence)
-                       'list
-                     (type-of sequence))
-                   replacements
-                   (seq-drop sequence start)))
-
-(cl-defmethod loopy--destructure-seq-replace (sequence (replacements list) start)
+(cl-defmethod loopy--destructure-seq-replace ((sequence list) replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
-  (let* ((len (seq-length sequence))
-         (signal-fn (lambda ()
-                      (signal 'args-out-of-range (list sequence start))))
-         (signal-or-val-fn (lambda (val)
-                             (cond
-                              ((> val len)
-                               (funcall signal-fn))
-                              ((< val 0)
-                               (let ((val2 (+ val len)))
-                                 (if (< val2 0)
-                                     (funcall signal-fn)
-                                   val2)))
-                              (t
-                               val))))
-         (idx-start (funcall signal-or-val-fn start))
-         (idx-end len))
-    (if (> idx-start idx-end)
-        (funcall signal-fn)
-      (seq-into (seq-map-indexed (lambda (elem idx)
-                                   (if (and (<= idx-start idx)
-                                            (< idx idx-end)
-                                            replacements)
-                                       (pop replacements)
-                                     elem))
-                                 sequence)
-                (if (listp sequence)
-                    'list
-                  (type-of sequence))))))
+  (let ((repped-seq (nthcdr start sequence)))
+    (cl-block loop
+      (seq-map (lambda (new-elt)
+                 (if repped-seq
+                     (progn
+                       (setcar repped-seq new-elt)
+                       (setq repped-seq (cdr repped-seq)))
+                   (cl-return-from loop)))
+               replacements))
+    sequence))
+
+(cl-defmethod loopy--destructure-seq-replace ((sequence stream) replacements start)
+  "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  (let (;; We don't use `seq-drop' here because we don't want to create a new
+        ;; sequence, we just want to force the evaluation of part of the current
+        ;; sequence.
+        (repped-seq (let ((seq2 sequence))
+                      (dotimes (_ start)
+                        (setq seq2 (stream-rest seq2)))
+                      seq2)))
+    (cl-block loop
+      (seq-map (lambda (new-elt)
+                 (if (stream-empty-p repped-seq)
+                     (cl-return-from loop)
+                   (setf (stream-first repped-seq) new-elt)))
+               replacements))
+    sequence))
 
 (defun loopy--destructure-generalized-sequence (var value-expression)
   "Destructure VALUE-EXPRESSION according to VAR as `setf'-able places.
