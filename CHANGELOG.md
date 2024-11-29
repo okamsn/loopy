@@ -58,10 +58,28 @@ This document describes the user-facing changes to Loopy.
   instead of all at once at the start of the loop ([#209], [#179]).  Testing
   showed that this is consistently faster than the old method.
 
+- Recursive destructuring for generalized variables (`setf`-able places), such
+  as in the below example, now work as expected, due to a combination of custom
+  GV setters and simplifying the produced code in some cases ([#212], [#213],
+  [#184]).  This can sometimes result in redundant operations when setting the
+  value of the generalized variable, but we've made an effort to reduce the
+  number of occurences in the obvious cases.
+
+  ```elisp
+  ;; => [1 2 3 4 0 0 16]
+  (let ((arr (vector 7 7 7 7 0 0 6)))
+    (loopy-ref (([&seq a b c &rest d &map (3 sub-idx-3)] arr))
+      (setf a 1 b 2 c 3 d [4])
+      (cl-incf sub-idx-3 10))
+    arr)
+  ```
+
+
 [#126]: https://github.com/okamsn/loopy/issues/126
 [#168]: https://github.com/okamsn/loopy/issues/168
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#179]: https://github.com/okamsn/loopy/issues/179
+[#184]: https://github.com/okamsn/loopy/issues/184
 [#203]: https://github.com/okamsn/loopy/pull/203
 [#205]: https://github.com/okamsn/loopy/pull/205
 [#206]: https://github.com/okamsn/loopy/pull/206
@@ -69,6 +87,8 @@ This document describes the user-facing changes to Loopy.
 [#209]: https://github.com/okamsn/loopy/pull/209
 [#210]: https://github.com/okamsn/loopy/issues/210
 [#211]: https://github.com/okamsn/loopy/pull/211
+[#212]: https://github.com/okamsn/loopy/pull/212
+[#213]: https://github.com/okamsn/loopy/pull/213
 
 ## 0.13.0
 
