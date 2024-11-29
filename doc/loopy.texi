@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgcd9d132
+@float Listing,org4aaf858
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgf148300
+@float Listing,org57f8a2b
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgff97ac8
+@float Listing,orgcb879ea
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2535,16 +2535,9 @@ will only overwrite values, not truncate or grow the array.
 
 @quotation Warning
 Unfortunately, not all kinds of recursive destructuring work on references.
-This is a limitation of how generic setters are implemented, and not all
-limitations are specific to @code{loopy}.
 
 Currently:
 @itemize
-@item
-The variable after @samp{&rest} in arrays cannot be recursive.
-@item
-The variables after @samp{&map} cannot be recursive due to the current
-implementation of @samp{map.el} upstream.
 @item
 @samp{&optional} variables are not supported
 @item
@@ -4685,7 +4678,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org7411b6a
+@float Listing,org024caac
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)
