@@ -606,21 +606,21 @@ builtin `aref', `seq-drop', and the custom
   (should (equal '(7 7 7 4 7)
                  (let ((arr (list 7 7 7 7 7)))
                    (setf (loopy--destructure-seq-elt
-                          (loopy--destructure-nthcdr 3 arr)
+                          (nthcdr 3 arr)
                           0)
                          4)
                    arr)))
 
   (should (equal '(7 7 7 4 7)
                  (let ((arr (list 7 7 7 7 7)))
-                   (setf (loopy--destructure-nth
-                          0 (loopy--destructure-nthcdr 3 arr))
+                   (setf (nth
+                          0 (nthcdr 3 arr))
                          4)
                    arr)))
 
   (should (equal '(7 7 7 4 7)
                  (let ((arr (list 7 7 7 7 7)))
-                   (setf (loopy--destructure-nth
+                   (setf (nth
                           0
                           (loopy--destructure-seq-drop arr 3))
                          4)
@@ -729,6 +729,125 @@ builtin `aref', `seq-drop', and the custom
                              3)
                             10)
                    arr))))
+
+(ert-deftest gv-destr-simplification-seq-elt-on-sub ()
+  "`seq-elt' on sub-sequence."
+  (should (equal '(seq-elt my-list 3)
+                 (macroexpand-all '(loopy--destructure-gv-seq-elt-simplifier
+                                    (loopy--destructure-gv-list-rest-simplifier
+                                     my-list 3)
+                                    0))))
+
+  (should (equal '(seq-elt my-list 4)
+                 (macroexpand-all '(loopy--destructure-gv-seq-elt-simplifier
+                                    (loopy--destructure-gv-array-rest-simplifier
+                                     my-list 3)
+                                    1))))
+
+  (should (equal '(seq-elt my-list 5)
+                 (macroexpand-all '(loopy--destructure-gv-seq-elt-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-list 3)
+                                    2)))))
+
+(ert-deftest gv-destr-simplification-seq-rest-on-sub ()
+  "`seq-drop' on sub-sequence."
+  (should (equal '(seq-drop my-list 3)
+                 (macroexpand-all '(loopy--destructure-gv-seq-rest-simplifier
+                                    (loopy--destructure-gv-list-rest-simplifier
+                                     my-list 3)
+                                    0))))
+
+  (should (equal '(seq-drop my-list 4)
+                 (macroexpand-all '(loopy--destructure-gv-seq-rest-simplifier
+                                    (loopy--destructure-gv-array-rest-simplifier
+                                     my-list 3)
+                                    1))))
+
+  (should (equal '(seq-drop my-list 5)
+                 (macroexpand-all '(loopy--destructure-gv-seq-rest-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-list 3)
+                                    2)))))
+
+(ert-deftest gv-destr-simplification-list-elt-on-sub ()
+  "`nth' on sub-sequence."
+  (should (equal '(nth 3 my-list)
+                 (macroexpand-all '(loopy--destructure-gv-list-elt-simplifier
+                                    (loopy--destructure-gv-list-rest-simplifier
+                                     my-list 3)
+                                    0))))
+
+  (should (equal '(nth 5 my-list)
+                 (macroexpand-all '(loopy--destructure-gv-list-elt-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-list 3)
+                                    2)))))
+
+(ert-deftest gv-destr-simplification-list-rest-on-sub ()
+  "`nthcdr' on sub-sequence."
+  (should (equal '(nthcdr 3 my-list)
+                 (macroexpand-all '(loopy--destructure-gv-list-rest-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-list 3)
+                                    0))))
+
+  (should (equal '(nthcdr 5 my-list)
+                 (macroexpand-all '(loopy--destructure-gv-list-rest-simplifier
+                                    (loopy--destructure-gv-list-rest-simplifier
+                                     my-list 3)
+                                    2)))))
+
+(ert-deftest gv-destr-simplification-array-elt-on-sub ()
+  "`aref' on sub-sequence."
+  (should (equal '(aref my-array 3)
+                 (macroexpand-all '(loopy--destructure-gv-array-elt-simplifier
+                                    (loopy--destructure-gv-array-rest-simplifier
+                                     my-array 3)
+                                    0))))
+
+  (should (equal '(aref my-array 5)
+                 (macroexpand-all '(loopy--destructure-gv-array-elt-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-array 3)
+                                    2)))))
+
+(ert-deftest gv-destr-simplification-array-rest-on-sub ()
+  "`cl-subseq' on sub-sequence."
+  (should (equal '(cl-subseq my-array 3)
+                 (macroexpand-all '(loopy--destructure-gv-array-rest-simplifier
+                                    (loopy--destructure-gv-seq-rest-simplifier
+                                     my-array 3)
+                                    0))))
+
+  (should (equal '(cl-subseq my-array 5)
+                 (macroexpand-all '(loopy--destructure-gv-array-rest-simplifier
+                                    (loopy--destructure-gv-array-rest-simplifier
+                                     my-array 3)
+                                    2)))))
+
+(ert-deftest gv-use-of-list-simplifiers ()
+  (should (equal (loopy--destructure-generalized-list '(a . b) 'my-val)
+                 '((a (loopy--destructure-gv-list-elt-simplifier my-val 0))
+                   (b (loopy--destructure-gv-list-rest-simplifier my-val 1)))))
+
+  (should (equal (loopy--destructure-generalized-list '(a &rest b) 'my-val)
+                 '((a (loopy--destructure-gv-list-elt-simplifier my-val 0))
+                   (b (loopy--destructure-gv-list-rest-simplifier my-val 1))))))
+
+(ert-deftest gv-use-of-array-simplifiers ()
+  (should (equal (loopy--destructure-generalized-array [a &rest b] 'my-val)
+                 '((a (loopy--destructure-gv-array-elt-simplifier my-val 0))
+                   (b (loopy--destructure-gv-array-rest-simplifier my-val 1))))))
+
+(ert-deftest gv-use-of-seq-simplifiers ()
+  (should (equal (loopy--destructure-generalized-sequence '(&seq a &rest b) 'my-val)
+                 '((a (loopy--destructure-gv-seq-elt-simplifier my-val 0))
+                   (b (loopy--destructure-gv-seq-rest-simplifier my-val 1)))))
+
+  (should (equal (loopy--destructure-generalized-sequence [&seq a &rest b] 'my-val)
+                 '((a (loopy--destructure-gv-seq-elt-simplifier my-val 0))
+                   (b (loopy--destructure-gv-seq-rest-simplifier my-val 1))))))
 
 (ert-deftest destructure-array-refs ()
   (should (equal [1 2 3]
