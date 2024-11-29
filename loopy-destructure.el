@@ -1,5 +1,7 @@
 ;;; loopy-destructure.el --- Miscellaneous functions used with Loopy. -*- lexical-binding: t; -*-
 
+;; LocalWords:  plists alists plist seqs
+
 ;; Copyright (c) 2024 Earl Hyatt
 
 ;;; Disclaimer:
@@ -1087,7 +1089,8 @@ an error should be signaled if the pattern doesn't match."
 ;;       replacing the portion of the super-sequences after setting an element
 ;;       of a newly created subsequence.  This should /not/ be needed for lists
 ;;       because lists use pointers, such that updating elements in the object
-;;       returned by functions like `cdr' /is/ updating the original list.
+;;       returned by functions like `cdr' and `seq-drop' /is/ updating the
+;;       original list.
 ;;
 ;;       We're not sure if all of these wrappers are needed, but we have them
 ;;       just in case.
@@ -1136,27 +1139,6 @@ an error should be signaled if the pattern doesn't match."
                                   ,v)))))))))
   (inline-letevals (sequence idx)
     (inline-quote (aref ,sequence ,idx))))
-
-(define-inline loopy--destructure-nth (idx sequence)
-  "A wrapper so that `setf' places are updated after running `nth'.
-
-This definition probably isn't needed, but we use it as a precaution."
-  (declare (gv-expander
-            (lambda (do)
-              (gv-letplace (getter setter) `(gv-delay-error ,sequence)
-                (macroexp-let2* nil ((idx idx))
-                  (funcall do
-                           `(nth ,idx ,getter)
-                           (lambda (v)
-                             (macroexp-let2* nil
-                                 ((v v)
-                                  (seq getter))
-                               `(progn
-                                  (setf (nth ,idx ,seq) ,v)
-                                  ,(funcall setter seq)
-                                  ,v)))))))))
-  (inline-letevals (sequence idx)
-    (inline-quote (nth ,idx ,sequence))))
 
 (define-inline loopy--destructure-seq-elt (sequence idx)
   "A wrapper so that `setf' places are updated after running `seq-elt'."
@@ -1259,29 +1241,132 @@ This definition might not be necessary, but we use it just in case."
   (inline-letevals (sequence n)
     (inline-quote (cl-subseq ,sequence ,n))))
 
-(define-inline loopy--destructure-nthcdr (n sequence)
-  "A wrapper for `nthcdr' so that places are updated after running `setcdr'.
+;;;;; Macros that expansion that simplifies code
 
-This definition might not be necessary, but we use it just in case."
-  (declare (gv-expander
-            (lambda (do)
-              (gv-letplace (getter setter) `(gv-delay-error ,sequence)
-                (macroexp-let2* nil ((n n))
-                  (funcall do
-                           `(nthcdr ,n ,getter)
-                           (lambda (v)
-                             (macroexp-let2* nil
-                                 ((v v)
-                                  (seq getter))
-                               `(progn
-                                  (if (<= ,n 0)
-                                      ,(funcall setter v)
-                                    (setcdr (nthcdr (1- ,n) ,seq)
-                                            ,v))
-                                  ,(funcall setter seq)
-                                  ,v)))))))))
-  (inline-letevals (sequence n)
-    (inline-quote (nthcdr ,n ,sequence))))
+;; NOTE: We can't simplify using `&map' on generic seqs and lists, since we
+;;       don't have enough information about what kind of map it is.  It could
+;;       be a plist, alist, vector, or something else, which all behave
+;;       differently.
+
+;;;;;; Macros that expansion that simplifies code for seqs
+
+(defmacro loopy--destructure-gv-seq-rest-simplifier (val start)
+  "Get the seq sub-sequence in VAL from START to END exclusive.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-seq as a complete seq.  Instead of producing a sub-seq and then
+passing that sub-seq to `seq-elt', we can pass the super-seq
+and a shifted index."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-seq-rest-simplifier
+            'loopy--destructure-gv-array-rest-simplifier
+            'loopy--destructure-gv-list-rest-simplifier)
+       ,super-seq ,sub-seq-start)
+     `(loopy--destructure-gv-seq-rest-simplifier ,super-seq ,(+ start sub-seq-start)))
+    (_
+     `(loopy--destructure-seq-drop ,val ,start))))
+
+(defmacro loopy--destructure-gv-seq-elt-simplifier (val idx)
+  "Get the element at position IDX in seq VAL.
+
+If the seq is a sub-seq, then we can simplify it by shifting
+IDX to a large value for the super-seq."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-seq-rest-simplifier
+            'loopy--destructure-gv-array-rest-simplifier
+            'loopy--destructure-gv-list-rest-simplifier)
+       ,super-seq ,sub-seq-start)
+     `(loopy--destructure-gv-seq-elt-simplifier ,super-seq ,(+ idx sub-seq-start)))
+    (_
+     `(loopy--destructure-seq-elt ,val ,idx))))
+
+;;;;;; Macros that expansion that simplifies code for arrays
+
+(defmacro loopy--destructure-gv-array-rest-simplifier (val start)
+  "Get the array sub-sequence in VAL from START to END exclusive.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-array as a complete array.  Instead of producing a sub-array and then
+passing that sub-array to `aref', we can pass the super-array
+and a shifted index."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-array-rest-simplifier
+            'loopy--destructure-gv-seq-rest-simplifier)
+       ,super-array ,sub-array-start)
+     `(loopy--destructure-gv-array-rest-simplifier ,super-array ,(+ start sub-array-start)))
+    (_
+     `(loopy--destructure-cl-subseq ,val ,start))))
+
+(defmacro loopy--destructure-gv-array-map-simplifier (val key default)
+  "Get the element at position KEY from the array VAL.
+
+DEFAULT is the return value when KEY is not found, which should
+never happen.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-array as a map.  Instead of producing a sub-array and then
+passing that sub-array to `loopy--destructure-map-elt', we can
+pass the super-array and a shifted index."
+  (pcase val
+    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
+     ;; Map is same as Elt for arrays, but we don't know the numeric value
+     ;; of the key ahead of time.  For Elt, the index is determined
+     ;; by the destructuring function.
+     ;;
+     ;; This simplification only applies to arrays, not seqs which might turn
+     ;; out to be arrays.
+     `(loopy--destructure-gv-array-map-simplifier ,super-array (+ ,key ,sub-array-start)
+                                                  ,default))
+    (_
+     ;; Using `loopy--destructure-map-elt' to support the expected recursive
+     ;; generic-variable setting.  We need this, for example, when calling
+     ;; `setf' on a `map-elt' on a `cl-subseq'.
+     `(loopy--destructure-map-elt ,val ,key ,default))))
+
+(defmacro loopy--destructure-gv-array-elt-simplifier (val idx)
+  "Get the element at position IDX in array VAL.
+
+If the array is a sub-array, then we can simplify it by shifting
+IDX to a large value for the super-array."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-array-rest-simplifier
+            'loopy--destructure-gv-seq-rest-simplifier)
+       ,super-array ,sub-array-start)
+     `(loopy--destructure-gv-array-elt-simplifier ,super-array ,(+ idx sub-array-start)))
+    (_
+     `(loopy--destructure-aref ,val ,idx))))
+
+;;;;;; Macros that expansion that simplifies code for lists
+
+
+(defmacro loopy--destructure-gv-list-rest-simplifier (val start)
+  "Get the list sub-sequence in VAL from START to END exclusive.
+
+This macro is used when `&rest' is followed by destructuring the
+sub-list as a complete list.  Instead of producing a sub-list and then
+passing that sub-list to `nth', we can pass the super-list
+and a shifted index."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-list-rest-simplifier
+            'loopy--destructure-gv-seq-rest-simplifier)
+       ,super-list ,sub-list-start)
+     `(loopy--destructure-gv-list-rest-simplifier
+       ,super-list ,(+ start sub-list-start)))
+    (_
+     `(nthcdr ,start ,val))))
+
+(defmacro loopy--destructure-gv-list-elt-simplifier (val idx)
+  "Get the element at position IDX in list VAL.
+
+If the list is a sub-list, then we can simplify it by shifting
+IDX to a large value for the super-list."
+  (pcase val
+    (`(,(or 'loopy--destructure-gv-list-rest-simplifier
+            'loopy--destructure-gv-seq-rest-simplifier)
+       ,super-list ,sub-list-start)
+     `(loopy--destructure-gv-list-elt-simplifier ,super-list ,(+ idx sub-list-start)))
+    (_
+     `(nth ,idx ,val))))
 
 ;;;;; Entry point for sequences as `setf'-able places
 
@@ -1328,7 +1413,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
       ,@(when pos-vars
           (cl-loop for v in pos-vars
                    for n from 0
-                   for expr = `(loopy--destructure-seq-elt ,value-expression ,n)
+                   for expr = `(loopy--destructure-gv-seq-elt-simplifier
+                                ,value-expression ,n)
                    if (seqp v)
                    append (loopy--destructure-generalized-sequence
                            v expr)
@@ -1338,7 +1424,7 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (signal 'loopy-&optional-generalized-variable
                   (list var-form value-expression)))
       ,@(when rest-var
-	  (let ((rest-val `(loopy--destructure-seq-drop
+	  (let ((rest-val `(loopy--destructure-gv-seq-rest-simplifier
                             ,value-expression
                             ,(+ (length pos-vars)
 				(length opt-vars)))))
@@ -1356,9 +1442,10 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
            ;;       can't optimize it here like we do for arrays using
            ;;       `loopy--destructure-gv-array-map-simplifier'.
            for expr = `(loopy--destructure-map-elt
-                        (loopy--destructure-seq-drop ,value-expression
-					             ,(+ (length pos-vars)
-					                 (length opt-vars)))
+                        (loopy--destructure-gv-seq-rest-simplifier
+                         ,value-expression
+			 ,(+ (length pos-vars)
+			     (length opt-vars)))
 			,key ,default)
            if default
            do (signal 'loopy-generalized-default
@@ -1378,60 +1465,6 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
                    collect `(,var ,val))))))
 
 ;;;;; Implementation of arrays as `setf'-able places
-
-;; NOTE: This code uses macro expansion to simplify destructurings with
-;;       `&rest' and `&map', for which we know ahead of time how they are
-;;       relative to the overall super-array.  We do this to avoid possible
-;;       errors with recursive `setf' applications, which upstream Emacs seems
-;;       to want to avoid.  This also has the benefit of producing more
-;;       efficient code, though the macro expansion becomes more complicated.
-
-(defmacro loopy--destructure-gv-array-rest-simplifier (val start)
-  "Get the array sub-sequence in VAL from START to END exclusive.
-
-This macro is used when `&rest' is followed by destructuring the
-sub-array as a complete array.  Instead of producing a sub-array and then
-passing that sub-array to `aref', we can pass the super-array
-and a shifted index."
-  (pcase val
-    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
-     `(loopy--destructure-gv-array-rest-simplifier ,super-array ,(+ start sub-array-start)))
-    (_
-     `(loopy--destructure-cl-subseq ,val ,start))))
-
-(defmacro loopy--destructure-gv-array-map-simplifier (val key default)
-  "Get the element at position KEY from the array VAL.
-
-DEFAULT is the return value when KEY is not found, which should
-never happen.
-
-This macro is used when `&rest' is followed by destructuring the
-sub-array as a map.  Instead of producing a sub-array and then
-passing that sub-array to `loopy--destructure-map-elt', we can
-pass the super-array and a shifted index."
-  (pcase val
-    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
-     ;; Map is same as Elt for arrays, but we don't know the numeric value
-     ;; of the key ahead of time.  For Elt, the index is determined
-     ;; by the destructuring function.
-     `(loopy--destructure-gv-array-map-simplifier ,super-array (+ ,key ,sub-array-start)
-                                                  ,default))
-    (_
-     ;; Using `loopy--destructure-map-elt' to support the expected recursive
-     ;; generic-variable setting.  We need this, for example, when calling
-     ;; `setf' on a `map-elt' on a `cl-subseq'.
-     `(loopy--destructure-map-elt ,val ,key ,default))))
-
-(defmacro loopy--destructure-gv-array-elt-simplifier (val idx)
-  "Get the element at position IDX in array VAL.
-
-If the array is a sub-array, then we can simplify it by shifting
-IDX to a large value for the super-array."
-  (pcase val
-    (`(loopy--destructure-gv-array-rest-simplifier ,super-array ,sub-array-start)
-     `(loopy--destructure-gv-array-elt-simplifier ,super-array ,(+ idx sub-array-start)))
-    (_
-     `(loopy--destructure-aref ,val ,idx))))
 
 (defun loopy--destructure-generalized-array (var-form value-expression)
   "Destructure VALUE-EXPRESSION according to VAR-FORM as `setf'-able places.
@@ -1508,6 +1541,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
                    for (var val) = (loopy--get-&aux-spec elem)
                    collect `(,var ,val))))))
 
+;;;;; Implementation of lists as `setf'-able places
+
 (cl-defun loopy--destructure-generalized-list (var-form value-expression)
   "Destructure list VALUE-EXPRESSION with generalized variables via VAR-FORM."
   (map-let (('whole whole-var)
@@ -1524,7 +1559,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
       ,@(when pos-vars
           (cl-loop for v in pos-vars
                    for n from 0
-                   for expr = `(loopy--destructure-nth ,n ,value-expression)
+                   for expr = `(loopy--destructure-gv-list-elt-simplifier
+                                ,value-expression ,n)
                    if (seqp v)
                    append (loopy--destructure-generalized-sequence
                            v expr)
@@ -1534,9 +1570,10 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (signal 'loopy-&optional-generalized-variable
                   (list var-form value-expression)))
       ,@(when rest-var
-	  (let ((rest-val `(loopy--destructure-nthcdr ,(+ (length pos-vars)
-                                                          (length opt-vars))
-                                                      ,value-expression)))
+	  (let ((rest-val `(loopy--destructure-gv-list-rest-simplifier
+                            ,value-expression
+                            ,(+ (length pos-vars)
+                                (length opt-vars)))))
 	    (if (seqp rest-var)
 		(loopy--destructure-generalized-sequence rest-var rest-val)
 	      `((,rest-var ,rest-val)))))
@@ -1545,10 +1582,11 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 	  (cl-loop
 	   for elem in key-vars
            for (key var2 default supplied) =  (loopy--get-&key-spec elem)
-           for expr = `(compat-call plist-get (nthcdr ,(+ (length pos-vars)
-							  (length opt-vars))
-						      ,value-expression)
-				    ,key)
+           for expr = `(plist-get
+                        (loopy--destructure-gv-list-rest-simplifier
+                         ,value-expression
+			 ,(+ (length pos-vars) (length opt-vars)))
+			,key)
            if default
            do (signal 'loopy-generalized-default
                       (list var-form value-expression))
@@ -1566,10 +1604,12 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
           (cl-loop for elem in map-vars
                    for (key var2 default supplied) =
                    (loopy--get-&map-spec elem)
-                   for expr = `(loopy--destructure-map-elt (nthcdr ,(+ (length pos-vars)
-						                       (length opt-vars))
-						                   ,value-expression)
-					                   ,key ,default)
+                   for expr = `(loopy--destructure-map-elt
+                                (loopy--destructure-gv-list-rest-simplifier
+                                 ,value-expression
+				 ,(+ (length pos-vars)
+				     (length opt-vars)))
+				,key ,default)
                    if default
                    do (signal 'loopy-generalized-default
                               (list var-form value-expression))
