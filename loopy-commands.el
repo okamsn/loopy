@@ -1123,6 +1123,83 @@ NAME is the name of the command."
       (loopy--pre-conditions (< ,value-holder ,num-steps)))))
 
 ;;;;;; Seq
+(defun loopy--distribute-seq-elements (&rest sequences)
+  "Distribute the elements of SEQUENCES into a vector of lists.
+
+For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (let ((vars (cl-loop for _ in sequences
+                       collect (gensym "seq-var-")))
+        (reverse-order (reverse sequences))
+        (result-sym (gensym)))
+
+    (cl-loop with expansion = `(seq-doseq (,(cl-first vars) ,(cl-first reverse-order))
+                                 (setq ,result-sym
+                                       (cons (list ,@(reverse vars))
+                                             ,result-sym)))
+             for var in (cl-rest vars)
+             for sequence in (cl-rest reverse-order)
+             do (setq expansion `(seq-doseq  (,var ,sequence)
+                                   ,expansion))
+             finally return `(let ((,result-sym nil))
+                               ,expansion
+                               (vconcat (nreverse ,result-sym))))))
+
+(loopy--defiteration seq
+  "Parse the `seq' command as (seq VAR EXPR [EXPRS] &key KEYS).
+
+Because some packages implement custom sequences as lists internally, no
+special consideration is given to whether EXPR is a list.  See, for
+example, the previous implementation of the Stream package on ELPA.
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', `:below', and
+`:test'.
+
+- `:index' names a variable used to store the accessed index of
+  the seq.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase.
+
+If multiple seq values are given, their elements are
+distributed using the function `loopy--distribute-seq-elements'."
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below :test)
+  :other-vals t
+  :instructions
+  (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                       :decreasing going-down :test test :test-given test-given)
+      (loopy--find-start-by-end-dir-vals opts)
+    (loopy--instr-let-const* ((by by)
+                              (test test)
+                              (seq-val (if other-vals
+                                           (apply #'loopy--distribute-seq-elements
+                                                  val other-vals)
+                                         val))
+                              (end (cond
+                                    (ending-index ending-index)
+                                    (going-down 0)
+                                    (t `(1- (seq-length ,seq-val))))))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((seq-index (cond
+                                          (starting-index starting-index)
+                                          (going-down `(1- (seq-length ,seq-val)))
+                                          (t 0))
+                                         (plist-get opts :index)))
+          loopy--iteration-vars
+        `((loopy--pre-conditions (funcall ,test ,seq-index ,end))
+          ,@(loopy--destructure-for-iteration-command
+             var `(seq-elt ,seq-val ,seq-index))
+          (loopy--latter-body
+           (setq ,seq-index (,(cond
+                               (going-down #'-)
+                               (test-given #'+)
+                               (t #'+))
+                             ,seq-index ,by))))))))
+
+;;;;;; Sequence
 ;; TODO: Turn this into a function.
 (defmacro loopy--distribute-sequence-elements (&rest sequences)
   "Distribute the elements of SEQUENCES into a vector of lists.
@@ -1144,8 +1221,8 @@ For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
                                ,expansion
                                (vconcat (nreverse result))))))
 
-(loopy--defiteration seq
-  "Parse the `seq' command as (seq VAR EXPR [EXPRS] &key KEYS).
+(loopy--defiteration sequence
+  "Parse the `sequence' command as (sequence VAR EXPR [EXPRS] &key KEYS).
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 `:upfrom', `:to', `:downto', `:upto', `:above', `:below', and
@@ -1245,9 +1322,9 @@ distributed using the function `loopy--distribute-sequence-elements'."
                      (setq ,seq-index (,(if going-down #'- #'+)
                                        ,seq-index ,by)))))))))))))
 
-;;;;;; Seq Index
-(loopy--defiteration seq-index
-  "Parse the `seq-index' command as (seq-index VAR VAL &key KEYS).
+;;;;;; Sequence Index
+(loopy--defiteration sequence-index
+  "Parse the `sequence-index' command as (sequence-index VAR VAL &key KEYS).
 
 KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
 `:to', `:downto', `:upto', `:above', or `:below'.
@@ -1267,14 +1344,15 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
         (loopy--find-start-by-end-dir-vals opts)
       (loopy--instr-let-var* ((seq-index-val val)
                               (seq-index-index (cond (key-start)
-                                                     (decreasing `(1- (length ,seq-index-val)))
+                                                     (decreasing
+                                                      `(1- (seq-length ,seq-index-val)))
                                                      (t 0))
                                                (unless with-bound var)))
           loopy--iteration-vars
         (loopy--instr-let-const* ((seq-index-index-end (or key-end
                                                            (if decreasing
                                                                0
-                                                             `(1- (length ,seq-index-val)))))
+                                                             `(1- (seq-length ,seq-index-val)))))
                                   (test key-test)
                                   (by by))
             loopy--iteration-vars
@@ -1289,7 +1367,60 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
 
 ;;;;;; Seq Ref
 (loopy--defiteration seq-ref
-  "Parse the `seq' command as (seq VAR EXPR &key KEYS).
+  "Parse the `seq-ref' command as (seq-ref VAR EXPR &key KEYS).
+
+Because some packages implement custom sequences as lists internally, no
+special consideration is given to whether EXPR is a list.  See, for
+example, the previous implementation of the Stream package on ELPA.
+
+KEYS is one or several of `:index', `:by', `:from', `:downfrom',
+`:upfrom', `:to', `:downto', `:upto', `:above', `:below', and
+`:test'.
+
+- `:index' names a variable used to store the accessed index of
+  the seq.
+- `:by' is the increment step size as a positive value.
+- `:from', `:downfrom', and `:upfrom' name the starting index
+- `:to', `:downto', and `:upto' name the ending index (inclusive)
+- `:below' and `:above' name an exclusive ending index.
+
+`:downto' and `:downfrom' make the index decrease instead of increase."
+  :keywords (:index :by :from :downfrom :upfrom :to :downto :upto :above :below :test)
+  :other-vals t
+  :instructions
+  (loopy--plist-bind ( :start starting-index :end ending-index :by (by 1)
+                       :decreasing going-down :test test :test-given test-given)
+      (loopy--find-start-by-end-dir-vals opts)
+    (loopy--instr-let-const* ((by by)
+                              (test test)
+                              (seq-val (if other-vals
+                                           (apply #'loopy--distribute-seq-elements
+                                                  val other-vals)
+                                         val))
+                              (end (cond
+                                    (ending-index ending-index)
+                                    (going-down 0)
+                                    (t `(1- (seq-length ,seq-val))))))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((seq-index (cond
+                                          (starting-index starting-index)
+                                          (going-down `(1- (seq-length ,seq-val)))
+                                          (t 0))
+                                         (plist-get opts :index)))
+          loopy--iteration-vars
+        `((loopy--pre-conditions (funcall ,test ,seq-index ,end))
+          ,@(loopy--destructure-for-generalized-command
+             var `(seq-elt ,seq-val ,seq-index))
+          (loopy--latter-body
+           (setq ,seq-index (,(cond
+                               (going-down #'-)
+                               (test-given #'+)
+                               (t #'+))
+                             ,seq-index ,by))))))))
+
+;;;;;; Sequence Ref
+(loopy--defiteration sequence-ref
+  "Parse the `sequence-ref' command as (sequence-ref VAR EXPR &key KEYS).
 
 KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 `:upfrom', `:to', `:downto', `:upto', `:above', or `:below'.

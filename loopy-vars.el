@@ -89,7 +89,8 @@ Definition must exist.  Neither argument need be quoted."
     (set-prev prev prev-expr)
     (sequence elements)
     (sequence-index sequencei seqi listi arrayi stringi)
-    (sequence-ref seqf sequencef sequencingf elements-ref))
+    (seq-ref seqf seqingf)
+    (sequence-ref sequencef sequencingf elements-ref))
   "Aliases to be removed from the documentation.")
 
 ;;;###autoload
@@ -142,13 +143,15 @@ Definition must exist.  Neither argument need be quoted."
     (set             . (setting))
     (set-accum       . (setting-accum))
     (set-prev        . (setting-prev prev-set))
-    (sequence        . (sequencing seq seqing))
+    (sequence        . (sequencing))
+    (seq             . (seqing))
     (sequence-index       . ( seq-index seqing-index
                               sequencing-index
                               list-index listing-index
                               array-index arraying-index
                               string-index stringing-index))
-    (sequence-ref    . (seqing-ref seq-ref sequencing-ref))
+    (seq-ref         . (seqing-ref))
+    (sequence-ref    . (sequencing-ref))
     (skip            . (skipping continue continuing))
     (skip-from       . (skipping-from continue-from continuing-from))
     (stream          . (streaming))
@@ -213,9 +216,11 @@ true names and lists of aliases.
     (reduce       . loopy--parse-reduce-command)
     (return       . loopy--parse-return-command)
     (return-from  . loopy--parse-return-from-command)
-    (sequence       . loopy--parse-seq-command)
-    (sequence-index . loopy--parse-seq-index-command)
-    (sequence-ref   . loopy--parse-seq-ref-command)
+    (seq          . loopy--parse-seq-command)
+    (sequence     . loopy--parse-sequence-command)
+    (sequence-index . loopy--parse-sequence-index-command)
+    (seq-ref      . loopy--parse-seq-ref-command)
+    (sequence-ref . loopy--parse-sequence-ref-command)
     (set          . loopy--parse-set-command)
     (set-prev     . loopy--parse-set-prev-command)
     (skip         . loopy--parse-skip-command)
