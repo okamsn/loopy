@@ -248,7 +248,8 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   (should (seqp (make-loopy--test-custom-seq :value 0 :next nil))))
 
 (cl-defmethod seq-do (func (seq loopy--test-custom-seq))
-  (message "Running `seq-do' for custom seqs.")
+  (cl-assert (loopy--test-custom-seq-p seq)
+             "Non-custom-seq passed to `seq-do' for custom seqs")
   (while seq
     (funcall func (loopy--test-custom-seq-value seq))
     (setq seq (loopy--test-custom-seq-next seq))))
@@ -266,6 +267,14 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
                                           :next nil))))
                    res))))
 
+(ert-deftest custom-seq-do-not-affect-streams ()
+  "We're seeing some odd behavior in the `substream' tests after
+writing a `seq-do' method for the custom seq."
+  (should (equal '(2 1 0)
+                 (let ((res))
+                   (seq-do (lambda (x) (push x res))
+                           (stream (vector 0 1 2)))
+                   res))))
 
 (cl-defmethod seq-into-sequence ((seq loopy--test-custom-seq))
   (let ((res nil))
