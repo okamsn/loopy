@@ -254,6 +254,29 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
     (funcall func (loopy--test-custom-seq-value seq))
     (setq seq (loopy--test-custom-seq-next seq))))
 
+(eval-and-compile
+  (cl-generic-define-generalizer stream--generalizer
+    11
+    (lambda (name &rest _)
+      `(when (streamp ,name)
+         'stream))
+    (lambda (tag &rest _)
+      (when (eq tag 'stream)
+        '(stream))))
+
+  (cl-defmethod cl-generic-generalizers ((_specializer (eql stream)))
+    "Support for `stream' specializers."
+    (list stream--generalizer))
+
+  (cl-defmethod seq-do (function (stream stream))
+    "Evaluate FUNCTION for each element of STREAM eagerly, and return nil.
+
+`seq-do' should never be used on infinite streams without some
+kind of nonlocal exit."
+    (while (not (stream-empty-p stream))
+      (funcall function (stream-first stream))
+      (setq stream (stream-rest stream)))))
+
 (ert-deftest custom-seq-do ()
   (should (equal '(2 1 0)
                  (let ((res))
