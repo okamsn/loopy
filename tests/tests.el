@@ -241,13 +241,14 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
   (value)
   (next))
 
-(cl-defmethod seqp ((seq loopy--test-custom-seq))
+(cl-defmethod seqp ((_seq loopy--test-custom-seq))
   t)
 
 (ert-deftest custom-seq-seqp ()
   (should (seqp (make-loopy--test-custom-seq :value 0 :next nil))))
 
 (cl-defmethod seq-do (func (seq loopy--test-custom-seq))
+  (message "Running `seq-do' for custom seqs.")
   (while seq
     (funcall func (loopy--test-custom-seq-value seq))
     (setq seq (loopy--test-custom-seq-next seq))))
@@ -3762,6 +3763,7 @@ are records, which are sequences, so they still work in that way."
 (loopy-deftest substream-:by-const
   :result '((0 1 2 3 4 5 6) (2 3 4 5 6) (4 5 6) (6))
   :body ((substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :by 2)
+         (do (message "Stream: %S" i))
          (set res nil)
          (do (seq-do (lambda (x) (push x res))
                      i))
