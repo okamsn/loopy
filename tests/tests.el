@@ -25,6 +25,7 @@
 (require 'subr-x)
 (require 'package)
 (require 'compat)
+(require 'stream)
 (require 'map)
 (require 'ert)
 (require 'generator)
