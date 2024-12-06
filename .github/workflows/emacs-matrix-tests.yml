@@ -47,7 +47,7 @@ jobs:
     - name: Install packages
       run: emacs -batch -l tests/install-script.el
     - name: Basic tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el --eval "(let ((ert-batch-backtrace-line-length nil)) (ert-run-tests-batch-and-exit))"
     - name: Seq tests
       run: emacs -batch -l tests/load-path.el -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
     - name: Pcase tests
