@@ -25,7 +25,8 @@
 (require 'subr-x)
 (require 'package)
 (require 'compat)
-;; (require 'stream)
+(require 'seq)
+(require 'stream)
 (require 'map)
 (require 'ert)
 (require 'generator)
@@ -247,133 +248,14 @@ SYMS-STR are the string names of symbols from `loopy-iter-bare-commands'."
 (ert-deftest custom-seq-seqp ()
   (should (seqp (make-loopy--test-custom-seq :value 0 :next nil))))
 
+;; For some reason, this _does_ affect streams.
+;;
 (cl-defmethod seq-do (func (seq loopy--test-custom-seq))
   (cl-assert (loopy--test-custom-seq-p seq)
              "Non-custom-seq passed to `seq-do' for custom seqs")
   (while seq
     (funcall func (loopy--test-custom-seq-value seq))
     (setq seq (loopy--test-custom-seq-next seq))))
-
-(eval-and-compile
-
-  (cl-defstruct (stream (:constructor stream--make-stream)
-                        (:conc-name stream--)
-                        (:predicate streamp)
-                        :named)
-
-    "A lazily evaluated sequence, compatible with the `seq' library's functions."
-
-    (evaluated
-     nil
-     :type boolean
-     :documentation "Whether the head and tail of the stream are accessible.
-
-This value is set to t via the function `stream--force' after it
-calls the updater function.")
-
-    (first
-     nil
-     :type t
-     :documentation "The first element of the stream.")
-
-    (rest
-     nil
-     :type (or stream null)
-     :documentation "The rest of the stream, which is itself a stream.")
-
-    (empty
-     nil
-     :type boolean
-     :documentation "Whether the evaluated stream is empty.
-
-A stream is empty if the updater function returns nil when
-`stream--force' evaluates the stream.")
-
-    (updater
-     nil
-     :type (or function null)
-     :documentation "Function that returns the head and tail of the stream when called.
-
-The updater function returns the head and tail in a cons cell.
-If it returns nil, then the stream is empty and `empty' is
-set to t.  After this function is called, assuming no errors were signaled,
-`evaluated' is set to t.
-
-In the case of the canonical empty stream (see the variable `stream-empty'),
-this slot is nil."))
-
-  (defmacro stream-make (&rest body)
-    "Return a stream built from BODY.
-
-BODY must return a cons cell whose car would be the head of a
-stream and whose cdr would be the tail of a stream.  The cdr must
-be a stream itself in order to be a valid tail.  Alternatively,
-BODY may return nil, in which case the stream is marked empty
-when the stream is evaluated."
-    (declare (debug t))
-    `(stream--make-stream :evaluated nil
-                          :updater (lambda () ,@body)))
-
-  (defun stream--force (stream)
-    "Evaluate and return the STREAM.
-
-If the output of the updater function is nil, then STREAM is
-marked as empty.  Otherwise, the output of the updater function
-is used to set the head and the tail of the stream."
-    ;; Check explicitly so that we can avoid checking
-    ;; in accessors by setting safety to 0 via `cl-declaim'.
-    (cl-check-type stream stream)
-    (if (stream--evaluated stream)
-        stream
-      (pcase (funcall (stream--updater stream))
-        (`(,head . ,tail)
-         (setf (stream--first stream) head
-               (stream--rest stream) tail))
-        ((pred null)
-         (setf (stream--empty stream) t))
-        (bad-output
-         (error "Bad output from stream updater: %S"
-                bad-output)))
-      (setf (stream--evaluated stream) t)
-      stream))
-
-
-  (defconst stream-empty
-    (stream--make-stream :evaluated t
-                         :first nil
-                         :rest nil
-                         :empty t
-                         :updater nil)
-    "The empty stream.")
-
-  (defun stream-empty ()
-    "Return the empty stream."
-    stream-empty)
-
-  (defun stream-empty-p (stream)
-    "Return non-nil if STREAM is empty, nil otherwise."
-    (stream--empty (stream--force stream)))
-
-  (defun stream-first (stream)
-    "Return the first element of STREAM.
-Return nil if STREAM is empty."
-    (stream--first (stream--force stream)))
-
-  (defun stream-rest (stream)
-    "Return a stream of all but the first element of STREAM."
-    (setq stream (stream--force stream))
-    (if (stream--empty stream)
-        (stream-empty)
-      (stream--rest stream)))
-
-  (cl-defmethod seq-do (function (stream stream))
-    "Evaluate FUNCTION for each element of STREAM eagerly, and return nil.
-
-`seq-do' should never be used on infinite streams without some
-kind of nonlocal exit."
-    (while (not (stream-empty-p stream))
-      (funcall function (stream-first stream))
-      (setq stream (stream-rest stream)))))
 
 (ert-deftest custom-seq-do ()
   (should (equal '(2 1 0)
