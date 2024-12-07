@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org4aaf858
+@float Listing,org3561138
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org57f8a2b
+@float Listing,orgf6ecf29
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgcb879ea
+@float Listing,orgbc59c53
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -2250,12 +2250,10 @@ Again, this can be disabled by setting @samp{unique} to nil.
 @end lisp
 @end table
 
-@findex seq
 @findex sequence
-@findex seqing
 @findex sequencing
 @table @asis
-@item @samp{(sequence|seq VAR EXPR [EXPRS] &key KEYS)}
+@item @samp{(sequence VAR EXPR [EXPRS] &key KEYS)}
 Loop through the sequence
 @samp{EXPR}, binding @samp{VAR} to the elements of the sequence (a list or an array).
 Because it is more generic, @samp{sequence} is somewhat less efficient than the
@@ -2265,11 +2263,11 @@ Because it is more generic, @samp{sequence} is somewhat less efficient than the
 For more on sequences, see @ref{Sequences Arrays Vectors,,,elisp,}.  This command
 works with the basic sequences understood by the Emacs Lisp functions @code{length}
 and @code{elt}.  It does not work with the generic sequences understood by the
-library @samp{seq.el}.
+library @samp{seq.el}.  For those, use the @samp{seq} command.
 
 @end quotation
 
-This command also has the aliases @samp{sequencing} and @samp{seqing}.
+This command also has the alias @samp{sequencing}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
@@ -2315,6 +2313,51 @@ resulting sequence of distributed elements.
 
 ;; => ((1 3) (2 3))
 (loopy (sequence i [1 2] '(3 4) :by 2)
+       (collect i))
+@end lisp
+@end table
+
+@findex seq
+@findex seqing
+@table @asis
+@item @samp{(seq VAR EXPR [EXPRS] &key KEYS)}
+For generic a sequence implementing the
+features of the library @samp{seq.el}, loop through the generic sequence @samp{EXPR},
+binding @samp{VAR} to the elements of the sequence.  Because it is more generic,
+@samp{seq} can be slower than the @samp{sequence} command, which in turn is somewhat
+less efficient than the @samp{list} and @samp{array} commands.
+
+If multiple generic sequences are given, then these keyword arguments apply to
+the resulting generic sequence of distributed elements.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
+variable used to store the index being accessed.  For the others, see the
+@samp{numbers} command.
+
+This command also has the alias @samp{seqing}.
+
+The @samp{seq} command naively loops through the generic sequence using @code{seq-elt}
+and @code{seq-length}.  Because other packages might build custom sequences using
+lists, no special consideration is made for optimizing the @samp{seq} command when
+given a list.
+
+Because the @samp{seq} command currently uses the function @code{seq-length} to detect
+when to leave the loop, it does not work with infinite sequences.  For
+infinite sequences, consider using the @samp{stream} command.
+
+@lisp
+;; => (0 2 4)
+(loopy (seq i [0 1 2 3 4 5] :by 2)
+       (collect i))
+
+;; => (5 3 1)
+(loopy (seq i '(0 1 2 3 4 5 6)
+            :downfrom 5 :by 2 :to 1)
+       (collect i))
+
+;; => ((1 3) (2 3))
+(loopy (seq i [1 2] '(3 4) :by 2)
        (collect i))
 @end lisp
 @end table
@@ -2688,15 +2731,13 @@ duplicate's value.
 
 @findex sequence-ref
 @findex sequencing-ref
-@findex seq-ref
-@findex seqing-ref
 @table @asis
 @item @samp{(sequence-ref|seq-ref VAR EXPR &key KEYS)}
 Loop
 through the elements of the sequence @samp{EXPR}, binding @samp{VAR} as a
 @code{setf}-able place.
 
-This command also has the aliases @samp{sequencing-ref} and @samp{seqing-ref}.
+This command also has the aliases @samp{sequencing-ref}.
 
 @samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
 @samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
@@ -2719,6 +2760,56 @@ variable used to store the index being accessed.  For others, see the
 ;; => "0123456a8a"
 (loopy (with (my-str (copy-sequence "0123456789")))
        (sequence-ref i my-str :downto 6 :by 2 )
+       (do (setf i ?a))
+       (finally-return my-str))
+@end lisp
+@end table
+
+@findex seq-ref
+@findex seqing-ref
+@table @asis
+@item @samp{(seq-ref VAR EXPR &key KEYS)}
+Loop through the elements of the generic
+sequence @samp{EXPR}, via the features of the library @samp{seq.el}, binding @samp{VAR} as a
+@code{setf}-able place.
+
+@quotation Note
+Not all generic sequences are mutable, so not all generic sequences work as
+a @code{setf}-able place.
+
+@end quotation
+
+This command also has the alias @samp{seqing-ref}.
+
+@samp{KEYS} is one or several of @samp{from}, @samp{upfrom}, @samp{downfrom}, @samp{to}, @samp{upto},
+@samp{downto}, @samp{above}, @samp{below}, @samp{by}, @samp{test}, and @samp{index}.  @samp{index} names the
+variable used to store the index being accessed.  For others, see the
+@samp{numbers} command.
+
+The @samp{seq-ref} command naively loops through the generic sequence using
+@code{seq-elt} and @code{seq-length}.  Because other packages might build custom
+sequences using lists, no special consideration is made for optimizing the
+@samp{seq-ref} command when given a list.
+
+Because the @samp{seq} command currently uses the function @code{seq-length} to detect
+when to leave the loop, it does not work with infinite sequences.
+
+@lisp
+;; => (7 7 7 7)
+(loopy (with (my-seq (list 1 2 3 4)))
+       (seq-ref i my-seq)
+       (do (setf i 7))
+       (finally-return my-seq))
+
+;; => (0 cat 2 cat 4 cat 6 cat 8 cat)
+(loopy (with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
+       (seq-ref i my-list :from 1 :by 2 )
+       (do (setf i 'cat))
+       (finally-return my-list))
+
+;; => "0123456a8a"
+(loopy (with (my-str (copy-sequence "0123456789")))
+       (seq-ref i my-str :downto 6 :by 2 )
        (do (setf i ?a))
        (finally-return my-str))
 @end lisp
@@ -4678,7 +4769,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,org024caac
+@float Listing,org50f63e8
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

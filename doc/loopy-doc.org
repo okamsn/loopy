@@ -2073,11 +2073,9 @@ source sequences.
            (collect (list key val)))
   #+end_src
 
-#+findex: seq
 #+findex: sequence
-#+findex: seqing
 #+findex: sequencing
-- =(sequence|seq VAR EXPR [EXPRS] &key KEYS)= :: Loop through the sequence
+- =(sequence VAR EXPR [EXPRS] &key KEYS)= :: Loop through the sequence
   =EXPR=, binding =VAR= to the elements of the sequence (a list or an array).
   Because it is more generic, =sequence= is somewhat less efficient than the
   =list= and =array= commands.
@@ -2087,10 +2085,10 @@ source sequences.
   For more on sequences, see [[info:elisp#Sequences Arrays Vectors]].  This command
   works with the basic sequences understood by the Emacs Lisp functions ~length~
   and ~elt~.  It does not work with the generic sequences understood by the
-  library =seq.el=.
+  library =seq.el=.  For those, use the =seq= command.
   #+end_quote
 
-  This command also has the aliases =sequencing= and =seqing=.
+  This command also has the alias =sequencing=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
@@ -2138,6 +2136,48 @@ source sequences.
     (loopy (sequence i [1 2] '(3 4) :by 2)
            (collect i))
   #+END_SRC
+
+#+findex: seq
+#+findex: seqing
+- =(seq VAR EXPR [EXPRS] &key KEYS)= :: For generic a sequence implementing the
+  features of the library =seq.el=, loop through the generic sequence =EXPR=,
+  binding =VAR= to the elements of the sequence.  Because it is more generic,
+  =seq= can be slower than the =sequence= command, which in turn is somewhat
+  less efficient than the =list= and =array= commands.
+
+  If multiple generic sequences are given, then these keyword arguments apply to
+  the resulting generic sequence of distributed elements.
+
+  =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+  =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
+  variable used to store the index being accessed.  For the others, see the
+  =numbers= command.
+
+  This command also has the alias =seqing=.
+
+  The =seq= command naively loops through the generic sequence using ~seq-elt~
+  and ~seq-length~.  Because other packages might implement custom sequences
+  using lists, no special consideration is made for optimizing the =seq= command
+  when given a list.
+
+  Because the =seq= command currently uses the function ~seq-length~ to detect
+  when to leave the loop, it does not work with infinite sequences.  For
+  infinite sequences, consider using the =stream= command.
+
+  #+begin_src emacs-lisp
+    ;; => (0 2 4)
+    (loopy (seq i [0 1 2 3 4 5] :by 2)
+           (collect i))
+
+    ;; => (5 3 1)
+    (loopy (seq i '(0 1 2 3 4 5 6)
+                :downfrom 5 :by 2 :to 1)
+           (collect i))
+
+    ;; => ((1 3) (2 3))
+    (loopy (seq i [1 2] '(3 4) :by 2)
+           (collect i))
+  #+end_src
 
 #+findex: stream
 #+findex: streaming
@@ -2262,7 +2302,8 @@ iterate.
   - =array-index=, =arraying-index=
   - =list-index=, =listing-index=
   - =string-index=, =stringing-index=
-  - =sequencing-index=, =seq-index=, =seqing-index=
+  - =sequencing-index=
+  -  =seq-index=, =seqing-index=
 
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
@@ -2486,13 +2527,10 @@ the accessed index during the loop.
 
 #+findex: sequence-ref
 #+findex: sequencing-ref
-#+findex: seq-ref
-#+findex: seqing-ref
-- =(sequence-ref|seq-ref VAR EXPR &key KEYS)= :: Loop
-  through the elements of the sequence =EXPR=, binding =VAR= as a
-  ~setf~-able place.
+- =(sequence-ref VAR EXPR &key KEYS)= :: Loop through the elements of the
+  sequence =EXPR= (an array or list), binding =VAR= as a ~setf~-able place.
 
-  This command also has the aliases =sequencing-ref= and =seqing-ref=.
+  This command also has the aliases =sequencing-ref=.
 
   =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
   =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
@@ -2515,6 +2553,53 @@ the accessed index during the loop.
     ;; => "0123456a8a"
     (loopy (with (my-str (copy-sequence "0123456789")))
            (sequence-ref i my-str :downto 6 :by 2 )
+           (do (setf i ?a))
+           (finally-return my-str))
+  #+END_SRC
+
+#+findex: seq-ref
+#+findex: seqing-ref
+- =(seq-ref VAR EXPR &key KEYS)= :: Loop through the elements of the generic
+  sequence =EXPR=, via the features of the library =seq.el=, binding =VAR= as a
+  ~setf~-able place.
+
+  #+attr_texinfo: :tag Note
+  #+begin_quote
+    Not all generic sequences are mutable, so not all generic sequences work as
+    a ~setf~-able place.
+  #+end_quote
+
+  =KEYS= is one or several of =from=, =upfrom=, =downfrom=, =to=, =upto=,
+  =downto=, =above=, =below=, =by=, =test=, and =index=.  =index= names the
+  variable used to store the index being accessed.  For others, see the
+  =numbers= command.
+
+  This command also has the alias =seqing-ref=.
+
+  The =seq-ref= command naively loops through the generic sequence using
+  ~seq-elt~ and ~seq-length~.  Because other packages might implement custom
+  sequences using lists, no special consideration is made for optimizing the
+  =seq-ref= command when given a list.
+
+  Because the =seq-ref= command currently uses the function ~seq-length~ to
+  detect when to leave the loop, it does not work with infinite sequences.
+
+  #+BEGIN_SRC emacs-lisp
+    ;; => (7 7 7 7)
+    (loopy (with (my-seq (list 1 2 3 4)))
+           (seq-ref i my-seq)
+           (do (setf i 7))
+           (finally-return my-seq))
+
+    ;; => (0 cat 2 cat 4 cat 6 cat 8 cat)
+    (loopy (with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
+           (seq-ref i my-list :from 1 :by 2 )
+           (do (setf i 'cat))
+           (finally-return my-list))
+
+    ;; => "0123456a8a"
+    (loopy (with (my-str (copy-sequence "0123456789")))
+           (seq-ref i my-str :downto 6 :by 2 )
            (do (setf i ?a))
            (finally-return my-str))
   #+END_SRC
@@ -4504,12 +4589,14 @@ create a list if more than one return value is given.
       - =arraying-index=
       - =listing-index=
       - =sequencing-index=
+      - =seqing-index=
       - =stringing-index=
     - Sequence Reference Iteration Command Names:
       - =arraying-ref=
       - =listing-ref=
       - =mapping-ref=
       - =sequencing-ref=
+      - =seqing-ref=
       - =stringing-ref=
   - Accumulation Commands:
     - =accumulating=

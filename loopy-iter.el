@@ -143,6 +143,7 @@ Without these keywords, one must use one of the names given in
     returning-from
     seqing
     seqing-index
+    seqing-ref
     sequencing
     sequencing-index
     sequencing-ref

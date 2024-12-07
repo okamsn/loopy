@@ -2269,7 +2269,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((collect . collecting)
               (cycle . cycling)))
 
-;;;;; Seq
+;;;;; Sequence
 (loopy-deftest sequence
   :result t
   :body ((_cmd l '(97 98 99 100 101))
@@ -2280,24 +2280,37 @@ Using numbers directly will use less variables and more efficient code."
              (return nil))
          (finally-return t))
   :repeat _cmd
-  :loopy ((_cmd . (seq sequence seqing sequencing elements)))
-  :iter-keyword ((_cmd . (seq sequence seqing sequencing elements))
+  :loopy ((_cmd . (sequence sequencing elements)))
+  :iter-keyword ((_cmd . (sequence sequencing elements))
                  (return . return))
-  :iter-bare ((seq . (seqing sequencing))
+  :iter-bare ((sequence . (sequencing))
               (return . returning)))
 
-(loopy-deftest seq-destructuring
-  :doc "Check that `seq' implements destructuring, not the destructuring itself."
+(loopy-deftest sequence-not-seq
+  :doc "Check that `sequence' does not correctly work on `seq'.
+If it does, we confused them somewhere in the setup code.  Custom types
+are records, which are sequences, so they still work in that way."
+  :result '(--stream-fresh--)
+  :body ((with (my-seq (stream '(1) )))
+         (sequence i my-seq)
+         (collect i))
+  :loopy t
+  :iter-keyword (sequence collect)
+  :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+(loopy-deftest sequence-destructuring
+  :doc "Check that `sequence' implements destructuring, not the destructuring itself."
   :result '(97 98)
   :multi-body t
-  :body [((seq (a . b) [(97 . 98)]) (finally-return a b))
-         ((seq [a b] '([97 98])) (finally-return a b))
-         ((seq [a b] ["ab"]) (finally-return a b))]
+  :body [((sequence (a . b) [(97 . 98)]) (finally-return a b))
+         ((sequence [a b] '([97 98])) (finally-return a b))
+         ((sequence [a b] ["ab"]) (finally-return a b))]
   :loopy t
-  :iter-keyword (seq)
-  :iter-bare ((seq . sequencing)))
+  :iter-keyword (sequence)
+  :iter-bare ((sequence . sequencing)))
 
-(loopy-deftest seq-:by
+(loopy-deftest sequence-:by
   :result '(0 2 4 6 8 10)
   :multi-body t
   :body [((sequence i (list 0 1 2 3 4 5 6 7 8 9 10) :by 2)
@@ -2309,7 +2322,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
-(loopy-deftest seq-:by-just-once
+(loopy-deftest sequence-:by-just-once
   :doc "`:by' should only be evaluated once."
   :result '(1 3 5)
   :multi-body t
@@ -2331,7 +2344,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
-(loopy-deftest seq-end-just-once
+(loopy-deftest sequence-end-just-once
   :doc "`:by' should only be evaluated once."
   :result '(0 1 2)
   :multi-body t
@@ -2374,7 +2387,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
-(loopy-deftest seq-:index
+(loopy-deftest sequence-:index
   :result '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
   :multi-body t
   :body [((sequence i [4 3 2 1 0] :index cat)
@@ -2386,7 +2399,7 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
-(loopy-deftest seq-:from-:downto-:by
+(loopy-deftest sequence-:from-:downto-:by
   :result '(8 6 4 2)
   :body ((sequence i [0 1 2 3 4 5 6 7 8 9 10]
                    :from 8 :downto 1 :by 2)
@@ -2396,79 +2409,79 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence . sequencing)
               (collect . collecting)))
 
-(loopy-deftest seq-:upto
-  :result '(0 1 2 3 4 5 6 7)
-  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
-          (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:upto
+               :result '(0 1 2 3 4 5 6 7)
+               :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :upto 7)
+                       (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:to
-  :result '(0 1 2 3 4 5 6 7)
-  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
-          (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:to
+               :result '(0 1 2 3 4 5 6 7)
+               :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :to 7)
+                       (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:downto
-  :result '(10 9 8 7 6 5 4 3)
-  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
-          (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:downto
+               :result '(10 9 8 7 6 5 4 3)
+               :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :downto 3)
+                       (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:above
-  :result '(10 9 8)
-  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
-          (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:above
+               :result '(10 9 8)
+               :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :above 7)
+                       (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:below
-  :result '(0 1 2)
-  :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
-          (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:below
+               :result '(0 1 2)
+               :body  ((sequence i [0 1 2 3 4 5 6 7 8 9 10] :below 3)
+                       (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:downfrom
-  :result '(5 4 3 2 1 0)
-  :body ((sequence i [0 1 2 3 4 5] :downfrom 5)
-         (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:downfrom
+               :result '(5 4 3 2 1 0)
+               :body ((sequence i [0 1 2 3 4 5] :downfrom 5)
+                      (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-:upfrom
-  :result '(2 3 4 5)
-  :body ((sequence i [0 1 2 3 4 5] :upfrom 2)
-         (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-:upfrom
+               :result '(2 3 4 5)
+               :body ((sequence i [0 1 2 3 4 5] :upfrom 2)
+                      (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-multi-seq
-  :result '((1 3) (1 4) (2 3) (2 4))
-  :body ((sequence i [1 2] '(3 4))
-         (collect i))
-  :loopy t
-  :iter-keyword (sequence collect)
-  :iter-bare ((sequence . sequencing)
-              (collect . collecting)))
+(loopy-deftest sequence-multi-sequence
+               :result '((1 3) (1 4) (2 3) (2 4))
+               :body ((sequence i [1 2] '(3 4))
+                      (collect i))
+               :loopy t
+               :iter-keyword (sequence collect)
+               :iter-bare ((sequence . sequencing)
+                           (collect . collecting)))
 
-(loopy-deftest seq-multi-seq-:by
+(loopy-deftest sequence-multi-sequence-:by
   :result '((1 3)  (2 3))
   :body ((sequence i [1 2] '(3 4) :by 2)
          (collect i))
@@ -2522,6 +2535,298 @@ Using numbers directly will use less variables and more efficient code."
   :loopy t
   :iter-keyword (sequence collect)
   :iter-bare ((sequence . sequencing)
+              (collect . collecting)))
+
+;;;;; Seq
+(loopy-deftest seq
+  :result t
+  :body ((_cmd l '(97 98 99 100 101))
+         (_cmd a [97 98 99 100 101])
+         (_cmd s "abcde")
+         (_cmd c (stream '(97 98 99 100 101)))
+         (if (not (and (/= l a)
+                       (/= a s)
+                       (/= s c)))
+             (return nil))
+         (finally-return t))
+  :repeat _cmd
+  :loopy ((_cmd . (seq seqing)))
+  :iter-keyword ((_cmd . (seq seqing))
+                 (return . return))
+  :iter-bare ((_cmd . (seqing))
+              (return . returning)))
+
+(loopy-deftest seq-destructuring
+  :doc "Check that `seq' implements destructuring, not the destructuring itself."
+  :result '(97 98)
+  :multi-body t
+  :body [((seq (a . b) [(97 . 98)]) (finally-return a b))
+         ((seq [a b] '([97 98])) (finally-return a b))
+         ((seq [a b] ["ab"]) (finally-return a b))
+         ((seq [a b] (stream '("ab") )) (finally-return a b))]
+  :loopy t
+  :iter-keyword (seq)
+  :iter-bare ((seq . seqing)))
+
+(loopy-deftest seq-:by
+  :result '(0 2 4 6 8 10)
+  :multi-body t
+  :body [((seq i (list 0 1 2 3 4 5 6 7 8 9 10) :by 2)
+          (collect i))
+         ((seq i [0 1 2 3 4 5 6 7 8 9 10] :by 2)
+          (collect i))
+         ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :by 2)
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:by-just-once
+  :doc "`:by' should only be evaluated once."
+  :result '(1 3 5)
+  :multi-body t
+  :body [((with (times 0))
+          (seq i (vector 1 2 3 4 5 6) :by (progn
+                                            (cl-assert (= times 0))
+                                            (cl-incf times)
+                                            2))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (list 1 2 3 4 5 6) :by (progn
+                                          (cl-assert (= times 0))
+                                          (cl-incf times)
+                                          2))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream (list 1 2 3 4 5 6) )
+               :by (progn
+                     (cl-assert (= times 0))
+                     (cl-incf times)
+                     2))
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-end-just-once
+  :doc "`:by' should only be evaluated once."
+  :result '(0 1 2)
+  :multi-body t
+  :body [((with (times 0))
+          (seq i (stream (vector 0 1 2 3 4 5 6) )
+               :to (progn
+                     (cl-assert (= times 0))
+                     (cl-incf times)
+                     2))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream (vector 0 1 2 3 4 5 6) )
+               :upto (progn
+                       (cl-assert (= times 0))
+                       (cl-incf times)
+                       2))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream (vector 2 1 0) )
+               :downto (progn
+                         (cl-assert (= times 0))
+                         (cl-incf times)
+                         0))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream (vector 0 1 2 3 4 5 6) )
+               :below (progn
+                        (cl-assert (= times 0))
+                        (cl-incf times)
+                        3))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream (vector 2 1 0) )
+               :above (progn
+                        (cl-assert (= times 0))
+                        (cl-incf times)
+                        -1))
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:index
+  :result '((0 . 4) (1 . 3) (2 . 2) (3 . 1) (4 . 0))
+  :multi-body t
+  :body [((seq i [4 3 2 1 0] :index cat)
+          (collect (cons cat i)))
+         ((seq i (list 4 3 2 1 0) :index cat)
+          (collect (cons cat i)))
+         ((seq i (stream (list 4 3 2 1 0) )
+               :index cat)
+          (collect (cons cat i)))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:from-:downto-:by
+  :result '(8 6 4 2)
+  :body ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] )
+                   :from 8 :downto 1 :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:upto
+  :result '(0 1 2 3 4 5 6 7)
+  :body  ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :upto 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:to
+  :result '(0 1 2 3 4 5 6 7)
+  :body  ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :to 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:downto
+  :result '(10 9 8 7 6 5 4 3)
+  :body  ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :downto 3)
+          (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:above
+  :result '(10 9 8)
+  :body  ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :above 7)
+          (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:below
+  :result '(0 1 2)
+  :body  ((seq i (stream [0 1 2 3 4 5 6 7 8 9 10] ) :below 3)
+          (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:downfrom
+  :result '(5 4 3 2 1 0)
+  :body ((seq i (stream [0 1 2 3 4 5] ) :downfrom 5)
+         (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:upfrom
+  :result '(2 3 4 5)
+  :body ((seq i (stream [0 1 2 3 4 5] ) :upfrom 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-multi-seq
+  :result '((1 3) (1 4) (2 3) (2 4))
+  :body ((seq i [1 2] (stream '(3 4) ))
+         (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-multi-seq-:by
+  :result '((1 3)  (2 3))
+  :body ((seq i [1 2] (stream '(3 4) ) :by 2)
+         (collect i))
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:test
+  :result '(8 6 4 2)
+  :multi-body t
+  :body [((with (start 8)
+                (end 2)
+                (step -2))
+          (seq i [0 1 2 3 4 5 6 7 8 9 10]
+               :from start :to end :by step
+               :test #'>=)
+          (collect i))
+         ((with (start 8)
+                (end 2)
+                (step -2))
+          (seq i (stream [0 1 2 3 4 5 6 7 8 9 10] )
+               :from start :to end :by step
+               :test #'>=)
+          (collect i))
+         ((with (start 8)
+                (end 2)
+                (step -2))
+          (seq i '(0 1 2 3 4 5 6 7 8 9 10)
+               :from start :to end :by step
+               :test #'>=)
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
+              (collect . collecting)))
+
+(loopy-deftest seq-:test-just-once
+  :result '(2 4 6 8)
+  :multi-body t
+  :body [((with (times 0))
+          (seq i [0 1 2 3 4 5 6 7 8 9 10]
+               :from 2 :to 8 :by 2
+               :test (progn
+                       (cl-assert (= times 0))
+                       (cl-incf times)
+                       #'<=))
+          (collect i))
+
+         ((with (times 0))
+          (seq i '(0 1 2 3 4 5 6 7 8 9 10)
+               :from 2 :to 8 :by 2
+               :test (progn
+                       (cl-assert (= times 0))
+                       (cl-incf times)
+                       #'<=))
+          (collect i))
+
+         ((with (times 0))
+          (seq i (stream '(0 1 2 3 4 5 6 7 8 9 10) )
+               :from 2 :to 8 :by 2
+               :test (progn
+                       (cl-assert (= times 0))
+                       (cl-incf times)
+                       #'<=))
+          (collect i))]
+  :loopy t
+  :iter-keyword (seq collect)
+  :iter-bare ((seq . seqing)
               (collect . collecting)))
 
 ;;;;; Seq Index
@@ -2731,154 +3036,168 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((seq-index . sequencing-index)
               (collect . collecting)))
 
-;;;;; Seq Ref
-(loopy-deftest seq-ref
+;;;;; Sequence Ref
+(loopy-deftest sequence-ref
   :result '(7 7 7 7)
   :body ((with (my-seq '(1 2 3 4)))
          (_cmd i my-seq)
          (do (setf i 7))
          (finally-return my-seq))
   :repeat _cmd
-  :loopy ((_cmd . (sequence-ref sequencef seq-ref seqf)))
-  :iter-keyword ((_cmd . (sequence-ref sequencef seq-ref seqf))
+  :loopy ((_cmd . (sequence-ref sequencef sequence-ref)))
+  :iter-keyword ((_cmd . (sequence-ref sequencef sequence-ref))
                  (do . do))
   :iter-bare ((_cmd . (sequencing-ref))
               (do . ignore)))
 
-(loopy-deftest seq-ref-:by-array
+(loopy-deftest sequence-ref-not-seq
+  :doc "Check that `sequence-ref' does not correctly work on `seq'.
+If it does, we confused them somewhere in the setup code.  Custom types
+are records, which are sequences, so they still work in that way."
+  :result (record 7 7 7)
+  :body ((with (my-seq (stream '(1 2 3 4) )))
+         (sequence-ref i my-seq)
+         (do (setf i 7))
+         (finally-return my-seq))
+  :loopy t
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest sequence-ref-:by-array
   :result "a1a3a5a7a9"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :by 2)
+         (sequence-ref i my-str :by 2)
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:by-list
+(loopy-deftest sequence-ref-:by-list
   :result '(99 1 99 3 99 5 99 7 99 9 99)
   :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9 10) ))
-         (seq-ref i my-list :by 2)
+         (sequence-ref i my-list :by 2)
          (do (setf i 99))
          (finally-return my-list))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:by-just-once
+(loopy-deftest sequence-ref-:by-just-once
   :result "a1a3a5a7a9"
   :body ((with (my-str "0123456789")
                (times 0))
-         (seq-ref i my-str :by (progn
-                                 (cl-assert (= times 0))
-                                 (cl-incf times)
-                                 2))
+         (sequence-ref i my-str :by (progn
+                                      (cl-assert (= times 0))
+                                      (cl-incf times)
+                                      2))
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:by-:index
+(loopy-deftest sequence-ref-:by-:index
   :result  "a1a3a5a7a9"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :by 2 :index cat)
-         (do (setf (aref my-str cat) ?a))
+         (sequence-ref i my-str :by 2 :index cat)
+         (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:from-:by
+(loopy-deftest sequence-ref-:from-:by
   :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
   :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
-         (seq-ref i my-list :from 1 :by 2 )
+         (sequence-ref i my-list :from 1 :by 2 )
          (do (setf i 'cat))
          (finally-return my-list))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:downto-:by
+(loopy-deftest sequence-ref-:downto-:by
   :result  "0123456a8a"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :downto 6 :by 2 )
+         (sequence-ref i my-str :downto 6 :by 2 )
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:below
+(loopy-deftest sequence-ref-:below
   :result  "aaaaa56789"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :below 5)
+         (sequence-ref i my-str :below 5)
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:above
+(loopy-deftest sequence-ref-:above
   :result  "012345aaaa"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :above 5)
+         (sequence-ref i my-str :above 5)
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:above-list
+(loopy-deftest sequence-ref-:above-list
   :result  '(0 1 2 3 4 5 cat cat cat cat)
   :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
-         (seq-ref i my-list :above 5)
+         (sequence-ref i my-list :above 5)
          (do (setf i 'cat))
          (finally-return my-list))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:upto
+(loopy-deftest sequence-ref-:upto
   :result  "aaaaaa6789"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :upto 5)
+         (sequence-ref i my-str :upto 5)
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:upfrom-:by
+(loopy-deftest sequence-ref-:upfrom-:by
   :result  "0a2a4a6a8a"
   :body ((with (my-str "0123456789"))
-         (seq-ref i my-str :upfrom 1 :by 2 )
+         (sequence-ref i my-str :upfrom 1 :by 2 )
          (do (setf i ?a))
          (finally-return my-str))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
-(loopy-deftest seq-ref-:upfrom-:by-string
+(loopy-deftest sequence-ref-:upfrom-:by-string
   :result  '(0 cat 2 cat 4 cat 6 cat 8 cat)
   :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9)))
-         (seq-ref i my-list :upfrom 1 :by 2)
+         (sequence-ref i my-list :upfrom 1 :by 2)
          (do (setf i 'cat))
          (finally-return my-list))
   :loopy t
-  :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
 (loopy-deftest sequence-ref-:downfrom
@@ -2892,6 +3211,207 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((sequence-ref . sequencing-ref)
               (do . ignore)))
 
+(loopy-deftest sequence-ref-:by-literal
+  :doc "`sequence-ref' can use literal `:by' directly."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (start 2) (end 8)
+               (arr (cl-coerce (number-sequence 0 10) 'vector)))
+         (sequence-ref i arr :from start :to end :by 2)
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest sequence-ref-:by-variable
+  :doc "`sequence-ref' can use literal `:by' directly."
+  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :body ((with (start 2) (end 8) (step 2)
+               (arr (cl-coerce (number-sequence 0 10) 'vector)))
+         (sequence-ref i arr :from start :to end :by step)
+         (do (setf i 22))
+         (finally-return arr))
+  :loopy t
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
+              (do . ignore)))
+
+(loopy-deftest sequence-ref-destructuring
+  :doc "Check that `sequence-ref' implements destructuring. Not destructuring itself."
+  :result [(7 8 9) (7 8 9)]
+  :body ((with (my-seq [(1 2 3) (4 5 6)]))
+         (sequence-ref (i j k) my-seq)
+         (do (setf i 7)
+             (setf j 8)
+             (setf k 9))
+         (finally-return my-seq))
+  :loopy t
+  :iter-keyword (sequence-ref do)
+  :iter-bare ((sequence-ref . sequencing-ref)
+              (do . ignore)))
+
+;;;;; Seq Ref
+(loopy-deftest seq-ref
+  :result (stream '(7 7 7 7) )
+  :body ((with (my-seq (stream '(1 2 3 4) )))
+         (_cmd i my-seq)
+         (do (setf i 7))
+         (finally-return my-seq))
+  :repeat _cmd
+  :loopy ((_cmd . (seq-ref seqing-ref seqf)))
+  :iter-keyword ((_cmd . (seq-ref seqing-ref seqf))
+                 (do . do))
+  :iter-bare ((_cmd . (seqing-ref))
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-array
+  :result "a1a3a5a7a9"
+  :body ((with (my-str "0123456789"))
+         (seq-ref i my-str :by 2)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-list
+  :result '(99 1 99 3 99 5 99 7 99 9 99)
+  :body ((with (my-list (list 0 1 2 3 4 5 6 7 8 9 10) ))
+         (seq-ref i my-list :by 2)
+         (do (setf i 99))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-just-once
+  :result (stream "a1a3a5a7a9" )
+  :body ((with (my-str (stream "0123456789" ))
+               (times 0))
+         (seq-ref i my-str :by (progn
+                                 (cl-assert (= times 0))
+                                 (cl-incf times)
+                                 2))
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:by-:index
+  :result  (stream "a1a3a5a7a9" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :by 2 :index cat)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:from-:by
+  :result  (seq-into '(0 cat 2 cat 4 cat 6 cat 8 cat) 'loopy--test-custom-seq)
+  :body ((with (my-list (seq-into (list 0 1 2 3 4 5 6 7 8 9) 'loopy--test-custom-seq)))
+         (seq-ref i my-list :from 1 :by 2 )
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:downto-:by
+  :result  (stream "0123456a8a" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :downto 6 :by 2 )
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:below
+  :result  (stream "aaaaa56789" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :below 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:above
+  :result  (stream "012345aaaa" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :above 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:above-list
+  :result  (stream '(0 1 2 3 4 5 cat cat cat cat) )
+  :body ((with (my-list (seq-into (list 0 1 2 3 4 5 6 7 8 9) 'loopy--test-custom-seq)))
+         (seq-ref i my-list :above 5)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:upto
+  :result  (stream "aaaaaa6789" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :upto 5)
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:upfrom-:by
+  :result  (stream "0a2a4a6a8a" )
+  :body ((with (my-str (stream "0123456789" )))
+         (seq-ref i my-str :upfrom 1 :by 2 )
+         (do (setf i ?a))
+         (finally-return my-str))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:upfrom-:by-string
+  :result  (seq-into '(0 cat 2 cat 4 cat 6 cat 8 cat) 'loopy--test-custom-seq)
+  :body ((with (my-list (seq-into (list 0 1 2 3 4 5 6 7 8 9) 'loopy--test-custom-seq)))
+         (seq-ref i my-list :upfrom 1 :by 2)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
+(loopy-deftest seq-ref-:downfrom
+  :result (seq-into '(0 cat 2 cat 4 cat 6 7 8 9) 'loopy--test-custom-seq)
+  :body ((with (my-list (seq-into (list 0 1 2 3 4 5 6 7 8 9) 'loopy--test-custom-seq)))
+         (seq-ref i my-list :downfrom 5 :by 2)
+         (do (setf i 'cat))
+         (finally-return my-list))
+  :loopy t
+  :iter-keyword (seq-ref do)
+  :iter-bare ((seq-ref . seqing-ref)
+              (do . ignore)))
+
 (loopy-deftest seq-ref-:by-literal
   :doc "`seq-ref' can use literal `:by' directly."
   :result [0 1 22 3 22 5 22 7 22 9 10]
@@ -2902,26 +3422,26 @@ Using numbers directly will use less variables and more efficient code."
          (finally-return arr))
   :loopy t
   :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-bare ((seq-ref . seqing-ref)
               (do . ignore)))
 
 (loopy-deftest seq-ref-:by-variable
   :doc "`seq-ref' can use literal `:by' directly."
-  :result [0 1 22 3 22 5 22 7 22 9 10]
+  :result (stream [0 1 22 3 22 5 22 7 22 9 10] )
   :body ((with (start 2) (end 8) (step 2)
-               (arr (cl-coerce (number-sequence 0 10) 'vector)))
+               (arr (stream (number-sequence 0 10) )))
          (seq-ref i arr :from start :to end :by step)
          (do (setf i 22))
          (finally-return arr))
   :loopy t
   :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-bare ((seq-ref . seqing-ref)
               (do . ignore)))
 
 (loopy-deftest seq-ref-destructuring
   :doc "Check that `seq-ref' implements destructuring. Not destructuring itself."
-  :result [(7 8 9) (7 8 9)]
-  :body ((with (my-seq [(1 2 3) (4 5 6)]))
+  :result (stream [(7 8 9) (7 8 9)] )
+  :body ((with (my-seq (stream [(1 2 3) (4 5 6)] )))
          (seq-ref (i j k) my-seq)
          (do (setf i 7)
              (setf j 8)
@@ -2929,7 +3449,7 @@ Using numbers directly will use less variables and more efficient code."
          (finally-return my-seq))
   :loopy t
   :iter-keyword (seq-ref do)
-  :iter-bare ((seq-ref . sequencing-ref)
+  :iter-bare ((seq-ref . seqing-ref)
               (do . ignore)))
 
 ;;;;; Stream
@@ -3063,6 +3583,7 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest substream-:by-const
   :result '((0 1 2 3 4 5 6) (2 3 4 5 6) (4 5 6) (6))
   :body ((substream i (loopy-test-escape (stream [0 1 2 3 4 5 6])) :by 2)
+         (do (message "Stream: %S" i))
          (set res nil)
          (do (seq-do (lambda (x) (push x res))
                      i))
