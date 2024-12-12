@@ -3018,12 +3018,23 @@ Using numbers directly will use less variables and more efficient code."
 
 (loopy-deftest substream-destr
   :result '((0 1 2)
-            (1 2 nil)
-            (2 nil nil))
+            (1 2 3)
+            (2 3 4))
+  :body ((cycle 3)
+         (substream (&seq i j k) (loopy-test-escape (stream [0 1 2 3 4 5 6])))
+         (collect (list i j k)))
+  :loopy t
+  :iter-keyword (substream collect cycle)
+  :iter-bare ((substream . substreaming)
+              (collect . collecting)
+              (cycle . cycling)))
+
+(loopy-deftest substream-destr-too-short
+  :error loopy-bad-run-time-destructuring
   :body ((substream (&seq i j k) (loopy-test-escape (stream [0 1 2])))
          (collect (list i j k)))
   :loopy t
-  :iter-keyword (substream collect)
+  :iter-keyword (substream collect )
   :iter-bare ((substream . substreaming)
               (collect . collecting)))
 

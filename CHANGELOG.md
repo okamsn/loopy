@@ -74,6 +74,10 @@ This document describes the user-facing changes to Loopy.
     arr)
   ```
 
+### Bug Fixes
+
+- Correctly signal an error when attempting to destructure a stream for more
+  values than it actually contains ([#217]).
 
 [#126]: https://github.com/okamsn/loopy/issues/126
 [#168]: https://github.com/okamsn/loopy/issues/168
@@ -89,6 +93,7 @@ This document describes the user-facing changes to Loopy.
 [#211]: https://github.com/okamsn/loopy/pull/211
 [#212]: https://github.com/okamsn/loopy/pull/212
 [#213]: https://github.com/okamsn/loopy/pull/213
+[#217]: https://github.com/okamsn/loopy/pull/217
 
 ## 0.13.0
 
