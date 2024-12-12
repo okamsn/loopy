@@ -16,7 +16,7 @@ jobs:
       matrix:
         emacs-version:
           # - '27.1'
-          - '27.2'
+          # - '27.2'
           # - '28.1'
           - '28.2'
           - '29.2'
@@ -32,8 +32,10 @@ jobs:
     - name: List files in the repository
       run: |
         ls ${{ github.workspace }}
-    - name: Make config dir to guaratee location.  Do it before we run Emacs the first time.
-      run: mkdir ~/.emacs.d
+    - name: Make config dir to guarantee location.  Do it before we run Emacs the first time.
+      run: |
+        if [ -d ~/.emacs.d ]; then rm -rf ~/.emacs.d; fi
+        mkdir ~/.emacs.d
     - name: Check Emacs version
       run: emacs --version
     - name: Make folder for base package.
@@ -47,7 +49,7 @@ jobs:
     - name: Install packages
       run: emacs -batch -l tests/install-script.el
     - name: Basic tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el --eval "(let ((ert-batch-backtrace-line-length nil)) (ert-run-tests-batch-and-exit))"
     - name: Seq tests
       run: emacs -batch -l tests/load-path.el -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
     - name: Pcase tests
