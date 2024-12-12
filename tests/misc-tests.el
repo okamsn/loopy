@@ -36,6 +36,26 @@ INPUT is the destructuring usage.  OUTPUT-PATTERN is what to match."
 
 ;;; Minor Functions
 
+(ert-deftest loopy--seq-length= ()
+  (should (equal t (loopy--seq-length= '(1 2 3) 3)))
+  (should (equal t (loopy--seq-length= [1 2 3 4] 4)))
+  (should (equal t (loopy--seq-length= (stream [1 2 3 4 5]) 5))))
+
+(ert-deftest loopy--seq-length> ()
+  (should (equal t (loopy--seq-length> '(1 2 3) 2)))
+  (should (equal t (loopy--seq-length> [1 2 3 4] 3)))
+  (should (equal t (loopy--seq-length> (stream [1 2 3 4 5]) 4))))
+
+(ert-deftest list-too-short ()
+  (should-error (loopy-let* (((a b c) '(a b)))
+                  (list a b c))
+                :type '(loopy-bad-run-time-destructuring (loopy (a b c)) (a b))))
+
+(ert-deftest stream-too-short ()
+  (should-error (loopy-let* (((&seq a b c) (stream '(a b))))
+                  (list a b c))
+                :type '(loopy-bad-run-time-destructuring (loopy (a b c)) (a b))))
+
 (ert-deftest loopy--member-p ()
   (should (loopy--member-p '((a . 1) (b . 2))
                            '(2 . c)
