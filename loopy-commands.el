@@ -447,7 +447,7 @@ instructions:
     (setq keywords (list keywords)))
 
   (when (or (eq other-vals 0)
-            (eq other-vals '(0)))
+            (equal other-vals '(0)))
     (setq other-vals nil))
 
   (when (null required-vals)
@@ -904,11 +904,14 @@ BY is the function to use to move through the list (default `cdr')."
 
 ;;;;;; Map
 (cl-defun loopy--parse-map-command ((name var val &key (unique t)))
-  "Parse the `map' loop command as `(map VAR EXPR &key (unique t))'.
+  "Parse the `map' loop command as `(map VAR VAL &key (unique t))'.
 
 Iterates through an alist of (key . value) dotted pairs,
 extracted from a hash-map, association list, property list, or
-vector using the library `map.el'."
+vector using the library `map.el'.
+
+NAME is used for reporting errors in case of aliases.
+If UNIQUE, filter out values for duplicated keys."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map))
   (loopy--instr-let-var* ((value-holder `(map-pairs ,val)))
@@ -947,9 +950,12 @@ vector using the library `map.el'."
   "Parse the `map-ref' command as (map-ref VAR VAL &key key (unique t)).
 
 KEY is a variable name in which to store the current key.
+If UNIQUE, filter out values for duplicated keys.
 
 Uses `map-elt' as a `setf'-able place, iterating through the
-map's keys.  Duplicate keys are ignored."
+map's keys.
+
+NAME is used for reporting errors in case of aliases."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map-ref))
   (loopy--instr-let-var* ((key-list `(map-keys ,val)))
@@ -1534,7 +1540,7 @@ more efficient than repeatedly traversing the list."
   "Produce instructions for an end-tracking accumulation of single items.
 
 VAR is the variable whose end is to be tracked.  VAL is the value
-to be added to the end of VAR. TEST is the test function.  KEY is
+to be added to the end of VAR.  TEST is the test function.  KEY is
 the transform function.  This is used in
 accumulation commands like `adjoin'.
 
@@ -1774,7 +1780,7 @@ you can use in the instructions:
             (setq explicit-category (plist-get category :explicit)
                   implicit-category (plist-get category :implicit)))
           (unless (and explicit-category implicit-category)
-            (error "Explicit or implicit accumulation category is nil.")))
+            (error "Explicit or implicit accumulation category is nil")))
         `(let ((args)
                (opts))
            ;; Compare with `loopy' for the equivalent code:
@@ -2492,7 +2498,9 @@ This function is used by `loopy--expand-optimized-accum'."
 
 ;;;;;;; Prepend
 (defun loopy--parse-prepend-command (arg)
-  "Parse the `prepend' command as (append VAR VAL :at start)."
+  "Parse the `prepend' command as (append VAR VAL :at start).
+
+ARG is the entire loop command."
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
@@ -2502,8 +2510,9 @@ This function is used by `loopy--expand-optimized-accum'."
 
 ;;;;;;; Push Into
 (defun loopy--parse-push-into-command (arg)
-  "Parse the `push-into' command as (collect VAR VAL :at start)."
+  "Parse the `push-into' command as (collect VAR VAL :at start).
 
+ARG is the entire loop command."
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
