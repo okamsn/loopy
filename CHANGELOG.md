@@ -4,6 +4,28 @@ This document describes the user-facing changes to Loopy.
 
 ## Unreleased
 
+### Commands for Generic (`seq.el`) Sequences
+
+Loopy can now loop through generic sequences implemented by the library `seq.el`
+([#215], [#150], [#136]).  Currently, this is done naively via the functions
+`seq-elt` and `seq-length`.  Because a package might implement a generic
+sequence using one of the built-in sequence types (lists and arrays), no attempt
+is made to optimize behavior for particular kinds of sequences.  As a
+comparison, the `sequence` command gives special consideration to lists in some
+circumstances.
+
+Because these commands use `seq-length`, they do not work with infinite
+sequences.  For that, consider using the `stream` command.
+
+The new commands are `seq` and `seq-ref`, which were previously aliases of
+`sequence` and `sequence-ref`, respectively ([#126, #206]).  This change should
+not cause an error, but the expanded code might be slower depending on the type
+of the sequence.
+
+`sequence-index`, which keeps the alias `seq-index`, has been changed to use
+`seq-length` instead of `length`.  This command is simple enough that no special
+version is needed for generic sequences.
+
 ### Breaking Changes
 
 - Conflicting starting values for accumulation variables, such as from using
@@ -34,13 +56,9 @@ This document describes the user-facing changes to Loopy.
   - `set-prev`: `prev`, `prev-expr`
   - `sequence`: `elements`
   - `sequence-index`: `sequencei`, `seqi`, `listi`, `arrayi`, `stringi`
-  - `sequence-ref`: `seqf`, `sequencef`, `sequencingf`, `elements-ref`
-
-- Make `sequence` the default name and `seq` an alias ([#126, #206]).
-
-- Make `sequence-ref` the default name and `seq-ref` an alias ([#126, #206]).
-
-- Make `sequence-index` the default name and `seq-index` an alias ([#126, #206]).
+  - `sequence-ref`: `sequencef`, `sequencingf`,
+    `elements-ref`
+  - `seq-ref`: `seqf` , `seqingf`
 
 - Review when the values of keyword arguments are taken and used ([#210]):
   - Make the `close` keyword argument of the `iter` command able to be evaluated
@@ -59,11 +77,11 @@ This document describes the user-facing changes to Loopy.
   showed that this is consistently faster than the old method.
 
 - Recursive destructuring for generalized variables (`setf`-able places), such
-  as in the below example, now work as expected, due to a combination of custom
-  GV setters and simplifying the produced code in some cases ([#212], [#213],
-  [#184]).  This can sometimes result in redundant operations when setting the
-  value of the generalized variable, but we've made an effort to reduce the
-  number of occurences in the obvious cases.
+  as in the below example, should now work as expected, due to a combination of
+  custom GV setters and simplifying the produced code in some cases ([#212],
+  [#213], [#184]).  This can sometimes result in redundant operations when
+  setting the value of the generalized variable, but we've made an effort to
+  reduce the number of occurences in the obvious cases.
 
   ```elisp
   ;; => [1 2 3 4 0 0 16]
@@ -80,6 +98,8 @@ This document describes the user-facing changes to Loopy.
   values than it actually contains ([#217]).
 
 [#126]: https://github.com/okamsn/loopy/issues/126
+[#136]: https://github.com/okamsn/loopy/issues/136
+[#150]: https://github.com/okamsn/loopy/issues/150
 [#168]: https://github.com/okamsn/loopy/issues/168
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#179]: https://github.com/okamsn/loopy/issues/179
@@ -93,6 +113,7 @@ This document describes the user-facing changes to Loopy.
 [#211]: https://github.com/okamsn/loopy/pull/211
 [#212]: https://github.com/okamsn/loopy/pull/212
 [#213]: https://github.com/okamsn/loopy/pull/213
+[#215]: https://github.com/okamsn/loopy/pull/215
 [#217]: https://github.com/okamsn/loopy/pull/217
 
 ## 0.13.0
