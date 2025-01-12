@@ -2,11 +2,6 @@
 
 (require 'cl-lib)
 
-(require 'package)
-(unless (featurep 'compat)
-  (dolist (dir (cl-remove-if-not #'file-directory-p (directory-files (expand-file-name package-user-dir) t "compat")))
-    (push dir load-path)))
-
 (eval-when-compile (require 'loopy)
                    (require 'loopy-iter))
 (require 'loopy)

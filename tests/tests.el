@@ -1,26 +1,11 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Run these tests using:
-;; emacs -Q --batch -l ert -l tests.el -f ert-run-tests-batch-and-exit
+;; make tests
 ;;
 ;; NOTE:
 ;; - Destructuring tests in `./misc-tests.el'.
 ;; - Alternative destructuring systems tested in their own files.
-
-(push (expand-file-name ".")
-      load-path)
-
-(require 'cl-lib)
-
-(require 'package)
-(dolist (feature '(compat stream))
-  (unless (featurep feature)
-    (dolist (dir (seq-filter #'file-directory-p
-                             (directory-files
-                              (expand-file-name package-user-dir)
-                              t
-                              (symbol-name feature))))
-      (push dir load-path))))
 
 (require 'subr-x)
 (require 'package)
