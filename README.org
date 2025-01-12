@@ -7,7 +7,6 @@
 
 # MELPA Badges
 =loopy=: [[https://melpa.org/#/loopy][file:https://melpa.org/packages/loopy-badge.svg]] \\
-=loopy-dash=: [[https://melpa.org/#/loopy-dash][file:https://melpa.org/packages/loopy-dash-badge.svg]]
 
 -----
 
@@ -20,6 +19,9 @@ regular looping and mapping features.
 
 For detailed information, see [[file:doc/loopy-doc.org][the documentation file]].  This README is just an
 overview.
+
+See also the extension package [[https://github.com/okamsn/loopy-dash][Loopy Dash]], which  provides destructuring using
+the library =dash.el= and is described in more detail below.
 
 -----
 #+begin_center
@@ -256,7 +258,7 @@ The default destructuring system is a super-set of what =cl-lib= provides
 and is described in the section [[https://github.com/okamsn/loopy/blob/master/doc/loopy-doc.org#basic-destructuring][Basic Destructuring]] in the documentation.
 
 In addition to the built-in destructuring style, ~loopy~ can optionally use
-destructuring provided by ~pcase-let~, ~seq-let~, the =dash= library.  This
+destructuring provided by ~pcase-let~, ~seq-let~, and the =dash= library.  This
 provides greater flexibility and allows you to use destructuring patterns that
 you're already familiar with.
 
