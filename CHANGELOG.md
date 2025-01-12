@@ -2,6 +2,8 @@
 
 This document describes the user-facing changes to Loopy.
 
+For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
+
 ## Unreleased
 
 ### Breaking Changes

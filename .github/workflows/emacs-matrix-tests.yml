@@ -29,22 +29,23 @@ jobs:
         version: ${{ matrix.emacs-version }}
     - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
     - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+    - name: Print working directory
+      run: echo "Current working directory is $PWD"
     - name: List files in the repository
       run: |
         ls ${{ github.workspace }}
-    - name: Make config dir to guaratee location.  Do it before we run Emacs the first time.
+    - name: Make config dir to guarantee location.  Do it before we run Emacs the first time.
       run: mkdir ~/.emacs.d
     - name: Check Emacs version
       run: emacs --version
     - name: Make folder for base package.
       run: |
-         mkdir 'test-install'
-         # Match all files of "loopy*.el" except for "loopy-dash.el".
-         echo Shell is $SHELL
-         shopt -s extglob
-         cp loopy!(-dash).el test-install
-         shopt -u extglob
-    - name: Install packages
+         mkdir --verbose 'loopy'
+         cp --verbose --target-directory=loopy/ ./*.el
+         ls ./loopy
+    - name: Get Loopy Dash from new repo
+      run: git clone 'https://github.com/okamsn/loopy-dash.git' ./loopy-dash
+    - name: Install package Loopy
       run: emacs -batch -l tests/install-script.el
     - name: Basic tests
       run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
@@ -55,7 +56,7 @@ jobs:
     - name: Iter tests
       run: emacs -batch -l tests/load-path.el -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
     - name: Dash tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/dash-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch -l tests/load-path.el -l ert -l loopy-dash/tests/dash-tests.el -f ert-run-tests-batch-and-exit
     - name: Miscellaneous tests
       run: emacs -batch -l tests/load-path.el -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
     - run: echo "🍏 This job's status is ${{ job.status }}."

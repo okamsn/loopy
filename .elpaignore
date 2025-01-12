@@ -6,5 +6,4 @@ examples
 .gitignore
 .elpaignore
 doc/loopy.info
-loopy-dash.el
 .dir-locals.el
