@@ -38,21 +38,8 @@ jobs:
       run: mkdir ~/.emacs.d
     - name: Check Emacs version
       run: emacs --version
-    - name: Make folder for base package.
-      run: |
-         mkdir --verbose 'loopy'
-         cp --verbose --target-directory=loopy/ ./*.el
-         ls ./loopy
-    - name: Build Info file
-      run: makeinfo --verbose --output=loopy/loopy.info doc/loopy.texi
-    - name: Make Dir file from info file
-      run: install-info --debug --dir-file ./loopy/dir --info-file ./loopy/loopy.info
-    - name: Check Info files where expected
-      run: |
-        test -f loopy/dir
-        test -f loopy/loopy.info
-    - name: List files in directory Loopy
-      run: ls loopy/
+    - name: Make Tar file of base package
+      run: make tar
     - name: Get Loopy Dash from new repo
       run: git clone 'https://github.com/okamsn/loopy-dash.git' ./loopy-dash
     - name: Install package Loopy
@@ -60,15 +47,15 @@ jobs:
     - name: Test accessing Info data
       run: emacs -batch --eval='(progn (package-activate-all) (info "(loopy)Top"))'
     - name: Basic tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
     - name: Seq tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
     - name: Pcase tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
     - name: Iter tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
     - name: Dash tests
-      run: emacs -batch -l tests/load-path.el -l ert -l loopy-dash/tests/dash-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l loopy-dash/tests/dash-tests.el -f ert-run-tests-batch-and-exit
     - name: Miscellaneous tests
-      run: emacs -batch -l tests/load-path.el -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
     - run: echo "🍏 This job's status is ${{ job.status }}."

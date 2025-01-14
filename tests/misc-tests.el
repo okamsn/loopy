@@ -1,19 +1,6 @@
 ;; Tests of secondary features and helper functions.  -*- lexical-binding: t; -*-
 
-(push (expand-file-name ".")
-      load-path)
-
 (require 'cl-lib)
-
-(require 'package)
-(dolist (feature '(compat stream))
-  (unless (featurep feature)
-    (dolist (dir (seq-filter #'file-directory-p
-                             (directory-files
-                              (expand-file-name package-user-dir)
-                              t
-                              (symbol-name feature))))
-      (push dir load-path))))
 
 (require 'map)
 (require 'ert)
