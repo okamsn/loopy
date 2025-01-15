@@ -765,6 +765,10 @@ or `loopy-aliases'."
     (signal 'loopy-unknown-loop-target (list target))))
 
 (defun loopy--check-position-name (pos)
+  "Error if POS is not an accepted symbol describing how to add to a sequence.
+
+For example, the `collect' command can add items at the beginning or end
+of a sequence."
   (unless (member pos '(start end beginning))
     (signal 'loopy-bad-position-command-argument (list pos))))
 
