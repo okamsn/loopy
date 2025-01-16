@@ -56,10 +56,32 @@ tar: info
 	@echo Getting package version if not passed explicitly
 	$(eval VERSION ?= $(shell $(EMACS) -Q -batch --eval="(progn (require 'lisp-mnt) (with-temp-buffer (insert-file-contents \"lisp/loopy.el\") (princ (or (lm-header \"package-version\") (lm-header \"version\")))))"))
 	@echo Package version is $(VERSION)
-	@echo Making directory to hold package files
+	@echo ""
+	@echo "Making directory to hold package files"
 	mkdir --verbose "loopy-$(VERSION)"
 	cp --verbose --target-directory="loopy-$(VERSION)" lisp/*.el
 	cp --verbose --target-directory="loopy-$(VERSION)" doc/dir doc/loopy.info
+	@echo ""
+	@echo "Creating \"loopy-pkg.el\""
+	$(EMACS) -Q -batch --eval=" \
+             (with-temp-buffer \
+                (require 'lisp-mnt) \
+		(insert-file-contents \"./lisp/loopy.el\") \
+		(let ((name (lm-get-package-name)) \
+                      (version (lm-version)) \
+                      (deps (lm-header \"Package-Requires\")) \
+                      (desc (lm-summary)) \
+                      (keywords (lm-keywords))) \
+		  (with-temp-buffer \
+		      (insert \"(define-package \") \
+		      (insert \"\\\"\" (file-name-base name) \"\\\" \") \
+		      (insert (format \"%S\" version)) \
+		      (insert \" \") \
+		      (insert (format \"%S\" desc)) \
+		      (insert \" \") \
+		      (insert \"'\" (format \"%s\" deps)) \
+		      (insert \")\") \
+		      (write-file \"./loopy-$(VERSION)/loopy-pkg.el\"))))"
 	@echo Making Tar file from that directory
 	tar --create --file "loopy-$(VERSION).tar" --exclude-from=".elpaignore" --verbose "loopy-$(VERSION)"
 	@echo Deleting that directory
