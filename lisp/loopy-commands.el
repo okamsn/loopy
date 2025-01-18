@@ -764,17 +764,14 @@ is a function by which to update VAR (default `cdr')."
   :instructions
   (loopy--instr-let-const* ((cons-by (or by (quote #'cdr))))
       loopy--iteration-vars
-    (let ((indirect (or (loopy--with-bound-p var)
-                        (sequencep var))))
-      (loopy--instr-let-var* ((cons-value val (unless indirect var)))
-          loopy--iteration-vars
-        `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
-          ;;       at least for some commands.
-          (loopy--pre-conditions (consp ,cons-value))
-          ,@(when indirect
-              (loopy--destructure-for-iteration-command var cons-value))
-          (loopy--latter-body
-           (setq ,cons-value (funcall ,cons-by ,cons-value))))))))
+    (loopy--instr-let-var* ((cons-value val))
+        loopy--iteration-vars
+      `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
+        ;;       at least for some commands.
+        (loopy--pre-conditions (consp ,cons-value))
+        ,@(loopy--destructure-for-iteration-command var cons-value)
+        (loopy--latter-body
+         (setq ,cons-value (funcall ,cons-by ,cons-value)))))))
 
 ;;;;;; Iter
 (loopy--defiteration iter
@@ -789,37 +786,27 @@ and is a value."
   :other-vals (0 1)
   :keywords (:yield-result :close)
   :instructions
-  (let ((obj-holder (gensym "iter-obj"))
-        (val-holder (gensym "iter-val"))
-        ;; If `other-vals', then we specified an iteration variable.
-        ;; Otherwise, don't bother saving anything.
-        (using-var other-vals)
-        (no-intermediate (and other-vals (not (or (sequencep var)
-                                                  (loopy--with-bound-p var))))))
-    (loopy--plist-bind ( :yield-result (yield-result (quote nil))
-                         :close (close t))
-        opts
-      ;; We always capture the iterator object in a generator,
-      ;; since it might be produced by a function call.
-      `((loopy--iteration-vars (,obj-holder ,(if other-vals
-                                                 (cl-first other-vals)
-                                               var)))
-        ,@(cond
-           (no-intermediate
-            `((loopy--iteration-vars (,var nil))
-              (loopy--pre-conditions
-               (condition-case nil
-                   (setq ,var (iter-next ,obj-holder ,yield-result))
-                 (iter-end-of-sequence nil)
-                 (:success t)))))
-           (using-var
-            `((loopy--iteration-vars (,val-holder nil))
-              (loopy--pre-conditions
-               (condition-case nil
-                   (setq ,val-holder (iter-next ,obj-holder ,yield-result))
-                 (iter-end-of-sequence nil)
-                 (:success t)))
-              ,@(loopy--destructure-for-iteration-command var val-holder)))
+  ;; If `other-vals', then we specified an iteration variable.
+  ;; Otherwise, don't bother saving anything.
+  (loopy--plist-bind ( :yield-result (yield-result (quote nil))
+                       :close (close t))
+      opts
+    ;; We always capture the iterator object in a generator,
+    ;; since it might be produced by a function call.
+    (loopy--instr-let-const* ((obj-holder (if other-vals
+                                              (cl-first other-vals)
+                                            var)))
+        loopy--iteration-vars
+      `(,@(cond
+           (other-vals
+            (loopy--instr-let-var* ((val-holder nil))
+                loopy--iteration-vars
+              `((loopy--pre-conditions (condition-case nil
+                                           (setq ,val-holder (iter-next ,obj-holder
+                                                                        ,yield-result))
+                                         (iter-end-of-sequence nil)
+                                         (:success t)))
+                ,@(loopy--destructure-for-iteration-command var val-holder))))
            (t
             `((loopy--pre-conditions
                (condition-case nil
@@ -1026,14 +1013,10 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
     (loopy--instr-let-const* ((increment-val-holder (or key-by 1))
                               (test-val-holder key-test))
         loopy--iteration-vars
-      (loopy--instr-let-var* ((var-val-holder (or key-start 0)
-                                              (if (loopy--with-bound-p var)
-                                                  (gensym "num-test-var")
-                                                var)))
+      (loopy--instr-let-var* ((var-val-holder (or key-start 0)))
           loopy--iteration-vars
-        `(,(when (loopy--with-bound-p var)
-             `(loopy--main-body (setq ,var ,var-val-holder)))
-
+        `((loopy--iteration-vars (,var nil))
+          (loopy--main-body (setq ,var ,var-val-holder))
           (loopy--latter-body
            (setq ,var-val-holder
                  ,(cond (test-given
@@ -1105,22 +1088,19 @@ an integer, to be used if a variable name is provided.
 NAME is the name of the command."
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'cycle))
-  (let* ((bound-and-given (and count-given
-                               (loopy--with-bound-p var-or-count)))
-         (value-holder (if (or (not count-given)
-                               bound-and-given)
-                           (gensym "repeat-limit-")
-                         var-or-count))
-         (num-steps (if count-given
-                        count
-                      var-or-count)))
-    ;; TODO: If we know at compile-time that num-steps is 1,
-    ;;       can we avoid creating the loop?
-    `((loopy--iteration-vars (,value-holder 0))
-      ,(when bound-and-given
-         `(loopy--main-body (setq ,var-or-count ,value-holder)))
-      (loopy--latter-body (setq ,value-holder (1+ ,value-holder)))
-      (loopy--pre-conditions (< ,value-holder ,num-steps)))))
+  ;; TODO: If we know at compile-time that num-steps is 1,
+  ;;       can we avoid creating the loop?
+  (loopy--instr-let-const* ((num-steps (if count-given
+                                           count
+                                         var-or-count)))
+      loopy--iteration-vars
+    (loopy--instr-let-var* ((value-holder 0))
+        loopy--iteration-vars
+      `(,@(when count-given
+            `((loopy--iteration-vars (,var-or-count nil))
+              (loopy--main-body (setq ,var-or-count ,value-holder))))
+        (loopy--latter-body (setq ,value-holder (1+ ,value-holder)))
+        (loopy--pre-conditions (< ,value-holder ,num-steps))))))
 
 ;;;;;; Seq
 (defun loopy--distribute-seq-elements (&rest sequences)
@@ -1338,32 +1318,29 @@ KEYS is one or several of `:by', `:from', `:downfrom', `:upfrom',
 
   :keywords (:by :from :downfrom :upfrom :to :downto :upto :above :below :test)
   :instructions
-  (let ((with-bound (loopy--with-bound-p var)))
-    (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
-                         :decreasing decreasing :test key-test)
-        (loopy--find-start-by-end-dir-vals opts)
-      (loopy--instr-let-var* ((seq-index-val val)
-                              (seq-index-index (cond (key-start)
-                                                     (decreasing
-                                                      `(1- (seq-length ,seq-index-val)))
-                                                     (t 0))
-                                               (unless with-bound var)))
+  (loopy--plist-bind ( :start key-start :end key-end :by (by 1)
+                       :decreasing decreasing :test key-test)
+      (loopy--find-start-by-end-dir-vals opts)
+    (loopy--instr-let-var* ((seq-index-val val)
+                            (seq-index-index (cond (key-start)
+                                                   (decreasing
+                                                    `(1- (seq-length ,seq-index-val)))
+                                                   (t 0))))
+        loopy--iteration-vars
+      (loopy--instr-let-const* ((seq-index-index-end (or key-end
+                                                         (if decreasing
+                                                             0
+                                                           `(1- (seq-length ,seq-index-val)))))
+                                (test key-test)
+                                (by by))
           loopy--iteration-vars
-        (loopy--instr-let-const* ((seq-index-index-end (or key-end
-                                                           (if decreasing
-                                                               0
-                                                             `(1- (seq-length ,seq-index-val)))))
-                                  (test key-test)
-                                  (by by))
-            loopy--iteration-vars
-          `((loopy--pre-conditions (funcall ,test ,seq-index-index ,seq-index-index-end))
-            ,@(when with-bound
-                `((loopy--iteration-vars (,var nil))
-                  (loopy--main-body (setq ,var ,seq-index-index))))
-            (loopy--latter-body
-             ,(cond
-               (decreasing `(setq ,seq-index-index (- ,seq-index-index ,by)))
-               (t          `(setq ,seq-index-index (+ ,seq-index-index ,by)))))))))))
+        `((loopy--pre-conditions (funcall ,test ,seq-index-index ,seq-index-index-end))
+          (loopy--iteration-vars (,var nil))
+          (loopy--main-body (setq ,var ,seq-index-index))
+          (loopy--latter-body
+           ,(cond
+             (decreasing `(setq ,seq-index-index (- ,seq-index-index ,by)))
+             (t          `(setq ,seq-index-index (+ ,seq-index-index ,by))))))))))
 
 ;;;;;; Seq Ref
 (loopy--defiteration seq-ref
@@ -1520,9 +1497,6 @@ KEYS is one or several of `:index', `:by', `:from', `:downfrom',
 
 Iterate through the sub-streams of STREAM, similar to the command `cons'.
 
-If STREAM is not destructured, VAR is not `with' bound, and
-LENGTH is not given, then VAR can be initialized as STREAM.
-
 `:by' is a numeric value telling which substream to move to (default: 1).
 `:length' is a numeric value that, if given, limits the length of the stream
 bound to VAR."
@@ -1535,22 +1509,18 @@ bound to VAR."
                        #'loopy--destructure-for-iteration-default))
                (not (eq '&seq (seq-first var))))
       (signal 'loopy-substream-not-&seq (list cmd)))
-    (let ((optimized (not (or length (seqp var) (loopy--with-bound-p var)))))
-      (loopy--instr-let-const* ((step-holder (or by 1))
-                                (len length))
+    (loopy--instr-let-const* ((step-holder (or by 1))
+                              (len length))
+        loopy--iteration-vars
+      (loopy--instr-let-var* ((value-holder `(stream-delay ,val)))
           loopy--iteration-vars
-        (loopy--instr-let-var* ((value-holder `(stream-delay ,val)
-                                              (when optimized
-                                                var)))
-            loopy--iteration-vars
-          `((loopy--pre-conditions (not (stream-empty-p ,value-holder)))
-            ,@(unless optimized
-                (loopy--destructure-for-iteration-command
-                 var (if len
-                         `(seq-take ,value-holder ,len)
-                       value-holder)))
-            (loopy--latter-body
-             (setq ,value-holder (seq-drop ,value-holder ,step-holder)))))))))
+        `((loopy--pre-conditions (not (stream-empty-p ,value-holder)))
+          ,@(loopy--destructure-for-iteration-command
+             var (if len
+                     `(seq-take ,value-holder ,len)
+                   value-holder))
+          (loopy--latter-body
+           (setq ,value-holder (seq-drop ,value-holder ,step-holder))))))))
 
 ;;;;;; Stream
 (loopy--defiteration stream

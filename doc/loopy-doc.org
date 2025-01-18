@@ -1436,14 +1436,6 @@ In ~loopy~, iteration commands are named after what they iterate through.  For
 example, the =array= and =list= commands iterate through the elements of arrays
 and lists, respectively.
 
-#+ATTR_TEXINFO: :tag Note
-#+begin_quote
-In general, iteration variables (such as the ~i~ and ~j~ above) are initialized
-to ~nil~.  For efficiency, some commands do not do this.  In such cases, the
-initial value of an iteration variable can be set using the =with= special macro
-argument, but this can result in less efficient code.
-#+end_quote
-
 Because some iteration commands use their variable to manage state, it is an
 error to use the same iteration variable for multiple iteration commands.
 
@@ -1452,6 +1444,85 @@ error to use the same iteration variable for multiple iteration commands.
   (loopy (numbers i :from 1 :to 10)
          (list i '(1 2 3))
          (finally-return t))
+#+end_src
+
+Iteration variables are initialized to ~nil~ and they are updated at the point
+in the loop body corresponding to the loop command's position in the macro's
+arguments.
+
+#+begin_src emacs-lisp
+  ;; `elem' retains its value from the previous
+  ;; iteration until it is updated again:
+  ;;
+  ;; => (((1 . nil) ; before
+  ;;      (2 . 1)
+  ;;      (3 . 2)
+  ;;      (4 . 3))
+  ;;     ((1 . 1) ; after
+  ;;      (2 . 2)
+  ;;      (3 . 3)
+  ;;      (4 . 4)))
+  (loopy (numbers nth :from 1)
+         (collect elem-before (cons nth elem))
+         (list elem '(1 2 3 4))
+         (collect elem-after (cons nth elem))
+         (finally-return elem-before
+                         elem-after))
+#+end_src
+
+Be aware that ~cl-loop~ does not consistently initialize its iteration variables
+to nil.  For some of ~cl-loop~'s iteration (=for=) statements, the variable is
+initialized to its value for the first iteration step and is manipulated
+directly at the end of the iteration step.  Loopy avoids this, as seen in the
+below example, but that can result in unnecessary indirection for some use
+cases, which has a minor speed cost.
+
+#+begin_src emacs-lisp
+  ;; => (5 (1 2 3 4) (1 2 3 4))
+  (cl-loop for elem in (list 1 2 3 4)
+           collect num into nums-1
+           for num from 1
+           collect num into nums-2
+           finally return (list num nums-1 nums-2))
+
+  ;; => (4 (nil 1 2 3) (1 2 3 4))
+  (loopy (list elem (list 1 2 3 4))
+         (collect nums-1 num)
+         (numbers num :from 1)
+         (collect nums-2 num)
+         (finally-return num nums-1 nums-2))
+#+end_src
+
+Generally, iteration commands with conditions check whether to terminate the
+loop /before/ the next iteration is run.  They do not check their conditions
+while running the current iteration step.  In the below example, note that the
+final value of ~i~ is 2 and not 3, even though the =do= command (similar to
+~cl-loop~'s =do= keyword) is placed before the =list= command.  Even though ~i~
+is updated before ~elem~ is updated, the decision whether to continue the loop,
+based on the =list= command's condition, is made /before/ the code in the =do=
+command is run.
+
+#+begin_src emacs-lisp
+  ;; => 2, not 3
+  (let ((i 0))
+    (loopy (do (setq i (1+ i)))
+           (list elem '(0 1)))
+    i)
+#+end_src
+
+If you do wish to conditionally leave the loop during an iteration, consider
+using the =leave= and =leave-from= commands ([[#exiting-the-loop-early]]).
+
+#+begin_src emacs-lisp
+  ;; => (3 (0 1))
+  (loopy (with (some-list (list 0 1))
+               (i 0))
+         (do (setq i (1+ i)))
+         (when (null some-list)
+           (leave))
+         (collect elems (car some-list))
+         (do (setq some-list (cdr some-list)))
+         (finally-return i elems))
 #+end_src
 
 Unlike ~cl-loop~ and like Common Lisp's ~iterate~, arguments of the iteration
@@ -1472,12 +1543,15 @@ loop.  This restriction allows for producing more efficient code.
 #+findex: cycling
 #+findex: repeat
 #+findex: repeating
-- =(cycle|repeat [VAR] EXPR)= :: Run the loop for =EXPR= iterations.  If
-  specified, =VAR= starts at 0, and is incremented by 1 at the end of each step
-  in the loop.  If =EXPR= is 0, then the loop isn't run.
+- =(cycle|repeat [VAR] EXPR)= :: Run the loop for =EXPR= iterations.
 
-  For efficiency, =VAR= is not initialized to ~nil~.  This can be overridden
-  using the =with= special macro argument, which can result in slower code.
+  If given, then during the loop, =VAR= is set to the number of iteration steps
+  that have been run (0 for the first iteration step).
+
+  If =EXPR= is 0, then the loop isn't run.
+
+  =(cycle VAR EXPR)= works the same as =(numbers VAR :from 0 :below EXPR)=
+  ([[#numeric-iteration]]).
 
   This command also has the aliases =cycling= and =repeating=.
 
@@ -1490,6 +1564,14 @@ loop.  This restriction allows for producing more efficient code.
     ;; => (10 0 10 1 10 2)
     (loopy (with (i 10))
            (repeat j 3)
+           (collect i)
+           (collect j))
+
+    ;; Same as above:
+    ;;
+    ;; => (10 0 10 1 10 2)
+    (loopy (with (i 10))
+           (numbers j :from 0 :below 3)
            (collect i)
            (collect j))
 
@@ -1518,13 +1600,6 @@ loop.  This restriction allows for producing more efficient code.
   the value yielded by calling ~iter-next~).  Unlike =close=, which is evaluated
   once, =yield-result= is an expression which is substituted into the loop body.
   Therefore, =yield-result= can be used to repeatedly call functions.
-
-  For efficiency, when possible, =VAR= is bound to the yielded value before each
-  step of the loop, which is used to detect whether the iterator signals that it
-  is finished.  This is not possible when destructuring.  You can override this
-  behavior by using the =with= special macro argument, which can result in
-  slower code and tells the macro that the initial value of =VAR= is meaningful
-  and to update =VAR= during the loop.
 
   This command also has the name =iterating=.
 
@@ -1632,11 +1707,6 @@ variants =numbers-up= and =numbers-down=.
   =(list i (number-sequence 1 10))=, and =(numbers i 3)= is similar to
   =(set i 3 (1+ i))=.
 
-  For efficiency, _=VAR= is initialized to the starting numeric value_, not
-  ~nil~, and is updated at the end of each step of the loop.  This can be
-  overridden using the =with= special macro argument, which can result in slower
-  code.
-
   In its most basic form, =numbers= iterates from a starting value to an
   inclusive ending value using the =:from= and =:to= keywords, respectively.
 
@@ -1644,6 +1714,34 @@ variants =numbers-up= and =numbers-down=.
     ;; => (1 2 3 4 5)
     (loopy (numbers i :from 1 :to 5)
            (collect i))
+  #+end_src
+
+  Unlike ~cl-loop~, =VAR= is not initialized to the starting value given.
+  Instead, =VAR= is updated during the loop, like in other iteration
+  commands. This avoids unexpectedly changing the value of =VAR= after the
+  iteration step, as happens with some implementations of Common Lisp's ~loop~
+  macro (such ~cl-loop~).
+
+  #+begin_src emacs-lisp
+    ;; => (4 (1 2 3 4))
+    (loopy (list elem (list 1 2 3 4))
+           (numbers num :from 1)
+           (collect nums num)
+           (finally-return num nums))
+
+    ;; => (5 (1 2 3 4))
+    (cl-loop for elem in (list 1 2 3 4)
+             for num from 1
+             collect num into nums
+             finally return (list num nums))
+
+    ;; SBCL returns 4, not 5:
+    ;;
+    ;; => (4 (1 2 3 4))
+    (loop for elem in (list 1 2 3 4)
+          for num from 1
+          collect num into nums
+          finally (return (list num nums)))
   #+end_src
 
   If the ending value is not given, then the value is incremented by 1 without
@@ -1929,11 +2027,6 @@ source sequences.
 - =(cons|conses VAR EXPR &key by)= :: Loop through the cons cells of =EXPR=.
   Optionally, find the cons cells via the function =by= instead of =cdr=.
 
-  For efficiency, when possible, =VAR= is initialized to the value of =EXPR=,
-  not ~nil~, and is updated at the end of each step in the loop.  This is not
-  possible when destructuring.  Such initialization can be overridden by using
-  the =with= special macro argument, which can result in slower code.
-
   This command also has the alias =consing=.
 
   #+BEGIN_SRC emacs-lisp
@@ -2214,11 +2307,6 @@ source sequences.
   and are compatible with features from the built-in =seq= library, such as
   ~seq-elt~ and ~seq-do~.
 
-  For efficiency, when possible, =VAR= is initialized to the value of =EXPR=,
-  not ~nil~, and is updated at the end of each step in the loop.  This is not
-  possible when destructuring.  Such initialization can be overridden by using
-  the =with= special macro argument, which can result in slower code.
-
   Sub-streams can only be destructured using the =&seq= feature of the default
   destructuring method ([[#basic-destructuring][Basic Destructuring]]), or by using the =seq= flag
   ([[#flags][Using Flags]]).  Streams are neither lists nor arrays.
@@ -2312,11 +2400,6 @@ iterate.
   can automatically end the loop when the index of the final element is reached.
   With =numbers=, one would first need to explicitly calculate the length of the
   sequence.
-
-  Similar to =numbers=, for efficiency, =VAR= is initialized to the starting
-  index value, not ~nil~, and is updated at the end of each step of the loop.
-  This can be overridden using the =with= special macro argument, which can
-  result in slower code.
 
   #+begin_src emacs-lisp
     ;; => (97 98 99 100 101 102)

@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgbe3a744
+@float Listing,org98ed280
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org0b98f72
+@float Listing,org68c72e4
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgec2e7cb
+@float Listing,orgebc9f13
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1588,14 +1588,6 @@ In @code{loopy}, iteration commands are named after what they iterate through.  
 example, the @samp{array} and @samp{list} commands iterate through the elements of arrays
 and lists, respectively.
 
-@quotation Note
-In general, iteration variables (such as the @code{i} and @code{j} above) are initialized
-to @code{nil}.  For efficiency, some commands do not do this.  In such cases, the
-initial value of an iteration variable can be set using the @samp{with} special macro
-argument, but this can result in less efficient code.
-
-@end quotation
-
 Because some iteration commands use their variable to manage state, it is an
 error to use the same iteration variable for multiple iteration commands.
 
@@ -1604,6 +1596,85 @@ error to use the same iteration variable for multiple iteration commands.
 (loopy (numbers i :from 1 :to 10)
        (list i '(1 2 3))
        (finally-return t))
+@end lisp
+
+Iteration variables are initialized to @code{nil} and they are updated at the point
+in the loop body corresponding to the loop command's position in the macro's
+arguments.
+
+@lisp
+;; `elem' retains its value from the previous
+;; iteration until it is updated again:
+;;
+;; => (((1 . nil) ; before
+;;      (2 . 1)
+;;      (3 . 2)
+;;      (4 . 3))
+;;     ((1 . 1) ; after
+;;      (2 . 2)
+;;      (3 . 3)
+;;      (4 . 4)))
+(loopy (numbers nth :from 1)
+       (collect elem-before (cons nth elem))
+       (list elem '(1 2 3 4))
+       (collect elem-after (cons nth elem))
+       (finally-return elem-before
+                       elem-after))
+@end lisp
+
+Be aware that @code{cl-loop} does not consistently initialize its iteration variables
+to nil.  For some of @code{cl-loop}'s iteration (@samp{for}) statements, the variable is
+initialized to its value for the first iteration step and is manipulated
+directly at the end of the iteration step.  Loopy avoids this, as seen in the
+below example, but that can result in unnecessary indirection for some use
+cases, which has a minor speed cost.
+
+@lisp
+;; => (5 (1 2 3 4) (1 2 3 4))
+(cl-loop for elem in (list 1 2 3 4)
+         collect num into nums-1
+         for num from 1
+         collect num into nums-2
+         finally return (list num nums-1 nums-2))
+
+;; => (4 (nil 2 3 4) (1 2 3 4))
+(loopy (list elem (list 1 2 3 4))
+       (collect nums-1 num)
+       (numbers num :from 1)
+       (collect nums-2 num)
+       (finally-return num nums-1 nums-2))
+@end lisp
+
+Generally, iteration commands with conditions check whether to terminate the
+loop @emph{before} the next iteration is run.  They do not check their conditions
+while running the current iteration.  In the below example, note that the final
+value of @code{i} is 2 and not 3, even though the @samp{do} command (similar to
+@code{cl-loop}'s @samp{do} keyword) is placed before the @samp{list} command.  Even though @code{i}
+is updated before @code{elem} is updated, the @samp{list} command's condition that decides
+whether to continue the loop is checked @emph{before} the code in the @samp{do} command is
+run.
+
+@lisp
+;; => 2, not 3
+(let ((i 0))
+  (loopy (do (setq i (1+ i)))
+         (list elem '(0 1)))
+  i)
+@end lisp
+
+If you do wish to conditionally leave the loop during an iteration, consider
+using the @samp{leave} and @samp{leave-from} commands (@ref{Early Exit}).
+
+@lisp
+;; => (3 (0 1))
+(loopy (with (some-list (list 0 1))
+             (i 0))
+       (do (setq i (1+ i)))
+       (when (null some-list)
+         (leave))
+       (collect elems (car some-list))
+       (do (setq some-list (cdr some-list)))
+       (finally-return i elems))
 @end lisp
 
 Unlike @code{cl-loop} and like Common Lisp's @code{iterate}, arguments of the iteration
@@ -1630,12 +1701,15 @@ loop.  This restriction allows for producing more efficient code.
 @findex repeating
 @table @asis
 @item @samp{(cycle|repeat [VAR] EXPR)}
-Run the loop for @samp{EXPR} iterations.  If
-specified, @samp{VAR} starts at 0, and is incremented by 1 at the end of each step
-in the loop.  If @samp{EXPR} is 0, then the loop isn't run.
+Run the loop for @samp{EXPR} iterations.
 
-For efficiency, @samp{VAR} is not initialized to @code{nil}.  This can be overridden
-using the @samp{with} special macro argument, which can result in slower code.
+If given, then during the loop, @samp{VAR} is set to the number of iteration steps
+that have been run (0 for the first iteration step).
+
+If @samp{EXPR} is 0, then the loop isn't run.
+
+@samp{(cycle VAR EXPR)} works the same as @samp{(numbers VAR :from 0 :below EXPR)}
+(@ref{Numeric Iteration}).
 
 This command also has the aliases @samp{cycling} and @samp{repeating}.
 
@@ -1648,6 +1722,14 @@ This command also has the aliases @samp{cycling} and @samp{repeating}.
 ;; => (10 0 10 1 10 2)
 (loopy (with (i 10))
        (repeat j 3)
+       (collect i)
+       (collect j))
+
+;; Same as above:
+;;
+;; => (10 0 10 1 10 2)
+(loopy (with (i 10))
+       (numbers j :from 0 :below 3)
        (collect i)
        (collect j))
 
@@ -1679,13 +1761,6 @@ which is the value of @code{iter-yield} in the iterator (not to be confused with
 the value yielded by calling @code{iter-next}).  Unlike @samp{close}, which is evaluated
 once, @samp{yield-result} is an expression which is substituted into the loop body.
 Therefore, @samp{yield-result} can be used to repeatedly call functions.
-
-For efficiency, when possible, @samp{VAR} is bound to the yielded value before each
-step of the loop, which is used to detect whether the iterator signals that it
-is finished.  This is not possible when destructuring.  You can override this
-behavior by using the @samp{with} special macro argument, which can result in
-slower code and tells the macro that the initial value of @samp{VAR} is meaningful
-and to update @samp{VAR} during the loop.
 
 This command also has the name @samp{iterating}.
 
@@ -1792,11 +1867,6 @@ The command @samp{numbers} is used to iterate through numbers.  For example,
 @samp{(list i (number-sequence 1 10))}, and @samp{(numbers i 3)} is similar to
 @samp{(set i 3 (1+ i))}.
 
-For efficiency, @samp{VAR} is initialized to the starting numeric value, not
-@code{nil}, and is updated at the end of each step of the loop.  This can be
-overridden using the @samp{with} special macro argument, which can result in slower
-code.
-
 In its most basic form, @samp{numbers} iterates from a starting value to an
 inclusive ending value using the @samp{:from} and @samp{:to} keywords, respectively.
 
@@ -1804,6 +1874,34 @@ inclusive ending value using the @samp{:from} and @samp{:to} keywords, respectiv
 ;; => (1 2 3 4 5)
 (loopy (numbers i :from 1 :to 5)
        (collect i))
+@end lisp
+
+Unlike @code{cl-loop}, @samp{VAR} is not initialized to the starting value given.
+Instead, @samp{VAR} is updated during the loop, like in other iteration
+commands. This avoids unexpectedly changing the value of @samp{VAR} after the
+iteration step, as happens with some implementations of Common Lisp's @code{loop}
+macro (such @code{cl-loop}).
+
+@lisp
+;; => (4 (1 2 3 4))
+(loopy (list elem (list 1 2 3 4))
+       (numbers num :from 1)
+       (collect nums num)
+       (finally-return num nums))
+
+;; => (5 (1 2 3 4))
+(cl-loop for elem in (list 1 2 3 4)
+         for num from 1
+         collect num into nums
+         finally return (list num nums))
+
+;; SBCL returns 4, not 5:
+;;
+;; => (4 (1 2 3 4))
+(loop for elem in (list 1 2 3 4)
+      for num from 1
+      collect num into nums
+      finally (return (list num nums)))
 @end lisp
 
 If the ending value is not given, then the value is incremented by 1 without
@@ -2094,11 +2192,6 @@ this new, resulting array of lists.
 @item @samp{(cons|conses VAR EXPR &key by)}
 Loop through the cons cells of @samp{EXPR}.
 Optionally, find the cons cells via the function @samp{by} instead of @samp{cdr}.
-
-For efficiency, when possible, @samp{VAR} is initialized to the value of @samp{EXPR},
-not @code{nil}, and is updated at the end of each step in the loop.  This is not
-possible when destructuring.  Such initialization can be overridden by using
-the @samp{with} special macro argument, which can result in slower code.
 
 This command also has the alias @samp{consing}.
 
@@ -2401,11 +2494,6 @@ and ``output streams'' used for reading and printing text (@ref{Read and Print,,
 and are compatible with features from the built-in @samp{seq} library, such as
 @code{seq-elt} and @code{seq-do}.
 
-For efficiency, when possible, @samp{VAR} is initialized to the value of @samp{EXPR},
-not @code{nil}, and is updated at the end of each step in the loop.  This is not
-possible when destructuring.  Such initialization can be overridden by using
-the @samp{with} special macro argument, which can result in slower code.
-
 Sub-streams can only be destructured using the @samp{&seq} feature of the default
 destructuring method (@ref{Basic Destructuring}), or by using the @samp{seq} flag
 (@ref{Using Flags}).  Streams are neither lists nor arrays.
@@ -2507,11 +2595,6 @@ type-specific versions.  This command also has the following aliases:
 can automatically end the loop when the index of the final element is reached.
 With @samp{numbers}, one would first need to explicitly calculate the length of the
 sequence.
-
-Similar to @samp{numbers}, for efficiency, @samp{VAR} is initialized to the starting
-index value, not @code{nil}, and is updated at the end of each step of the loop.
-This can be overridden using the @samp{with} special macro argument, which can
-result in slower code.
 
 @lisp
 ;; => (97 98 99 100 101 102)
@@ -4770,7 +4853,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgd6b91a9
+@float Listing,orge9aa92e
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

@@ -72,6 +72,46 @@ version is needed for generic sequences.
   - Allow the `unique` keyword argument of the commands `map` and `map-ref` to be
     evaluable at run time, instead of just checked at compile time ([#209]).
 
+- Remove the initialization optimizations that produced faster code but
+  could change final results ([#226, #204]).  For example, consider the
+  difference results between `cl-loop` and SBCL's `loop`:
+
+  ``` emacs-lisp
+  ;; => (4 (1 2 3))
+  (cl-loop for elem in (list 1 2 3)
+           for i from 1
+           collect i into is
+           finally return (list i is))
+  ```
+
+
+  ``` common-lisp
+  ;; => (3 (1 2 3))
+  (loop for elem in (list 1 2 3)
+        for num from 1
+        collect num into nums
+        finally (return (list num nums)))
+  ```
+
+  Loopy would give the same result as `cl-loop` when using the optimization and
+  would given the same result as SBCL's `loop` when not using the optimization.
+
+  Working around having different results based on unstated (though documented)
+  settings would mean requiring users to fully know the implementations of each
+  loop command and how they could change when optimized.  That position also
+  argues against making use of the optimization more explicit via an added
+  `iter-opt` special macro argument, as discussed in [#226] and [#204].
+
+  Therefore, these optimizations are being removed and Loopy is reverting to its
+  previous behavior of initializing the iteration variables to `nil` by default
+  for the following commands:
+  - `cons`
+  - `cycle`
+  - `iter`
+  - `numbers`
+  - `seq-index`
+  - `substream`
+
 ### Improvements
 
 - The `map` and `map-ref` commands now check for duplicate keys step by step,
@@ -107,6 +147,7 @@ version is needed for generic sequences.
 [#179]: https://github.com/okamsn/loopy/issues/179
 [#184]: https://github.com/okamsn/loopy/issues/184
 [#203]: https://github.com/okamsn/loopy/pull/203
+[#204]: https://github.com/okamsn/loopy/issues/204
 [#205]: https://github.com/okamsn/loopy/pull/205
 [#206]: https://github.com/okamsn/loopy/pull/206
 [#207]: https://github.com/okamsn/loopy/pull/207
@@ -117,6 +158,7 @@ version is needed for generic sequences.
 [#213]: https://github.com/okamsn/loopy/pull/213
 [#215]: https://github.com/okamsn/loopy/pull/215
 [#217]: https://github.com/okamsn/loopy/pull/217
+[#226]: https://github.com/okamsn/loopy/pull/226
 
 ## 0.13.0
 
