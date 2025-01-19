@@ -53,6 +53,10 @@ please let me know.
        beginning of the loop.
      - The =:on-failure= argument of the =find= command is now evaluated at the
        beginning of the loop.
+   - Changed back to the old, slightly slower behavior of always initializing
+     iteration variables to ~nil~, instead of sometimes initializing to the
+     expected value during the first iteration step.  This affects =cons=,
+     =cycle=, =iter=, =numbers=, =seq-index=, and =substream=.
  - Version 0.13.0:
    - The deprecated =:init= keyword argument has been removed.  Use the =with=
      special macro argument instead.

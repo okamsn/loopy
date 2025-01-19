@@ -1543,9 +1543,9 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((cons . consing)
               (collect . collecting)))
 
-(loopy-deftest cons-init-direct
-  :doc "Check that `cons' immediately binds the value when possible."
-  :result '((1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4) (4))
+(loopy-deftest cons-init-not-direct
+  :doc "Check that `cons' does not immediately binds the value when possible."
+  :result '(nil (1 2 3 4) (1 2 3 4) (2 3 4) (2 3 4) (3 4) (3 4) (4))
   :body  ((collect l)
           (cons l '(1 2 3 4))
           (collect l))
@@ -1568,8 +1568,8 @@ Using numbers directly will use less variables and more efficient code."
 
 ;;;;; Iter
 (loopy-deftest iter-single-var
-  :doc "When single var, `iter' can bind the value directly."
-  :result '(1 1 2 2 3 3)
+  :doc "Even when single var, `iter' should not be bound to the value directly."
+  :result '(nil 1 1 2 2 3)
   :body ((with (iter-maker (iter-lambda ()
                              (iter-yield 1)
                              (iter-yield 2)
@@ -2290,8 +2290,8 @@ Using numbers directly will use less variables and more efficient code."
               (cycle . cycling)))
 
 (loopy-deftest numbers-no-with
-  :doc "Var should be initialized to the first value."
-  :result '(1 1 2 2)
+  :doc "Var not should be initialized to the first value."
+  :result '(nil 1 1 2)
   :body ((collect n)
          (numbers n :from 1 :to 2)
          (collect n))
@@ -2301,7 +2301,7 @@ Using numbers directly will use less variables and more efficient code."
               (collect . collecting)))
 
 (loopy-deftest numbers-yes-with
-  :doc "Var should be initialized to the first value, unless with given."
+  :doc "Var should not be initialized to the first value."
   :result '(24 1 1 2)
   :body ((with (n 24))
          (collect n)
@@ -2376,7 +2376,7 @@ Using numbers directly will use less variables and more efficient code."
 
 (loopy-deftest cycle-yes-var
   :doc "Need to test order of execution and functionality."
-  :result '(0 1 2)
+  :result '(nil 0 1)
   :body ((collect coll i)
          (_cmd i 3)
          (finally-return coll))
@@ -2390,8 +2390,8 @@ Using numbers directly will use less variables and more efficient code."
               (collect . collecting)))
 
 (loopy-deftest cycle-init-no-with
-  :doc "Variable is initialized to 0."
-  :result '(0 0 1 1 2 2)
+  :doc "Variable is not initialized to 0."
+  :result '(nil 0 0 1 1 2)
   :body ((collect my-var)
          (cycle my-var 3)
          (collect my-var))
@@ -2401,7 +2401,7 @@ Using numbers directly will use less variables and more efficient code."
               (cycle . cycling)))
 
 (loopy-deftest cycle-init-yes-with
-  :doc "Variable is initialized to 0, except from `with'."
+  :doc "Variable is not initialized to 0."
   :result '(cat 0 0 1 1 2)
   :body ((with (my-var 'cat))
          (collect my-var)
@@ -3158,7 +3158,7 @@ are records, which are sequences, so they still work in that way."
               (collect . collecting)))
 
 (loopy-deftest seq-index-init-with
-  :doc "`seq-index' can default to the starting index if not with-bound."
+  :doc "`seq-index' cannot default to the starting index."
   :result '(27 0 0 1 1 2 2 3)
   :body ((with (i 27))
          (collect i)
@@ -3170,8 +3170,8 @@ are records, which are sequences, so they still work in that way."
               (collect . collecting)))
 
 (loopy-deftest seq-index-init-no-with
-  :doc "`seq-index' can default to the starting index if not with-bound."
-  :result '(0 0 1 1 2 2 3 3)
+  :doc "`seq-index' cannot default to the starting index even if not with-bound."
+  :result '(nil 0 0 1 1 2 2 3)
   :body ((collect i)
          (seq-index i [1 2 3 4])
          (collect i))
