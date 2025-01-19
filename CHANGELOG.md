@@ -4,7 +4,7 @@ This document describes the user-facing changes to Loopy.
 
 For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
-## Unreleased
+## 0.14.0
 
 ### Commands for Generic (`seq.el`) Sequences
 
