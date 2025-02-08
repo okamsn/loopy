@@ -5,8 +5,11 @@
 # Some parsers require this option to export footnotes.
 #+options: f:t
 
-# MELPA Badges
-=loopy=: [[https://melpa.org/#/loopy][file:https://melpa.org/packages/loopy-badge.svg]] \\
+# Badges
+[[https://elpa.nongnu.org/nongnu/loopy.html][file:https://elpa.nongnu.org/nongnu/loopy.svg]]
+[[https://elpa.nongnu.org/nongnu-devel/loopy.html][file:https://elpa.nongnu.org/nongnu-devel/loopy.svg]]
+[[https://melpa.org/#/loopy][file:https://melpa.org/packages/loopy-badge.svg]]
+[[https://stable.melpa.org/#/loopy][file:https://stable.melpa.org/packages/loopy-badge.svg]]
 
 -----
 
@@ -216,9 +219,9 @@ more niche features of ~cl-loop~ and ~iterate~ are still being added.
 
 * How to Install
 
-Loopy can be installed from [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The optional package
-=loopy-dash= can be installed to enable using the Dash library for destructuring
-(instead of other methods).
+Loopy can be installed from [[https://elpa.nongnu.org/nongnu/loopy.html][Non-GNU ELPA]] and [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The
+optional package =loopy-dash= can be installed to enable using the Dash library
+for destructuring (instead of other methods).
 
 #+begin_src emacs-lisp
   (use-package loopy)
