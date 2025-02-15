@@ -705,7 +705,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org98ed280
+@float Listing,org3151e6b
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -887,7 +887,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org68c72e4
+@float Listing,org7bf92c8
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -902,7 +902,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,orgebc9f13
+@float Listing,org0853253
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -1473,13 +1473,10 @@ expressions.  Currently, this command is only useful when used within the
 
 @findex set
 @findex setting
-@findex expr
-@findex exprs
 @table @asis
-@item @samp{(set VAR [EXPRS])}
+@item @samp{(set VAR EXPR [EXPRS])}
 Bind @samp{VAR} to each @samp{EXPR} in order.  Once the last
-@samp{EXPR} is reached, it is used repeatedly for the rest of the loop.  With no
-@samp{EXPR}, @samp{VAR} is bound to @code{nil} during each iteration of the loop.
+@samp{EXPR} is reached, it is used repeatedly for the rest of the loop.
 
 This command also has the aliases @samp{setting}.
 
@@ -1637,7 +1634,7 @@ cases, which has a minor speed cost.
          collect num into nums-2
          finally return (list num nums-1 nums-2))
 
-;; => (4 (nil 2 3 4) (1 2 3 4))
+;; => (4 (nil 1 2 3) (1 2 3 4))
 (loopy (list elem (list 1 2 3 4))
        (collect nums-1 num)
        (numbers num :from 1)
@@ -1647,12 +1644,12 @@ cases, which has a minor speed cost.
 
 Generally, iteration commands with conditions check whether to terminate the
 loop @emph{before} the next iteration is run.  They do not check their conditions
-while running the current iteration.  In the below example, note that the final
-value of @code{i} is 2 and not 3, even though the @samp{do} command (similar to
+while running the current iteration step.  In the below example, note that the
+final value of @code{i} is 2 and not 3, even though the @samp{do} command (similar to
 @code{cl-loop}'s @samp{do} keyword) is placed before the @samp{list} command.  Even though @code{i}
-is updated before @code{elem} is updated, the @samp{list} command's condition that decides
-whether to continue the loop is checked @emph{before} the code in the @samp{do} command is
-run.
+is updated before @code{elem} is updated, the decision whether to continue the loop,
+based on the @samp{list} command's condition, is made @emph{before} the code in the @samp{do}
+command is run.
 
 @lisp
 ;; => 2, not 3
@@ -4853,7 +4850,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orge9aa92e
+@float Listing,org0bc3841
 @lisp
 ;; => ((1 2 3) (-3 -2 -1) (0))
 (loopy-iter (arg accum-opt positives negatives other)

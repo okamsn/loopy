@@ -35,6 +35,9 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - =set= now warns when it is not given a value.  In the future, it will
+     signal an error.
  - Version 0.14.0:
    - Conflicting initialization values for accumulation variables now signal
      a warning.  In the future, they will signal an error.
