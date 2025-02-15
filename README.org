@@ -95,28 +95,13 @@ Unlike ~cl-loop~, ~loopy~ uses parenthetical expressions instead of "clauses".
              (collect evens i)
            (collect odds i))
          (finally-return odds evens))
-
-  (loopy (numbers i :from 1 :to 10)
-         (if (cl-evenp i)
-             (collect i :into evens)
-           (collect i :into odds))
-         (finally-return odds evens))
 #+end_src
 
 ~loopy~ supports destructuring for iteration commands like =list= and
 accumulation commands like =sum= or =collect=.
 
 #+begin_src emacs-lisp
-  ;; Summing the nth elements of arrays:
-  ;; => (8 10 12 14 16 18)
-  (loopy (list (list-elem1 list-elem2)
-               '(([1 2 3] [4 5 6])
-                 ([7 8 9] [10 11 12])))
-         (sum [sum1 sum2 sum3] list-elem1)
-         (sum [sum4 sum5 sum6] list-elem2)
-         (finally-return sum1 sum2 sum3 sum4 sum5 sum6))
-
-  ;; Or, more simply:
+  ;; Summing the nth elements of sub-arrays:
   ;; => (8 10 12 14 16 18)
   (loopy (list list-elem '(([1 2 3] [4 5 6])
                            ([7 8 9] [10 11 12])))
@@ -162,7 +147,7 @@ automatically ~let~-bound so as to not affect code outside of the loop.
 
 ~loopy~ has arguments for binding (or not binding) variables, executing code
 before or after the loop, executing code only if the loop completes, and for
-setting the macro's return value (default ~nil~).  This is in addition to the
+setting the macro's return value (default: ~nil~).  This is in addition to the
 looping features themselves.
 
 All of this makes ~loopy~ a useful and convenient choice for looping and
@@ -193,28 +178,9 @@ Common Lisp.
 
 Generally, all of the packages handle basic use cases in similar ways.  One
 large difference is that ~iterate~ can embed its looping constructs in arbitrary
-code.  Loopy is currently provides this feature as a separate macro,
-~loopy-iter~, which expands looping constructs using ~macroexpand~.
-
-#+begin_src emacs-lisp
-  (require 'loopy-iter)
-
-  ;; Things to node:
-  ;; - `accum-opt' produces more efficient accumulations for names variables
-  ;; - `cycling' is another name for `repeat'
-  ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
-  ;;     (0)
-  ;;     (1 2 3 4 5 6 7 8 9 10 11))
-  (loopy-iter (accum-opt positives negatives zeroes)
-              (numbering i :from -10 :to 10)
-              ;; Normal `let' and `pcase', not Loopy constructs:
-              (let ((var (1+ i)))
-                (pcase var
-                  ((pred cl-plusp)  (collecting positives var))
-                  ((pred cl-minusp) (collecting negatives var))
-                  ((pred zerop)     (collecting zeroes var))))
-              (finally-return negatives zeroes positives))
-#+end_src
+code.  Loopy currently provides this feature as a separate macro,
+~loopy-iter~, which expands looping constructs using ~macroexpand~
+(see [[*Loop Commands in Arbitrary Code][Loop Commands in Arbitrary Code]] in this README).
 
 Loopy is not yet feature complete.  Please request features or report problems
 in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].  While basic uses are covered, some of the
@@ -313,13 +279,21 @@ Iterate to Emacs Lisp.
   (require 'loopy-iter)
 
   ;; => ((1 2 3) (-3 -2 -1) (0))
-  (loopy-iter (accum-opt positives negatives other)
-              (numbering i :from -3 :to 3)
-              (pcase i
-                ((pred cl-plusp)  (collecting positives i))
-                ((pred cl-minusp) (collecting negatives i))
-                (_                (collecting other i)))
-              (finally-return positives negatives other))
+  ;; Things to node:
+  ;; - `accum-opt' produces more efficient accumulations for names variables
+  ;; - `cycling' is another name for `repeat'
+  ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
+  ;;     (0)
+  ;;     (1 2 3 4 5 6 7 8 9 10 11))
+  (loopy-iter (accum-opt positives negatives zeroes)
+              (numbering i :from -10 :to 10)
+              ;; Normal `let' and `pcase', not Loopy constructs:
+              (let ((var (1+ i)))
+                (pcase var
+                  ((pred cl-plusp)  (collecting positives var))
+                  ((pred cl-minusp) (collecting negatives var))
+                  ((pred zerop)     (collecting zeroes var))))
+              (finally-return negatives zeroes positives))
 
   ;; => 6
   (loopy-iter (listing elem '(1 2 3))
