@@ -1324,11 +1324,8 @@ value and do no affect how the loop iterates.
 
 #+findex: set
 #+findex: setting
-#+findex: expr
-#+findex: exprs
-- =(set VAR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.  Once the last
-  =EXPR= is reached, it is used repeatedly for the rest of the loop.  With no
-  =EXPR=, =VAR= is bound to ~nil~ during each iteration of the loop.
+- =(set VAR EXPR [EXPRS])= :: Bind =VAR= to each =EXPR= in order.  Once the last
+  =EXPR= is reached, it is used repeatedly for the rest of the loop.
 
   This command also has the aliases =setting=.
 

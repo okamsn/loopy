@@ -4,6 +4,16 @@ This document describes the user-facing changes to Loopy.
 
 For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
+## Unreleased
+
+### Breaking Changes
+
+- `set` now warns when it is not given a value ([#229]).  Currently, `(set VAR)`
+  binds `VAR` to `nil`, but since this form is indistinguishable from a mistake,
+  and since `nil` is a short word to write, this behavior is deprecated.
+
+[#229]: https://github.com/okamsn/loopy/PR/229
+
 ## 0.14.0
 
 ### Commands for Generic (`seq.el`) Sequences

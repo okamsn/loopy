@@ -143,7 +143,7 @@ handled by `loopy-iter'."
 
 ;;;;; Genereric Evaluation
 ;;;;;; Set
-(cl-defun loopy--parse-set-command ((_ var &rest vals))
+(cl-defun loopy--parse-set-command ((&whole cmd name var &rest vals))
   "Parse the `set' command.
 
 - VAR is the variable to assign.
@@ -152,7 +152,10 @@ handled by `loopy-iter'."
          (arg-length (length vals)))
     (cl-case arg-length
       ;; If no values, repeatedly set to `nil'.
-      (0 (loopy--destructure-for-other-command
+      (0 (warn "`loopy': `%s' will require at least 1 value in the future: `%s'"
+               name
+               cmd)
+         (loopy--destructure-for-other-command
           var nil))
       ;; If one value, repeatedly set to that value.
       (1 (loopy--destructure-for-other-command
