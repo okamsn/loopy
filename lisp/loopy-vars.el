@@ -697,6 +697,64 @@ known to fall into the first group.")
 
 This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 
+(cl-defstruct (loopy--state
+               (:constructor loopy--make-state))
+  "State for expanding Loopy.
+See `loopy--variables.'"
+  (loop-name nil :type symbol)
+  (with-vars nil :type list)
+  (without-vars nil :type list)
+  (before-do nil :type list)
+  (wrapping-forms nil :type list)
+  (after-do nil :type list)
+  (final-do nil :type list)
+  (final-protect nil :type list)
+  (final-return nil :type list)
+
+  ;; -- Vars for processing loop commands --
+  ;; NOTE: `loopy--at-instructions' cannot be local to each loop:
+  at-instructions ; TODO: Test if this works.
+  (iteration-vars nil :type list)
+  (optimized-accum-vars nil :type list)
+  (accumulation-vars nil :type list)
+  (generalized-vars nil :type list)
+  (other-vars nil :type list)
+  (pre-conditions nil :type list)
+  (main-body nil :type list)
+  (latter-body nil :type list)
+  (post-conditions nil :type list)
+  (implicit-return nil :type list)
+
+  ;; -- Variables for constructing code --
+  (skip-tag-name nil :type symbol)
+  (skip-used nil :type boolean)
+  (non-returning-exit-tag-name nil :type symbol)
+  (non-returning-exit-used nil :type boolean)
+  (vars-final-updates nil :type list)
+  (accumulation-list-end-vars nil :type list)
+  (accumulation-variable-info nil :type list)
+  (in-sub-level nil :type boolean)
+
+  ;; -- Flag Variables --
+  (destr-with-function
+   #'loopy--destructure-for-with-vars-default
+   :type function)
+  (destr-iter-function
+   #'loopy--destructure-for-iteration-default
+   :type function)
+  (destr-accum-parser
+   #'loopy--destructuring-accumulation-parser
+   :type function
+   :documentation "The function used to parse destructuring accumulation commands.
+
+Unlike `loopy--destructuring-for-iteration-function', the
+function named by this variable returns instructions, not a list
+of variable-value pairs.
+
+If nil, use `loopy--parse-destructuring-accumulation-command-default'."))
+
+(defvar loopy--expansion-state nil
+  "Map of expansion variables and values.")
 ;;;; Functions to for macro expansion
 
 (defun loopy--with-bound-p (var-name)
@@ -778,10 +836,11 @@ of a sequence."
                          loopy--variables)
                  (macroexp-progn body)))
 
-(defun loopy--apply-flag (flag)
-  "Apply the effects of the FLAG."
+(defun loopy--apply-flag (flag state)
+  "Apply the effects of the FLAG.
+STATE is `loopy--expansion-state'."
   (if-let ((func (map-elt loopy--flag-settings flag)))
-      (funcall func)
+      (funcall func state)
     (error "Loopy: Flag not defined: %s" flag)))
 
 (defun loopy--valid-external-at-target-p (target)

@@ -43,29 +43,28 @@
 (require 'loopy-destructure)
 (require 'loopy-vars)
 
-(defun loopy-seq--enable-flag-seq ()
+(defun loopy-seq--enable-flag-seq (state)
   "Make this `loopy' loop use `seq-let' destructuring."
-  (setq loopy--destructuring-for-iteration-function
-        #'loopy-seq--destructure-for-iteration
-        loopy--destructuring-for-with-vars-function
+  (setf (loopy--state-destr-with-function state)
         #'loopy-seq--destructure-for-with-vars
-        loopy--destructuring-accumulation-parser
+        (loopy--state-destr-iter-function state)
+        #'loopy-seq--destructure-for-iteration
+        (loopy--state-destr-accum-parser state)
         #'loopy-seq--parse-destructuring-accumulation-command))
 
-(defun loopy-seq--disable-flag-seq ()
+(defun loopy-seq--disable-flag-seq (state)
   "Make this `loopy' loop use `seq-let' destructuring."
-  (if (eq loopy--destructuring-for-iteration-function
-          #'loopy-seq--destructure-for-iteration)
-      (setq loopy--destructuring-for-iteration-function
-            #'loopy--destructure-for-iteration-default))
-  (if (eq loopy--destructuring-for-with-vars-function
-          #'loopy-seq--destructure-for-with-vars)
-      (setq loopy--destructuring-for-with-vars-function
-            #'loopy--destructure-for-with-vars-default))
-  (if (eq loopy--destructuring-accumulation-parser
-          #'loopy-seq--parse-destructuring-accumulation-command)
-      (setq loopy--destructuring-accumulation-parser
-            #'loopy--parse-destructuring-accumulation-command-default)))
+  (cl-symbol-macrolet ((iter-fn (loopy--state-destr-iter-function state))
+                       (with-fn (loopy--state-destr-with-function state))
+                       (accum-parser (loopy--state-destr-accum-parser state)))
+    (when (eq iter-fn #'loopy-seq--destructure-for-iteration)
+      (setf iter-fn #'loopy--destructure-for-iteration-default))
+
+    (when (eq with-fn #'loopy-seq--destructure-for-iteration)
+      (setf with-fn #'loopy--destructure-for-with-vars-default))
+
+    (when (eq accum-parser #'loopy-seq--parse-destructuring-accumulation-command)
+      (setf accum-parser #'loopy--parse-destructuring-accumulation-command-default))))
 
 (add-to-list 'loopy--flag-settings (cons 'seq #'loopy-seq--enable-flag-seq))
 (add-to-list 'loopy--flag-settings (cons '+seq #'loopy-seq--enable-flag-seq))

@@ -934,6 +934,8 @@ see the Info node `(loopy)' distributed with this package."
   ;; Bind variables in `loopy--variables' around code to build the expanded
   ;; loop.
   (loopy--wrap-variables-around-body
+   (let ((loopy--expansion-state (mapcar #'list loopy--variables)))
+     )
 ;;;;; Process the special macro arguments.
    (mapc #'loopy--apply-flag loopy-default-flags)
    (setq body (loopy--process-special-arg-loop-name body))
