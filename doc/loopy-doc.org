@@ -584,6 +584,20 @@ argument =with= is used to initialized variables.
            (return a))
   #+end_src
 
+The following two special macro arguments are useful when using Loopy in a
+library with custom commands ([[#adding-custom-commands]]) and custom aliases
+([[#custom-aliases]]).  /They are currently experimental./
+
+#+pindex: commands
+- =commands= :: Command parsers that are local to the macro expansion for the
+  loop body in which the =commands= is used.  It does not apply to sub-loops.
+  =commands= takes an evaluated association list ("alist") of names and parsing
+  functions.  Parsing functions must be available during macro expansion.
+
+  #+begin_src emacs-lisp
+    (loopy (commands '((f . f-parse))))
+  #+end_src
+
 
 As stated above, all other expressions will be considered loop commands
 ([[#loop-commands][Loop Commands]]).

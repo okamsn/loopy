@@ -791,7 +791,7 @@ This predicate checks for presence in the list
 `loopy--valid-external-at-targets'."
   (memq target loopy--valid-external-at-targets))
 
-(cl-defun loopy--get-true-name (name)
+(cl-defun loopy--get-true-name (name &optional (aliases loopy-aliases))
   "Get the true name of possible alias NAME."
   (or (progn
         ;; Defensively return nil, since `map-do' in older versions
@@ -799,7 +799,7 @@ This predicate checks for presence in the list
         (map-do (lambda (k v)
                   (when (memq name v)
                     (cl-return-from loopy--get-true-name k)))
-                loopy-aliases)
+                aliases)
         (map-do (lambda (k v)
                   (when (memq name v)
                     (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, use `loopy-defalias'."
