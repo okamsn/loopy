@@ -56,23 +56,29 @@ function in the variable `loopy--flag-settings'."
   "Add alias ALIAS for loop command DEFINITION.
 
 Definition must exist.  Neither argument need be quoted."
-  `(let ((alias (quote ,(loopy--get-quoted-symbol alias)))
-         (definition (quote ,(loopy--get-quoted-symbol definition))))
-     (let ((true-name (loopy--get-true-name definition)))
-       (cond
-        ((eq alias definition)
-         (error "Can't alias name to itself: `%s' -> `%s'"
-                alias definition))
-        ((eq alias true-name)
-         (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
-                alias definition true-name))
-        (t
-         ;; Remove previous uses of that alias from all other names.
-         (setq loopy-aliases (map-apply (lambda (k v)
-                                          (cons k (remq alias v)))
-                                        loopy-aliases))
-         ;; Add the alias for the new target name.
-         (push alias (map-elt loopy-aliases true-name)))))))
+  `(setq loopy-aliases
+         (loopy--defalias-internal (quote ,(loopy--get-quoted-symbol alias))
+                                   (quote ,(loopy--get-quoted-symbol definition))
+                                   loopy-aliases)))
+
+(defun loopy--defalias-internal (alias definition alist)
+  "Make a new ALIST to add ALIAS for DEFINITION and return modified ALIST."
+  (let ((true-name (loopy--get-true-name definition alist)))
+    (cond
+     ((eq alias definition)
+      (error "Can't alias name to itself: `%s' -> `%s'"
+             alias definition))
+     ((eq alias true-name)
+      (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
+             alias definition true-name))
+     (t
+      ;; Remove previous uses of that alias from all other names.
+      (setq alist (map-apply (lambda (true-name aliases)
+                               (cons true-name (remq alias aliases)))
+                             alist))
+      ;; Add the alias for the new target name.
+      (push alias (map-elt alist true-name))
+      alist))))
 
 (defvar loopy--obsolete-aliases
   '((array across)
@@ -93,15 +99,15 @@ Definition must exist.  Neither argument need be quoted."
     (sequence-ref sequencef sequencingf elements-ref))
   "Aliases to be removed from the documentation.")
 
+(defvar loopy--aliases-internal nil
+  "This variable holds a version of `loopy-aliases' during expansion.")
+
 ;;;###autoload
 (defcustom loopy-aliases
-  ;; TODO: Is there a faster way to search for aliases?
-  ;;       Would using a hash table with a flatter structure be better?
-  ;;       Using `map-do' on a hash table seemed to be a bit slower for what
-  ;;       we want?
   '((accumulate      . (accumulating callf2))
     (adjoin          . (adjoining))
     (after-do        . (else after else-do))
+    (alias           . (aliases))
     (append          . (appending))
     (array           . (arraying string stringing))
     (array-ref       . (arraying-ref string-ref stringing-ref))
@@ -171,6 +177,9 @@ true names and lists of aliases.
 `loopy-command-parsers' when the command parser is unknown."
   :group 'loopy
   :type '(alist :key-type symbol :value-type (repeat symbol)))
+
+(defvar loopy--command-parsers-internal nil
+  "This variable holds a version of `loopy-command-parsers' during expansion.")
 
 ;;;###autoload
 (defcustom loopy-command-parsers
@@ -665,6 +674,10 @@ known to fall into the first group.")
       loopy--final-protect
       loopy--final-return
 
+      ;; -- Vars to store overwritten values --
+      loopy--command-parsers-internal
+      loopy--aliases-internal
+
       ;; -- Vars for processing loop commands --
       ;; NOTE: `loopy--at-instructions' cannot be local to each loop:
       ;; loopy--at-instructions
@@ -791,7 +804,7 @@ This predicate checks for presence in the list
 `loopy--valid-external-at-targets'."
   (memq target loopy--valid-external-at-targets))
 
-(cl-defun loopy--get-true-name (name &optional (aliases loopy-aliases))
+(cl-defun loopy--get-true-name (name aliases)
   "Get the true name of possible alias NAME."
   (or (progn
         ;; Defensively return nil, since `map-do' in older versions
@@ -814,7 +827,7 @@ This predicate checks for presence in the list
 
 See also `loopy--get-all-names', for when the true name
 is not known."
-  (map-elt loopy-aliases true-name))
+  (map-elt loopy--aliases-internal true-name))
 
 (cl-defun loopy--get-all-names (name &key from-true ignored)
   "Get the true name of NAME and all of the true name's aliases.
@@ -834,7 +847,7 @@ This function does not check whether a name is known."
                                  (when (or (eq name k) (memq name v))
                                    (cl-return-from loopy--get-all-names
                                      (cons k v))))
-                               loopy-aliases)
+                               loopy--aliases-internal)
                        nil)
                      (list name)))))
     (if ignored

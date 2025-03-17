@@ -1780,7 +1780,7 @@ second pass of macro expansion."
   (let ((plist (cl-second arg)))
     (loopy--plist-bind (:name name :loop loop)
         plist
-      (let ((true-name (loopy--get-true-name name)))
+      (let ((true-name (loopy--get-true-name name loopy--aliases-internal)))
         (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
             (cl-destructuring-bind (main-body other-instrs)
                 (loopy--extract-main-body (funcall func plist))
@@ -3100,7 +3100,7 @@ The following variables are checked:
 
 Failing that, an error is signaled."
 
-  (let ((true-name (loopy--get-true-name command-name)))
+  (let ((true-name (loopy--get-true-name command-name loopy--aliases-internal)))
     (or (map-elt parsers true-name)
         (signal 'loopy-unknown-command (list command-name)))))
 

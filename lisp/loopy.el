@@ -230,7 +230,7 @@ Returns a list of two elements:
 NAMES can be either a single quoted name or a list of quoted names.
 
 Aliases can be found in `loopy-aliases'."
-  (let ((aliases (map-pairs loopy-aliases)))
+  (let ((aliases (map-pairs loopy--aliases-internal)))
     (dolist (keyword
              (if (listp names)
                  (append names
@@ -508,6 +508,12 @@ Returns BODY without the `%s' argument."
               (ignore arg-value)
               ,@body))
          (t (error "Conflicting arguments: %s" matching-args))))))
+
+(loopy--def-special-processor alias
+  (cl-loop for (alias . def) in (car arg-value)
+           do (setq loopy--aliases-internal
+                    (loopy--defalias-internal alias def loopy--aliases-internal)))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
 (defun loopy--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
@@ -935,25 +941,22 @@ see the Info node `(loopy)' distributed with this package."
   ;; loop.
   (loopy--wrap-variables-around-body
 ;;;;; Get the list of aliases
-   (let* ((aliases-internal loopy-aliases)
-          (true-name-getter (lambda (name)
-                              (loopy--get-true-name name aliases-internal))))
-
+   (setq loopy--aliases-internal loopy-aliases)
+   (setq body (loopy--process-special-arg-alias body))
 
 ;;;;; Process the special macro arguments.
-     (mapc #'loopy--apply-flag loopy-default-flags)
-     (setq body (loopy--process-special-arg-loop-name body true-name-getter))
-     (setq body (loopy--process-special-arg-flag body true-name-getter))
-     (setq body (loopy--process-special-arg-with body true-name-getter))
-     (setq body (loopy--process-special-arg-without body true-name-getter))
-     (setq body (loopy--process-special-arg-accum-opt body true-name-getter))
-     (setq body (loopy--process-special-arg-wrap body true-name-getter))
-     (setq body (loopy--process-special-arg-before-do body true-name-getter))
-     (setq body (loopy--process-special-arg-after-do body true-name-getter))
-     (setq body (loopy--process-special-arg-finally-do body true-name-getter))
-     (setq body (loopy--process-special-arg-finally-return body true-name-getter))
-     (setq body (loopy--process-special-arg-finally-protect body true-name-getter))
-     )
+   (mapc #'loopy--apply-flag loopy-default-flags)
+   (setq body (loopy--process-special-arg-loop-name body))
+   (setq body (loopy--process-special-arg-flag body))
+   (setq body (loopy--process-special-arg-with body))
+   (setq body (loopy--process-special-arg-without body))
+   (setq body (loopy--process-special-arg-accum-opt body))
+   (setq body (loopy--process-special-arg-wrap body))
+   (setq body (loopy--process-special-arg-before-do body))
+   (setq body (loopy--process-special-arg-after-do body))
+   (setq body (loopy--process-special-arg-finally-do body))
+   (setq body (loopy--process-special-arg-finally-return body))
+   (setq body (loopy--process-special-arg-finally-protect body))
 
 ;;;;; Check the loop name and loop commands.
 

@@ -376,6 +376,23 @@ writing a `seq-do' method for the custom seq."
                    seq))))
 
 ;;; Macro arguments
+
+(loopy-deftest aliases-arg
+  :wrap ((x . `(let ((loopy-iter-bare-commands (cons 'my-list loopy-iter-bare-commands)))
+                 ,x)
+            ))
+  :result '(1 2 3)
+  :body ((alias  ((my-list . list)))
+         (my-list i '(1 2 3))
+         (collect i))
+  :repeat _alias
+  :loopy ((_alias . (alias aliases)))
+  ;; TODO
+  ;; :iter-keyword ((_alias . (alias aliases)))
+  ;; :iter-bare ((_alias . (alias aliases)))
+  )
+
+
 ;;;; Named (loop Name)
 
 (loopy-deftest named

@@ -588,6 +588,16 @@ The following two special macro arguments are useful when using Loopy in a
 library with custom commands ([[#adding-custom-commands]]) and custom aliases
 ([[#custom-aliases]]).  /They are currently experimental./
 
+#+pindex: aliases
+- =alias=, =aliases= :: Custom aliases that are to local to the macro (and not
+  any sub-macros).  This special macro argument is process before all others.
+
+  #+begin_src emacs-lisp
+    (loopy (alias  ((my-list . list)))
+           (my-list i '(1 2 3))
+           (collect i))
+  #+end_src
+
 #+pindex: commands
 - =commands= :: Command parsers that are local to the macro expansion for the
   loop body in which the =commands= is used.  It does not apply to sub-loops.
