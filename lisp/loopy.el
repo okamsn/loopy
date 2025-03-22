@@ -515,6 +515,13 @@ Returns BODY without the `%s' argument."
                     (loopy--defalias-internal alias def loopy--aliases-internal)))
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
+(loopy--def-special-processor command
+  (setq loopy--command-parsers-internal
+        (map-merge 'alist
+                   loopy--command-parsers-internal
+                   (car arg-value)))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
 (defun loopy--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
   (let ((names)
@@ -941,8 +948,12 @@ see the Info node `(loopy)' distributed with this package."
   ;; loop.
   (loopy--wrap-variables-around-body
 ;;;;; Get the list of aliases
-   (setq loopy--aliases-internal loopy-aliases)
+   (setq loopy--aliases-internal (copy-tree loopy-aliases))
    (setq body (loopy--process-special-arg-alias body))
+
+   (setq loopy--command-parsers-internal loopy-command-parsers)
+   (setq body (loopy--process-special-arg-command body))
+   (message "Parsers: %S" loopy--command-parsers-internal)
 
 ;;;;; Process the special macro arguments.
    (mapc #'loopy--apply-flag loopy-default-flags)

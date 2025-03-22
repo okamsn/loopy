@@ -599,13 +599,23 @@ library with custom commands ([[#adding-custom-commands]]) and custom aliases
   #+end_src
 
 #+pindex: commands
-- =commands= :: Command parsers that are local to the macro expansion for the
-  loop body in which the =commands= is used.  It does not apply to sub-loops.
-  =commands= takes an evaluated association list ("alist") of names and parsing
-  functions.  Parsing functions must be available during macro expansion.
+- =command=, =commands= :: Command parsers that are local to the macro expansion
+  for the loop body in which the =command= is used.  It does not apply to
+  sub-loops.  =command= takes an /unevaluated/ association list ("alist") of
+  symbols naming commands and symbols naming parsing functions.  Parsing
+  functions must be available during macro expansion.
+
+  See [[#adding-custom-commands]] for an explanation of this example.
 
   #+begin_src emacs-lisp
-    (loopy (commands '((f . f-parse))))
+    (cl-defun my-set-parser ((_name var val))
+      `((loopy--other-vars (,var nil))
+        (loopy--main-body (setq ,var ,val))))
+
+    ;; => 3
+    (loopy (command ((my-set . my-set-parser)))
+           (my-set i 3)
+           (return i))
   #+end_src
 
 

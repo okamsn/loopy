@@ -3090,18 +3090,18 @@ Return a single list of instructions in the same order as
 COMMAND-LIST."
   (mapcan #'loopy--parse-loop-command command-list))
 
-(cl-defun loopy--get-command-parser (command-name &key (parsers loopy-command-parsers))
+(cl-defun loopy--get-command-parser (command-name)
   "Get the parsing function for COMMAND-NAME.
 
 The following variables are checked:
 
-1. `loopy-aliases'
-2. `loopy-command-parsers' or the value of PARSERS
+1. `loopy--aliases-internal'
+2. `loopy--command-parsers-internal' or the value of PARSERS
 
 Failing that, an error is signaled."
 
   (let ((true-name (loopy--get-true-name command-name loopy--aliases-internal)))
-    (or (map-elt parsers true-name)
+    (or (map-elt loopy--command-parsers-internal true-name)
         (signal 'loopy-unknown-command (list command-name)))))
 
 (provide 'loopy-commands)
