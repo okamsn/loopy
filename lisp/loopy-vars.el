@@ -63,22 +63,25 @@ Definition must exist.  Neither argument need be quoted."
 
 (defun loopy--defalias-internal (alias definition alist)
   "Make a new ALIST to add ALIAS for DEFINITION and return modified ALIST."
-  (let ((true-name (loopy--get-true-name definition alist)))
-    (cond
-     ((eq alias definition)
-      (error "Can't alias name to itself: `%s' -> `%s'"
-             alias definition))
-     ((eq alias true-name)
-      (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
-             alias definition true-name))
-     (t
-      ;; Remove previous uses of that alias from all other names.
-      (setq alist (map-apply (lambda (true-name aliases)
-                               (cons true-name (remq alias aliases)))
-                             alist))
-      ;; Add the alias for the new target name.
-      (push alias (map-elt alist true-name))
-      alist))))
+  (if (memq alias loopy--special-macro-arguments)
+      (error "This name is reserved for the special macro argument: `%'"
+             alias)
+    (let ((true-name (loopy--get-true-name definition alist)))
+      (cond
+       ((eq alias definition)
+        (error "Can't alias name to itself: `%s' -> `%s'"
+               alias definition))
+       ((eq alias true-name)
+        (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
+               alias definition true-name))
+       (t
+        ;; Remove previous uses of that alias from all other names.
+        (setq alist (map-apply (lambda (true-name aliases)
+                                 (cons true-name (remq alias aliases)))
+                               alist))
+        ;; Add the alias for the new target name.
+        (push alias (map-elt alist true-name))
+        alist)))))
 
 (defvar loopy--obsolete-aliases
   '((array across)
@@ -114,6 +117,7 @@ Definition must exist.  Neither argument need be quoted."
     (at              . (atting))
     (before-do       . (initially-do initially before))
     (collect         . (collecting))
+    (command         . (commands))
     (concat          . (concating))
     (cons            . (conses consing))
     (count           . (counting))
@@ -331,7 +335,7 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 
 (defvar loopy--special-macro-arguments
   '( flag with without before-do after-do finally-do finally-return wrap
-     finally-protect accum-opt)
+     finally-protect accum-opt alias command)
   "List of base names of built-in special macro arguments.
 
 These are only the base names as found in `loopy-aliases'.")
