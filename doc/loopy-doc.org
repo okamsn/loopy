@@ -589,20 +589,27 @@ library with custom commands ([[#adding-custom-commands]]) and custom aliases
 ([[#custom-aliases]]).  /They are currently experimental./
 
 #+pindex: aliases
-- =alias=, =aliases= :: Custom aliases that are to local to the macro (and not
-  any sub-macros).  This special macro argument is process before all others.
+- =loopy-aliases= :: Local overrides of the global variable ~loopy-aliases~
+  ([[#custom-aliases]]).  These overrides do not apply to sub-loops.
+
+  This special macro argument takes an /unevaluated/ association list ("alist")
+  of symbols naming aliases and symbols naming the command aliased.  This
+  special macro argument is processed before all others.
 
   #+begin_src emacs-lisp
-    (loopy (alias  ((my-list . list)))
+    ;; => (1 2 3)
+    (loopy (loopy-aliases  ((my-list . list)))
            (my-list i '(1 2 3))
            (collect i))
   #+end_src
 
 #+pindex: commands
-- =command=, =commands= :: Command parsers that are local to the macro expansion
-  for the loop body in which the =command= is used.  It does not apply to
-  sub-loops.  =command= takes an /unevaluated/ association list ("alist") of
-  symbols naming commands and symbols naming parsing functions.  Parsing
+- =loopy-command-parsers= :: Local overrides of the global variable
+  ~loopy-command-parsers~ ([[#adding-custom-commands]]).  These overrides do not
+  apply to sub-loops.
+
+  This special macro argument takes an /unevaluated/ association list ("alist")
+  of symbols naming commands and symbols naming parsing functions.  Parsing
   functions must be available during macro expansion.
 
   See [[#adding-custom-commands]] for an explanation of this example.
@@ -613,7 +620,7 @@ library with custom commands ([[#adding-custom-commands]]) and custom aliases
         (loopy--main-body (setq ,var ,val))))
 
     ;; => 3
-    (loopy (command ((my-set . my-set-parser)))
+    (loopy (loopy-command-parsers ((my-set . my-set-parser)))
            (my-set i 3)
            (return i))
   #+end_src

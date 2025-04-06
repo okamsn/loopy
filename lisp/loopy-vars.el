@@ -110,14 +110,12 @@ Definition must exist.  Neither argument need be quoted."
   '((accumulate      . (accumulating callf2))
     (adjoin          . (adjoining))
     (after-do        . (else after else-do))
-    (alias           . (aliases))
     (append          . (appending))
     (array           . (arraying string stringing))
     (array-ref       . (arraying-ref string-ref stringing-ref))
     (at              . (atting))
     (before-do       . (initially-do initially before))
     (collect         . (collecting))
-    (command         . (commands))
     (concat          . (concating))
     (cons            . (conses consing))
     (count           . (counting))
@@ -335,7 +333,7 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 
 (defvar loopy--special-macro-arguments
   '( flag with without before-do after-do finally-do finally-return wrap
-     finally-protect accum-opt alias command)
+     finally-protect accum-opt loopy-aliases loopy-command-parsers)
   "List of base names of built-in special macro arguments.
 
 These are only the base names as found in `loopy-aliases'.")

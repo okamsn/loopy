@@ -509,13 +509,13 @@ Returns BODY without the `%s' argument."
               ,@body))
          (t (error "Conflicting arguments: %s" matching-args))))))
 
-(loopy--def-special-processor alias
+(loopy--def-special-processor loopy-aliases
   (cl-loop for (alias . def) in (car arg-value)
            do (setq loopy--aliases-internal
                     (loopy--defalias-internal alias def loopy--aliases-internal)))
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
-(loopy--def-special-processor command
+(loopy--def-special-processor loopy-command-parsers
   (setq loopy--command-parsers-internal
         (map-merge 'alist
                    loopy--command-parsers-internal
@@ -946,72 +946,73 @@ see the Info node `(loopy)' distributed with this package."
 
   ;; Bind variables in `loopy--variables' around code to build the expanded
   ;; loop.
-  (loopy--wrap-variables-around-body
-;;;;; Get the list of aliases
-   (setq loopy--aliases-internal (copy-tree loopy-aliases))
-   (setq body (loopy--process-special-arg-alias body))
+  (let ((loopy--aliases-internal nil)
+        (loopy--command-parsers-internal nil))
+    (loopy--wrap-variables-around-body
+  ;;;;; Get the list of aliases
+     (setq loopy--aliases-internal (copy-tree loopy-aliases))
+     (setq body (loopy--process-special-arg-loopy-aliases body))
 
-   (setq loopy--command-parsers-internal loopy-command-parsers)
-   (setq body (loopy--process-special-arg-command body))
-   (message "Parsers: %S" loopy--command-parsers-internal)
+     (setq loopy--command-parsers-internal loopy-command-parsers)
+     (setq body (loopy--process-special-arg-loopy-command-parsers body))
 
-;;;;; Process the special macro arguments.
-   (mapc #'loopy--apply-flag loopy-default-flags)
-   (setq body (loopy--process-special-arg-loop-name body))
-   (setq body (loopy--process-special-arg-flag body))
-   (setq body (loopy--process-special-arg-with body))
-   (setq body (loopy--process-special-arg-without body))
-   (setq body (loopy--process-special-arg-accum-opt body))
-   (setq body (loopy--process-special-arg-wrap body))
-   (setq body (loopy--process-special-arg-before-do body))
-   (setq body (loopy--process-special-arg-after-do body))
-   (setq body (loopy--process-special-arg-finally-do body))
-   (setq body (loopy--process-special-arg-finally-return body))
-   (setq body (loopy--process-special-arg-finally-protect body))
+  ;;;;; Process the special macro arguments.
+     (mapc #'loopy--apply-flag loopy-default-flags)
+     (setq body (loopy--process-special-arg-loop-name body))
+     (setq body (loopy--process-special-arg-flag body))
+     (setq body (loopy--process-special-arg-with body))
+     (setq body (loopy--process-special-arg-without body))
+     (setq body (loopy--process-special-arg-accum-opt body))
+     (setq body (loopy--process-special-arg-wrap body))
+     (setq body (loopy--process-special-arg-before-do body))
+     (setq body (loopy--process-special-arg-after-do body))
+     (setq body (loopy--process-special-arg-finally-do body))
+     (setq body (loopy--process-special-arg-finally-return body))
+     (setq body (loopy--process-special-arg-finally-protect body))
 
-;;;;; Check the loop name and loop commands.
+  ;;;;; Check the loop name and loop commands.
 
-   ;; Body forms have the most variety.
-   ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
-   ;; Things added are expanded in place.
-   (unwind-protect
-       (progn
-         (loopy--process-instructions (loopy--parse-loop-commands body))
+     ;; Body forms have the most variety.
+     ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
+     ;; Things added are expanded in place.
+     (unwind-protect
+         (progn
+           (loopy--process-instructions (loopy--parse-loop-commands body))
 
-         ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
-         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-         ;; using the function `loopy--expand-optimized-accum'.
-         ;;
-         ;; Prevent the expansion of, at the very least, `cl-block',
-         ;; `cl-return-from', and `cl-return' shouldn't be expanded.
-         ;;
-         ;; TODO: Is there a way to more precisely only expand
-         ;;       `loopy--optimized-accum'?
-         ;; Another option is this, but it massively slows down expansion:
-         ;;     (cl-loop for i being the symbols
-         ;;              when (eq (car-safe (symbol-function i)) 'macro)
-         ;;              collect (cons i nil))
-         (setq loopy--main-body
-               (cl-loop
-                with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
-                                                collect (cons i nil))
-                                     (loopy--optimized-accum
-                                      . loopy--expand-optimized-accum)
-                                     ,@macroexpand-all-environment)
-                for i in loopy--main-body
-                collect (macroexpand-all i macro-funcs)))
+           ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+           ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+           ;; using the function `loopy--expand-optimized-accum'.
+           ;;
+           ;; Prevent the expansion of, at the very least, `cl-block',
+           ;; `cl-return-from', and `cl-return' shouldn't be expanded.
+           ;;
+           ;; TODO: Is there a way to more precisely only expand
+           ;;       `loopy--optimized-accum'?
+           ;; Another option is this, but it massively slows down expansion:
+           ;;     (cl-loop for i being the symbols
+           ;;              when (eq (car-safe (symbol-function i)) 'macro)
+           ;;              collect (cons i nil))
+           (setq loopy--main-body
+                 (cl-loop
+                  with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
+                                                  collect (cons i nil))
+                                       (loopy--optimized-accum
+                                        . loopy--expand-optimized-accum)
+                                       ,@macroexpand-all-environment)
+                  for i in loopy--main-body
+                  collect (macroexpand-all i macro-funcs)))
 
-         ;; Process any `at' instructions from loops lower in the call list.
-         (loopy--process-instructions (map-elt loopy--at-instructions
-                                               loopy--loop-name)))
-     (loopy--clean-up-stack-vars))
+           ;; Process any `at' instructions from loops lower in the call list.
+           (loopy--process-instructions (map-elt loopy--at-instructions
+                                                 loopy--loop-name)))
+       (loopy--clean-up-stack-vars))
 
-   ;; Now that instructions processed, make sure the order-dependent lists are
-   ;; in the correct order.
-   (loopy--correct-var-structure)
+     ;; Now that instructions processed, make sure the order-dependent lists are
+     ;; in the correct order.
+     (loopy--correct-var-structure)
 
-   ;; Constructing/Creating the returned code.
-   (loopy--expand-to-loop)))
+     ;; Constructing/Creating the returned code.
+     (loopy--expand-to-loop))))
 
 ;;;;; Other features
 
