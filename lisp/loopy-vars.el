@@ -333,7 +333,10 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 
 (defvar loopy--special-macro-arguments
   '( flag with without before-do after-do finally-do finally-return wrap
-     finally-protect accum-opt loopy-aliases loopy-command-parsers)
+     finally-protect accum-opt loopy-aliases loopy-command-parsers
+     loopy-iter-bare-commands
+     loopy-iter-bare-special-macro-arguments
+     loopy-iter-keywords)
   "List of base names of built-in special macro arguments.
 
 These are only the base names as found in `loopy-aliases'.")
