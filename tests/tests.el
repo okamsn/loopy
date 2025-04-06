@@ -6645,6 +6645,39 @@ Otherwise, `loopy' should return t."
   :iter-bare ((list . listing)
               (my-always . my-always)))
 
+(cl-defun loopy--tests-my-set-parser ((_name var val))
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+(loopy-deftest local-custom-command
+  :doc "Check that the command exists as expected."
+  :result 3
+  :body ((loopy-command-parsers ((my-set . loopy--tests-my-set-parser)))
+         (my-set i 3)
+         (return i))
+  :loopy t
+  :iter-keyword (return my-set loopy-command-parsers)
+  :iter-bare nil)
+
+(loopy-deftest local-custom-command-should-fail
+  :doc "Check that the command doesn't work in sub-loop."
+  :wrap ((x . `(should (equal '(my-set) ,x))))
+  :error loopy-unknown-command
+  :body ((with (i nil))
+         (loopy-command-parsers ((my-set . loopy--tests-my-set-parser)))
+         (loopy (my-set i 3) (leave))
+         (return i))
+  :loopy t
+  :iter-keyword (return my-set loopy-command-parsers loopy leave)
+  :iter-bare nil)
+
+(ert-deftest iter-bare/local-custom-command ()
+  (should (equal 3
+                 (eval '(loopy-iter (loopy-iter-bare-commands (my-set))
+                                    (loopy-command-parsers ((my-set . my-set-parser)))
+                                    (my-set i 3)
+                                    (returning i))))))
+
 ;;; Repeated evaluation of macro
 
 ;; This was an odd case reported by a user. See:
