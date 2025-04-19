@@ -641,12 +641,17 @@ library with custom commands (@ref{Custom Commands}) and custom aliases
 
 @pindex aliases
 @table @asis
-@item @samp{alias}, @samp{aliases}
-Custom aliases that are to local to the macro (and not
-any sub-macros).  This special macro argument is process before all others.
+@item @samp{loopy-aliases}
+Local overrides of the global variable @code{loopy-aliases}
+(@ref{Custom Aliases}).  These overrides do not apply to sub-loops.
+
+This special macro argument takes an @emph{unevaluated} association list (``alist'')
+of symbols naming aliases and symbols naming the command aliased.  This
+special macro argument is processed before all others.
 
 @lisp
-(loopy (alias  ((my-list . list)))
+;; => (1 2 3)
+(loopy (loopy-aliases  ((my-list . list)))
        (my-list i '(1 2 3))
        (collect i))
 @end lisp
@@ -654,19 +659,26 @@ any sub-macros).  This special macro argument is process before all others.
 
 @pindex commands
 @table @asis
-@item @samp{command}, @samp{commands}
-Command parsers that are local to the macro expansion
-for the loop body in which the @samp{commands} is used.  It does not apply to
-sub-loops.  @samp{commands} takes an unevaluated association list (``alist'') of
-symbols naming commands and symbols naming parsing functions.  Parsing
+@item @samp{loopy-command-parsers}
+Local overrides of the global variable
+@code{loopy-command-parsers} (@ref{Custom Commands}).  These overrides do not
+apply to sub-loops.
+
+This special macro argument takes an @emph{unevaluated} association list (``alist'')
+of symbols naming commands and symbols naming parsing functions.  Parsing
 functions must be available during macro expansion.
 
-See @ref{Custom Commands} for more.
+See @ref{Custom Commands} for an explanation of this example.
 
 @lisp
-(defun f-parse (arg)
-  )
-(loopy (commands '((f . f-parse))))
+(cl-defun my-set-parser ((_name var val))
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+;; => 3
+(loopy (loopy-command-parsers ((my-set . my-set-parser)))
+       (my-set i 3)
+       (return i))
 @end lisp
 @end table
 
@@ -739,7 +751,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orga7c80ce
+@float Listing,org8e3055f
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -923,7 +935,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org1c4b608
+@float Listing,orgf1bcd94
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -938,7 +950,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org28106ca
+@float Listing,org23ec3b0
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -4965,7 +4977,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-aliases}.
 
-@float Listing,orgeaaaae9
+@float Listing,org5440a17
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
