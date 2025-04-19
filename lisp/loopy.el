@@ -475,6 +475,8 @@ Variables available:
        (t (error "Conflicting arguments: %s" such-args)))))
 
 ;;;; Create special arg processors
+(defvar loopy-iter-bare-special-macro-arguments)
+(defvar loopy-iter-keywords)
 (defmacro loopy--def-special-processor (name &rest body)
   "Create a processor for the special macro argument NAME and its aliases.
 
@@ -484,34 +486,55 @@ in `loopy--variables') and return a new BODY with its
 own argument removed.
 
 Variables available:
-- `all-names' is all of the names found
-- `matching-args' are all arguments that match elements in
-  `all-names'
 - `arg-value' is the value of the arg if there is only one match
-- `arg-name' the name of the arg found if there is only one match"
+- `arg-name' the name of the arg found if there is only one match
+- `mode' is current mode of expansion"
   (declare (indent defun))
-  `(defun ,(intern (format "loopy--process-special-arg-%s" name))
-       (body &optional ignored)
+  `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
+       (body mode)
      ,(format "Process the special macro argument `%s' and its aliases.
 
 Returns BODY without the `%s' argument."
               name name)
-     (let* ((all-names (loopy--get-all-names (quote ,name)
-                                             :from-true t
-                                             :ignored ignored))
-            (matching-args (seq-filter (lambda (x) (memq (car-safe x) all-names))
-                                       body)))
-       (cl-case (length matching-args)
-         (0 body)
-         (1 (let ((arg-name  (caar matching-args))
-                  (arg-value (cdar matching-args)))
-              (ignore arg-value)
-              ,@body))
-         (t (error "Conflicting arguments: %s" matching-args))))))
+     (cl-assert (memq mode '(iter basic)))
+     (let* ((found)
+            (all-names (loopy--get-all-names (quote ,name) :from-true t))
+            (new-body))
+       (cl-ecase mode
+         (iter (let ((bare-names (cl-intersection all-names
+                                                  loopy-iter-bare-special-macro-arguments)))
+                 (dolist (expr body)
+                   (pcase expr
+                     ((or `(,(and (pred (lambda (x) (memq x bare-names)))
+                                  arg-name)
+                            . ,arg-value)
+                          `(,(pred (lambda (x) (memq x loopy-iter-keywords)))
+                            ,(and (pred (lambda (x) (memq x all-names)))
+                                  arg-name)
+                            . ,arg-value))
+                      (if found
+                          (error "Conflicting arguments: %S" (list found expr))
+                        (setq found expr))
+                      ,@body)
+                     (_
+                      (push expr new-body))))))
+         (basic (dolist (expr body)
+                  (pcase expr
+                    (`(,(and (pred (lambda (x) (memq x all-names)))
+                             arg-name)
+                       . ,arg-value)
+                     (if found
+                         (error "Conflicting arguments: %S" (list found expr))
+                       (setq found expr))
+                     ,@body)
+                    (_
+                     (push expr new-body))))))
+       (nreverse new-body))))
 
 (defvar loopy-iter-keywords)
 (defun loopy--process-special-arg-loop-name (body mode)
   "Process BODY and the loop name listed therein."
+  (cl-assert (memq mode '(iter basic)))
   (let* ((names)
          (new-body)
          (all-sma-names (loopy--get-all-names 'named :from-true t))
@@ -553,8 +576,7 @@ Returns BODY without the `%s' argument."
   ;; 1. Flags in `loopy-default-flags'.
   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
   ;; (mapc #'loopy--apply-flag loopy-default-flags)
-  (mapc #'loopy--apply-flag arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (mapc #'loopy--apply-flag arg-value))
 
 (loopy--def-special-processor with
   (setq loopy--with-vars
@@ -565,45 +587,36 @@ Returns BODY without the `%s' argument."
                         ((= 1 (length binding)) (list (cl-first binding)
                                                       nil))
                         (t                       binding)))
-                arg-value))
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+                arg-value)))
 
 (loopy--def-special-processor without
-  (setq loopy--without-vars arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--without-vars arg-value))
 
 (loopy--def-special-processor accum-opt
   (pcase-dolist ((or `(,var ,pos) var) arg-value)
     (push var loopy--optimized-accum-vars)
     (when pos
-      (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF)))
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+      (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
 
 (loopy--def-special-processor wrap
-  (setq loopy--wrapping-forms arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--wrapping-forms arg-value))
 
 (loopy--def-special-processor before-do
-  (setq loopy--before-do arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--before-do arg-value))
 
 (loopy--def-special-processor after-do
-  (setq loopy--after-do arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--after-do arg-value))
 
 (loopy--def-special-processor finally-do
-  (setq loopy--final-do arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--final-do arg-value))
 
 (loopy--def-special-processor finally-return
   (setq loopy--final-return (if (= 1 (length arg-value))
                                 (cl-first arg-value)
-                              (cons 'list arg-value)))
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+                              (cons 'list arg-value))))
 
 (loopy--def-special-processor finally-protect
-  (setq loopy--final-protect arg-value)
-  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+  (setq loopy--final-protect arg-value))
 
 (defun loopy--clean-up-stack-vars ()
   "Clean up the special stack variables.
