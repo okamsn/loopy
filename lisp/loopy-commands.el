@@ -129,9 +129,10 @@ These commands affect other loops higher up in the call list."
   (loopy--check-target-loop-name target-loop)
   (let ((loopy--loop-name target-loop)
         (loopy--in-sub-level t))
-    `((loopy--at-instructions
-       (,target-loop
-        ,@(loopy--parse-loop-commands commands))))))
+    (loopy--bind-main-body (main other)
+        (loopy--parse-loop-commands commands)
+      `((loopy--main-body ,(macroexp-progn main))
+        (loopy--at-instructions (,target-loop ,@other))))))
 
 ;;;;;; Loopy
 (cl-defun loopy--parse-loopy-command ((_ &rest body))
