@@ -224,7 +224,7 @@ to use `loopy' in general."
                                      (loopy-iter--non-main-body-instructions)
                                      (loopy-iter--level 0)
                                      (command-env
-                                      (cl-loop for (sym . func) in (loopy--internal--name-parser-conclusion-alist)
+                                      (cl-loop for (sym . func) in name-parser-alist
                                                ;; `cl-loop' modifies vars, so
                                                ;; need to capture value.
                                                collect (let ((sym2 sym)
@@ -302,11 +302,16 @@ to use `loopy' in general."
                       ;; isn't a command itself, bind `loopy--in-sub-level' in case
                       ;; of any commands further down.
                       (iter-macroexpand-all (expr)
-                        (if (map-elt command-env (car expr))
-                            (macroexpand-all expr first-pass-env)
-                          (let ((loopy-iter--level (1+ loopy-iter--level))
-                                (loopy--in-sub-level t))
-                            (macroexpand-all expr first-pass-env))))
+                        (cl-ecase loopy--mode
+                          (basic (if (alist-get (car-safe expr) name-parser-alist)
+                                     (macroexpand-1 expr first-pass-env)
+                                   (signal 'loopy-unknown-command (list expr))))
+                          (iter
+                           (if (map-elt command-env (car expr))
+                               (macroexpand-all expr first-pass-env)
+                             (let ((loopy-iter--level (1+ loopy-iter--level))
+                                   (loopy--in-sub-level t))
+                               (macroexpand-all expr first-pass-env))))))
                       ;; Process body, insert data for optimized accumulations,
                       ;; then process the other instructions:
                       (first-pass (body)
