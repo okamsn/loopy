@@ -55,246 +55,246 @@
 ;;       while expanding commands.  For example, `cl-flet'.
 
 ;;;; Custom User Options
-(defgroup loopy-iter nil
-  "Options specifically for the `loopy-iter' macro."
-  :group 'loopy
-  :prefix "loopy-iter-")
-
-(defcustom loopy-iter-keywords '(accum for exit arg)
-  "Keywords that `loopy-iter' can use to recognize loop commands.
-
-By default, `loopy-iter' can use keywords to clearly distinguish
-loop commands and special macro arguments from other Emacs
-features.
-
-A loop command or special macro argument can be preceded by any
-of the keywords in this list.  For example, by default, \"(for
-collect i)\" and \"(accum collect i)\" are both valid way of
-identifying the `collect' loop command.
-
-Without these keywords, one must use one of the names given in
-`loopy-iter-bare-commands' or
-`loopy-iter-bare-special-macro-arguments'."
-  :type '(repeat symbol))
-
-(def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
-  ;; This is the same as for `loopy', but without `let*'.
-  [&or ([&or "with" "init"] &rest (symbolp &optional form))
-       ([&or "without" "no-with" "no-init"] &rest symbolp)
-       ([&or "flag" "flags"] &rest symbolp)
-       ([&or "accum-opt" "opt-accum"]
-        [&or symbolp (symbolp [&or "end" "start" "beginning"])])
-       ;; This is basically the same as the spec used by
-       ;; `thread-first':
-       ("wrap" &rest [&or symbolp (sexp &rest form)])
-       ;; "body" is the same as "&rest form":
-       ([&or "before-do" "before" "initially-do" "initially"] body)
-       ([&or "after-do" "after" "else-do" "else"] body)
-       ([&or "finally-do" "finally"] body)
-       ([&or "finally-protect" "finally-protected"] body)
-       ("finally-return" form &optional [&rest form])])
-
-(def-edebug-spec loopy-iter--command-edebug-specs
-  ([&optional symbolp] . loopy--command-edebug-specs))
-
-;;;; For parsing commands
-
-(defcustom loopy-iter-bare-commands
-  '(accumulating
-    adjoining
-    always
-    appending
-    arraying
-    arraying-index
-    arraying-ref
-    at
-    collecting
-    concating
-    consing
-    continuing
-    continuing-from
-    counting
-    cycling
-    finding
-    iterating
-    leaving
-    leaving-from
-    listing
-    listing-index
-    listing-ref
-    mapping
-    mapping-pairs
-    mapping-ref
-    maximizing
-    minimizing
-    multiplying
-    nconcing
-    never
-    numbering
-    numbering-down
-    numbering-up
-    nunioning
-    prepending
-    pushing
-    pushing-into
-    reducing
-    repeating
-    returning
-    returning-from
-    seqing
-    seqing-index
-    seqing-ref
-    sequencing
-    sequencing-index
-    sequencing-ref
-    setting
-    setting-accum
-    setting-prev
-    skipping
-    skipping-from
-    string
-    string-index
-    string-ref
-    stringing
-    stringing-index
-    stringing-ref
-    streaming
-    substreaming
-    summing
-    thereis
-    unioning
-    vconcating)
-  "Commands recognized in `loopy-iter' without a preceding keyword.
-
-For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
-  :type '(repeat symbol)
-  :group 'loopy-iter)
-
-(defvar loopy-iter--command-parsers nil
-  "Parsers used by `loopy-iter'.
-
-This variable is bound while `loopy-iter' is running, combining
-`loopy-command-parsers' and
-`loopy-iter-overwritten-command-parsers'.")
-
-(defun loopy-iter--parse-command (command)
-  "Parse COMMAND using parsers in`loopy-iter--command-parsers'.
-
-See also `loopy--parse-loop-command'."
-  (let* ((cmd-name (cl-first command))
-         (parser (loopy--get-command-parser
-                  cmd-name
-                  :parsers loopy-iter--command-parsers))
-         (instructions (remq nil (funcall parser command))))
-    (or instructions
-        (signal 'loopy-parser-instructions-missing
-                (list command parser)))))
-
-(defvar loopy-iter--non-main-body-instructions nil
-  "Used to capture other instructions while expanding.
-
-Expanding functions `push' lists of instructions into this
-variable.  The contents of main-body instructions are inserted
-into the expanded body in the command's place during macro
-expansion.")
-
-;;;;; Expanders
-
-(defvar loopy-iter--level nil
-  "The level of the expression `loopy-iter' is currently processing.
-
-For example, iteration commands should only be processed during
-level 1, which is the top level.  The next level of nesting is
-level 2, and so on.  If `loopy-iter--level' is greater than 1,
-then `loopy--in-sub-level' is set to `t'.
-
-The macro initially `let'-binds this variable to 0, and it is
-incremented upon parsing a new function.")
-
-(defun loopy-iter--opt-accum-expand-val (arg)
-  "Macro expand only the value of the optimized accumulation expression ARG.
-
-Optimized accumulations are expanded into a special form, after
-which this function will recursively expand the expression of the
-accumulated value.
-
-To avoid an infinite loop, this function replaces the `loopy--optimized-accum'
-in the expression with `loopy--optimized-accum-2', which is then processed
-during a second pass on the expanded code."
-  (loopy (with (plist (cadr arg)))
-         (cons (k v) plist :by #'cddr)
-         (collect k)
-         ;; By this point, command expansion are already defined, so we don't
-         ;; need to try to handle instructions.
-         (collect (if (eq k :val)
-                      (let ((loopy-iter--level (1+ loopy-iter--level))
-                            (loopy--in-sub-level t))
-                        (macroexpand-all v macroexpand-all-environment))
-                    v))
-         (finally-return `(loopy--optimized-accum-2 (quote ,loopy-result)))))
-
-;;;;; Overwritten parser definitions
-
-(defcustom loopy-iter-overwritten-command-parsers
-  '((at       . loopy-iter--parse-at-command))
-  "Overwritten command parsers.
-
-This is an alist of dotted pairs of base names and parsers, as in
-`loopy-command-parsers'.
-
-Some parsers reasonably assume that all of their body arguments are
-also commands.  For `loopy-iter', this cannot work, so some parsers
-need to be tweaked."
-  :type '(alist :key-type symbol :value-type function)
-  :group 'loopy-iter)
-
-(cl-defun loopy-iter--parse-at-command ((_ target-loop &rest commands))
-  "Parse the `at' command as (at &rest COMMANDS).
-
-These commands affect other loops higher up in the call list."
-  (loopy--check-target-loop-name target-loop)
-  ;; We need to capture all non-main-body instructions into a new `at'
-  ;; instruction, so we just temporarily `let'-bind
-  ;; `loopy-iter--non-main-body-instructions' while the expanding functions push
-  ;; to it, which we then wrap back in a new instruction and pass up to the
-  ;; calling function, which consumes instructions.
-  (loopy (with (loopy-iter--non-main-body-instructions nil)
-               (loopy--loop-name target-loop)
-               (loopy--in-sub-level t)
-               (loopy-iter--level (1+ loopy-iter--level)))
-         (list cmd commands)
-         (collect (list 'loopy--main-body (macroexpand-all
-                                           cmd
-                                           macroexpand-all-environment)))
-         (finally-return
-          ;; Return list of instructions to comply with expectations of calling
-          ;; function, which thinks that this is a normal loop-command parser.
-          `(,@loopy-result
-            (loopy--at-instructions
-             (,target-loop
-              ,@(thread-last loopy-iter--non-main-body-instructions
-                             nreverse
-                             (apply #'append))))))))
-
-;;;; For parsing special macro arguments
-
-(defcustom loopy-iter-bare-special-macro-arguments
-  '( after-do        after else-do else
-     before-do       before initially-do initially
-     finally-do      finally
-     finally-return
-     finally-protect finally-protected
-     flag            flags
-     named
-     accum-opt       opt-accum
-     with            init
-     without         no-with no-init
-     wrap)
-  "Symbols naming recognized special macro arguments and their aliases.
-
-These should not overwrite any other macros or functions in Emacs Lisp."
-  :type '(repeat symbol)
-  :group 'loopy-iter)
+;; (defgroup loopy-iter nil
+;;   "Options specifically for the `loopy-iter' macro."
+;;   :group 'loopy
+;;   :prefix "loopy-iter-")
+;;
+;; (defcustom loopy-iter-keywords '(accum for exit arg)
+;;   "Keywords that `loopy-iter' can use to recognize loop commands.
+;;
+;; By default, `loopy-iter' can use keywords to clearly distinguish
+;; loop commands and special macro arguments from other Emacs
+;; features.
+;;
+;; A loop command or special macro argument can be preceded by any
+;; of the keywords in this list.  For example, by default, \"(for
+;; collect i)\" and \"(accum collect i)\" are both valid way of
+;; identifying the `collect' loop command.
+;;
+;; Without these keywords, one must use one of the names given in
+;; `loopy-iter-bare-commands' or
+;; `loopy-iter-bare-special-macro-arguments'."
+;;   :type '(repeat symbol))
+;;
+;; (def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
+;;   ;; This is the same as for `loopy', but without `let*'.
+;;   [&or ([&or "with" "init"] &rest (symbolp &optional form))
+;;        ([&or "without" "no-with" "no-init"] &rest symbolp)
+;;        ([&or "flag" "flags"] &rest symbolp)
+;;        ([&or "accum-opt" "opt-accum"]
+;;         [&or symbolp (symbolp [&or "end" "start" "beginning"])])
+;;        ;; This is basically the same as the spec used by
+;;        ;; `thread-first':
+;;        ("wrap" &rest [&or symbolp (sexp &rest form)])
+;;        ;; "body" is the same as "&rest form":
+;;        ([&or "before-do" "before" "initially-do" "initially"] body)
+;;        ([&or "after-do" "after" "else-do" "else"] body)
+;;        ([&or "finally-do" "finally"] body)
+;;        ([&or "finally-protect" "finally-protected"] body)
+;;        ("finally-return" form &optional [&rest form])])
+;;
+;; (def-edebug-spec loopy-iter--command-edebug-specs
+;;   ([&optional symbolp] . loopy--command-edebug-specs))
+;;
+;; ;;;; For parsing commands
+;;
+;; (defcustom loopy-iter-bare-commands
+;;   '(accumulating
+;;     adjoining
+;;     always
+;;     appending
+;;     arraying
+;;     arraying-index
+;;     arraying-ref
+;;     at
+;;     collecting
+;;     concating
+;;     consing
+;;     continuing
+;;     continuing-from
+;;     counting
+;;     cycling
+;;     finding
+;;     iterating
+;;     leaving
+;;     leaving-from
+;;     listing
+;;     listing-index
+;;     listing-ref
+;;     mapping
+;;     mapping-pairs
+;;     mapping-ref
+;;     maximizing
+;;     minimizing
+;;     multiplying
+;;     nconcing
+;;     never
+;;     numbering
+;;     numbering-down
+;;     numbering-up
+;;     nunioning
+;;     prepending
+;;     pushing
+;;     pushing-into
+;;     reducing
+;;     repeating
+;;     returning
+;;     returning-from
+;;     seqing
+;;     seqing-index
+;;     seqing-ref
+;;     sequencing
+;;     sequencing-index
+;;     sequencing-ref
+;;     setting
+;;     setting-accum
+;;     setting-prev
+;;     skipping
+;;     skipping-from
+;;     string
+;;     string-index
+;;     string-ref
+;;     stringing
+;;     stringing-index
+;;     stringing-ref
+;;     streaming
+;;     substreaming
+;;     summing
+;;     thereis
+;;     unioning
+;;     vconcating)
+;;   "Commands recognized in `loopy-iter' without a preceding keyword.
+;;
+;; For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
+;;   :type '(repeat symbol)
+;;   :group 'loopy-iter)
+;;
+;; (defvar loopy-iter--command-parsers nil
+;;   "Parsers used by `loopy-iter'.
+;;
+;; This variable is bound while `loopy-iter' is running, combining
+;; `loopy-command-parsers' and
+;; `loopy-iter-overwritten-command-parsers'.")
+;;
+;; (defun loopy-iter--parse-command (command)
+;;   "Parse COMMAND using parsers in`loopy-iter--command-parsers'.
+;;
+;; See also `loopy--parse-loop-command'."
+;;   (let* ((cmd-name (cl-first command))
+;;          (parser (loopy--get-command-parser
+;;                   cmd-name
+;;                   :parsers loopy-iter--command-parsers))
+;;          (instructions (remq nil (funcall parser command))))
+;;     (or instructions
+;;         (signal 'loopy-parser-instructions-missing
+;;                 (list command parser)))))
+;;
+;; (defvar loopy-iter--non-main-body-instructions nil
+;;   "Used to capture other instructions while expanding.
+;;
+;; Expanding functions `push' lists of instructions into this
+;; variable.  The contents of main-body instructions are inserted
+;; into the expanded body in the command's place during macro
+;; expansion.")
+;;
+;; ;;;;; Expanders
+;;
+;; (defvar loopy-iter--level nil
+;;   "The level of the expression `loopy-iter' is currently processing.
+;;
+;; For example, iteration commands should only be processed during
+;; level 1, which is the top level.  The next level of nesting is
+;; level 2, and so on.  If `loopy-iter--level' is greater than 1,
+;; then `loopy--in-sub-level' is set to `t'.
+;;
+;; The macro initially `let'-binds this variable to 0, and it is
+;; incremented upon parsing a new function.")
+;;
+;; (defun loopy-iter--opt-accum-expand-val (arg)
+;;   "Macro expand only the value of the optimized accumulation expression ARG.
+;;
+;; Optimized accumulations are expanded into a special form, after
+;; which this function will recursively expand the expression of the
+;; accumulated value.
+;;
+;; To avoid an infinite loop, this function replaces the `loopy--optimized-accum'
+;; in the expression with `loopy--optimized-accum-2', which is then processed
+;; during a second pass on the expanded code."
+;;   (loopy (with (plist (cadr arg)))
+;;          (cons (k v) plist :by #'cddr)
+;;          (collect k)
+;;          ;; By this point, command expansion are already defined, so we don't
+;;          ;; need to try to handle instructions.
+;;          (collect (if (eq k :val)
+;;                       (let ((loopy-iter--level (1+ loopy-iter--level))
+;;                             (loopy--in-sub-level t))
+;;                         (macroexpand-all v macroexpand-all-environment))
+;;                     v))
+;;          (finally-return `(loopy--optimized-accum-2 (quote ,loopy-result)))))
+;;
+;; ;;;;; Overwritten parser definitions
+;;
+;; (defcustom loopy-iter-overwritten-command-parsers
+;;   '((at       . loopy-iter--parse-at-command))
+;;   "Overwritten command parsers.
+;;
+;; This is an alist of dotted pairs of base names and parsers, as in
+;; `loopy-command-parsers'.
+;;
+;; Some parsers reasonably assume that all of their body arguments are
+;; also commands.  For `loopy-iter', this cannot work, so some parsers
+;; need to be tweaked."
+;;   :type '(alist :key-type symbol :value-type function)
+;;   :group 'loopy-iter)
+;;
+;; (cl-defun loopy-iter--parse-at-command ((_ target-loop &rest commands))
+;;   "Parse the `at' command as (at &rest COMMANDS).
+;;
+;; These commands affect other loops higher up in the call list."
+;;   (loopy--check-target-loop-name target-loop)
+;;   ;; We need to capture all non-main-body instructions into a new `at'
+;;   ;; instruction, so we just temporarily `let'-bind
+;;   ;; `loopy-iter--non-main-body-instructions' while the expanding functions push
+;;   ;; to it, which we then wrap back in a new instruction and pass up to the
+;;   ;; calling function, which consumes instructions.
+;;   (loopy (with (loopy-iter--non-main-body-instructions nil)
+;;                (loopy--loop-name target-loop)
+;;                (loopy--in-sub-level t)
+;;                (loopy-iter--level (1+ loopy-iter--level)))
+;;          (list cmd commands)
+;;          (collect (list 'loopy--main-body (macroexpand-all
+;;                                            cmd
+;;                                            macroexpand-all-environment)))
+;;          (finally-return
+;;           ;; Return list of instructions to comply with expectations of calling
+;;           ;; function, which thinks that this is a normal loop-command parser.
+;;           `(,@loopy-result
+;;             (loopy--at-instructions
+;;              (,target-loop
+;;               ,@(thread-last loopy-iter--non-main-body-instructions
+;;                              nreverse
+;;                              (apply #'append))))))))
+;;
+;; ;;;; For parsing special macro arguments
+;;
+;; (defcustom loopy-iter-bare-special-macro-arguments
+;;   '( after-do        after else-do else
+;;      before-do       before initially-do initially
+;;      finally-do      finally
+;;      finally-return
+;;      finally-protect finally-protected
+;;      flag            flags
+;;      named
+;;      accum-opt       opt-accum
+;;      with            init
+;;      without         no-with no-init
+;;      wrap)
+;;   "Symbols naming recognized special macro arguments and their aliases.
+;;
+;; These should not overwrite any other macros or functions in Emacs Lisp."
+;;   :type '(repeat symbol)
+;;   :group 'loopy-iter)
 
 ;; TODO: Combine this with `loopy--def-special-processor'.
 (defmacro loopy-iter--def-special-processor (name &rest body)
