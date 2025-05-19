@@ -296,141 +296,141 @@
 ;;   :type '(repeat symbol)
 ;;   :group 'loopy-iter)
 
-;; TODO: Combine this with `loopy--def-special-processor'.
-(defmacro loopy-iter--def-special-processor (name &rest body)
-  "Create a processor for the special macro argument NAME and its aliases.
-
-BODY is the arguments to the macro `loopy' or `loopy-iter'.
-Each processor should set a special variable (such as those
-in `loopy--variables') and return a new BODY with its
-own argument removed.
-
-Variables available:
-- `all-names' is all of the names found
-- `matching-args' are all arguments that match elements in
-  `all-names'
-- `arg-value' is the value of the arg if there is only one match
-- `arg-name' the name of the arg found if there is only one match"
-  (declare (indent defun))
-  `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
-       (body)
-     ,(format "Process the special macro argument `%s' and its aliases.
-
-Returns BODY without the `%s' argument."
-              name name)
-     (loopy
-      (accum-opt matching-args new-body)
-      (with (all-names (loopy--get-all-names (quote ,name) :from-true t))
-            (bare-names (loopy (list name all-names)
-                               (when (memq name loopy-iter-bare-special-macro-arguments)
-                                 (collect name)))))
-      (listing expr body)
-      (if (and (consp expr)
-               (or (memq (cl-first expr) bare-names)
-                   (and (memq (cl-first expr) loopy-iter-keywords)
-                        (memq (cl-second expr) all-names))))
-          (collecting matching-args expr)
-        (collecting new-body expr))
-      (finally-do (when matching-args
-                    (if (cdr matching-args)
-                        (error "Conflicting arguments: %s" matching-args)
-                      (let ((arg (car matching-args))
-                            (arg-name)
-                            (arg-value))
-                        ;; TODO: Probably a better way to do this that doesn't
-                        ;; involve checking twice.
-                        (if (memq (cl-first arg) bare-names)
-                            (loopy-setq (arg-name . arg-value) arg)
-                          (loopy-setq (_ arg-name . arg-value) arg))
-                        (ignore arg-name)
-                        ,@body))))
-      (finally-return
-       new-body))))
-
-(defun loopy-iter--process-special-arg-loop-name (body)
-  "Process BODY and the loop name listed therein."
-  (let* ((names)
-         (new-body)
-         (all-sma-names (loopy--get-all-names 'named :from-true t))
-         (all-sma-bare-names
-          (loopy (list name all-sma-names)
-                 (when (memq name loopy-iter-bare-special-macro-arguments)
-                   (collect name)))))
-    (dolist (arg body)
-      (cond ((symbolp arg)
-             (push arg names))
-            ((memq (car-safe arg) all-sma-bare-names)
-             (if (/= 2 (length arg))
-                 (error "Wrong number of arguments for loop name: %s" arg)
-               (push (cl-second arg) names)))
-            ((and (memq (car-safe arg) loopy-iter-keywords)
-                  (memq (cl-second arg) all-sma-names))
-             (if (/= 3 (length arg))
-                 (error "Wrong number of arguments for loop name: %s" arg)
-               (push (cl-third arg) names)))
-            (t (push arg new-body))))
-    (if (> (length names) 1)
-        (error "Conflicting loop names: %s" names)
-      (let ((loop-name (cl-first names))) ; Symbol or `nil'.
-        (setq loopy--loop-name loop-name
-              loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
-              loopy--non-returning-exit-tag-name
-              (loopy--produce-non-returning-exit-tag-name loop-name))
-        ;; Set up the stack-maps.
-        (push loopy--loop-name loopy--known-loop-names)
-        (push (list loopy--loop-name) loopy--accumulation-places)
-        ;; Return non-name args.
-        (nreverse new-body)))))
-
-(loopy-iter--def-special-processor with
-  ;; Note: These values don't have to be used literally, due to
-  ;;       destructuring.
-  (loopy (list binding arg-value)
-         (collect
-          (cond ((symbolp binding)      (list binding nil))
-                ((= 1 (length binding)) (list (cl-first binding) nil))
-                (t                       binding)))
-         (finally-do
-          (setq loopy--with-vars loopy-result))))
-
-
-(loopy-iter--def-special-processor finally-return
-  (setq loopy--final-return (if (= 1 (length arg-value))
-                                (cl-first arg-value)
-                              (cons 'list arg-value))))
-
-(loopy-iter--def-special-processor flag
-  ;; Process any flags passed to the macro.  In case of conflicts, the
-  ;; processing order is:
-  ;;
-  ;; 1. Flags in `loopy-default-flags'.
-  ;; 2. Flags in the `flag' macro argument, which can undo the first group.
-  ;; (mapc #'loopy--apply-flag loopy-default-flags)
-  (mapc #'loopy--apply-flag arg-value))
-
-(loopy-iter--def-special-processor without
-  (setq loopy--without-vars arg-value))
-
-(loopy-iter--def-special-processor accum-opt
-  (pcase-dolist ((or `(,var ,pos) var) arg-value)
-    (push var loopy--optimized-accum-vars)
-    (when pos
-      (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
-
-(loopy-iter--def-special-processor wrap
-  (setq loopy--wrapping-forms arg-value))
-
-(loopy-iter--def-special-processor before-do
-  (setq loopy--before-do arg-value))
-
-(loopy-iter--def-special-processor after-do
-  (setq loopy--after-do arg-value))
-
-(loopy-iter--def-special-processor finally-do
-  (setq loopy--final-do arg-value))
-
-(loopy-iter--def-special-processor finally-protect
-  (setq loopy--final-protect arg-value))
+;; ;; TODO: Combine this with `loopy--def-special-processor'.
+;; (defmacro loopy-iter--def-special-processor (name &rest body)
+;;   "Create a processor for the special macro argument NAME and its aliases.
+;;
+;; BODY is the arguments to the macro `loopy' or `loopy-iter'.
+;; Each processor should set a special variable (such as those
+;; in `loopy--variables') and return a new BODY with its
+;; own argument removed.
+;;
+;; Variables available:
+;; - `all-names' is all of the names found
+;; - `matching-args' are all arguments that match elements in
+;;   `all-names'
+;; - `arg-value' is the value of the arg if there is only one match
+;; - `arg-name' the name of the arg found if there is only one match"
+;;   (declare (indent defun))
+;;   `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
+;;        (body)
+;;      ,(format "Process the special macro argument `%s' and its aliases.
+;;
+;; Returns BODY without the `%s' argument."
+;;               name name)
+;;      (loopy
+;;       (accum-opt matching-args new-body)
+;;       (with (all-names (loopy--get-all-names (quote ,name) :from-true t))
+;;             (bare-names (loopy (list name all-names)
+;;                                (when (memq name loopy-iter-bare-special-macro-arguments)
+;;                                  (collect name)))))
+;;       (listing expr body)
+;;       (if (and (consp expr)
+;;                (or (memq (cl-first expr) bare-names)
+;;                    (and (memq (cl-first expr) loopy-iter-keywords)
+;;                         (memq (cl-second expr) all-names))))
+;;           (collecting matching-args expr)
+;;         (collecting new-body expr))
+;;       (finally-do (when matching-args
+;;                     (if (cdr matching-args)
+;;                         (error "Conflicting arguments: %s" matching-args)
+;;                       (let ((arg (car matching-args))
+;;                             (arg-name)
+;;                             (arg-value))
+;;                         ;; TODO: Probably a better way to do this that doesn't
+;;                         ;; involve checking twice.
+;;                         (if (memq (cl-first arg) bare-names)
+;;                             (loopy-setq (arg-name . arg-value) arg)
+;;                           (loopy-setq (_ arg-name . arg-value) arg))
+;;                         (ignore arg-name)
+;;                         ,@body))))
+;;       (finally-return
+;;        new-body))))
+;;
+;; (defun loopy-iter--process-special-arg-loop-name (body)
+;;   "Process BODY and the loop name listed therein."
+;;   (let* ((names)
+;;          (new-body)
+;;          (all-sma-names (loopy--get-all-names 'named :from-true t))
+;;          (all-sma-bare-names
+;;           (loopy (list name all-sma-names)
+;;                  (when (memq name loopy-iter-bare-special-macro-arguments)
+;;                    (collect name)))))
+;;     (dolist (arg body)
+;;       (cond ((symbolp arg)
+;;              (push arg names))
+;;             ((memq (car-safe arg) all-sma-bare-names)
+;;              (if (/= 2 (length arg))
+;;                  (error "Wrong number of arguments for loop name: %s" arg)
+;;                (push (cl-second arg) names)))
+;;             ((and (memq (car-safe arg) loopy-iter-keywords)
+;;                   (memq (cl-second arg) all-sma-names))
+;;              (if (/= 3 (length arg))
+;;                  (error "Wrong number of arguments for loop name: %s" arg)
+;;                (push (cl-third arg) names)))
+;;             (t (push arg new-body))))
+;;     (if (> (length names) 1)
+;;         (error "Conflicting loop names: %s" names)
+;;       (let ((loop-name (cl-first names))) ; Symbol or `nil'.
+;;         (setq loopy--loop-name loop-name
+;;               loopy--skip-tag-name (loopy--produce-skip-tag-name loop-name)
+;;               loopy--non-returning-exit-tag-name
+;;               (loopy--produce-non-returning-exit-tag-name loop-name))
+;;         ;; Set up the stack-maps.
+;;         (push loopy--loop-name loopy--known-loop-names)
+;;         (push (list loopy--loop-name) loopy--accumulation-places)
+;;         ;; Return non-name args.
+;;         (nreverse new-body)))))
+;;
+;; (loopy-iter--def-special-processor with
+;;   ;; Note: These values don't have to be used literally, due to
+;;   ;;       destructuring.
+;;   (loopy (list binding arg-value)
+;;          (collect
+;;           (cond ((symbolp binding)      (list binding nil))
+;;                 ((= 1 (length binding)) (list (cl-first binding) nil))
+;;                 (t                       binding)))
+;;          (finally-do
+;;           (setq loopy--with-vars loopy-result))))
+;;
+;;
+;; (loopy-iter--def-special-processor finally-return
+;;   (setq loopy--final-return (if (= 1 (length arg-value))
+;;                                 (cl-first arg-value)
+;;                               (cons 'list arg-value))))
+;;
+;; (loopy-iter--def-special-processor flag
+;;   ;; Process any flags passed to the macro.  In case of conflicts, the
+;;   ;; processing order is:
+;;   ;;
+;;   ;; 1. Flags in `loopy-default-flags'.
+;;   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
+;;   ;; (mapc #'loopy--apply-flag loopy-default-flags)
+;;   (mapc #'loopy--apply-flag arg-value))
+;;
+;; (loopy-iter--def-special-processor without
+;;   (setq loopy--without-vars arg-value))
+;;
+;; (loopy-iter--def-special-processor accum-opt
+;;   (pcase-dolist ((or `(,var ,pos) var) arg-value)
+;;     (push var loopy--optimized-accum-vars)
+;;     (when pos
+;;       (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
+;;
+;; (loopy-iter--def-special-processor wrap
+;;   (setq loopy--wrapping-forms arg-value))
+;;
+;; (loopy-iter--def-special-processor before-do
+;;   (setq loopy--before-do arg-value))
+;;
+;; (loopy-iter--def-special-processor after-do
+;;   (setq loopy--after-do arg-value))
+;;
+;; (loopy-iter--def-special-processor finally-do
+;;   (setq loopy--final-do arg-value))
+;;
+;; (loopy-iter--def-special-processor finally-protect
+;;   (setq loopy--final-protect arg-value))
 
 ;;;; Misc
 
