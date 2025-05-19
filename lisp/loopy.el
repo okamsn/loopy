@@ -1490,11 +1490,15 @@ to which bindings applies."
                 collect `(,sym (let* ,bindings
                                  ,@body)))))
 
-(defun loopy--internal--name-parser-conclusion-alist ()
+;; TODO: Separate aliases and commands for easier overrides?
+(defun loopy--internal--name-parser-conclusion-hashtable (mode)
   "Combine `loopy-aliases' and `loopy-command-parsers' into final alist of command name-parser pairs."
   (let ((ht (make-hash-table :test #'eq :size 200)))
     (cl-loop for (cmd . parser) in loopy-command-parsers
              do (puthash cmd parser ht))
+    (when (eq mode 'iter)
+      (cl-loop for (cmd . parser) in loopy-iter-overwritten-command-parsers
+               do (puthash cmd parser ht)))
     (cl-loop for (orig . aliases) in loopy--obsolete-aliases
              for parser = (gethash orig ht)
              when parser
@@ -1577,7 +1581,7 @@ to use `loopy' in general."
                              (loopy--internal--process-special-arg-finally-return loopy--mode)
                              (loopy--internal--process-special-arg-finally-protect loopy--mode)))
 
-     (let ((name-parser-alist (loopy--internal--name-parser-conclusion-alist))
+     (let ((name-parser-hashtable (loopy--internal--name-parser-conclusion-hashtable mode))
            (loopy-iter--non-main-body-instructions)
            (loopy-iter--level 0))
 
@@ -1621,7 +1625,8 @@ to use `loopy' in general."
                                                    ;; while parsing an actual top-level command.
                                                    (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                           (loopy--in-sub-level (> loopy-iter--level 1)))
-                                                     (loopy-iter--parse-command args))
+                                                     (funcall (gethash (car args) name-parser-hashtable)
+                                                              args))
                                                  (push other loopy-iter--non-main-body-instructions)
                                                  (macroexp-progn main)))))
                                       (cl-loop
@@ -1641,7 +1646,8 @@ to use `loopy' in general."
                                                      ;; top-level command.
                                                      (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                             (loopy--in-sub-level (> loopy-iter--level 1)))
-                                                       (loopy-iter--parse-command (cons cmd args)))
+                                                       (funcall (gethash cmd name-parser-hashtable)
+                                                                (cons cmd args)))
                                                    (push other loopy-iter--non-main-body-instructions)
                                                    (macroexp-progn main))))))))
                                     (common-env `(,@suppressed-expanders
@@ -1661,7 +1667,7 @@ to use `loopy' in general."
                             (mapcar (cl-ecase loopy--mode
                                       (basic
                                        (lambda (expr)
-                                         (if-let ((parser (map-elt name-parser-alist (car-safe expr))))
+                                         (if-let ((parser (map-elt name-parser-hashtable (car-safe expr))))
                                              (loopy--bind-main-body (main other)
                                                  (funcall parser expr)
                                                (loopy--process-instructions other)
