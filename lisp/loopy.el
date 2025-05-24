@@ -1304,23 +1304,20 @@ These commands affect other loops higher up in the call list."
   ;; `loopy-iter--non-main-body-instructions' while the expanding functions push
   ;; to it, which we then wrap back in a new instruction and pass up to the
   ;; calling function, which consumes instructions.
-  (loopy (with (loopy-iter--non-main-body-instructions nil)
-               (loopy--loop-name target-loop)
-               (loopy--in-sub-level t)
-               (loopy-iter--level (1+ loopy-iter--level)))
-         (list cmd commands)
-         (collect (list 'loopy--main-body (macroexpand-all
-                                           cmd
-                                           macroexpand-all-environment)))
-         (finally-return
-          ;; Return list of instructions to comply with expectations of calling
-          ;; function, which thinks that this is a normal loop-command parser.
-          `(,@loopy-result
-            (loopy--at-instructions
-             (,target-loop
-              ,@(thread-last loopy-iter--non-main-body-instructions
-                             nreverse
-                             (apply #'append))))))))
+  (let ((loopy-iter--non-main-body-instructions nil)
+        (loopy--loop-name target-loop)
+        (loopy--in-sub-level t)
+        (loopy-iter--level (1+ loopy-iter--level)))
+    `(,@(mapcar (lambda (expr)
+                  `(loopy--main-body ,(macroexpand-all
+                                       expr
+                                       macroexpand-all-environment)))
+                commands)
+      (loopy--at-instructions
+       (,target-loop
+        ,@(thread-last loopy-iter--non-main-body-instructions
+                       nreverse
+                       (apply #'append)))))))
 
 ;;;; For parsing special macro arguments
 
