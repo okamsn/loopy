@@ -509,6 +509,63 @@ Returns BODY without the `%s' argument."
               ,@body))
          (t (error "Conflicting arguments: %s" matching-args))))))
 
+(loopy--def-special-processor overrides
+  ;; Form is (overrides (VAR1 VAL) (VAR2 VAL2))
+  ;; TODO: Use `setq' for new values once set up.
+  (let* ((local-aliases nil)
+         (local-commands nil)
+         (use-warn nil)
+         (cmd-ht (let ((ht (make-hash-table :size 200 :test #'eq)))
+                   (map-do (lambda (sym parser)
+                             (puthash sym parser ht))
+                           loopy-command-parsers)))
+         (sma-names-alist nil)
+         (cmd-alias-ht (let ((ht (make-hash-table :size 200 :test #'eq)))
+                         (pcase-dolist ((and whole `(,sym . ,orig-aliases)) alias-defaults)
+                           (when (memq sym loopy--special-macro-arguments)
+                             (push whole sma-names-alist))
+                           (dolist (alias orig-aliases)
+                             (puthash alias sym ht)))))
+         (overrode-loopy-aliases nil))
+    (dolist (var-val arg-value)
+      (pcase var-val
+        (`(loopy-aliases ,alist)
+         (if overrode-loopy-aliases
+             (error "`loopy-aliases' overridden multiple times")
+           (setq overrode-loopy-aliases t)
+           (let ((found-keys))
+             (pcase-dolist (`(,alias . ,target) alias-overrides)
+               (unless (memq alias found-keys)
+                 (push alias found-keys)
+                 (let ((actual-target target))
+                   (compat-call while-let ((new-target (alist-get actual-target alias-overrides)))
+                                (setq actual-target new-target))
+                   ;; Place in both places just in case.
+                   (when (memq actual-target loopy--special-macro-arguments)
+                     (push alias (alist-get actual-target sma-names-alist)))
+                   (puthash aias actual-target cmd-alias-ht)))))))
+        (`(loopy-command-parsers ,alist)
+         (let ((found-keys nil))
+           (pcase-dolist (`(,cmd . ,new-fn) alist)
+             (unless (memq cmd found-keys)
+               (push cmd found-keys)
+               (puthash cmd new-fn cmd-ht)))))
+        (`(,(or 'loopy-iter-bare-special-macro-arguments
+                'loopy-iter-keywords
+                'loopy-iter-bare-commands)
+           ,_)
+         (setq use-warn t))
+        ((and `(,unknown . ,_)
+              whole)
+         (error "Unkown `loopy' override: `%s', %S" unkown whole))
+        (bad
+         (error "Badly formed `loopy' override: %S" bad)))))
+
+  (cl-loop for (alias . def) in (car arg-value)
+           do (setq loopy--aliases-internal
+                    (loopy--defalias-internal alias def loopy--aliases-internal)))
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
 (loopy--def-special-processor loopy-aliases
   (cl-loop for (alias . def) in (car arg-value)
            do (setq loopy--aliases-internal
@@ -896,6 +953,64 @@ When EXCLUDE-MAIN-BODY is non-nil, don't reverse `loopy--main-body'."
                                    ;; If multiple items, be sure to use a list
                                    ;; in the correct order.
                                    `(list ,@(nreverse loopy--implicit-return))))))
+
+(cl-defun loopy--make-symbol-parser-hashtable (&key parser-defaults alias-defaults
+                                                    parser-overrides alias-overrides)
+  (let ((cmd-ht (make-hash-table :size 200 :test #'eq))
+        (sma-alist nil))
+    (map-do (lambda (sym parser)
+              (puthash sym parser ht))
+            parser-defaults)
+    (cl-loop with found-syms = nil
+             for (sym . parser) in parser-overrides
+             unless (memq sym found-syms)
+             do (push sym found-syms)
+             and do (puthash sym parser ht))
+    ;; We can assume that this structure is correct because we
+    ;; tell users to not mess with `loopy-aliases', but to use `loopy-defalias'
+    ;; for forward compatibility.
+    (pcase-dolist (`(,sym . ,orig-aliases) alias-defaults)
+      (if (memq sym loopy--special-macro-argument-p)
+          )
+      (dolist (alias orig-aliases)
+        (if-let ((parser alias-defaults)))
+        (puthash alias (gethash sym ht) ht)))
+    ;; These can be references to each other, existing aliases,
+    ;; or actual commands.  If to each other, we needalias-defaults
+    ;; to simplify.
+    ;; ((a . b) (b . c) (listing . array))
+    (when alias-overrides
+      (let ((new-alist)
+            (found-keys))
+        (pcase-dolist (`(,alias . ,target) alias-overrides)
+          (unless (memq alias found-keys)
+            (push alias found-keys)
+            (let ((actual-target target))
+              (compat-call while-let ((new-target (alist-get actual-target alias-overrides)))
+                           (setq actual-target new-target))
+              (puthash alias (gethash actual-target ht) ht))))))
+    ht))
+
+(let ((cnt 0))
+  (pcase-dolist (`(,cmd . ,orig-aliases) (map-filter (lambda (k _v)
+                                                       (memq k loopy--special-macro-arguments))
+                                                     loopy-aliases))
+    (dolist (alias orig-aliases)
+      (cl-incf cnt)))
+  cnt)
+
+(let ((alias-overrides (map-filter (lambda (k _v)
+                                     (memq k loopy--special-macro-arguments))
+                                   loopy-aliases)))
+  (let ((new-alist)
+        (found-keys))
+    (pcase-dolist (`(,alias . ,target) alias-overrides)
+      (unless (memq alias found-keys)
+        (push alias found-keys)
+        (let ((actual-target target))
+          (compat-call while-let ((new-target (alist-get actual-target alias-overrides)))
+                       (setq actual-target new-target))
+          (push (cons alias )))))))
 
 ;;;###autoload
 (cl-defmacro loopy (&rest body)
