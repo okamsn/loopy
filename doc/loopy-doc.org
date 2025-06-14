@@ -5805,14 +5805,17 @@ needed evaluation can occur during the execution of the wrapper.
                  (collect i))
 #+end_src
 
-Overrides use the name of the overridden variable.  Overrides either replace or
+Overrides use the name of the overridden variable.  Overrides replace or
 add to the global definitions of the variable.  They cannot be used to remove
 entries from variable vales.  The following variables can be overridden:
 
-- ~loopy-aliases~ :: An alist of ~(ALIAS . EXISTING)~ symbol pairs.  See
-  [[#custom-aliases]].  These are added to and can
+- ~loopy-aliases~ :: A =map.el=-compatible structure that maps a new alias to an
+  existing definition.  See [[#custom-aliases]].
 
   #+begin_src emacs-lisp
+    (defmacro my-loopy-wrapper (&args)
+      (let ((aliases (map-insert loopy-aliases 'my-list 'list)))))
+
     ;; => (1 2 3)
     (loopy (overrides (loopy-aliases  ((my-list . list))))
            (my-list i '(1 2 3))

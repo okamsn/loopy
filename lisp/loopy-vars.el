@@ -102,8 +102,9 @@ Definition must exist.  Neither argument need be quoted."
     (sequence-ref sequencef sequencingf elements-ref))
   "Aliases to be removed from the documentation.")
 
-(defvar loopy--aliases-internal nil
-  "This variable holds a version of `loopy-aliases' during expansion.")
+(defvar loopy--internal-sma-aliases nil)
+
+(defvar loopy--internal-command-parsers nil)
 
 ;;;###autoload
 (defcustom loopy-aliases
@@ -179,9 +180,6 @@ true names and lists of aliases.
 `loopy-command-parsers' when the command parser is unknown."
   :group 'loopy
   :type '(alist :key-type symbol :value-type (repeat symbol)))
-
-(defvar loopy--command-parsers-internal nil
-  "This variable holds a version of `loopy-command-parsers' during expansion.")
 
 ;;;###autoload
 (defcustom loopy-command-parsers
@@ -680,8 +678,8 @@ known to fall into the first group.")
       loopy--final-return
 
       ;; -- Vars to store overwritten values --
-      loopy--command-parsers-internal
-      loopy--aliases-internal
+      loopy--internal-command-parsers
+      loopy--internal-sma-aliases
 
       ;; -- Vars for processing loop commands --
       ;; NOTE: `loopy--at-instructions' cannot be local to each loop:
@@ -832,7 +830,7 @@ This predicate checks for presence in the list
 
 See also `loopy--get-all-names', for when the true name
 is not known."
-  (map-elt loopy--aliases-internal true-name))
+  (map-elt loopy-aliases true-name))
 
 (cl-defun loopy--get-all-names (name &key from-true ignored)
   "Get the true name of NAME and all of the true name's aliases.
@@ -852,7 +850,7 @@ This function does not check whether a name is known."
                                  (when (or (eq name k) (memq name v))
                                    (cl-return-from loopy--get-all-names
                                      (cons k v))))
-                               loopy--aliases-internal)
+                               loopy-aliases)
                        nil)
                      (list name)))))
     (if ignored

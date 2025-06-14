@@ -376,17 +376,22 @@ writing a `seq-do' method for the custom seq."
                    seq))))
 
 ;;; Macro arguments
+(defmacro test ()
+  (let ((ht (make-hash-table)))
+    (puthash 'a 1 ht)
+    `(list ,ht))
+  )
 
-(loopy-deftest aliases-arg
+(loopy-deftest local-aliases
   :wrap ((x . `(let ((loopy-iter-bare-commands (cons 'my-list loopy-iter-bare-commands)))
                  ,x)
             ))
   :result '(1 2 3)
-  :body ((alias  ((my-list . list)))
+  :body ((overrides (loopy-aliases ((my-list . list))))
          (my-list i '(1 2 3))
          (collect i))
   :repeat _alias
-  :loopy ((_alias . (alias aliases)))
+  :loopy t
   ;; TODO
   ;; :iter-keyword ((_alias . (alias aliases)))
   ;; :iter-bare ((_alias . (alias aliases)))
@@ -6652,7 +6657,7 @@ Otherwise, `loopy' should return t."
 (loopy-deftest local-custom-command
   :doc "Check that the command exists as expected."
   :result 3
-  :body ((loopy-command-parsers ((my-set . loopy--tests-my-set-parser)))
+  :body ((overrides (loopy-command-parsers ((my-set . loopy--tests-my-set-parser))))
          (my-set i 3)
          (return i))
   :loopy t
@@ -6664,7 +6669,7 @@ Otherwise, `loopy' should return t."
   :wrap ((x . `(should (equal '(my-set) ,x))))
   :error loopy-unknown-command
   :body ((with (i nil))
-         (loopy-command-parsers ((my-set . loopy--tests-my-set-parser)))
+         (overrides (loopy-command-parsers ((my-set . loopy--tests-my-set-parser))))
          (loopy (my-set i 3) (leave))
          (return i))
   :loopy t
@@ -6673,8 +6678,8 @@ Otherwise, `loopy' should return t."
 
 (ert-deftest iter-bare/local-custom-command ()
   (should (equal 3
-                 (eval '(loopy-iter (loopy-iter-bare-commands (my-set))
-                                    (loopy-command-parsers ((my-set . my-set-parser)))
+                 (eval '(loopy-iter (overrides (loopy-iter-bare-commands (my-set))
+                                               (loopy-command-parsers ((my-set . my-set-parser))))
                                     (my-set i 3)
                                     (returning i))))))
 

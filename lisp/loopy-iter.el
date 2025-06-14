@@ -77,9 +77,6 @@ Without these keywords, one must use one of the names given in
 `loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol))
 
-(defvar loopy-iter--keywords-internal nil
-  "Internal version of `loopy-iter-keywords' for overrides.")
-
 (def-edebug-spec loopy-iter--special-macro-arg-edebug-spec
   ;; This is the same as for `loopy', but without `let*'.
   [&or ([&or "with" "init"] &rest (symbolp &optional form))
@@ -173,29 +170,12 @@ For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol)
   :group 'loopy-iter)
 
-(defvar loopy-iter--bare-commands-internal nil
-  "Internal version of `loopy-iter-bare-commands' for local overrides.")
-
-;; TODO: Combine this with `loopy--command-parsers-internal'.
-;;       We only have this separate for documentation reasons.
-;;       We actually use `loopy--command-parsers-internal'
-;;       for its already-defined processor in the body of `loopy-iter'.
-(defvaralias 'loopy-iter--command-parsers-internal
-  'loopy--command-parsers-internal
-  "Parsers used by `loopy-iter', including local overrides.
-
-This variable is bound while `loopy-iter' is running, combining
-`loopy-command-parsers' and
-`loopy-iter-overwritten-command-parsers'.")
-
 (defun loopy-iter--parse-command (command)
   "Parse COMMAND using parsers in`loopy-iter--command-parsers-internal'.
 
 See also `loopy--parse-loop-command'."
   (let* ((cmd-name (cl-first command))
-         (parser (loopy--get-command-parser
-                  cmd-name
-                  :parsers loopy-iter--command-parsers-internal))
+         (parser (loopy--get-command-parser cmd-name))
          (instructions (remq nil (funcall parser command))))
     (or instructions
         (signal 'loopy-parser-instructions-missing
@@ -398,6 +378,49 @@ Returns BODY without the `%s' argument."
         ;; Return non-name args.
         (nreverse new-body)))))
 
+(loopy-iter--def-special-processor overrides
+  ;; Order needs to be existing commands, then new command parsers, then
+  ;; existing aliases which reference existing command parsers and existing
+  ;; SMAs, then new aliases which can reference existing commands, existing
+  ;; aliases, and existing SMAs.
+  (let ((parser-overrides)
+        (overrode-parsers)
+        (overrode-aliases)
+        (alias-overrides))
+    (dolist (pair arg-value)
+      (pcase pair
+        (`(loopy-aliases . ,alist)
+         (if overrode-aliases
+             (error "Repeated `loopy-aliases' in overrides")
+           (setq overrode-aliases t
+                 alias-overrides alist)))
+        (`(loopy-command-parsers . ,alist)
+         (if overrode-parsers
+             (error "Repeated `loopy-aliases' in overrides")
+           (setq overrode-parsers t
+                 parser-overrides alist)))
+
+        (`(,(and (or 'loopy-iter-bare-special-macro-arguments
+                     'loopy-iter-keywords
+                     'loopy-iter-bare-commands)
+                 whole)
+           ,_)
+         (warn "Overriding `loopy-iter' variables in `loopy' has no effect: %S"
+               whole))
+        ((and `(,unknown . ,_)
+              whole)
+         (error "Unkown `loopy' override: `%s', %S" unknown whole))
+        (bad
+         (error "Badly formed `loopy' override: %S" bad))))
+    (cl-destructuring-bind (&key cmds smas)
+        (loopy--make-cmd-ht-and-sma-alist :parser-defaults loopy-command-parsers
+                                          :parser-overrides (append parser-overrides
+                                                                    loopy-iter-overwritten-command-parsers)
+                                          :alias-defaults loopy-aliases
+                                          :alias-overrides alias-overrides)
+      (setq loopy--internal-sma-aliases smas
+            loopy--internal-command-parsers cmds))))
+
 (loopy-iter--def-special-processor with
   ;; Note: These values don't have to be used literally, due to
   ;;       destructuring.
@@ -448,21 +471,6 @@ Returns BODY without the `%s' argument."
 (loopy-iter--def-special-processor finally-protect
   (setq loopy--final-protect arg-value))
 
-(loopy-iter--def-special-processor loopy-iter-bare-commands
-  (setq loopy-iter--bare-commands-internal
-        (append (car arg-value)
-                loopy-iter-bare-commands)))
-
-(loopy-iter--def-special-processor loopy-iter-bare-special-macro-arguments
-  (setq loopy-iter--bare-special-macro-arguments-internal
-        (append (car arg-value)
-                loopy-iter-bare-special-macro-arguments)))
-
-(loopy-iter--def-special-processor loopy-iter-keywords
-  (setq loopy-iter--keywords-internal
-        (append (car arg-value)
-                loopy-iter-keywords)))
-
 ;;;; Misc
 
 (defvar loopy-iter-suppressed-macros '(cl-block cl-return cl-return-from)
@@ -512,32 +520,32 @@ to use `loopy' in general.
   ;; 6) Then we manipulate the variables and build the loop like normal, as we
   ;;    do in `loopy'.
 
-  (let ((loopy-iter--bare-commands-internal)
-        (loopy-iter--bare-special-macro-arguments-internal)
-        (loopy-iter--keywords)
-        (loopy--command-parsers-internal)
-        (loopy--aliases-internal))
+  (let ((loopy--internal-sma-aliases nil)
+        (loopy--internal-command-parsers nil))
     (loopy--wrap-variables-around-body
 
      (mapc #'loopy--apply-flag loopy-default-flags)
 
-     (setq loopy--command-parsers-internal
-           (map-merge 'alist
-                      loopy-command-parsers
-                      loopy-iter-overwritten-command-parsers)
-           loopy--aliases-internal
-           (copy-tree loopy-aliases)
-           loopy-iter--bare-commands-internal
-           loopy-iter-bare-commands
-           loopy-iter--bare-special-macro-arguments-internal
-           loopy-iter-bare-special-macro-arguments
-           loopy-iter--keywords
-           loopy-iter-keywords)
+     (when (or (null loopy--internal-sma-aliases)
+               (null loopy--internal-command-parsers))
+       (cl-destructuring-bind (&whole whole &key cmds smas)
+           (loopy--make-cmd-ht-and-sma-alist :parser-defaults loopy-command-parsers
+                                             :parser-overrides loopy-iter-overwritten-command-parsers
+                                             :alias-defaults (map-merge-with 'alist (lambda (v1 v2)
+                                                                                      (append v1 v2))
+                                                                             loopy-aliases
+                                                                             loopy--obsolete-aliases))
+         ;; (message "Whole: %S" whole)
+         (setq loopy--internal-command-parsers cmds
+               loopy--internal-sma-aliases smas))
+       ;; (message "New : %S" loopy--internal-command-parsers)
+       )
 
      (setq body (thread-first
                   body
-                  loopy--process-special-arg-loopy-aliases
-                  loopy--process-special-arg-loopy-command-parsers
+                  ;; loopy--process-special-arg-loopy-aliases
+                  ;; loopy--process-special-arg-loopy-command-parsers
+                  loopy--process-special-arg-overrides
                   loopy-iter--process-special-arg-loop-name
                   loopy-iter--process-special-arg-flag
                   loopy-iter--process-special-arg-with
@@ -553,8 +561,6 @@ to use `loopy' in general.
      (loopy--with-protected-stack
       (let* ((suppressed-expanders (loopy (list i loopy-iter-suppressed-macros)
                                           (collect (cons i nil))))
-
-             (loopy-iter--command-parsers-internal )
              (loopy-iter--non-main-body-instructions)
              (loopy-iter--level 0)
              (command-env
@@ -568,7 +574,7 @@ to use `loopy' in general.
                                           ;; while parsing an actual top-level command.
                                           (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                  (loopy--in-sub-level (> loopy-iter--level 1)))
-                                            (loopy-iter--parse-command args))
+                                            (loopy--parse-loop-command args))
                                         (push other loopy-iter--non-main-body-instructions)
                                         (macroexp-progn main))))))
                       (loopy (list command loopy-iter-bare-commands)
@@ -587,7 +593,7 @@ to use `loopy' in general.
                                             ;; top-level command.
                                             (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                    (loopy--in-sub-level (> loopy-iter--level 1)))
-                                              (loopy-iter--parse-command (cons cmd args)))
+                                              (loopy--parse-loop-command (cons cmd args)))
                                           (push other loopy-iter--non-main-body-instructions)
                                           (macroexp-progn main)))))))))
              (common-env `(,@suppressed-expanders

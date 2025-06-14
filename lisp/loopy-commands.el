@@ -89,6 +89,7 @@
 (declare-function loopy--process-instructions "loopy")
 (declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
+(defvar loopy--internal-command-parsers)
 
 ;;;; Helpful Functions
 
@@ -1780,7 +1781,7 @@ second pass of macro expansion."
   (let ((plist (cl-second arg)))
     (loopy--plist-bind (:name name :loop loop)
         plist
-      (let ((true-name (loopy--get-true-name name loopy--aliases-internal)))
+      (let ((true-name (loopy--get-true-name name loopy-aliases)))
         (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
             (cl-destructuring-bind (main-body other-instrs)
                 (loopy--extract-main-body (funcall func plist))
@@ -3100,9 +3101,11 @@ The following variables are checked:
 
 Failing that, an error is signaled."
 
-  (let ((true-name (loopy--get-true-name command-name loopy--aliases-internal)))
-    (or (map-elt loopy--command-parsers-internal true-name)
-        (signal 'loopy-unknown-command (list command-name)))))
+  (or ;; (map-elt loopy--internal-command-parsers command-name)
+   (gethash command-name loopy--internal-command-parsers)
+   (progn
+     (message "Parsers: %S" loopy--internal-command-parsers)
+     (signal 'loopy-unknown-command (list command-name)))))
 
 (provide 'loopy-commands)
 
