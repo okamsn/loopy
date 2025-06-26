@@ -170,26 +170,6 @@ For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
   :type '(repeat symbol)
   :group 'loopy-iter)
 
-(defvar loopy-iter--command-parsers nil
-  "Parsers used by `loopy-iter'.
-
-This variable is bound while `loopy-iter' is running, combining
-`loopy-command-parsers' and
-`loopy-iter-overwritten-command-parsers'.")
-
-(defun loopy-iter--parse-command (command)
-  "Parse COMMAND using parsers in`loopy-iter--command-parsers'.
-
-See also `loopy--parse-loop-command'."
-  (let* ((cmd-name (cl-first command))
-         (parser (loopy--get-command-parser
-                  cmd-name
-                  :parsers loopy-iter--command-parsers))
-         (instructions (remq nil (funcall parser command))))
-    (or instructions
-        (signal 'loopy-parser-instructions-missing
-                (list command parser)))))
-
 (defvar loopy-iter--non-main-body-instructions nil
   "Used to capture other instructions while expanding.
 
@@ -239,8 +219,8 @@ during a second pass on the expanded code."
   '((at       . loopy-iter--parse-at-command))
   "Overwritten command parsers.
 
-This is an alist of dotted pairs of base names and parsers, as in
-`loopy-command-parsers'.
+This is an alist of dotted pairs of base names and parsers, similar to
+`loopy-parsers', except that this variable is an alist.
 
 Some parsers reasonably assume that all of their body arguments are
 also commands.  For `loopy-iter', this cannot work, so some parsers
@@ -312,64 +292,62 @@ Variables available:
 - `arg-value' is the value of the arg if there is only one match
 - `arg-name' the name of the arg found if there is only one match"
   (declare (indent defun))
-  `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
-       (body)
-     ,(format "Process the special macro argument `%s' and its aliases.
+  (let ((fn-sym `(quote ,(intern (format "loopy--parse-%s-special-macro-argument" name)))))
+    `(defun ,(intern (format "loopy-iter--process-special-arg-%s" name))
+         (body)
+       ,(format "Process the special macro argument `%s' and its aliases.
 
 Returns BODY without the `%s' argument."
-              name name)
-     (loopy
-      (accum-opt matching-args new-body)
-      (with (all-names (loopy--get-all-names (quote ,name) :from-true t))
-            (bare-names (loopy (list name all-names)
-                               (when (memq name loopy-iter-bare-special-macro-arguments)
-                                 (collect name)))))
-      (listing expr body)
-      (if (and (consp expr)
-               (or (memq (cl-first expr) bare-names)
-                   (and (memq (cl-first expr) loopy-iter-keywords)
-                        (memq (cl-second expr) all-names))))
-          (collecting matching-args expr)
-        (collecting new-body expr))
-      (finally-do (when matching-args
-                    (if (cdr matching-args)
-                        (error "Conflicting arguments: %s" matching-args)
-                      (let ((arg (car matching-args))
-                            (arg-name)
-                            (arg-value))
-                        ;; TODO: Probably a better way to do this that doesn't
-                        ;; involve checking twice.
-                        (if (memq (cl-first arg) bare-names)
-                            (loopy-setq (arg-name . arg-value) arg)
-                          (loopy-setq (_ arg-name . arg-value) arg))
-                        (ignore arg-name)
-                        ,@body))))
-      (finally-return
-       new-body))))
+                name name)
+       (loopy
+        (accum-opt matching-args new-body)
+        (listing expr body)
+        (if (and (consp expr)
+                 (let ((first (cl-first expr)))
+                   (or (and (memq first loopy-iter-keywords)
+                            (eq ,fn-sym (loopy--get-command-parser (cl-second expr))))
+                       (and (memq first loopy-iter-bare-special-macro-arguments)
+                            (eq ,fn-sym (loopy--get-command-parser first))))))
+            (collecting matching-args expr)
+          (collecting new-body expr))
+        (finally-do (when matching-args
+                      (if (cdr matching-args)
+                          (error "Conflicting arguments: %s" matching-args)
+                        (let ((arg (car matching-args))
+                              (arg-name)
+                              (arg-value))
+                          ;; TODO: Probably a better way to do this that doesn't
+                          ;; involve checking twice.
+                          (if (memq (cl-first arg) loopy-iter-keywords)
+                              (loopy-setq (_ arg-name . arg-value) arg)
+                            (loopy-setq (arg-name . arg-value) arg))
+                          (ignore arg-name)
+                          ,@body))))
+        (finally-return
+         new-body)))))
 
 (defun loopy-iter--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
   (let* ((names)
-         (new-body)
-         (all-sma-names (loopy--get-all-names 'named :from-true t))
-         (all-sma-bare-names
-          (loopy (list name all-sma-names)
-                 (when (memq name loopy-iter-bare-special-macro-arguments)
-                   (collect name)))))
+         (new-body))
     (dolist (arg body)
-      (cond ((symbolp arg)
-             (push arg names))
-            ((memq (car-safe arg) all-sma-bare-names)
-             (if (/= 2 (length arg))
-                 (error "Wrong number of arguments for loop name: %s" arg)
-               (push (cl-second arg) names)))
-            ((and (memq (car-safe arg) loopy-iter-keywords)
-                  (memq (cl-second arg) all-sma-names))
-             (if (/= 3 (length arg))
-                 (error "Wrong number of arguments for loop name: %s" arg)
-               (push (cl-third arg) names)))
-            (t (push arg new-body))))
-    (if (> (length names) 1)
+      (pcase arg
+        ((pred symbolp)
+         (push arg names))
+        ((or `(,(pred (lambda (x) (memq x loopy-iter-keywords)))
+               ,(pred (lambda (x) (eq 'loopy--parse-named-special-macro-argument
+                                      (loopy--get-command-parser x))))
+               ,name . ,rest)
+             `(,(and (pred (lambda (x) (memq x loopy-iter-bare-special-macro-arguments)))
+                     (pred (lambda (x) (eq 'loopy--parse-named-special-macro-argument
+                                           (loopy--get-command-parser x)))))
+               ,name . ,rest))
+         (if (null rest)
+             (push name names)
+           (error "Wrong number of arguments for loop name: %s" arg)))
+        (_
+         (push arg new-body))))
+    (if (length> names 1)
         (error "Conflicting loop names: %s" names)
       (let ((loop-name (cl-first names))) ; Symbol or `nil'.
         (setq loopy--loop-name loop-name
@@ -482,6 +460,24 @@ to use `loopy' in general.
   ;;    do in `loopy'.
 
   (loopy--wrap-variables-around-body
+;;;;; Process obsolete variables
+   (setq loopy--parsers-internal (copy-hash-table loopy-parsers))
+   (when loopy-command-parsers
+     (map-do (lambda (k v)
+               (puthash k v loopy--parsers-internal))
+             loopy-command-parsers))
+
+   ;; NOTE: This one isn't obsolete but needs to happen before aliases.
+   (when loopy-iter-overwritten-command-parsers
+     (map-do (lambda (k v)
+               (puthash k v loopy--parsers-internal))
+             loopy-iter-overwritten-command-parsers))
+
+   (when loopy-aliases
+     (pcase-dolist (`(,orig . ,aliases) loopy-aliases)
+       (let ((parser (gethash orig loopy--parsers-internal)))
+         (dolist (alias aliases)
+           (puthash alias parser loopy--parsers-internal)))))
 
    (mapc #'loopy--apply-flag loopy-default-flags)
 
@@ -501,9 +497,6 @@ to use `loopy' in general.
    (loopy--with-protected-stack
     (let* ((suppressed-expanders (loopy (list i loopy-iter-suppressed-macros)
                                         (collect (cons i nil))))
-           (loopy-iter--command-parsers (or loopy-iter--command-parsers
-                                            (append loopy-iter-overwritten-command-parsers
-                                                    loopy-command-parsers)))
            (loopy-iter--non-main-body-instructions)
            (loopy-iter--level 0)
            (command-env
@@ -517,7 +510,7 @@ to use `loopy' in general.
                                         ;; while parsing an actual top-level command.
                                         (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                (loopy--in-sub-level (> loopy-iter--level 1)))
-                                          (loopy-iter--parse-command args))
+                                          (loopy--parse-loop-command args))
                                       (push other loopy-iter--non-main-body-instructions)
                                       (macroexp-progn main))))))
                     (loopy (list command loopy-iter-bare-commands)
@@ -536,7 +529,7 @@ to use `loopy' in general.
                                           ;; top-level command.
                                           (let* ((loopy-iter--level (1+ loopy-iter--level))
                                                  (loopy--in-sub-level (> loopy-iter--level 1)))
-                                            (loopy-iter--parse-command (cons cmd args)))
+                                            (loopy--parse-loop-command (cons cmd args)))
                                         (push other loopy-iter--non-main-body-instructions)
                                         (macroexp-progn main)))))))))
            (common-env `(,@suppressed-expanders
@@ -597,8 +590,9 @@ to use `loopy' in general.
 See the info node `(loopy)The loopy-iter Macro' for more."
   `((loopy--main-body ,(macroexpand `(loopy-iter ,@body)))))
 
-(cl-callf map-insert loopy-command-parsers
-  'loopy-iter #'loopy-iter--parse-loopy-iter-command)
+(puthash 'loopy-iter
+         #'loopy-iter--parse-loopy-iter-command
+         loopy-parsers)
 
 (provide 'loopy-iter)
 ;;; loopy-iter.el ends here

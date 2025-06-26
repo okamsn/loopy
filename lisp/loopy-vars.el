@@ -51,191 +51,304 @@ This is a list of symbols, each symbol corresponding to a
 function in the variable `loopy--flag-settings'."
   :type '(repeat symbol))
 
+(defun loopy--defalias-1 (alias definition)
+  (if (eq alias definition)
+      (error "Can't alias name to itself: `%s' -> `%s'"
+             alias definition)
+    (let ((true-name
+           ;; Now that `loopy-aliases' is nil, we know that it can only
+           ;; contain the true name by user intervention, in which
+           ;; case it should have priority over `loopy-parsers'.
+           (or (cl-loop for (orig . aliases) in loopy-aliases
+                        when (memq definition aliases)
+                        return orig)
+               (and (map-contains-key loopy-parsers definition)
+                    definition)
+               (when-let* ((orig (gethash definition loopy--obsolete-aliases)))
+                 (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, add it to `loopy-parsers'."
+                       definition orig)
+                 orig))))
+      (if (eq alias true-name)
+          (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
+                 alias definition true-name)
+        (if-let* ((fn (gethash true-name loopy-parsers)))
+            (progn
+              ;; Remove previous uses of that alias from all other names.
+              ;; We don't want to trigger the setting warning unless we must,
+              ;; so we check first.
+              (when (map-some (lambda (_ v) (memq alias v))
+                              loopy-aliases)
+                (setq loopy-aliases (map-apply (lambda (k v)
+                                                 (cons k (remq alias v)))
+                                               loopy-aliases)))
+              ;; Add the alias for the new target name.
+              (puthash alias fn loopy-parsers))
+          (error "Ultimate command `%S' for alias `%S' to `%S' is not a known command"
+                 true-name alias definition))))))
+
 ;;;###autoload
 (defmacro loopy-defalias (alias definition)
   "Add alias ALIAS for loop command DEFINITION.
 
 Definition must exist.  Neither argument need be quoted."
-  `(let ((alias (quote ,(loopy--get-quoted-symbol alias)))
-         (definition (quote ,(loopy--get-quoted-symbol definition))))
-     (let ((true-name (loopy--get-true-name definition)))
-       (cond
-        ((eq alias definition)
-         (error "Can't alias name to itself: `%s' -> `%s'"
-                alias definition))
-        ((eq alias true-name)
-         (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
-                alias definition true-name))
-        (t
-         ;; Remove previous uses of that alias from all other names.
-         (setq loopy-aliases (map-apply (lambda (k v)
-                                          (cons k (remq alias v)))
-                                        loopy-aliases))
-         ;; Add the alias for the new target name.
-         (push alias (map-elt loopy-aliases true-name)))))))
+  `(loopy--defalias-1 (quote ,(loopy--get-quoted-symbol alias))
+                      (quote ,(loopy--get-quoted-symbol definition))))
 
 (defvar loopy--obsolete-aliases
-  '((array across)
-    (array-ref arrayf arrayingf stringf stringingf across-ref)
-    (command-do group)
-    (cons on)
-    (list in)
-    (list-ref listf listingf in-ref)
-    (map-ref mapf mappingf)
-    (numbers num nums)
-    (numbers-down nums-down numdown num-down numsdown)
-    (numbers-up nums-up numup num-up numsup)
-    (set exprs expr)
-    (set-prev prev prev-expr)
-    (sequence elements)
-    (sequence-index sequencei seqi listi arrayi stringi)
-    (seq-ref seqf seqingf)
-    (sequence-ref sequencef sequencingf elements-ref))
+  #s(hash-table
+     test eq
+     data ( across        array
+            arrayf        array-ref
+            arrayingf     array-ref
+            stringf       array-ref
+            stringingf    array-ref
+            across-ref    array-ref
+            group         command-do
+            on            cons
+            in            list
+            listf         list-ref
+            listingf      list-ref
+            in-ref        list-ref
+            mapf          map-ref
+            mappingf      map-ref
+            num           numbers
+            nums          numbers
+            nums-down     numbers-down
+            numdown       numbers-down
+            num-down      numbers-down
+            numsdown      numbers-down
+            nums-up       numbers-up
+            numup         numbers-up
+            num-up        numbers-up
+            numsup        numbers-up
+            exprs         set
+            expr          set
+            prev          set-prev
+            prev-expr     set-prev
+            elements      sequence
+            sequencei     sequence-index
+            seqi          sequence-index
+            listi         sequence-index
+            arrayi        sequence-index
+            stringi       sequence-index
+            seqf          seq-ref
+            seqingf       seq-ref
+            sequencef     sequence-ref
+            sequencingf   sequence-ref
+            elements-ref  sequence-ref))
   "Aliases to be removed from the documentation.")
 
+(defun loopy--expression-parser-map-p (obj)
+  "Return when OBJ has the correct data for `loopy-expression-parsers'."
+  (and (mapp obj)
+       (map-every-p (lambda (k v)
+                      (and (symbolp k)
+                           (or (functionp v)
+                               (and (symbolp k)
+                                    (string-match-p "loopy--parse-.*-special-macro-argument"
+                                                    (symbol-name v))))))
+                    obj)))
+
+(defvar loopy--parsers-internal nil
+  "Internal version of `loopy-parsers' for current expansion.")
+
 ;;;###autoload
-(defcustom loopy-aliases
-  ;; TODO: Is there a faster way to search for aliases?
-  ;;       Would using a hash table with a flatter structure be better?
-  ;;       Using `map-do' on a hash table seemed to be a bit slower for what
-  ;;       we want?
-  '((accumulate      . (accumulating callf2))
-    (adjoin          . (adjoining))
-    (after-do        . (else after else-do))
-    (append          . (appending))
-    (array           . (arraying string stringing))
-    (array-ref       . (arraying-ref string-ref stringing-ref))
-    (at              . (atting))
-    (before-do       . (initially-do initially before))
-    (collect         . (collecting))
-    (concat          . (concating))
-    (cons            . (conses consing))
-    (count           . (counting))
-    (cycle           . (cycling repeat repeating))
-    (finally-do      . (finally))
-    (finally-protect . (finally-protected))
-    (find            . (finding))
-    (flag            . (flags))
-    (iter            . (iterating))
-    (leave           . (leaving))
-    (leave-from      . (leaving-from))
-    (list            . (listing each))
-    (list-ref        . (listing-ref))
-    (map             . (mapping map-pairs mapping-pairs))
-    (map-ref         . (mapping-ref))
-    (max             . (maximizing maximize maxing))
-    ;; Unlike "maxing", there doesn't seem to be much on-line about the word
-    ;; "minning", but the double-N follows conventional spelling rules, such as
-    ;; in "sum" and "summing".
-    (min             . (minimizing minimize minning))
-    (multiply        . (multiplying))
-    (nconc           . (nconcing))
-    (numbers         . (number numbering))
-    (numbers-down    . (number-down numbering-down))
-    (numbers-up      . (number-up numbering-up))
-    (nunion          . (nunioning))
-    (opt-accum       . (accum-opt))
-    (prepend         . (prepending))
-    (push-into       . (push pushing pushing-into))
-    (reduce          . (reducing callf))
-    (return          . (returning))
-    (return-from     . (returning-from))
-    (set             . (setting))
-    (set-accum       . (setting-accum))
-    (set-prev        . (setting-prev prev-set))
-    (sequence        . (sequencing))
-    (seq             . (seqing))
-    (sequence-index       . ( seq-index seqing-index
-                              sequencing-index
-                              list-index listing-index
-                              array-index arraying-index
-                              string-index stringing-index))
-    (seq-ref         . (seqing-ref))
-    (sequence-ref    . (sequencing-ref))
-    (skip            . (skipping continue continuing))
-    (skip-from       . (skipping-from continue-from continuing-from))
-    (stream          . (streaming))
-    (substream       . (substreaming))
-    (sum             . (summing))
-    (union           . (unioning))
-    (vconcat         . (vconcating))
-    (with            . (let* init))
-    (without         . (no-with no-init)))
-  "Aliases for loopy commands and special macro arguments.
+(defcustom loopy-parsers
+  #s(hash-table
+     test eq
+     data (;; Special macro arguments
+           accum-opt          loopy--parse-accum-opt-special-macro-argument
+           opt-accum          loopy--parse-accum-opt-special-macro-argument
+           after              loopy--parse-after-do-special-macro-argument
+           after-do           loopy--parse-after-do-special-macro-argument
+           else               loopy--parse-after-do-special-macro-argument
+           else-do            loopy--parse-after-do-special-macro-argument
+           before             loopy--parse-before-do-special-macro-argument
+           before-do          loopy--parse-before-do-special-macro-argument
+           initially          loopy--parse-before-do-special-macro-argument
+           initially-do       loopy--parse-before-do-special-macro-argument
+           finally            loopy--parse-finally-do-special-macro-argument
+           finally-do         loopy--parse-finally-do-special-macro-argument
+           finally-protect    loopy--parse-finally-protect-special-macro-argument
+           finally-protected  loopy--parse-finally-protect-special-macro-argument
+           finally-return     loopy--parse-finally-return-special-macro-argument
+           flag               loopy--parse-flag-special-macro-argument
+           flags              loopy--parse-flag-special-macro-argument
+           init               loopy--parse-with-special-macro-argument
+           let*               loopy--parse-with-special-macro-argument
+           with               loopy--parse-with-special-macro-argument
+           no-init            loopy--parse-without-special-macro-argument
+           no-with            loopy--parse-without-special-macro-argument
+           without            loopy--parse-without-special-macro-argument
+           named              loopy--parse-named-special-macro-argument
+           wrap               loopy--parse-wrap-special-macro-argument
 
-This variable should not be modified directly.  For forward
-compatibility, use `loopy-defalias'.  For now, these are pairs of
-true names and lists of aliases.
+           ;; Loop Commands
+           accumulate        loopy--parse-accumulate-command
+           accumulating      loopy--parse-accumulate-command
+           callf2            loopy--parse-accumulate-command
+           adjoin            loopy--parse-adjoin-command
+           adjoining         loopy--parse-adjoin-command
+           always            loopy--parse-always-command
+           append            loopy--parse-append-command
+           appending         loopy--parse-append-command
+           array             loopy--parse-array-command
+           arraying          loopy--parse-array-command
+           string            loopy--parse-array-command
+           stringing         loopy--parse-array-command
+           array-ref         loopy--parse-array-ref-command
+           arraying-ref      loopy--parse-array-ref-command
+           string-ref        loopy--parse-array-ref-command
+           stringing-ref     loopy--parse-array-ref-command
+           at                loopy--parse-at-command
+           atting            loopy--parse-at-command
+           collect           loopy--parse-collect-command
+           collecting        loopy--parse-collect-command
+           command-do        loopy--parse-command-do-command
+           concat            loopy--parse-concat-command
+           concating         loopy--parse-concat-command
+           cond              loopy--parse-cond-command
+           cons              loopy--parse-cons-command
+           conses            loopy--parse-cons-command
+           consing           loopy--parse-cons-command
+           count             loopy--parse-count-command
+           counting          loopy--parse-count-command
+           cycle             loopy--parse-cycle-command
+           cycling           loopy--parse-cycle-command
+           repeat            loopy--parse-cycle-command
+           repeating         loopy--parse-cycle-command
+           do                loopy--parse-do-command
+           find              loopy--parse-find-command
+           finding           loopy--parse-find-command
+           if                loopy--parse-if-command
+           iter              loopy--parse-iter-command
+           iterating         loopy--parse-iter-command
+           leave             loopy--parse-leave-command
+           leaving           loopy--parse-leave-command
+           leave-from        loopy--parse-leave-from-command
+           leaving-from      loopy--parse-leave-from-command
+           each              loopy--parse-list-command
+           list              loopy--parse-list-command
+           listing           loopy--parse-list-command
+           list-ref          loopy--parse-list-ref-command
+           listing-ref       loopy--parse-list-ref-command
+           loopy             loopy--parse-loopy-command
+           map               loopy--parse-map-command
+           map-pairs         loopy--parse-map-command
+           mapping           loopy--parse-map-command
+           mapping-pairs     loopy--parse-map-command
+           map-ref           loopy--parse-map-ref-command
+           mapping-ref       loopy--parse-map-ref-command
+           max               loopy--parse-max-command
+           maximize          loopy--parse-max-command
+           maximizing        loopy--parse-max-command
+           maxing            loopy--parse-max-command
+           min               loopy--parse-min-command
+           minimize          loopy--parse-min-command
+           minimizing        loopy--parse-min-command
+           minning           loopy--parse-min-command
+           multiply          loopy--parse-multiply-command
+           multiplying       loopy--parse-multiply-command
+           nconc             loopy--parse-nconc-command
+           nconcing          loopy--parse-nconc-command
+           never             loopy--parse-never-command
+           number            loopy--parse-numbers-command
+           numbering         loopy--parse-numbers-command
+           numbers           loopy--parse-numbers-command
+           number-down       loopy--parse-numbers-down-command
+           numbering-down    loopy--parse-numbers-down-command
+           numbers-down      loopy--parse-numbers-down-command
+           number-up         loopy--parse-numbers-up-command
+           numbering-up      loopy--parse-numbers-up-command
+           numbers-up        loopy--parse-numbers-up-command
+           nunion            loopy--parse-nunion-command
+           nunioning         loopy--parse-nunion-command
+           prepend           loopy--parse-prepend-command
+           prepending        loopy--parse-prepend-command
+           push              loopy--parse-push-into-command
+           push-into         loopy--parse-push-into-command
+           pushing           loopy--parse-push-into-command
+           pushing-into      loopy--parse-push-into-command
+           callf             loopy--parse-reduce-command
+           reduce            loopy--parse-reduce-command
+           reducing          loopy--parse-reduce-command
+           return            loopy--parse-return-command
+           returning         loopy--parse-return-command
+           return-from       loopy--parse-return-from-command
+           returning-from    loopy--parse-return-from-command
+           seq               loopy--parse-seq-command
+           seqing            loopy--parse-seq-command
+           seq-ref           loopy--parse-seq-ref-command
+           seqing-ref        loopy--parse-seq-ref-command
+           sequence          loopy--parse-sequence-command
+           sequencing        loopy--parse-sequence-command
+           array-index       loopy--parse-sequence-index-command
+           arraying-index    loopy--parse-sequence-index-command
+           list-index        loopy--parse-sequence-index-command
+           listing-index     loopy--parse-sequence-index-command
+           seq-index         loopy--parse-sequence-index-command
+           seqing-index      loopy--parse-sequence-index-command
+           sequence-index    loopy--parse-sequence-index-command
+           sequencing-index  loopy--parse-sequence-index-command
+           string-index      loopy--parse-sequence-index-command
+           stringing-index   loopy--parse-sequence-index-command
+           sequence-ref      loopy--parse-sequence-ref-command
+           sequencing-ref    loopy--parse-sequence-ref-command
+           set-accum         loopy--parse-set-accum-command
+           setting-accum     loopy--parse-set-accum-command
+           set               loopy--parse-set-command
+           setting           loopy--parse-set-command
+           prev-set          loopy--parse-set-prev-command
+           set-prev          loopy--parse-set-prev-command
+           setting-prev      loopy--parse-set-prev-command
+           continue          loopy--parse-skip-command
+           continuing        loopy--parse-skip-command
+           skip              loopy--parse-skip-command
+           skipping          loopy--parse-skip-command
+           continue-from     loopy--parse-skip-from-command
+           continuing-from   loopy--parse-skip-from-command
+           skip-from         loopy--parse-skip-from-command
+           skipping-from     loopy--parse-skip-from-command
+           stream            loopy--parse-stream-command
+           streaming         loopy--parse-stream-command
+           substream         loopy--parse-substream-command
+           substreaming      loopy--parse-substream-command
+           sum               loopy--parse-sum-command
+           summing           loopy--parse-sum-command
+           thereis           loopy--parse-thereis-command
+           union             loopy--parse-union-command
+           unioning          loopy--parse-union-command
+           vconcat           loopy--parse-vconcat-command
+           vconcating        loopy--parse-vconcat-command
+           unless            loopy--parse-when-unless-command
+           when              loopy--parse-when-unless-command
+           until             loopy--parse-while-until-commands
+           while             loopy--parse-while-until-commands
+           loopy-iter        loopy-iter--parse-loopy-iter-command))
+  "Map of symbols to parsing functions.
 
- This user option is an alternative to modifying
-`loopy-command-parsers' when the command parser is unknown."
+This includes special macro arguments in addition to the loop commands.
+
+Functions for special macro arguments are fake entries.  These entries
+are used to identify special macro arguments.  These entries are _not_
+used to find the function which parses special macro arguments.  How
+special macro arguments are parsed is not configurable.  Special macro
+arguments are handled specially.  See the Info node
+`(loopy)Special Macro Arguments'.
+
+Functions for parsing custom loop commands can be added to this mapping,
+which are used after special macro arguments are processed.  See the Info node
+`(loopy)Loop Commands' and the Info node `(loopy)Custom Commands'."
   :group 'loopy
-  :type '(alist :key-type symbol :value-type (repeat symbol)))
+  :type '(restricted-sexp :match-alternatives (loopy--expression-parser-map-p)))
 
-;;;###autoload
-(defcustom loopy-command-parsers
-  ;; TODO: This would probably be faster as a hash table,
-  ;;       but then not as customizable.
-  '((accumulate   . loopy--parse-accumulate-command)
-    (always       . loopy--parse-always-command)
-    (append       . loopy--parse-append-command)
-    (adjoin       . loopy--parse-adjoin-command)
-    (array        . loopy--parse-array-command)
-    (array-ref    . loopy--parse-array-ref-command)
-    (at           . loopy--parse-at-command)
-    (collect      . loopy--parse-collect-command)
-    (command-do   . loopy--parse-command-do-command)
-    (concat       . loopy--parse-concat-command)
-    (cond         . loopy--parse-cond-command)
-    (cons         . loopy--parse-cons-command)
-    (count        . loopy--parse-count-command)
-    (cycle        . loopy--parse-cycle-command)
-    (do           . loopy--parse-do-command)
-    (find         . loopy--parse-find-command)
-    (set-accum    . loopy--parse-set-accum-command)
-    (if           . loopy--parse-if-command)
-    (iter         . loopy--parse-iter-command)
-    (leave        . loopy--parse-leave-command)
-    (leave-from   . loopy--parse-leave-from-command)
-    (list         . loopy--parse-list-command)
-    (list-ref     . loopy--parse-list-ref-command)
-    (loopy        . loopy--parse-loopy-command)
-    (map          . loopy--parse-map-command)
-    (map-ref      . loopy--parse-map-ref-command)
-    (max          . loopy--parse-max-command)
-    (min          . loopy--parse-min-command)
-    (multiply     . loopy--parse-multiply-command)
-    (never        . loopy--parse-never-command)
-    (nconc        . loopy--parse-nconc-command)
-    (numbers      . loopy--parse-numbers-command)
-    (numbers-up   . loopy--parse-numbers-up-command)
-    (numbers-down . loopy--parse-numbers-down-command)
-    (nunion       . loopy--parse-nunion-command)
-    (prepend      . loopy--parse-prepend-command)
-    (push-into    . loopy--parse-push-into-command)
-    (reduce       . loopy--parse-reduce-command)
-    (return       . loopy--parse-return-command)
-    (return-from  . loopy--parse-return-from-command)
-    (seq          . loopy--parse-seq-command)
-    (sequence     . loopy--parse-sequence-command)
-    (sequence-index . loopy--parse-sequence-index-command)
-    (seq-ref      . loopy--parse-seq-ref-command)
-    (sequence-ref . loopy--parse-sequence-ref-command)
-    (set          . loopy--parse-set-command)
-    (set-prev     . loopy--parse-set-prev-command)
-    (skip         . loopy--parse-skip-command)
-    (skip-from    . loopy--parse-skip-from-command)
-    (stream       . loopy--parse-stream-command)
-    (substream    . loopy--parse-substream-command)
-    (sum          . loopy--parse-sum-command)
-    (thereis      . loopy--parse-thereis-command)
-    (union        . loopy--parse-union-command)
-    (unless       . loopy--parse-when-unless-command)
-    (until        . loopy--parse-while-until-commands)
-    (vconcat      . loopy--parse-vconcat-command)
-    (when         . loopy--parse-when-unless-command)
-    (while        . loopy--parse-while-until-commands))
+(make-obsolete-variable 'loopy-command-parsers 'loopy-parsers "2025-07" 'set)
+(defcustom loopy-command-parsers nil
+
   "An alist of pairs of a quoted command name and a parsing function.
+
+This variable is obsolete.  See instead the customizable variable
+`loopy-parsers'.
 
 The parsing function is chosen based on the command name (such as
 `list' in `(list i my-list)'), not the usage of the command.  That is,
@@ -259,6 +372,21 @@ exist), one could do
   :group 'loopy
   :type '(alist :key-type symbol :value-type function))
 
+(make-obsolete-variable 'loopy-aliases 'loopy-parsers "2025-07" 'set)
+(defcustom loopy-aliases nil
+  "Aliases for loopy commands and special macro arguments.
+
+This variable is obsolete.  See instead the customizable variable
+`loopy-parsers'.
+
+This variable should not be modified directly.  For forward
+compatibility, use `loopy-defalias'.  For now, these are pairs of
+true names and lists of aliases.
+
+ This user option is an alternative to modifying
+`loopy-command-parsers' when the command parser is unknown."
+  :group 'loopy
+  :type '(alist :key-type symbol :value-type (repeat symbol)))
 
 
 ;;;; Flags
@@ -320,28 +448,6 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 ;; might be cleaner code to modify from the parsing function, after the macro
 ;; has already set them to nil.
 
-(defvar loopy--special-macro-arguments
-  '( flag with without before-do after-do finally-do finally-return wrap
-     finally-protect accum-opt)
-  "List of base names of built-in special macro arguments.
-
-These are only the base names as found in `loopy-aliases'.")
-
-(defvar loopy--special-maro-argument-processors
-  '(loopy--process-special-arg-loop-name
-    loopy--process-special-arg-flag
-    loopy--process-special-arg-with
-    loopy--process-special-arg-without
-    loopy--process-special-arg-accum-opt
-    loopy--process-special-arg-wrap
-    loopy--process-special-arg-before-do
-    loopy--process-special-arg-after-do
-    loopy--process-special-arg-finally-do
-    loopy--process-special-arg-finally-return
-    loopy--process-special-arg-finally-protect)
-  "Processing functions for special macro arguments.
-These functions must be run in order.")
-
 (defvar loopy--loop-name nil
   "A symbol that names the loop, appropriate for use in `cl-block'.")
 
@@ -349,7 +455,6 @@ These functions must be run in order.")
   "The stack of symbols of currently expanding loops.
 
 This is used to check for errors with the `at' command.")
-
 
 (defvar loopy--flags nil
   "Symbols/flags whose presence changes the behavior of `loopy'.
@@ -394,8 +499,6 @@ just wrap the macro expression as you normally would.")
 (defvar loopy--before-do nil
   "A list of expressions to evaluate before the loop starts.
 This is done using a `progn'.")
-
-
 
 
 ;;;; Loop Commands
@@ -621,21 +724,6 @@ CMD-NAME is used for signaling errors."
   (or (map-nested-elt loopy--accumulation-places (list loop var))
       (signal 'loopy-missing-accum-counters (list cmd-name))))
 
-(defvar loopy--accumulation-constructors
-  '((adjoin .  loopy--construct-accum-adjoin)
-    (append .  loopy--construct-accum-append)
-    (prepend .  loopy--construct-accum-append)
-    (collect . loopy--construct-accum-collect)
-    (push-into . loopy--construct-accum-collect)
-    (concat . loopy--construct-accum-concat)
-    (nconc . loopy--construct-accum-nconc)
-    (nunion . loopy--construct-accum-nunion)
-    (union . loopy--construct-accum-union)
-    (vconcat . loopy--construct-accum-vconcat))
-  "Functions that produce the code of an optimized accumulation.
-
-This is used by the function `loopy--get-optimized-accum'.")
-
 (defvar loopy--optimized-accum-vars nil
   "Explicit accumulations variables to optimize.
 
@@ -664,6 +752,8 @@ known to fall into the first group.")
       loopy--final-do
       loopy--final-protect
       loopy--final-return
+
+      loopy--parsers-internal
 
       ;; -- Vars for processing loop commands --
       ;; NOTE: `loopy--at-instructions' cannot be local to each loop:
@@ -790,56 +880,6 @@ of a sequence."
 This predicate checks for presence in the list
 `loopy--valid-external-at-targets'."
   (memq target loopy--valid-external-at-targets))
-
-(cl-defun loopy--get-true-name (name)
-  "Get the true name of possible alias NAME."
-  (or (progn
-        ;; Defensively return nil, since `map-do' in older versions
-        ;; of `map.el' failed to return nil correctly.
-        (map-do (lambda (k v)
-                  (when (memq name v)
-                    (cl-return-from loopy--get-true-name k)))
-                loopy-aliases)
-        (map-do (lambda (k v)
-                  (when (memq name v)
-                    (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, use `loopy-defalias'."
-                          name k)
-                    (cl-return-from loopy--get-true-name k)))
-                loopy--obsolete-aliases)
-        nil)
-      name))
-
-(defun loopy--get-aliases (true-name)
-  "Get the immediate aliases of TRUE-NAME.
-
-See also `loopy--get-all-names', for when the true name
-is not known."
-  (map-elt loopy-aliases true-name))
-
-(cl-defun loopy--get-all-names (name &key from-true ignored)
-  "Get the true name of NAME and all of the true name's aliases.
-
-If FROM-TRUE is non-nil, NAME is the true name.  IGNORED is a
-list of names to be removed from the list of found names.
-
-If no other names are found, a list of just NAME is returned.
-This function does not check whether a name is known."
-  (let ((names (if from-true
-                   (cons name (loopy--get-aliases name))
-                 (or (progn
-                       ;; Defensively return nil, since `map-do' in
-                       ;; older versions of `map.el' failed to
-                       ;; return nil correctly.
-                       (map-do (lambda (k v)
-                                 (when (or (eq name k) (memq name v))
-                                   (cl-return-from loopy--get-all-names
-                                     (cons k v))))
-                               loopy-aliases)
-                       nil)
-                     (list name)))))
-    (if ignored
-        (seq-difference names ignored #'eq)
-      names)))
 
 (provide 'loopy-vars)
 ;;; loopy-vars.el ends here

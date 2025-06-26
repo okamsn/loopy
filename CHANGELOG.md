@@ -12,7 +12,29 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   binds `VAR` to `nil`, but since this form is indistinguishable from a mistake,
   and since `nil` is a short word to write, this behavior is deprecated.
 
+- `loopy-command-parsers` and `loopy-aliases` are both deprecated in favor of
+  the newly added `loopy-parsers` ([#237]).  The new user option simplifies the
+  code internally, making it easier to add local overrides in the future, which
+  will make code which custom commands more portable.
+
+  The new user option is a hash table which maps symbols to parsing functions.
+  There is no longer a separate mapping of aliases to original names.  However,
+  `loopy-defalias` will continue to work.
+
+### Internal Changes
+
+- As far as the implementation is concerned, "aliases" are no longer a separate
+  concept from commands ([#237]).  Aliases and true command names now exist in a
+  single hash table, `loopy-parsers`, and are indistinguishable.  This simplifies
+  the code and makes this part of the code slightly faster.
+  - Special macro arguments are now identified by the parsing function given in
+    `loopy-parsers`, even though the corresponding function doesn't actually
+    exist.
+
+
 [#229]: https://github.com/okamsn/loopy/PR/229
+[#237]: https://github.com/okamsn/loopy/PR/237
+
 
 ## 0.14.0
 
