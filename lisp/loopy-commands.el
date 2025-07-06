@@ -1778,16 +1778,15 @@ Then entire plist is passed to the constructor found in
 second pass of macro expansion."
   ;; Data is quoted to prevent recursive macro expansion.
   (let ((plist (cl-second arg)))
-    (loopy--plist-bind (:name name :loop loop)
+    (loopy--plist-bind (:name name :loop loop :opt-accum-fn fn)
         plist
-      (let ((true-name (loopy--get-true-name name)))
-        (if-let ((func (map-elt loopy--accumulation-constructors true-name)))
-            (cl-destructuring-bind (main-body other-instrs)
-                (loopy--extract-main-body (funcall func plist))
-              (loopy--process-instructions
-               `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
-              (macroexp-progn main-body))
-          (signal 'loopy-accum-constructor-missing (list name)))))))
+      (if (null fn)
+          (signal 'loopy-accum-constructor-missing (list name plist))
+        (cl-destructuring-bind (main-body other-instrs)
+            (loopy--extract-main-body (funcall fn plist))
+          (loopy--process-instructions
+           `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
+          (macroexp-progn main-body))))))
 
 (cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
   "Keep track of where things are being placed.
@@ -2049,7 +2048,8 @@ you can use in the instructions:
           `((loopy--main-body
              (loopy--optimized-accum '( :cmd ,cmd :name ,name
                                         :var ,var :val ,val
-                                        :test ,test :key ,key :at ,pos)))))
+                                        :test ,test :key ,key :at ,pos
+                                        :opt-accum-fn loopy--construct-accum-adjoin)))))
 
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
@@ -2079,7 +2079,8 @@ you can use in the instructions:
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
                                   :var ,var :val ,val
-                                  :test ,test :key ,key :at ,pos)))
+                                  :test ,test :key ,key :at ,pos
+                                  :opt-accum-fn loopy--construct-accum-adjoin)))
       (loopy--implicit-return ,var))))
 
 ;;;;;;; Append
@@ -2130,7 +2131,8 @@ you can use in the instructions:
             (loopy--main-body
              (loopy--optimized-accum '( :loop ,loopy--loop-name
                                         :var ,var :val ,val
-                                        :cmd ,cmd :name ,name :at ,pos)))))
+                                        :cmd ,cmd :name ,name :at ,pos
+                                        :opt-accum-fn loopy--construct-accum-append)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
@@ -2155,7 +2157,8 @@ you can use in the instructions:
     `((loopy--accumulation-vars (,var nil))
       (loopy--main-body
        (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var :val ,val
-                                  :cmd ,cmd :name ,name :at ,pos)))
+                                  :cmd ,cmd :name ,name :at ,pos
+                                  :opt-accum-fn loopy--construct-accum-append)))
       (loopy--implicit-return ,var))))
 
 ;;;;;;; Collect
@@ -2200,7 +2203,8 @@ you can use in the instructions:
                     `((loopy--main-body
                        (loopy--optimized-accum
                         '( :loop ,loopy--loop-name :var ,var :val ,val
-                           :cmd ,cmd :name ,name :at ,pos)))))
+                           :cmd ,cmd :name ,name :at ,pos
+                           :opt-accum-fn loopy--construct-accum-collect)))))
                 (loopy--check-accumulation-compatibility
                  loopy--loop-name var 'list cmd)
                 `((loopy--accumulation-vars (,var nil))
@@ -2223,7 +2227,8 @@ you can use in the instructions:
               `((loopy--main-body
                  (loopy--optimized-accum
                   '( :loop ,loopy--loop-name :var ,var :val ,val
-                     :cmd ,cmd :name ,name :at ,pos)))
+                     :cmd ,cmd :name ,name :at ,pos
+                     :opt-accum-fn loopy--construct-accum-collect)))
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Concat
@@ -2266,7 +2271,8 @@ This function is called by `loopy--expand-optimized-accum'."
                       (loopy--main-body
                        (loopy--optimized-accum
                         '( :loop ,loopy--loop-name :var ,var :val ,val
-                           :cmd ,cmd :name ,name :at ,pos)))
+                           :cmd ,cmd :name ,name :at ,pos
+                           :opt-accum-fn loopy--construct-accum-concat)))
                       (loopy--implicit-return ,var)))
                 (loopy--check-accumulation-compatibility
                  loopy--loop-name var 'string cmd)
@@ -2292,7 +2298,8 @@ This function is called by `loopy--expand-optimized-accum'."
                 (loopy--main-body
                  (loopy--optimized-accum
                   '( :loop ,loopy--loop-name :var ,var :val ,val
-                     :cmd ,cmd :name ,name :at ,pos)))
+                     :cmd ,cmd :name ,name :at ,pos
+                     :opt-accum-fn loopy--construct-accum-concat)))
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Count
@@ -2469,7 +2476,8 @@ EXPR is the value to bind to VAR."
                     `((loopy--accumulation-vars (,var nil))
                       (loopy--main-body (loopy--optimized-accum
                                          '( :loop ,loopy--loop-name :var ,var
-                                            :val ,val :cmd ,cmd :name ,name :at ,pos)))))
+                                            :val ,val :cmd ,cmd :name ,name :at ,pos
+                                            :opt-accum-fn loopy--construct-accum-nconc)))))
                 (loopy--check-accumulation-compatibility
                  loopy--loop-name var 'list cmd)
                 `((loopy--accumulation-vars (,var nil))
@@ -2491,7 +2499,8 @@ EXPR is the value to bind to VAR."
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body (loopy--optimized-accum
                                    '( :loop ,loopy--loop-name :var ,var
-                                      :val ,val :cmd ,cmd :name ,name :at ,pos)))
+                                      :val ,val :cmd ,cmd :name ,name :at ,pos
+                                      :opt-accum-fn loopy--construct-accum-nconc)))
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Nunion
@@ -2562,7 +2571,8 @@ This function is used by `loopy--expand-optimized-accum'."
             (loopy--main-body
              (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var
                                         :val ,val :cmd ,cmd :name ,name :at ,pos
-                                        :key ,key :test ,test)))))
+                                        :key ,key :test ,test
+                                        :opt-accum-fn loopy--construct-accum-nunion)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
@@ -2598,7 +2608,8 @@ This function is used by `loopy--expand-optimized-accum'."
       (loopy--main-body
        (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var
                                   :val ,val :cmd ,cmd :name ,name :at ,pos
-                                  :key ,key :test ,test))))))
+                                  :key ,key :test ,test
+                                  :opt-accum-fn loopy--construct-accum-nunion))))))
 
 ;;;;;;; Prepend
 (defun loopy--parse-prepend-command (arg)
@@ -2750,7 +2761,8 @@ This function is used by `loopy--expand-optimized-accum'."
             (loopy--main-body
              (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var
                                         :val ,val :cmd ,cmd :name ,name :at ,pos
-                                        :key ,key :test ,test)))))
+                                        :key ,key :test ,test
+                                        :opt-accum-fn loopy--construct-accum-union)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
         ,@(cond
@@ -2786,7 +2798,8 @@ This function is used by `loopy--expand-optimized-accum'."
       (loopy--main-body
        (loopy--optimized-accum '( :loop ,loopy--loop-name :var ,var
                                   :val ,val :cmd ,cmd :name ,name :at ,pos
-                                  :key ,key :test ,test))))))
+                                  :key ,key :test ,test
+                                  :opt-accum-fn loopy--construct-accum-union))))))
 
 ;;;;;;; Vconcat
 (defun loopy--construct-accum-vconcat (plist)
@@ -2832,7 +2845,8 @@ This function is called by `loopy--expand-optimized-accum'."
                       (loopy--main-body
                        (loopy--optimized-accum
                         '( :loop ,loopy--loop-name :var ,var :val ,val
-                           :cmd ,cmd :name ,name :at ,pos)))))
+                           :cmd ,cmd :name ,name :at ,pos
+                           :opt-accum-fn loopy--construct-accum-vconcat)))))
                 (loopy--check-accumulation-compatibility
                  loopy--loop-name var 'vector cmd)
                 `((loopy--accumulation-vars (,var nil))
@@ -2857,7 +2871,8 @@ This function is called by `loopy--expand-optimized-accum'."
                 (loopy--main-body
                  (loopy--optimized-accum
                   '( :loop ,loopy--loop-name :var ,var :val ,val
-                     :cmd ,cmd :name ,name :at ,pos)))
+                     :cmd ,cmd :name ,name :at ,pos
+                     :opt-accum-fn loopy--construct-accum-vconcat)))
                 (loopy--implicit-return ,var))))
 
 ;;;;; Boolean Commands
@@ -3090,19 +3105,16 @@ Return a single list of instructions in the same order as
 COMMAND-LIST."
   (mapcan #'loopy--parse-loop-command command-list))
 
-(cl-defun loopy--get-command-parser (command-name &key (parsers loopy-command-parsers))
+(cl-defun loopy--get-command-parser (command-name)
   "Get the parsing function for COMMAND-NAME.
 
-The following variables are checked:
-
-1. `loopy-aliases'
-2. `loopy-command-parsers' or the value of PARSERS
-
 Failing that, an error is signaled."
-
-  (let ((true-name (loopy--get-true-name command-name)))
-    (or (map-elt parsers true-name)
-        (signal 'loopy-unknown-command (list command-name)))))
+  (or (map-elt loopy--parsers-internal command-name)
+      (when-let* ((found (map-elt loopy--obsolete-aliases command-name)))
+        (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, add it to `loopy-parsers'."
+              command-name found)
+        (map-elt loopy--parsers-internal found))
+      (signal 'loopy-unknown-command (list command-name))))
 
 (provide 'loopy-commands)
 

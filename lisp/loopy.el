@@ -224,26 +224,6 @@ Returns a list of two elements:
               (push `(_ ,set-expr) new-binds))))))
     (list 'let* (nreverse new-binds))))
 
-(cl-defun loopy--find-special-macro-arguments (names body)
-  "Find any usages of special macro arguments NAMES in BODY, given aliases.
-
-NAMES can be either a single quoted name or a list of quoted names.
-
-Aliases can be found in `loopy-aliases'."
-  (let ((aliases (map-pairs loopy-aliases)))
-    (dolist (keyword
-             (if (listp names)
-                 (append names
-                         (cl-loop for alias in aliases
-                                  if (memq (cdr alias) names)
-                                  collect (car alias)))
-               (cons names (cl-loop for alias in aliases
-                                    if (eq (cdr alias) names)
-                                    collect (car alias)))))
-      (when-let ((target (cdr (assq keyword body))))
-        (cl-return-from loopy--find-special-macro-arguments target)))))
-
-
 ;;;; The Macro Itself
 (defun loopy--expand-to-loop ()
   "Create the loop body according to the variables found in `loopy--variables'.
@@ -450,30 +430,6 @@ The function creates quoted code that should be used by a macro."
       ;; Return the constructed code.
       result)))
 
-(defmacro loopy--process-special-marco-args (names &rest body)
-  "Process the special macro arguments named by NAMES.
-
-BODY is the processing.
-
-Variables available:
-- `all-names' is all of the names found
-- `such-args' are all arguments that match elements in
-  `all-names'
-- `arg-value' is the value of the arg if there is only one match
-- `arg-name' the name of the arg found if there is only one match"
-  (declare (indent 1))
-  `(let* ((all-names (loopy--get-all-names ,names))
-          (such-args (map-filter (lambda (arg-name _)
-                                   (memq arg-name all-names))
-                                 body)))
-     (cl-case (length such-args)
-       (0 nil)
-       (1 (let ((arg-name  (caar such-args))
-                (arg-value (cdar such-args)))
-            (ignore arg-value)
-            ,@body))
-       (t (error "Conflicting arguments: %s" such-args)))))
-
 ;;;; Create special arg processors
 (defmacro loopy--def-special-processor (name &rest body)
   "Create a processor for the special macro argument NAME and its aliases.
@@ -484,23 +440,21 @@ in `loopy--variables') and return a new BODY with its
 own argument removed.
 
 Variables available:
-- `all-names' is all of the names found
 - `matching-args' are all arguments that match elements in
   `all-names'
 - `arg-value' is the value of the arg if there is only one match
 - `arg-name' the name of the arg found if there is only one match"
   (declare (indent defun))
   `(defun ,(intern (format "loopy--process-special-arg-%s" name))
-       (body &optional ignored)
+       (body)
      ,(format "Process the special macro argument `%s' and its aliases.
 
 Returns BODY without the `%s' argument."
               name name)
-     (let* ((all-names (loopy--get-all-names (quote ,name)
-                                             :from-true t
-                                             :ignored ignored))
-            (matching-args (seq-filter (lambda (x) (memq (car-safe x) all-names))
-                                       body)))
+     (let* ((matching-args (cl-remove-if (lambda (x)
+                                           (not (eq (quote ,(intern (format "loopy--parse-%s-special-macro-argument" name)))
+                                                    (loopy--get-command-parser (car-safe x)))))
+                                         body)))
        (cl-case (length matching-args)
          (0 body)
          (1 (let ((arg-name  (caar matching-args))
@@ -516,7 +470,8 @@ Returns BODY without the `%s' argument."
     (dolist (arg body)
       (cond ((symbolp arg)
              (push arg names))
-            ((and (memq (car-safe arg) (loopy--get-all-names 'named :from-true t)))
+            ((eq 'loopy--parse-named-special-macro-argument
+                 (loopy--get-command-parser (car-safe arg)))
              (if (/= 2 (length arg))
                  (error "Wrong number of arguments for loop name: %s" arg)
                (push (cl-second arg) names)))
@@ -934,6 +889,21 @@ see the Info node `(loopy)' distributed with this package."
   ;; Bind variables in `loopy--variables' around code to build the expanded
   ;; loop.
   (loopy--wrap-variables-around-body
+;;;;; Process obsolete variables
+   ;; Don't copy unless we have to.
+   (if (not (or loopy-command-parsers loopy-aliases))
+       (setq loopy--parsers-internal loopy-parsers)
+     (setq loopy--parsers-internal (copy-hash-table loopy-parsers))
+     (when loopy-command-parsers
+       (map-do (lambda (k v)
+                 (puthash k v loopy--parsers-internal))
+               loopy-command-parsers))
+     (when loopy-aliases
+       (pcase-dolist (`(,orig . ,aliases) loopy-aliases)
+         (let ((parser (loopy--get-command-parser orig)))
+           (dolist (alias aliases)
+             (puthash alias parser loopy--parsers-internal))))))
+
 ;;;;; Process the special macro arguments.
    (mapc #'loopy--apply-flag loopy-default-flags)
    (setq body (loopy--process-special-arg-loop-name body))
