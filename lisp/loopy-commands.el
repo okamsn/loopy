@@ -85,9 +85,7 @@
 (require 'subr-x)
 (require 'stream)
 
-(declare-function loopy--bound-p "loopy")
 (declare-function loopy--process-instructions "loopy")
-(declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Helpful Functions
@@ -275,8 +273,8 @@ BODY is one or more commands to be grouped by a `progn' form.
 This command is suitable for using as the first sub-command in an
 `if' command."
   (let ((loopy--in-sub-level t))
-    (cl-destructuring-bind (progn-body rest)
-        (loopy--extract-main-body (loopy--parse-loop-commands body))
+    (loopy--bind-main-body (progn-body rest)
+        (loopy--parse-loop-commands body)
       ;; Return the instructions.
       (cons `(loopy--main-body (progn ,@progn-body))
             rest))))
@@ -300,19 +298,16 @@ the loop literally (not even in a `progn')."
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
   (let ((loopy--in-sub-level t))
-    (pcase-let ((`(,if-true-main-body ,true-rest)
-                 (loopy--extract-main-body (loopy--parse-loop-command if-true)))
-                (`(,if-false-main-body ,false-rest)
-                 (loopy--extract-main-body (loopy--parse-loop-commands if-false))))
-
-      ;; Handle if we need to wrap multiple main-body expressions.
-      (setq if-true-main-body (macroexp-progn if-true-main-body))
-
-      ;; Return the full instruction list.
-      `((loopy--main-body
-         (if ,condition ,if-true-main-body ,@if-false-main-body))
-        ,@true-rest
-        ,@false-rest))))
+    (loopy--bind-main-body (if-true-main-body true-rest)
+        (loopy--parse-loop-command if-true)
+      (loopy--bind-main-body (if-false-main-body false-rest)
+          (loopy--parse-loop-commands if-false)
+        ;; Return the full instruction list.
+        `((loopy--main-body (if ,condition
+                                ,(macroexp-progn if-true-main-body)
+                              ,@if-false-main-body))
+          ,@true-rest
+          ,@false-rest)))))
 
 ;;;;;; Cond
 (cl-defun loopy--parse-cond-command ((_ &rest clauses))
@@ -326,13 +321,12 @@ command are inserted into a `cond' special form."
   (let ((loopy--in-sub-level t)
         (cond-body nil)
         (rest-instructions nil))
-    (cl-loop for clause in clauses
-             for (main-body rest) = (loopy--extract-main-body
-                                     (loopy--parse-loop-commands
-                                      (cl-rest clause)))
-             do
-             (push (cons (cl-first clause) main-body) cond-body)
-             (push rest rest-instructions))
+    (dolist (clause clauses)
+      (loopy--bind-main-body (main-body rest)
+          (loopy--parse-loop-commands
+           (cl-rest clause))
+        (push (cons (cl-first clause) main-body) cond-body)
+        (push rest rest-instructions)))
     (cons `(loopy--main-body (cond ,@(nreverse cond-body)))
           (apply #'append (nreverse rest-instructions)))))
 
@@ -357,7 +351,7 @@ command are inserted into a `cond' special form."
 ;;;;; Iteration
 (cl-defmacro loopy--defiteration
     (name doc-string &key keywords (required-vals 1) other-vals instructions)
-  "Define an interation command parser for NAME.
+  "Define an iteration command parser for NAME.
 
 An iteration command made with this macro has the layout of
 \(command-name variable-name value [values] [keys]).  That is,
@@ -1781,8 +1775,8 @@ second pass of macro expansion."
         plist
       (if (null fn)
           (signal 'loopy-accum-constructor-missing (list name plist))
-        (cl-destructuring-bind (main-body other-instrs)
-            (loopy--extract-main-body (funcall fn plist))
+        (loopy--bind-main-body (main-body other-instrs)
+            (funcall fn plist)
           (loopy--process-instructions
            `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
           (macroexp-progn main-body))))))
@@ -1794,13 +1788,11 @@ LOOP is the current loop.  VAR is the accumulation variable.
 PLACE is one of `start' or `end'.  VALUE is the integer by which
 to increment the count (default 1)."
   (loopy--check-target-loop-name loop)
+  (loopy--check-position-name place)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
-    (setq place (loopy--normalize-symbol place))
-    (when (eq place 'beginning) (setq place 'start))
-    (loopy--check-position-name place)
     (cl-incf (map-elt (map-elt loop-map var) place) value)))
 
 ;;;;;; Commands
@@ -2036,11 +2028,7 @@ you can use in the instructions:
   :explicit
   (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
-
+    (setq pos (loopy--normalize-position-name pos))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2049,31 +2037,27 @@ you can use in the instructions:
                                         :var ,var :val ,val
                                         :test ,test :key ,key :at ,pos
                                         :opt-accum-fn loopy--construct-accum-adjoin)))))
-
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
-        ,@(cond
-           ((member pos '(start beginning 'start 'beginning))
-            (loopy--instr-let-const* ((test-val test)
-                                      (key-val key))
-                loopy--accumulation-vars
-              `((loopy--main-body
-                 ,(cl-once-only ((adjoin-value val))
-                    `(unless (loopy--member-p ,var ,adjoin-value
-                                              :test ,test-val :key ,key-val)
-                       (cl-callf2 cons ,adjoin-value ,var)))))))
-           ((member pos '(end nil 'end))
-            (loopy--produce-adjoin-end-tracking var val :test test :key key))
-           (t
-            (signal 'loopy-bad-position-command-argument (list pos cmd))))
+        ,@(pcase pos
+            ('start
+             (loopy--instr-let-const* ((test-val test)
+                                       (key-val key))
+                 loopy--accumulation-vars
+               `((loopy--main-body
+                  ,(cl-once-only ((adjoin-value val))
+                     `(unless (loopy--member-p ,var ,adjoin-value
+                                               :test ,test-val :key ,key-val)
+                        (cl-callf2 cons ,adjoin-value ,var)))))))
+            ((or 'end 'nil)
+             (loopy--produce-adjoin-end-tracking var val :test test :key key))
+            (_
+             (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
@@ -2089,7 +2073,6 @@ you can use in the instructions:
                        :var var :val val
                        :at (pos 'end))
       plist
-    (setq pos (loopy--get-quoted-symbol pos))
     (map-let (('start start)
               ('end end))
         (loopy--get-accum-counts loop var 'append)
@@ -2119,10 +2102,7 @@ you can use in the instructions:
   :explicit
   (loopy--plist-bind (:at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2134,24 +2114,18 @@ you can use in the instructions:
                                         :opt-accum-fn loopy--construct-accum-append)))))
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
-        ,@(cond
-           ;; TODO: Is there a better way of appending to the beginning
-           ;;       of a list?
-           ((member pos '(start beginning 'start 'beginning))
+        ,@(pcase pos
+            ;; TODO: Is there a better way of appending to the beginning
+            ;;       of a list?
             ;; `append' doesn't copy the last argument.
-            `((loopy--main-body (setq ,var (append ,val ,var)))))
-           ((member pos '(end 'end))
-            (loopy--produce-multi-item-end-tracking var val))
-           (t
-            (signal 'loopy-bad-position-command-argument (list pos cmd))))
+            ('start `((loopy--main-body (setq ,var (append ,val ,var)))))
+            ('end (loopy--produce-multi-item-end-tracking var val))
+            (_ (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind (:at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--main-body
@@ -2165,7 +2139,6 @@ you can use in the instructions:
   "Construct an optimized `collect' accumulation from PLIST."
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
-    (setq pos (loopy--get-quoted-symbol pos))
     `((loopy--accumulation-vars (,var nil))
       ,@(map-let (('start start)
                   ('end end))
@@ -2192,10 +2165,7 @@ you can use in the instructions:
   :keywords (at)
   :explicit (loopy--plist-bind ( :at (pos (quote 'end)))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2218,10 +2188,7 @@ you can use in the instructions:
 
   :implicit (loopy--plist-bind ( :at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--main-body
                  (loopy--optimized-accum
@@ -2263,6 +2230,7 @@ This function is called by `loopy--expand-optimized-accum'."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end))
                 opts
+              (setq pos (loopy--normalize-position-name pos))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2288,10 +2256,7 @@ This function is called by `loopy--expand-optimized-accum'."
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
@@ -2465,10 +2430,7 @@ EXPR is the value to bind to VAR."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2490,10 +2452,7 @@ EXPR is the value to bind to VAR."
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body (loopy--optimized-accum
@@ -2559,10 +2518,7 @@ This function is used by `loopy--expand-optimized-accum'."
   :explicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2597,10 +2553,7 @@ This function is used by `loopy--expand-optimized-accum'."
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
@@ -2753,6 +2706,7 @@ This function is used by `loopy--expand-optimized-accum'."
   :explicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
+    (setq pos (loopy--normalize-position-name pos))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2787,10 +2741,7 @@ This function is used by `loopy--expand-optimized-accum'."
   :implicit
   (loopy--plist-bind (:at (pos 'end) :key key :test (test (quote #'equal)))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--accumulation-vars (,var nil))
       (loopy--implicit-return ,var)
@@ -2833,10 +2784,7 @@ This function is called by `loopy--expand-optimized-accum'."
   :keywords (at)
   :explicit (loopy--plist-bind (:at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (if (memq var loopy--optimized-accum-vars)
                   (progn
                     (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2861,10 +2809,7 @@ This function is called by `loopy--expand-optimized-accum'."
                   (loopy--vars-final-updates (,var . nil)))))
   :implicit (loopy--plist-bind (:at (pos 'end))
                 opts
-              (setq pos (loopy--normalize-symbol pos))
-              (when (eq pos 'beginning) (setq pos 'start))
-              (unless (memq pos '(start beginning end))
-                (signal 'loopy-bad-position-command-argument (list pos cmd)))
+              (setq pos (loopy--normalize-position-name pos))
               (loopy--update-accum-place-count loopy--loop-name var pos)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
@@ -3067,8 +3012,13 @@ Return a list of instructions for initializing the variables and
 destructuring into them in the loop body.
 
 A wrapper around `loopy--destructure-for-iteration-command'."
-  (loopy--convert-iteration-vars-to-other-vars
-   (loopy--destructure-for-iteration-command var value-expression)))
+  (cl-loop
+   for binding in (loopy--destructure-for-iteration-command var value-expression)
+   if (eq (car binding) 'loopy--iteration-vars)
+   collect (cons 'loopy--other-vars (cdr binding))
+   else
+   collect binding
+   end))
 
 (cl-defun loopy--parse-destructuring-accumulation-command-default
     ((name var val &rest args))

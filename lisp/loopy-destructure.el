@@ -260,7 +260,6 @@ Type is one of `list' or `array'."
           (puthash var-seq val loopy--get-var-groups-cache)
           val))))
 
-;; TODO: Turn these into records?
 (defun loopy--get-&optional-spec (form)
   "Get the spec of the `&optional' variable FORM as (VAR DEFAULT SUPPLIED LEN)."
   (let ((var)
@@ -390,7 +389,7 @@ Type is one of `list' or `array'."
   "Wrapper macro for compatibility with obsoletion of `pcase--flip'.
 
 FN is the function.  ARG2 is the argument to move to the second
-postion of the call to FN in the pattern."
+position of the call to FN in the pattern."
   (static-if (>= emacs-major-version 30)
       `(,fn _ ,arg2)
     `(pcase--flip ,fn ,arg2)))
@@ -1033,10 +1032,9 @@ an error should be signaled if the pattern doesn't match."
                                                                    #'cdr
                                                                  #'cadr))
                                                              v)))
-                                     (seq-let (main-body other-instructions)
-                                         (loopy--extract-main-body
-                                          (loopy--parse-loop-command
-                                           `(,name ,destr-var ,destr-val ,@args)))
+                                     (loopy--bind-main-body (main-body other-instructions)
+                                         (loopy--parse-loop-command
+                                          `(,name ,destr-var ,destr-val ,@args))
                                        ;; Just push the other instructions, but
                                        ;; gather the main body expressions.
                                        (dolist (instr other-instructions)

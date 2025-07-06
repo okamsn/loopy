@@ -383,7 +383,6 @@ Returns BODY without the `%s' argument."
   ;;
   ;; 1. Flags in `loopy-default-flags'.
   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
-  ;; (mapc #'loopy--apply-flag loopy-default-flags)
   (mapc #'loopy--apply-flag arg-value))
 
 (loopy-iter--def-special-processor without
@@ -393,6 +392,7 @@ Returns BODY without the `%s' argument."
   (pcase-dolist ((or `(,var ,pos) var) arg-value)
     (push var loopy--optimized-accum-vars)
     (when pos
+      (setq pos (loopy--normalize-position-name pos))
       (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
 
 (loopy-iter--def-special-processor wrap

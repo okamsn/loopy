@@ -256,39 +256,6 @@
 
 
 ;;;; List Processing
-(defalias 'loopy--car-equals-car #'loopy--car-equal-car)
-(defun loopy--car-equal-car (a b)
-  "Check whether the `car' of A equals the `car' of B."
-  (equal (car a) (car b)))
-
-;; Similar to `seq--count-successive'.
-(defun loopy--count-while (pred list)
-  "Count the number of items while PRED is true in LIST.
-
-This function returns 0 if PRED is immediately false.
-PRED is a function taking one argument: the item.
-
-For example, applying `cl-evenp' on (2 4 6 7) returns 3."
-  ;; Could be done with `cl-position-if-not', except that
-  ;; we want to return the length of the lists if
-  ;; no counterexample found.
-  (cl-loop for i in list
-           while (funcall pred i)
-           sum 1))
-
-(defun loopy--count-until (pred list)
-  "Count the number of items until PRED is true in LIST.
-
-This function returns 0 if PRED is immediately true.
-PRED is a function taking one argument: the item.
-
-For example, applying `cl-oddp' on (2 4 6 7) returns 3."
-  ;; Could be done with `cl-position-if', except that
-  ;; we want to return the length of the lists if
-  ;; no counterexample found.
-  (cl-loop for i in list
-           until (funcall pred i)
-           sum 1))
 
 (defmacro loopy--plist-bind (bindings plist &rest body)
   "Bind values in PLIST to variables in BINDINGS, surrounding BODY.
@@ -312,31 +279,6 @@ keywords and variables are separate."
                            &allow-other-keys)
        ,plist
      ,@body))
-
-(cl-defun loopy--substitute-using (new seq &key test)
-  "Copy SEQ, substituting elements using output of function NEW.
-
-NEW receives the element as its only argument.
-
-If given predicate function TEST, replace only elements
-satisfying TEST.  This testing could also be done in NEW."
-  ;; In testing, `cl-map' seems the fastest way to do this.
-  (cl-map (if (listp seq) 'list 'array)
-          (if test
-              (lambda (x)
-                (if (funcall test x)
-                    (funcall new x)
-                  x))
-            (lambda (x) (funcall new x)))
-          seq))
-
-(cl-defun loopy--substitute-using-if (new test seq)
-  "Copy SEQ, substituting elements satisfying TEST using output of NEW.
-
-NEW receives the element as its only argument.
-
-Unlike `loopy--substitute-using', the test is required."
-  (loopy--substitute-using new seq :test test))
 
 
 ;;;; Loop Tag Names
