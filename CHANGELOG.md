@@ -17,14 +17,20 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   binds `VAR` to `nil`, but since this form is indistinguishable from a mistake,
   and since `nil` is a short word to write, this behavior is deprecated.
 
-- `loopy-command-parsers` and `loopy-aliases` are both deprecated in favor of
-  the newly added `loopy-parsers` ([#237]).  The new user option simplifies the
-  code internally, making it easier to add local overrides in the future, which
-  will make code which custom commands more portable.
+- Some variables were combined to simplify the code internally and make it
+  easier to add local overrides in the future, which will make code which custom
+  commands more portable.
 
-  The new user option is a hash table which maps symbols to parsing functions.
-  There is no longer a separate mapping of aliases to original names.  However,
-  `loopy-defalias` will continue to work.
+  - `loopy-command-parsers` and `loopy-aliases` are both deprecated in favor of
+    the newly added `loopy-parsers` ([#237]).  The new user option is a hash
+    table which maps symbols to parsing functions.  There is no longer a
+    separate mapping of aliases to original names.  However, `loopy-defalias`
+    will continue to work.
+
+  - `loopy-iter-bare-special-marco-arguments` and `loopy-iter-bare-commands` are
+    both deprecated in favor of the newly added `loopy-iter-bare-names` ([#242],
+    [#238]). The new user option is a list which by default contains all symbols
+    previously listed in the old variables.
 
 - Separate `when` and `unless` commands to have different parsing functions
   ([#234], [#240]).  The old implementation used the name of the command in the
@@ -44,8 +50,10 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#229]: https://github.com/okamsn/loopy/PR/229
 [#234]: https://github.com/okamsn/loopy/issues/234
 [#237]: https://github.com/okamsn/loopy/PR/237
+[#238]: https://github.com/okamsn/loopy/issues/238
 [#240]: https://github.com/okamsn/loopy/PR/240
 [#241]: https://github.com/okamsn/loopy/PR/241
+[#242]: https://github.com/okamsn/loopy/PR/242
 
 ## 0.14.0
 

@@ -31,6 +31,11 @@
                       (repeating 3)
                       (collecting (list a b c)))))
 
+(ert-deftest bare-names ()
+  (let ((loopy-iter-bare-names (cons 'array loopy-iter-bare-names)))
+    (should (equal '(0 1 2 3)
+                   (liq (array i [0 1 2 3])
+                        (collecting i))))))
 
 ;; A list of special-form code walkers in Iterate. In Emacs Lisp, many of these
 ;; are macros, and so we should not need to test them, as they expand to simpler

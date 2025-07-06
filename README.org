@@ -41,6 +41,8 @@ please let me know.
    - ~loopy-command-parsers~ and ~loopy-aliases~ are deprecated in favor of
      a single hash table in the new user option ~loopy-parsers~.  This
      simplified the code and will make adding local overrides easier.
+   - ~loopy-iter-bare-special-macro-arguments~ and ~loopy-iter-bare-commands~
+     are deprecated in favor of the single variable ~loopy-iter-bare-names~.
    - =when= and =unless= are now implemented separately, fixing when the
      commands are aliased.
  - Version 0.14.0:

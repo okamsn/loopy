@@ -4511,8 +4511,8 @@ which loop commands are treated as macros to be expanded by ~macroexpand-all~.
 Hence, a loop command could overshadow the function value of a symbol.  There
 are two ways to avoid such conflicts.
 
-#+cindex: loopy-iter bare commands
-#+vindex: loopy-iter-bare-commands
+#+cindex: loopy-iter bare names
+#+vindex: loopy-iter-bare-names
 The first way is to use non-conflicting aliases.  Like in Iterate (and
 ~cl-loop~, to an extent), almost all commands in ~loopy~ have aliases in the
 present-participle form (the "-ing" form).  For example, Loopy provides the
@@ -4540,17 +4540,17 @@ arguments that are recognized by default are given in [[#iter-default-names]].
                           (at outer (collecting j))))
 #+end_src
 
-The non-conflicting command aliases recognized by ~loopy-iter~ can be customized
-with the user option ~loopy-iter-bare-commands~, which is a list of symbols
-naming commands and their aliases.  Again, these commands are found in the loop
-body by using Emacs Lisp's macro-expansion features, so adding an alias that
-overrides a symbol's function definition can cause errors.  ~loopy~, whose
-environment is more limited, does not have this restriction.
-
-#+vindex: loopy-iter-bare-special-macro-arguments
-The special macro arguments (and their aliases) recognized by ~loopy-iter~ can
-be set in the user option ~loopy-iter-bare-special-macro-arguments~.  Some of
-their built-in aliases, such as =let*= for =with=, are excluded by default.
+The non-conflicting names of loop commands and special macro arguments
+recognized by ~loopy-iter~ can be customized with the user option
+~loopy-iter-bare-names~, which is a list of symbols naming commands, special
+macro arguments, and their aliases.  Again, these symbols are found in the loop
+body by using Emacs Lisp's macro-expansion features, so adding a name that
+overrides a symbol's function definition can cause errors. Names that are
+obvious conflicts, such as the non-suffixed versions of most loop commands (such
+as =list=), loop commands that are unneeded in ~loopy-iter~ (such as =when=),
+and the names of Loopy features that are the same as the names of Emacs Lisp
+features (such as =let*= for =with=) are by default excluded from
+~loopy-iter-bare-names~.
 
 #+cindex: loopy-iter keywords
 #+vindex: loopy-iter-keywords
@@ -4673,8 +4673,7 @@ Finally, there are a few things to keep in mind when using ~loopy-iter~:
 
 This section lists the default aliases supported as bare names in the macro
 ~loopy-iter~.  The list of supported bare names can be customized in the user
-options ~loopy-iter-bare-commands~ and
-~loopy-iter-bare-special-macro-arguments~.
+options ~loopy-iter-bare-names~.
 
 By default, the following commands are not recognized:
 - =do= and =command-do=, which are not needed.
