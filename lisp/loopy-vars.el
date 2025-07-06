@@ -456,11 +456,6 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 
 This is used to check for errors with the `at' command.")
 
-(defvar loopy--flags nil
-  "Symbols/flags whose presence changes the behavior of `loopy'.
-
-NOTE: This functionality might change in the future.")
-
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
 
