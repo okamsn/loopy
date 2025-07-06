@@ -818,18 +818,6 @@ Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
   (member expression loopy--implicit-return))
 
-(defun loopy--special-macro-argument-p (symbol arguments-list)
-  "Whether SYMBOL is a special macro argument (including aliases).
-
-Special macro arguments are listed in ARGUMENTS-LIST
-or `loopy-aliases'."
-  (memq symbol (append arguments-list
-                       (let ((results))
-                         (dolist (alias loopy-aliases)
-                           (when (memq (cdr alias) arguments-list)
-                             (push (car alias) results)))
-                         results))))
-
 (defun loopy--known-loop-name-p (target)
   "Whether TARGET is a known loop name."
   (memq target loopy--known-loop-names))
