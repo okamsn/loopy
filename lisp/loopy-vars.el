@@ -690,7 +690,7 @@ command) create for themselves a new, local top level.")
   "Where some accumulation commands are placing values.
 
 This variable keeps track some of the accumulation variables in a
-loop and how there being used.  This allows for optimizing some
+loop and how they are being used.  This allows for optimizing some
 kinds accumulations.
 
 Generally, this is used with commands that produce lists, such as
