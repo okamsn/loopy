@@ -770,8 +770,9 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 (defun loopy--with-bound-p (var-name)
   "Whether VAR-NAME is bound in `loopy--with-vars' or `loopy--without-vars'.
 
-Some iteration commands can produce more efficient code if there
-is no request for a specific initialization value."
+Some iteration commands (e.g., `reduce') will change their behavior
+depending on whether the accumulation variable is given an initial
+value."
   (or (cl-loop for (var val) in loopy--with-vars
                when (eq var var-name)
                return (cons 'with val))
@@ -783,7 +784,10 @@ is no request for a specific initialization value."
   "Whether VAR-NAME was bound by a command (and not a special macro argument).
 
 The variable can exist in `loopy--iteration-vars',
-`loopy--accumulation-vars', or `loopy--generalized-vars'."
+`loopy--accumulation-vars', `loopy--other-vars' (for commands like
+`set'), or `loopy--generalized-vars'.
+
+Re-initializing an iteration variable is an error."
   (or (cl-loop for (var val) in loopy--iteration-vars
                when (eq var var-name)
                return (cons 'iteration val))
@@ -792,7 +796,10 @@ The variable can exist in `loopy--iteration-vars',
                return (cons 'accumulation val))
       (cl-loop for (var val) in loopy--generalized-vars
                when (eq var var-name)
-               return (cons 'generalized val))))
+               return (cons 'generalized val))
+      (cl-loop for (var val) in loopy--other-vars
+               when (eq var var-name)
+               return (cons 'other val))))
 
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
