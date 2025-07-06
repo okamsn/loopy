@@ -818,13 +818,9 @@ Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
   (member expression loopy--implicit-return))
 
-(defun loopy--known-loop-name-p (target)
-  "Whether TARGET is a known loop name."
-  (memq target loopy--known-loop-names))
-
 (defun loopy--check-target-loop-name (target)
   "Signal an error whether TARGET is not a valid loop name."
-  (unless (loopy--known-loop-name-p target)
+  (unless (memq target loopy--known-loop-names)
     (signal 'loopy-unknown-loop-target (list target))))
 
 (defun loopy--check-position-name (pos)
