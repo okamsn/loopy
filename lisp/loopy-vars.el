@@ -831,6 +831,19 @@ of a sequence."
   (unless (member pos '(start end beginning))
     (signal 'loopy-bad-position-command-argument (list pos))))
 
+(defun loopy--normalize-position-name (pos)
+  (pcase pos
+    ((or 'beginning '(quote beginning))
+     'start)
+    ('(quote start)
+     'start)
+    ('(quote end)
+     'end)
+    ((or 'start 'end)
+     pos)
+    (_
+     (signal 'loopy-bad-position-command-argument (list pos)))))
+
 (defmacro loopy--wrap-variables-around-body (&rest body)
   "Wrap variables in `loopy--variables' in `let*' bindings around BODY."
   (macroexp-let* (mapcar (lambda (x) (list x nil))

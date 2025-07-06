@@ -2036,11 +2036,7 @@ you can use in the instructions:
   :explicit
   (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
-
+    (setq pos (loopy--normalize-position-name pos))
     (if (memq var loopy--optimized-accum-vars)
         (progn
           (loopy--update-accum-place-count loopy--loop-name var pos)
@@ -2049,31 +2045,27 @@ you can use in the instructions:
                                         :var ,var :val ,val
                                         :test ,test :key ,key :at ,pos
                                         :opt-accum-fn loopy--construct-accum-adjoin)))))
-
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
-        ,@(cond
-           ((member pos '(start beginning 'start 'beginning))
-            (loopy--instr-let-const* ((test-val test)
-                                      (key-val key))
-                loopy--accumulation-vars
-              `((loopy--main-body
-                 ,(cl-once-only ((adjoin-value val))
-                    `(unless (loopy--member-p ,var ,adjoin-value
-                                              :test ,test-val :key ,key-val)
-                       (cl-callf2 cons ,adjoin-value ,var)))))))
-           ((member pos '(end nil 'end))
-            (loopy--produce-adjoin-end-tracking var val :test test :key key))
-           (t
-            (signal 'loopy-bad-position-command-argument (list pos cmd))))
+        ,@(pcase pos
+            ('start
+             (loopy--instr-let-const* ((test-val test)
+                                       (key-val key))
+                 loopy--accumulation-vars
+               `((loopy--main-body
+                  ,(cl-once-only ((adjoin-value val))
+                     `(unless (loopy--member-p ,var ,adjoin-value
+                                               :test ,test-val :key ,key-val)
+                        (cl-callf2 cons ,adjoin-value ,var)))))))
+            ((or 'end 'nil)
+             (loopy--produce-adjoin-end-tracking var val :test test :key key))
+            (_
+             (signal 'loopy-bad-position-command-argument (list pos cmd))))
         (loopy--vars-final-updates (,var . nil)))))
   :implicit
   (loopy--plist-bind ( :test (test (quote #'equal)) :key key :at (pos 'end))
       opts
-    (setq pos (loopy--normalize-symbol pos))
-    (when (eq pos 'beginning) (setq pos 'start))
-    (unless (memq pos '(start beginning end))
-      (signal 'loopy-bad-position-command-argument (list pos cmd)))
+    (setq pos (loopy--normalize-position-name pos))
     (loopy--update-accum-place-count loopy--loop-name var pos)
     `((loopy--main-body
        (loopy--optimized-accum '( :cmd ,cmd :name ,name
