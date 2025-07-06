@@ -653,8 +653,6 @@ list much easier.  When using multiple accumulation commands, it
 is important that such commands use the same variable to keep
 track of the end of the list.")
 
-(define-obsolete-variable-alias 'loopy--accumulation-final-updates
-  'loopy--vars-final-updates "2022-11")
 (defvar loopy--vars-final-updates nil
   "Alist of actions to perform on variables after the loop ends.
 
