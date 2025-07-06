@@ -738,6 +738,30 @@ writing a `seq-do' method for the custom seq."
   ;; "for loopy"" should work, but is redundant and unneeded.
   :iter-keyword (array loopy))
 
+(loopy-deftest loopy-at-set
+  :doc "Ensure `loopy--other-vars' are handled by `at' correctly."
+  :result 25
+  :multi-body t
+  :body [((named outer)
+          (cycle 1)
+          ;; Don't turn this into (for cycle 1) inside `loopy',
+          ;; which would break.
+          (loopy (loopy-test-escape (cycle 1))
+                 (loopy-test-escape (at outer (set cat 25))))
+          (finally-return cat))
+         (outer
+          (cycle 1)
+          ;; Don't turn this into (for cycle 1) inside `loopy',
+          ;; which would break.
+          (loopy (loopy-test-escape (cycle 1))
+                 (loopy-test-escape (at outer (set cat 25))))
+          (finally-return cat))]
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((cycle . cycling))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (cycle loopy))
+
 (loopy-deftest loopy-at-leave
   :result '(1 2 3)
   :multi-body t

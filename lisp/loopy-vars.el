@@ -514,21 +514,6 @@ are `(loopy--at-instructions (LOOP-NAME INSTRUCTION INSTRUCTION ...))'.
 
 These instructions are removed when that loop expansion is complete.")
 
-(defvar loopy--valid-external-at-targets
-  ;; Iteration vars currently needed for `expr'.
-  ;;
-  ;; TODO: We should probably change what the variables are named
-  '( loopy--iteration-vars
-     loopy--accumulation-vars
-     loopy--vars-final-updates
-     loopy--skip-used
-     loopy--non-returning-exit-used
-     loopy--implicit-return)
-  "Valid targets for instructions pushed upwards by the `at' command.
-
-Instructions not in this list are interpreted by the current
-loop.")
-
 ;;;;; Loop Body Settings
 (defvar loopy--pre-conditions nil
   "The list of expressions that determine whether the `while' loop starts/loops.
@@ -873,13 +858,6 @@ of a sequence."
   (if-let ((func (map-elt loopy--flag-settings flag)))
       (funcall func)
     (error "Loopy: Flag not defined: %s" flag)))
-
-(defun loopy--valid-external-at-target-p (target)
-  "Check if variable TARGET is valid for an `at' command.
-
-This predicate checks for presence in the list
-`loopy--valid-external-at-targets'."
-  (memq target loopy--valid-external-at-targets))
 
 (provide 'loopy-vars)
 ;;; loopy-vars.el ends here

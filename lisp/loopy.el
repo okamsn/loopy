@@ -672,9 +672,10 @@ macro `loopy' itself."
          (map-let ((t external)
                    (nil internal))
              (seq-group-by (lambda (x)
-                             (if (loopy--valid-external-at-target-p (cl-first x))
-                                 t
-                               nil))
+                             (if (memq (cl-first x)
+                                       '(loopy--main-body loopy--latter-body))
+                                 nil
+                               t))
                            at-instructions)
            (setf (alist-get target-loop loopy--at-instructions)
                  (append (alist-get target-loop
