@@ -392,6 +392,7 @@ Returns BODY without the `%s' argument."
   (pcase-dolist ((or `(,var ,pos) var) arg-value)
     (push var loopy--optimized-accum-vars)
     (when pos
+      (setq pos (loopy--normalize-position-name pos))
       (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF))))
 
 (loopy-iter--def-special-processor wrap

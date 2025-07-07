@@ -826,9 +826,14 @@ Accumulation commands can operate on the same variable, and we
 (defun loopy--check-position-name (pos)
   "Error if POS is not an accepted symbol describing how to add to a sequence.
 
+Accepted places are the quoted symbols `start' or `end'.  The place
+`beginning' is assumed to have been transformed by the function
+`loopy--normalize-position-name' into `start' before calling
+`loopy--check-position-name'.
+
 For example, the `collect' command can add items at the beginning or end
 of a sequence."
-  (unless (member pos '(start end beginning))
+  (unless (member pos '(start end))
     (signal 'loopy-bad-position-command-argument (list pos))))
 
 (defun loopy--normalize-position-name (pos)

@@ -1792,13 +1792,11 @@ LOOP is the current loop.  VAR is the accumulation variable.
 PLACE is one of `start' or `end'.  VALUE is the integer by which
 to increment the count (default 1)."
   (loopy--check-target-loop-name loop)
+  (loopy--check-position-name place)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
-    (setq place (loopy--normalize-symbol place))
-    (when (eq place 'beginning) (setq place 'start))
-    (loopy--check-position-name place)
     (cl-incf (map-elt (map-elt loop-map var) place) value)))
 
 ;;;;;; Commands
