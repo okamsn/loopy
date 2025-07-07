@@ -919,37 +919,35 @@ see the Info node `(loopy)' distributed with this package."
    ;; Body forms have the most variety.
    ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
    ;; Things added are expanded in place.
-   (unwind-protect
-       (progn
-         (loopy--process-instructions (loopy--parse-loop-commands body))
+   (loopy--with-protected-stack
+    (loopy--process-instructions (loopy--parse-loop-commands body))
 
-         ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
-         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-         ;; using the function `loopy--expand-optimized-accum'.
-         ;;
-         ;; Prevent the expansion of, at the very least, `cl-block',
-         ;; `cl-return-from', and `cl-return' shouldn't be expanded.
-         ;;
-         ;; TODO: Is there a way to more precisely only expand
-         ;;       `loopy--optimized-accum'?
-         ;; Another option is this, but it massively slows down expansion:
-         ;;     (cl-loop for i being the symbols
-         ;;              when (eq (car-safe (symbol-function i)) 'macro)
-         ;;              collect (cons i nil))
-         (setq loopy--main-body
-               (cl-loop
-                with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
-                                                collect (cons i nil))
-                                     (loopy--optimized-accum
-                                      . loopy--expand-optimized-accum)
-                                     ,@macroexpand-all-environment)
-                for i in loopy--main-body
-                collect (macroexpand-all i macro-funcs)))
+    ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+    ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+    ;; using the function `loopy--expand-optimized-accum'.
+    ;;
+    ;; Prevent the expansion of, at the very least, `cl-block',
+    ;; `cl-return-from', and `cl-return' shouldn't be expanded.
+    ;;
+    ;; TODO: Is there a way to more precisely only expand
+    ;;       `loopy--optimized-accum'?
+    ;; Another option is this, but it massively slows down expansion:
+    ;;     (cl-loop for i being the symbols
+    ;;              when (eq (car-safe (symbol-function i)) 'macro)
+    ;;              collect (cons i nil))
+    (setq loopy--main-body
+          (cl-loop
+           with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
+                                           collect (cons i nil))
+                                (loopy--optimized-accum
+                                 . loopy--expand-optimized-accum)
+                                ,@macroexpand-all-environment)
+           for i in loopy--main-body
+           collect (macroexpand-all i macro-funcs)))
 
-         ;; Process any `at' instructions from loops lower in the call list.
-         (loopy--process-instructions (map-elt loopy--at-instructions
-                                               loopy--loop-name)))
-     (loopy--clean-up-stack-vars))
+    ;; Process any `at' instructions from loops lower in the call list.
+    (loopy--process-instructions (map-elt loopy--at-instructions
+                                          loopy--loop-name)))
 
    ;; Now that instructions processed, make sure the order-dependent lists are
    ;; in the correct order.
