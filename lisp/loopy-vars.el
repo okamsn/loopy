@@ -833,14 +833,10 @@ of a sequence."
 
 (defun loopy--normalize-position-name (pos)
   (pcase pos
-    ((or 'beginning '(quote beginning))
+    ((or 'beginning '(quote beginning) 'start '(quote start))
      'start)
-    ('(quote start)
-     'start)
-    ('(quote end)
+    ((or 'end '(quote end))
      'end)
-    ((or 'start 'end)
-     pos)
     (_
      (signal 'loopy-bad-position-command-argument (list pos)))))
 
