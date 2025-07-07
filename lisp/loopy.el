@@ -155,10 +155,6 @@ this means that an explicit \"nil\" is always required."
                (= 2 (length binding)))
     (error "Invalid binding in `loopy' expansion: %s" binding)))
 
-(defun loopy--ensure-valid-bindings (bindings)
-  "Ensure BINDINGS valid according to `loopy--validate-binding'."
-  (mapc #'loopy--validate-binding bindings))
-
 (defun loopy--destructure-for-with-vars (bindings)
   "Destructure BINDINGS into bindings suitable for something like `let*'.
 
