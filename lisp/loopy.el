@@ -495,7 +495,6 @@ Returns BODY without the `%s' argument."
   ;;
   ;; 1. Flags in `loopy-default-flags'.
   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
-  ;; (mapc #'loopy--apply-flag loopy-default-flags)
   (mapc #'loopy--apply-flag arg-value)
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
