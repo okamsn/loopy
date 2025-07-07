@@ -85,9 +85,7 @@
 (require 'subr-x)
 (require 'stream)
 
-(declare-function loopy--bound-p "loopy")
 (declare-function loopy--process-instructions "loopy")
-(declare-function loopy--process-instruction "loopy")
 (defvar loopy--in-sub-level)
 
 ;;;; Helpful Functions
