@@ -273,8 +273,8 @@ BODY is one or more commands to be grouped by a `progn' form.
 This command is suitable for using as the first sub-command in an
 `if' command."
   (let ((loopy--in-sub-level t))
-    (cl-destructuring-bind (progn-body rest)
-        (loopy--extract-main-body (loopy--parse-loop-commands body))
+    (loopy--bind-main-body (progn-body rest)
+        (loopy--parse-loop-commands body)
       ;; Return the instructions.
       (cons `(loopy--main-body (progn ,@progn-body))
             rest))))
@@ -298,19 +298,16 @@ the loop literally (not even in a `progn')."
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
   (let ((loopy--in-sub-level t))
-    (pcase-let ((`(,if-true-main-body ,true-rest)
-                 (loopy--extract-main-body (loopy--parse-loop-command if-true)))
-                (`(,if-false-main-body ,false-rest)
-                 (loopy--extract-main-body (loopy--parse-loop-commands if-false))))
-
-      ;; Handle if we need to wrap multiple main-body expressions.
-      (setq if-true-main-body (macroexp-progn if-true-main-body))
-
-      ;; Return the full instruction list.
-      `((loopy--main-body
-         (if ,condition ,if-true-main-body ,@if-false-main-body))
-        ,@true-rest
-        ,@false-rest))))
+    (loopy--bind-main-body (if-true-main-body true-rest)
+        (loopy--parse-loop-command if-true)
+      (loopy--bind-main-body (if-false-main-body false-rest)
+          (loopy--parse-loop-commands if-false)
+        ;; Return the full instruction list.
+        `((loopy--main-body (if ,condition
+                                ,(macroexp-progn if-true-main-body)
+                              ,@if-false-main-body))
+          ,@true-rest
+          ,@false-rest)))))
 
 ;;;;;; Cond
 (cl-defun loopy--parse-cond-command ((_ &rest clauses))
@@ -324,13 +321,12 @@ command are inserted into a `cond' special form."
   (let ((loopy--in-sub-level t)
         (cond-body nil)
         (rest-instructions nil))
-    (cl-loop for clause in clauses
-             for (main-body rest) = (loopy--extract-main-body
-                                     (loopy--parse-loop-commands
-                                      (cl-rest clause)))
-             do
-             (push (cons (cl-first clause) main-body) cond-body)
-             (push rest rest-instructions))
+    (dolist (clause clauses)
+      (loopy--bind-main-body (main-body rest)
+          (loopy--parse-loop-commands
+           (cl-rest clause))
+        (push (cons (cl-first clause) main-body) cond-body)
+        (push rest rest-instructions)))
     (cons `(loopy--main-body (cond ,@(nreverse cond-body)))
           (apply #'append (nreverse rest-instructions)))))
 
@@ -1779,8 +1775,8 @@ second pass of macro expansion."
         plist
       (if (null fn)
           (signal 'loopy-accum-constructor-missing (list name plist))
-        (cl-destructuring-bind (main-body other-instrs)
-            (loopy--extract-main-body (funcall fn plist))
+        (loopy--bind-main-body (main-body other-instrs)
+            (funcall fn plist)
           (loopy--process-instructions
            `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
           (macroexp-progn main-body))))))
