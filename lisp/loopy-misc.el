@@ -256,10 +256,6 @@
 
 
 ;;;; List Processing
-(defalias 'loopy--car-equals-car #'loopy--car-equal-car)
-(defun loopy--car-equal-car (a b)
-  "Check whether the `car' of A equals the `car' of B."
-  (equal (car a) (car b)))
 
 ;; Similar to `seq--count-successive'.
 (defun loopy--count-while (pred list)
