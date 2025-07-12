@@ -3016,8 +3016,13 @@ Return a list of instructions for initializing the variables and
 destructuring into them in the loop body.
 
 A wrapper around `loopy--destructure-for-iteration-command'."
-  (loopy--convert-iteration-vars-to-other-vars
-   (loopy--destructure-for-iteration-command var value-expression)))
+  (cl-loop
+   for binding in (loopy--destructure-for-iteration-command var value-expression)
+   if (eq (car binding) 'loopy--iteration-vars)
+   collect (cons 'loopy--other-vars (cdr binding))
+   else
+   collect binding
+   end))
 
 (cl-defun loopy--parse-destructuring-accumulation-command-default
     ((name var val &rest args))

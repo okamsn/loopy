@@ -145,15 +145,5 @@ The lists will be in the order parsed (correct for insertion)."
        (loopy--extract-main-body ,value)
      ,@body))
 
-(defun loopy--convert-iteration-vars-to-other-vars (instructions)
-  "Convert instructions for `loopy--iteration-vars' to `loopy--other-vars'.
-
-INSTRUCTIONS is a list of instructions, which don't all have to be
-for `loopy--iteration-vars'."
-  (loopy--substitute-using-if
-   (cl-function (lambda ((_ init)) (list 'loopy--other-vars init)))
-   (lambda (x) (eq (car x) 'loopy--iteration-vars))
-   instructions))
-
 (provide 'loopy-instrs)
 ;;; loopy-instrs.el ends here
