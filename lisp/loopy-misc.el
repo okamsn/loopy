@@ -257,35 +257,6 @@
 
 ;;;; List Processing
 
-;; Similar to `seq--count-successive'.
-(defun loopy--count-while (pred list)
-  "Count the number of items while PRED is true in LIST.
-
-This function returns 0 if PRED is immediately false.
-PRED is a function taking one argument: the item.
-
-For example, applying `cl-evenp' on (2 4 6 7) returns 3."
-  ;; Could be done with `cl-position-if-not', except that
-  ;; we want to return the length of the lists if
-  ;; no counterexample found.
-  (cl-loop for i in list
-           while (funcall pred i)
-           sum 1))
-
-(defun loopy--count-until (pred list)
-  "Count the number of items until PRED is true in LIST.
-
-This function returns 0 if PRED is immediately true.
-PRED is a function taking one argument: the item.
-
-For example, applying `cl-oddp' on (2 4 6 7) returns 3."
-  ;; Could be done with `cl-position-if', except that
-  ;; we want to return the length of the lists if
-  ;; no counterexample found.
-  (cl-loop for i in list
-           until (funcall pred i)
-           sum 1))
-
 (defmacro loopy--plist-bind (bindings plist &rest body)
   "Bind values in PLIST to variables in BINDINGS, surrounding BODY.
 
