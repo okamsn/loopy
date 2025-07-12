@@ -355,7 +355,7 @@ command are inserted into a `cond' special form."
 ;;;;; Iteration
 (cl-defmacro loopy--defiteration
     (name doc-string &key keywords (required-vals 1) other-vals instructions)
-  "Define an interation command parser for NAME.
+  "Define an iteration command parser for NAME.
 
 An iteration command made with this macro has the layout of
 \(command-name variable-name value [values] [keys]).  That is,
