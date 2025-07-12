@@ -338,7 +338,7 @@ command are inserted into a `cond' special form."
 
 ;;;;;; When
 (cl-defun loopy--parse-when-command ((_ condition &rest body))
-  "Parse `when' as (when CONDITION [COMMANDS]."
+  "Parse `when' as (when CONDITION [COMMANDS])."
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
@@ -347,7 +347,7 @@ command are inserted into a `cond' special form."
 
 ;;;;;; Unless
 (cl-defun loopy--parse-unless-command ((_ condition &rest body))
-  "Parse `when' as (when CONDITION [COMMANDS]."
+  "Parse `unless' as (unless CONDITION [COMMANDS])."
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
