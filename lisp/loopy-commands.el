@@ -336,24 +336,23 @@ command are inserted into a `cond' special form."
     (cons `(loopy--main-body (cond ,@(nreverse cond-body)))
           (apply #'append (nreverse rest-instructions)))))
 
-;;;;;; When Unless
-(cl-defun loopy--parse-when-unless-command ((name condition &rest body))
-  "Parse `when' and `unless' commands as (when/unless CONDITION [COMMANDS]).
+;;;;;; When
+(cl-defun loopy--parse-when-command ((_ condition &rest body))
+  "Parse `when' as (when CONDITION [COMMANDS]."
+  (let ((loopy--in-sub-level t))
+    (loopy--bind-main-body (main other)
+        (loopy--parse-loop-commands body)
+      `((loopy--main-body (when ,condition ,@main))
+        ,@other))))
 
-- NAME is `when' or `unless'.
-- CONDITION is the condition.
-- BODY is the sub-commands."
-  (let ((loopy--in-sub-level t)
-        (when-body)
-        (other-instructions))
-    (dolist (cmd body)
-      (cl-destructuring-bind (main-body rest)
-          (loopy--extract-main-body (loopy--parse-loop-command cmd))
-        (push main-body when-body)
-        (push rest other-instructions)))
-    (cons `(loopy--main-body
-            (,name ,condition ,@(apply #'append (nreverse when-body))))
-          (apply #'append (nreverse other-instructions)))))
+;;;;;; Unless
+(cl-defun loopy--parse-unless-command ((_ condition &rest body))
+  "Parse `when' as (when CONDITION [COMMANDS]."
+  (let ((loopy--in-sub-level t))
+    (loopy--bind-main-body (main other)
+        (loopy--parse-loop-commands body)
+      `((loopy--main-body (unless ,condition ,@main))
+        ,@other))))
 
 ;;;;; Iteration
 (cl-defmacro loopy--defiteration

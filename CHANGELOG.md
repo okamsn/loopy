@@ -6,6 +6,10 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 ## Unreleased
 
+### Bug Fixes
+
+- `when` and `unless` now correctly work when aliased ([#234], [#240]).
+
 ### Breaking Changes
 
 - `set` now warns when it is not given a value ([#229]).  Currently, `(set VAR)`
@@ -21,6 +25,10 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   There is no longer a separate mapping of aliases to original names.  However,
   `loopy-defalias` will continue to work.
 
+- Separate `when` and `unless` commands to have different parsing functions
+  ([#234], [#240]).  The old implementation used the name of the command in the
+  generated code and was written before aliases.
+
 ### Internal Changes
 
 - As far as the implementation is concerned, "aliases" are no longer a separate
@@ -33,7 +41,9 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 
 [#229]: https://github.com/okamsn/loopy/PR/229
+[#234]: https://github.com/okamsn/loopy/issues/234
 [#237]: https://github.com/okamsn/loopy/PR/237
+[#240]: https://github.com/okamsn/loopy/PR/240
 
 
 ## 0.14.0

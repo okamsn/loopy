@@ -5976,6 +5976,15 @@ Multiple of 3: 6"
          (finally-return (string-join (nreverse msg-coll) "\n")))
   :loopy t)
 
+(loopy-deftest when-alias
+  :doc "Make sure aliases don't show up in `when' instead of the symbol `when'."
+  :result 1
+  :wrap ((x . `(let ((loopy-parsers
+                      (my-ht-map-insert loopy-parsers 'w (map-elt loopy-parsers 'when))))
+                 (eval (quote ,x) t))))
+  :body ((w t (return 1)))
+  :loopy t)
+
 ;;;;; Unless
 (loopy-deftest multi-unless-prepend-test
   :result "Not multiple of 2: 1
@@ -5996,6 +6005,15 @@ Not multiple of 3: 7"
          (unless (zerop (mod el second-var))
            (push-into msg-coll (format "Not multiple of 3: %d" el)))
          (finally-return (string-join (nreverse msg-coll) "\n")))
+  :loopy t)
+
+(loopy-deftest unless-alias
+  :doc "Make sure aliases don't show up in `unless' instead of the symbol `unless'."
+  :result 1
+  :wrap ((x . `(let ((loopy-parsers
+                      (my-ht-map-insert loopy-parsers 'u (map-elt loopy-parsers 'unless))))
+                 (eval (quote ,x) t))))
+  :body ((u nil (return 1)))
   :loopy t)
 
 ;;;;; Cond FORMS
