@@ -280,31 +280,6 @@ keywords and variables are separate."
        ,plist
      ,@body))
 
-(cl-defun loopy--substitute-using (new seq &key test)
-  "Copy SEQ, substituting elements using output of function NEW.
-
-NEW receives the element as its only argument.
-
-If given predicate function TEST, replace only elements
-satisfying TEST.  This testing could also be done in NEW."
-  ;; In testing, `cl-map' seems the fastest way to do this.
-  (cl-map (if (listp seq) 'list 'array)
-          (if test
-              (lambda (x)
-                (if (funcall test x)
-                    (funcall new x)
-                  x))
-            (lambda (x) (funcall new x)))
-          seq))
-
-(cl-defun loopy--substitute-using-if (new test seq)
-  "Copy SEQ, substituting elements satisfying TEST using output of NEW.
-
-NEW receives the element as its only argument.
-
-Unlike `loopy--substitute-using', the test is required."
-  (loopy--substitute-using new seq :test test))
-
 
 ;;;; Loop Tag Names
 (defun loopy--produce-non-returning-exit-tag-name (&optional loop-name)
