@@ -320,8 +320,8 @@ Definition must exist.  Neither argument need be quoted."
            unioning          loopy--parse-union-command
            vconcat           loopy--parse-vconcat-command
            vconcating        loopy--parse-vconcat-command
-           unless            loopy--parse-when-unless-command
-           when              loopy--parse-when-unless-command
+           unless            loopy--parse-unless-command
+           when              loopy--parse-when-command
            until             loopy--parse-while-until-commands
            while             loopy--parse-while-until-commands
            loopy-iter        loopy-iter--parse-loopy-iter-command))
