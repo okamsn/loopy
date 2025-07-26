@@ -77,7 +77,7 @@
   (cons 'seq
         (seq-map (lambda (elt)
                    (if (seqp elt)
-                       (seq--make-pcase-patterns elt)
+                       (loopy-seq--make-pcase-pattern elt)
                      elt))
                  args)))
 

@@ -115,45 +115,24 @@ binding exists."
              (reverse bindings)
              :initial-value (macroexp-progn body)))
 
+(cl-defmacro loopy--bind-main-body ((main-exprs other-instrs) value &rest body)
+  "Bind MAIN-EXPRS and OTHER-INSTRS for those items in VALUE for BODY.
 
-(defun loopy--extract-main-body (instructions)
-  "Extract main-body expressions from INSTRUCTIONS.
-
-This returns a list of two sub-lists:
-
-1. A list of expressions (not instructions) that are meant to be
-   use in the main body of the loop.
-
-2. A list of instructions for places other than the main body.
-
-The lists will be in the order parsed (correct for insertion)."
-  (let ((wrapped-main-body)
-        (other-instructions))
-    (dolist (instruction instructions)
-      (if (eq (cl-first instruction) 'loopy--main-body)
-          (push (cl-second instruction) wrapped-main-body)
-        (push instruction other-instructions)))
-
-    ;; Return the sub-lists.
-    (list (nreverse wrapped-main-body) (nreverse other-instructions))))
-
-;; We find ourselves doing this pattern a lot.
-(cl-defmacro loopy--bind-main-body ((main-expr other-instrs) value &rest body)
-  "Bind MAIN-EXPR and OTHER-INSTRS for those items in VALUE for BODY."
+MAIN-EXPR is a list of main-body expressions (not instructions).
+OTHER-INSTRS is a list of the remaining instructions."
   (declare (indent 2))
-  `(cl-destructuring-bind (,main-expr ,other-instrs)
-       (loopy--extract-main-body ,value)
-     ,@body))
-
-(defun loopy--convert-iteration-vars-to-other-vars (instructions)
-  "Convert instructions for `loopy--iteration-vars' to `loopy--other-vars'.
-
-INSTRUCTIONS is a list of instructions, which don't all have to be
-for `loopy--iteration-vars'."
-  (loopy--substitute-using-if
-   (cl-function (lambda ((_ init)) (list 'loopy--other-vars init)))
-   (lambda (x) (eq (car x) 'loopy--iteration-vars))
-   instructions))
+  (let ((main-temp (gensym "main-temp"))
+        (other-temp (gensym "other-temp"))
+        (instruction (gensym "instr")))
+    `(let ((,main-temp nil)
+           (,other-temp nil))
+       (dolist (,instruction ,value)
+         (if (eq (cl-first ,instruction) 'loopy--main-body)
+             (push (cl-second ,instruction) ,main-temp)
+           (push ,instruction ,other-temp)))
+       (let ((,main-exprs (nreverse ,main-temp))
+             (,other-instrs (nreverse ,other-temp)))
+         ,@body))))
 
 (provide 'loopy-instrs)
 ;;; loopy-instrs.el ends here

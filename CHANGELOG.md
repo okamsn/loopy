@@ -9,6 +9,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 ### Bug Fixes
 
 - `when` and `unless` now correctly work when aliased ([#234], [#240]).
+- Fix variable scoping when using `set` with `at` ([#241]).
 
 ### Breaking Changes
 
@@ -44,7 +45,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#234]: https://github.com/okamsn/loopy/issues/234
 [#237]: https://github.com/okamsn/loopy/PR/237
 [#240]: https://github.com/okamsn/loopy/PR/240
-
+[#241]: https://github.com/okamsn/loopy/PR/241
 
 ## 0.14.0
 

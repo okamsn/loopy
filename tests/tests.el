@@ -738,6 +738,30 @@ writing a `seq-do' method for the custom seq."
   ;; "for loopy"" should work, but is redundant and unneeded.
   :iter-keyword (array loopy))
 
+(loopy-deftest loopy-at-set
+  :doc "Ensure `loopy--other-vars' are handled by `at' correctly."
+  :result 25
+  :multi-body t
+  :body [((named outer)
+          (cycle 1)
+          ;; Don't turn this into (for cycle 1) inside `loopy',
+          ;; which would break.
+          (loopy (loopy-test-escape (cycle 1))
+                 (loopy-test-escape (at outer (set cat 25))))
+          (finally-return cat))
+         (outer
+          (cycle 1)
+          ;; Don't turn this into (for cycle 1) inside `loopy',
+          ;; which would break.
+          (loopy (loopy-test-escape (cycle 1))
+                 (loopy-test-escape (at outer (set cat 25))))
+          (finally-return cat))]
+  :loopy t
+  ;; `loopy' should work barely.
+  :iter-bare ((cycle . cycling))
+  ;; "for loopy"" should work, but is redundant and unneeded.
+  :iter-keyword (cycle loopy))
+
 (loopy-deftest loopy-at-leave
   :result '(1 2 3)
   :multi-body t
@@ -2057,8 +2081,6 @@ Using numbers directly will use less variables and more efficient code."
               (do . ignore)))
 
 ;;;;; Nums
-;; TODO: Names `num' and `number' aren't listed in the Org doc.
-;;       They should be removed.
 (loopy-deftest numbers
   :result '(1 2 3 4 5)
   :repeat _cmd
@@ -5313,7 +5335,6 @@ Using `start' and `end' in either order should give the same result."
   :iter-bare ((array . arraying)
               (nunion . nunioning)))
 
-;; TODO: Fail.  Fix in optimized constructor, same as others.
 (loopy-deftest nunion-end-tracking-accum-opt-end-:at-start
   :result '(10 8 9 7 5 6 4 1 2 3)
   :body ((accum-opt (coll end))

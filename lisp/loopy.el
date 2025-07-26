@@ -155,10 +155,6 @@ this means that an explicit \"nil\" is always required."
                (= 2 (length binding)))
     (error "Invalid binding in `loopy' expansion: %s" binding)))
 
-(defun loopy--ensure-valid-bindings (bindings)
-  "Ensure BINDINGS valid according to `loopy--validate-binding'."
-  (mapc #'loopy--validate-binding bindings))
-
 (defun loopy--destructure-for-with-vars (bindings)
   "Destructure BINDINGS into bindings suitable for something like `let*'.
 
@@ -495,7 +491,6 @@ Returns BODY without the `%s' argument."
   ;;
   ;; 1. Flags in `loopy-default-flags'.
   ;; 2. Flags in the `flag' macro argument, which can undo the first group.
-  ;; (mapc #'loopy--apply-flag loopy-default-flags)
   (mapc #'loopy--apply-flag arg-value)
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
@@ -519,6 +514,7 @@ Returns BODY without the `%s' argument."
   (pcase-dolist ((or `(,var ,pos) var) arg-value)
     (push var loopy--optimized-accum-vars)
     (when pos
+      (setq pos (loopy--normalize-position-name pos))
       (loopy--update-accum-place-count loopy--loop-name var pos 1.0e+INF)))
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
@@ -672,9 +668,10 @@ macro `loopy' itself."
          (map-let ((t external)
                    (nil internal))
              (seq-group-by (lambda (x)
-                             (if (loopy--valid-external-at-target-p (cl-first x))
-                                 t
-                               nil))
+                             (if (memq (cl-first x)
+                                       '(loopy--main-body loopy--latter-body))
+                                 nil
+                               t))
                            at-instructions)
            (setf (alist-get target-loop loopy--at-instructions)
                  (append (alist-get target-loop
@@ -923,37 +920,35 @@ see the Info node `(loopy)' distributed with this package."
    ;; Body forms have the most variety.
    ;; An instruction is (PLACE-TO-ADD . THING-TO-ADD).
    ;; Things added are expanded in place.
-   (unwind-protect
-       (progn
-         (loopy--process-instructions (loopy--parse-loop-commands body))
+   (loopy--with-protected-stack
+    (loopy--process-instructions (loopy--parse-loop-commands body))
 
-         ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
-         ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
-         ;; using the function `loopy--expand-optimized-accum'.
-         ;;
-         ;; Prevent the expansion of, at the very least, `cl-block',
-         ;; `cl-return-from', and `cl-return' shouldn't be expanded.
-         ;;
-         ;; TODO: Is there a way to more precisely only expand
-         ;;       `loopy--optimized-accum'?
-         ;; Another option is this, but it massively slows down expansion:
-         ;;     (cl-loop for i being the symbols
-         ;;              when (eq (car-safe (symbol-function i)) 'macro)
-         ;;              collect (cons i nil))
-         (setq loopy--main-body
-               (cl-loop
-                with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
-                                                collect (cons i nil))
-                                     (loopy--optimized-accum
-                                      . loopy--expand-optimized-accum)
-                                     ,@macroexpand-all-environment)
-                for i in loopy--main-body
-                collect (macroexpand-all i macro-funcs)))
+    ;; (cl-callf2 mapcar #'loopy--accum-code-expansion loopy--main-body)
+    ;; Expand any uses of `loopy--optimized-accum' as if it were a macro,
+    ;; using the function `loopy--expand-optimized-accum'.
+    ;;
+    ;; Prevent the expansion of, at the very least, `cl-block',
+    ;; `cl-return-from', and `cl-return' shouldn't be expanded.
+    ;;
+    ;; TODO: Is there a way to more precisely only expand
+    ;;       `loopy--optimized-accum'?
+    ;; Another option is this, but it massively slows down expansion:
+    ;;     (cl-loop for i being the symbols
+    ;;              when (eq (car-safe (symbol-function i)) 'macro)
+    ;;              collect (cons i nil))
+    (setq loopy--main-body
+          (cl-loop
+           with macro-funcs = `(,@(cl-loop for i in loopy--suppressed-macros
+                                           collect (cons i nil))
+                                (loopy--optimized-accum
+                                 . loopy--expand-optimized-accum)
+                                ,@macroexpand-all-environment)
+           for i in loopy--main-body
+           collect (macroexpand-all i macro-funcs)))
 
-         ;; Process any `at' instructions from loops lower in the call list.
-         (loopy--process-instructions (map-elt loopy--at-instructions
-                                               loopy--loop-name)))
-     (loopy--clean-up-stack-vars))
+    ;; Process any `at' instructions from loops lower in the call list.
+    (loopy--process-instructions (map-elt loopy--at-instructions
+                                          loopy--loop-name)))
 
    ;; Now that instructions processed, make sure the order-dependent lists are
    ;; in the correct order.

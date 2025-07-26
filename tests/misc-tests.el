@@ -1915,8 +1915,6 @@ The valid keys are:
   :list nil
   :convert nil)
 
-;; TODO: HERE!!!!!!!!!!!!! start with `pcase-tests-loopy-&map-full-form'
-
 (loopy-def-pcase-test pcase-tests-loopy-&map-full-form-1
   :result (list 1 2)
   :val (list 'a 1 'b 2)

@@ -456,11 +456,6 @@ Each item is of the form (FLAG . FLAG-ENABLING-FUNCTION).")
 
 This is used to check for errors with the `at' command.")
 
-(defvar loopy--flags nil
-  "Symbols/flags whose presence changes the behavior of `loopy'.
-
-NOTE: This functionality might change in the future.")
-
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
 
@@ -513,21 +508,6 @@ The form of the instructions that eventually set values in this variable
 are `(loopy--at-instructions (LOOP-NAME INSTRUCTION INSTRUCTION ...))'.
 
 These instructions are removed when that loop expansion is complete.")
-
-(defvar loopy--valid-external-at-targets
-  ;; Iteration vars currently needed for `expr'.
-  ;;
-  ;; TODO: We should probably change what the variables are named
-  '( loopy--iteration-vars
-     loopy--accumulation-vars
-     loopy--vars-final-updates
-     loopy--skip-used
-     loopy--non-returning-exit-used
-     loopy--implicit-return)
-  "Valid targets for instructions pushed upwards by the `at' command.
-
-Instructions not in this list are interpreted by the current
-loop.")
 
 ;;;;; Loop Body Settings
 (defvar loopy--pre-conditions nil
@@ -673,8 +653,6 @@ list much easier.  When using multiple accumulation commands, it
 is important that such commands use the same variable to keep
 track of the end of the list.")
 
-(define-obsolete-variable-alias 'loopy--accumulation-final-updates
-  'loopy--vars-final-updates "2022-11")
 (defvar loopy--vars-final-updates nil
   "Alist of actions to perform on variables after the loop ends.
 
@@ -712,7 +690,7 @@ command) create for themselves a new, local top level.")
   "Where some accumulation commands are placing values.
 
 This variable keeps track some of the accumulation variables in a
-loop and how there being used.  This allows for optimizing some
+loop and how they are being used.  This allows for optimizing some
 kinds accumulations.
 
 Generally, this is used with commands that produce lists, such as
@@ -792,8 +770,9 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 (defun loopy--with-bound-p (var-name)
   "Whether VAR-NAME is bound in `loopy--with-vars' or `loopy--without-vars'.
 
-Some iteration commands can produce more efficient code if there
-is no request for a specific initialization value."
+Some iteration commands (e.g., `reduce') will change their behavior
+depending on whether the accumulation variable is given an initial
+value."
   (or (cl-loop for (var val) in loopy--with-vars
                when (eq var var-name)
                return (cons 'with val))
@@ -805,7 +784,10 @@ is no request for a specific initialization value."
   "Whether VAR-NAME was bound by a command (and not a special macro argument).
 
 The variable can exist in `loopy--iteration-vars',
-`loopy--accumulation-vars', or `loopy--generalized-vars'."
+`loopy--accumulation-vars', `loopy--other-vars' (for commands like
+`set'), or `loopy--generalized-vars'.
+
+Re-initializing an iteration variable is an error."
   (or (cl-loop for (var val) in loopy--iteration-vars
                when (eq var var-name)
                return (cons 'iteration val))
@@ -814,7 +796,10 @@ The variable can exist in `loopy--iteration-vars',
                return (cons 'accumulation val))
       (cl-loop for (var val) in loopy--generalized-vars
                when (eq var var-name)
-               return (cons 'generalized val))))
+               return (cons 'generalized val))
+      (cl-loop for (var val) in loopy--other-vars
+               when (eq var var-name)
+               return (cons 'other val))))
 
 (defun loopy--bound-p (var-name)
   "Check if VAR-NAME (a symbol) is already bound for the macro.
@@ -833,34 +818,32 @@ Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
   (member expression loopy--implicit-return))
 
-(defun loopy--special-macro-argument-p (symbol arguments-list)
-  "Whether SYMBOL is a special macro argument (including aliases).
-
-Special macro arguments are listed in ARGUMENTS-LIST
-or `loopy-aliases'."
-  (memq symbol (append arguments-list
-                       (let ((results))
-                         (dolist (alias loopy-aliases)
-                           (when (memq (cdr alias) arguments-list)
-                             (push (car alias) results)))
-                         results))))
-
-(defun loopy--known-loop-name-p (target)
-  "Whether TARGET is a known loop name."
-  (memq target loopy--known-loop-names))
-
 (defun loopy--check-target-loop-name (target)
   "Signal an error whether TARGET is not a valid loop name."
-  (unless (loopy--known-loop-name-p target)
+  (unless (memq target loopy--known-loop-names)
     (signal 'loopy-unknown-loop-target (list target))))
 
 (defun loopy--check-position-name (pos)
   "Error if POS is not an accepted symbol describing how to add to a sequence.
 
+Accepted places are the quoted symbols `start' or `end'.  The place
+`beginning' is assumed to have been transformed by the function
+`loopy--normalize-position-name' into `start' before calling
+`loopy--check-position-name'.
+
 For example, the `collect' command can add items at the beginning or end
 of a sequence."
-  (unless (member pos '(start end beginning))
+  (unless (member pos '(start end))
     (signal 'loopy-bad-position-command-argument (list pos))))
+
+(defun loopy--normalize-position-name (pos)
+  (pcase pos
+    ((or 'beginning '(quote beginning) 'start '(quote start))
+     'start)
+    ((or 'end '(quote end))
+     'end)
+    (_
+     (signal 'loopy-bad-position-command-argument (list pos)))))
 
 (defmacro loopy--wrap-variables-around-body (&rest body)
   "Wrap variables in `loopy--variables' in `let*' bindings around BODY."
@@ -873,13 +856,6 @@ of a sequence."
   (if-let ((func (map-elt loopy--flag-settings flag)))
       (funcall func)
     (error "Loopy: Flag not defined: %s" flag)))
-
-(defun loopy--valid-external-at-target-p (target)
-  "Check if variable TARGET is valid for an `at' command.
-
-This predicate checks for presence in the list
-`loopy--valid-external-at-targets'."
-  (memq target loopy--valid-external-at-targets))
 
 (provide 'loopy-vars)
 ;;; loopy-vars.el ends here
