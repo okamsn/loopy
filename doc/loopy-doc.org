@@ -80,13 +80,14 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
   - [[#default-bare-names-in-loopy-iter][Default Bare Names in ~loopy-iter~]]
 - [[#using-flags][Using Flags]]
-- [[#custom-aliases][Custom Aliases]]
-- [[#custom-commands][Custom Commands]]
-  - [[#background-info][Background Info]]
-  - [[#hello-world][Hello World]]
-  - [[#an-always-command][An ~always~ Command]]
-  - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
-  - [[#finding-more-examples][Finding More Examples]]
+- [[#customizing-macro-behavior][Customizing Macro Behavior]]
+  - [[#custom-aliases][Custom Aliases]]
+  - [[#custom-commands][Custom Commands]]
+    - [[#background-info][Background Info]]
+    - [[#hello-world][Hello World]]
+    - [[#an-always-command][An ~always~ Command]]
+    - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
+    - [[#finding-more-examples][Finding More Examples]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
 - [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
   - [[#for-clauses][For Clauses]]
@@ -4923,7 +4924,8 @@ and produce inefficient code.
          (finally-return whole temporary?))
 #+end_src
 
-* Custom Aliases
+* Customizing Macro Behavior
+** Custom Aliases
 :PROPERTIES:
 :CUSTOM_ID: custom-aliases
 :DESCRIPTION: How to add one's own aliases.
@@ -4989,7 +4991,7 @@ add local command definitions that apply only to a single instance of the macro
 during expansion.
 #+end_quote
 
-* Custom Commands
+** Custom Commands
 :PROPERTIES:
 :CUSTOM_ID: adding-custom-commands
 :DESCRIPTION: Extending `loopy' with personal commands.
@@ -4998,7 +5000,7 @@ during expansion.
 This section contains information about how loop commands work and how one can
 add custom commands to ~loopy~.  Two examples are provided.
 
-** Background Info
+*** Background Info
 :PROPERTIES:
 :CUSTOM_ID: background-info
 :DESCRIPTION: The internals of `loopy'.
@@ -5355,7 +5357,7 @@ will work similar to the below example.
                 'loopy--early-return-capture))))))
 #+END_SRC
 
-** Hello World
+*** Hello World
 :PROPERTIES:
 :CUSTOM_ID: a-small-example
 :DESCRIPTION: A minimal working example.
@@ -5439,7 +5441,7 @@ you can see that it expands to do what we want, as expected.
       nil))
 #+END_SRC
 
-** An ~always~ Command
+*** An ~always~ Command
 :PROPERTIES:
 :CUSTOM_ID: always-example
 :DESCRIPTION: Adding a feature from `cl-loop'.
@@ -5628,7 +5630,7 @@ The actual definition of the =always= command can be read in the library
 includes more error checking for working with the other commands.
 
 
-** Custom commands in the ~loopy-iter~ macro
+*** Custom commands in the ~loopy-iter~ macro
 :PROPERTIES:
 :CUSTOM_ID: custom-commands-for-loopy-iter
 :END:
@@ -5709,7 +5711,7 @@ instructions (see the code for usage examples).
 These alternative command parsers are listed in
 ~loopy-iter-overwritten-command-parsers~.
 
-** Finding More Examples
+*** Finding More Examples
 :PROPERTIES:
 :CUSTOM_ID: finding-more-examples
 :END:
