@@ -41,9 +41,7 @@ libraries @samp{seq} (@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref
 * Loop Commands::                The main features of `loopy'.
 * Destructuring Macros::         Destructuring outside of the loop.
 * The @code{loopy-iter} Macro::  Embedding loop commands in arbitrary code.
-* Using Flags::                  Using flags to change behavior.
-* Custom Aliases::               How to add one's own aliases.
-* Custom Commands::              Extending `loopy' with personal commands.
+* Customizing Macro Behavior::
 * Comparing to @code{cl-loop}::  Why `loopy' instead of `cl-loop'.
 * Translating to and from @samp{cl-loop}:: Converting `cl-loop' to `loopy', and vice versa.
 * Index of Concepts::
@@ -91,6 +89,13 @@ Control Flow
 The @code{loopy-iter} Macro
 
 * Default Bare Names in @code{loopy-iter}::
+
+Customizing Macro Behavior
+
+* Using Flags::                  Using flags to change behavior.
+* Custom Aliases::               How to add one's own aliases.
+* Custom Commands::              Extending `loopy' with personal commands.
+* Locally Overriding Behavior::  Using the `overrides' special macro argument.
 
 Custom Commands
 
@@ -704,7 +709,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org856c86a
+@float Listing,org4bf03c0
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -893,7 +898,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgab44b24
+@float Listing,orgb7f13a8
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -908,7 +913,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org51fdf8f
+@float Listing,org761e883
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -4867,8 +4872,8 @@ which loop commands are treated as macros to be expanded by @code{macroexpand-al
 Hence, a loop command could overshadow the function value of a symbol.  There
 are two ways to avoid such conflicts.
 
-@cindex loopy-iter bare commands
-@vindex loopy-iter-bare-commands
+@cindex loopy-iter bare names
+@vindex loopy-iter-bare-names
 The first way is to use non-conflicting aliases.  Like in Iterate (and
 @code{cl-loop}, to an extent), almost all commands in @code{loopy} have aliases in the
 present-participle form (the ``-ing'' form).  For example, Loopy provides the
@@ -4896,17 +4901,17 @@ arguments that are recognized by default are given in @ref{Default Bare Names in
                         (at outer (collecting j))))
 @end lisp
 
-The non-conflicting command aliases recognized by @code{loopy-iter} can be customized
-with the user option @code{loopy-iter-bare-commands}, which is a list of symbols
-naming commands and their aliases.  Again, these commands are found in the loop
-body by using Emacs Lisp's macro-expansion features, so adding an alias that
-overrides a symbol's function definition can cause errors.  @code{loopy}, whose
-environment is more limited, does not have this restriction.
-
-@vindex loopy-iter-bare-special-macro-arguments
-The special macro arguments (and their aliases) recognized by @code{loopy-iter} can
-be set in the user option @code{loopy-iter-bare-special-macro-arguments}.  Some of
-their built-in aliases, such as @samp{let*} for @samp{with}, are excluded by default.
+The non-conflicting names of loop commands and special macro arguments
+recognized by @code{loopy-iter} can be customized with the user option
+@code{loopy-iter-bare-names}, which is a list of symbols naming commands, special
+macro arguments, and their aliases.  Again, these symbols are found in the loop
+body by using Emacs Lisp's macro-expansion features, so adding a name that
+overrides a symbol's function definition can cause errors. Names that are
+obvious conflicts, such as the non-suffixed versions of most loop commands (such
+as @samp{list}), loop commands that are unneeded in @code{loopy-iter} (such as @samp{when}),
+and the names of Loopy features that are the same as the names of Emacs Lisp
+features (such as @samp{let*} for @samp{with}) are by default excluded from
+@code{loopy-iter-bare-names}.
 
 @cindex loopy-iter keywords
 @vindex loopy-iter-keywords
@@ -4935,7 +4940,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,org8bd5c99
+@float Listing,org8d78e14
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5041,8 +5046,7 @@ this project's @uref{https://github.com/okamsn/loopy/issues, issues tracker} so 
 
 This section lists the default aliases supported as bare names in the macro
 @code{loopy-iter}.  The list of supported bare names can be customized in the user
-options @code{loopy-iter-bare-commands} and
-@code{loopy-iter-bare-special-macro-arguments}.
+options @code{loopy-iter-bare-names}.
 
 By default, the following commands are not recognized:
 @itemize
@@ -5295,21 +5299,47 @@ Sub-loop Commands:
 @end itemize
 @end itemize
 
+@node Customizing Macro Behavior
+@chapter Customizing Macro Behavior
+
+There are three ways to control behavior:
+
+@enumerate
+@item
+Setting a flag (@ref{Using Flags}), which currently controls destructuring
+@item
+Modifying the customizable variables like @code{loopy-parsers} and
+@code{loopy-iter-bare-names}
+@item
+Using the special macro argument @samp{overrides}, which modifies the same
+settings as the customizable variables, but only locally for the
+current loop (and not sub-loops)
+@end enumerate
+
+A package which extends Loopy and wishes to make those extensions available to
+others would modify the customizable variables, similar to defining new
+functions and variables in Emacs Lisp's global namespace.  A package which makes
+use of Loopy internally and wishes to modify its behavior would use the
+@samp{overrides} special macro argument within a bespoke macro that wraps Loopy.
+
+@menu
+* Using Flags::                  Using flags to change behavior.
+* Custom Aliases::               How to add one's own aliases.
+* Custom Commands::              Extending `loopy' with personal commands.
+* Locally Overriding Behavior::  Using the `overrides' special macro argument.
+@end menu
+
 @node Using Flags
-@chapter Using Flags
+@section Using Flags
 
 @cindex flag
 A @dfn{flag} is a symbol passed to the @samp{flag} or @samp{flags} special macro
 argument, changing the macro's behavior.  Currently, flags affect what method
-@code{loopy} uses to perform destructuring (@samp{pcase}, @samp{seq}, @samp{dash}, or the default)
+@code{loopy} uses to perform destructuring (@samp{pcase}, @samp{seq}, @samp{dash}, or the default
+method).
 
 Flags are applied in order.  If you specify @samp{(flags seq pcase)}, then @code{loopy}
 will use @code{pcase-let} for destructuring, not @code{seq-let}.
-
-@vindex loopy-default-flags
-If you wish to always use a flag, you can add that flag to the list
-@code{loopy-default-flags}.  These can be overridden by any flag given in the @samp{flag}
-special macro argument.
 
 The following flags are currently supported:
 
@@ -5364,6 +5394,8 @@ the destructuring of:
 iteration variables
 @item
 accumulation variables
+@item
+variables explicitly named by the commands @samp{set} and @samp{set-prev}
 @item
 variables bound by the special macro argument @samp{with}
 @end itemize
@@ -5433,7 +5465,7 @@ and produce inefficient code.
 @end lisp
 
 @node Custom Aliases
-@chapter Custom Aliases
+@section Custom Aliases
 
 @cindex custom aliases
 An @dfn{alias} is another name for a loop command (@ref{Loop Commands}) or
@@ -5458,7 +5490,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,orgd9e70b9
+@float Listing,org51fe987
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")
@@ -5503,7 +5535,7 @@ during expansion.
 @end quotation
 
 @node Custom Commands
-@chapter Custom Commands
+@section Custom Commands
 
 This section contains information about how loop commands work and how one can
 add custom commands to @code{loopy}.  Two examples are provided.
@@ -5517,7 +5549,7 @@ add custom commands to @code{loopy}.  Two examples are provided.
 @end menu
 
 @node Background Info
-@section Background Info
+@subsection Background Info
 
 @cindex instruction, instructions
 The core working of @code{loopy} is taking a loop command and generating code that
@@ -5940,7 +5972,7 @@ will work similar to the below example.
 @end lisp
 
 @node Hello World
-@section Hello World
+@subsection Hello World
 
 This is an example of a command that prints a message during the main loop body.
 
@@ -6025,7 +6057,7 @@ you can see that it expands to do what we want, as expected.
 @end lisp
 
 @node An @code{always} Command
-@section An @code{always} Command
+@subsection An @code{always} Command
 
 Lets say we want to emulate @code{cl-loop}'s @samp{always} clause, which causes the loop
 to return @code{nil} if an expression evaluates to @code{nil} and @code{t} otherwise.  This is
@@ -6223,7 +6255,7 @@ The actual definition of the @samp{always} command can be read in the library
 includes more error checking for working with the other commands.
 
 @node Custom commands in the @code{loopy-iter} macro
-@section Custom commands in the @code{loopy-iter} macro
+@subsection Custom commands in the @code{loopy-iter} macro
 
 See also @ref{The @code{loopy-iter} Macro}.
 
@@ -6308,11 +6340,135 @@ These alternative command parsers are listed in
 @code{loopy-iter-overwritten-command-parsers}.
 
 @node Finding More Examples
-@section Finding More Examples
+@subsection Finding More Examples
 
 If you would like to see more examples, consider reading through the source code
 of @file{loopy-commands.el}, which contains the code of all of the built-in
 loop commands.  You can easily find this file using @kbd{M-x find-library loopy-commands @key{RET}}.
+
+@node Locally Overriding Behavior
+@section Locally Overriding Behavior
+
+The special macro argument @samp{override} is used to override the global values of
+the customizable variables.  This is desirable when one wants to configure
+Loopy's behavior without affecting other libraries that might be using Loopy.
+For example, consider namespace collisions: a library which makes a custom
+loop command available via @code{loopy-command-parsers} might
+overwrite another definition created by some other, unknown library.  This is
+similar to what would happen if different libraries tried to use the same
+function name or variable name.  If the loop command is only meant to be used
+internally, then local overrides paired with wrapping macros can help to avoid
+the problem of unintentionally affecting other libraries.
+
+The syntax of the special macro argument @samp{override} is similar to that of the
+special macro argument @samp{with}.  Note, however, its arguments are not evaluated,
+but taken literally, similar to normal macro arguments.  As shown in the below
+example, this is not an issue when used with a wrapping macro, because any
+needed evaluation can occur during the execution of the wrapper.
+
+@lisp
+(defvar my-pkg--desired-aliases '((each . seq)
+                                  (vect . array))
+  "New names for built-in commands.")
+
+(defmacro my-pkg--loopy (&rest args)
+  `(loopy (override (loopy-parsers
+                     ,(loopy
+                       (with (parsers (map-copy loopy-parsers)))
+                       (map (k . v) my-pkg--desired-aliases)
+                       (do (setf (map-elt parsers k) (map-elt parsers v)))
+                       (finally-return parsers))))
+          ,@@args))
+
+(my-pkg--loopy (each i some-seq)
+               (vect j some-array)
+               (collect (cons i j)))
+@end lisp
+
+Overrides use the name of the overridden variable.  Overrides replace the global
+definitions of variables for a particular use of a macro.  They cannot be used
+to remove entries from variable values.  They do not affect any sub-uses of the
+macro.  The following variables can be overridden:
+
+@table @asis
+@item @code{loopy-parsers}
+A @samp{map.el}-compatible structure that maps a symbol to a
+parsing function.  Parsing functions must be available during macro expansion.
+See the user option @code{loopy-parsers} and see @ref{Custom Commands}.
+
+In both @code{loopy} and @code{loopy-iter}, overriding @code{loopy-parsers} will also
+override any effects from setting the deprecated variables
+@code{loopy-command-parsers} and @code{loopy-aliases} to a non-@code{nil} value.
+
+@lisp
+(cl-defun my-set-parser ((_name var val))
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+(defmacro my-loopy-wrapper (&rest args)
+  (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+    `(loopy (override (loopy-parsers ,map))
+            ,@@args)))
+
+;; => 3
+(my-loopy-wrapper (my-set i 3)
+                  (return i))
+@end lisp
+
+Overriding @code{loopy-parsers} in @code{loopy-iter} will also override the effects of
+any settings in @code{loopy-iter-overwritten-parsers}.  Currently, there is no
+override for @code{loopy-iter-overwritten-parsers}.  Using the override for
+@code{loopy-parsers} achieves the same effect.
+
+@lisp
+;; The same example as above, but for `loopy-iter':
+(defmacro my-loopy-iter-wrapper (&rest args)
+  (let ((map (map-merge '(hash-table :test eq)
+                        loopy-parsers
+                        loopy-iter-overwritten-parsers
+                        '((my-set . my-set-parser))))
+        (list (cons 'my-set loopy-iter-bare-names)))
+    `(loopy-iter (override (loopy-iter-bare-names ,list)
+                           (loopy-parsers ,map))
+                 ,@@args)))
+@end lisp
+
+@item @code{loopy-iter-bare-names}
+A list of symbols.  See the user option
+@code{loopy-iter-bare-names} and see @ref{The @code{loopy-iter} Macro}.
+
+@lisp
+(cl-defun my-set-parser ((_name var val))
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+(defmacro my-loopy-iter-wrapper (&rest args)
+  (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser))
+        (list (cons 'my-set loopy-iter-bare-names)))
+    `(loopy-iter (override (loopy-iter-bare-names ,list)
+                            (loopy-command-parsers ,map))
+                 ,@@args)))
+
+;; => 3
+(my-loopy-iter-wrapper (my-set i 3)
+                       (return i))
+@end lisp
+
+@item @code{loopy-iter-keywords}
+A list of symbols.  See the user option
+@code{loopy-iter-keywords} and see @ref{The @code{loopy-iter} Macro}.
+
+@lisp
+(defmacro my-loopy-iter-wrapper (&rest args)
+  (let ((list (cons 'my-keyword loopy-iter-keywords)))
+    `(loopy-iter (override (loopy-iter-keywords ,list))
+                 ,@@args)))
+
+;; => (1 2 3)
+(my-loopy-iter-wrapper (my-keyword list i '(1 2 3))
+                       (collecting i))
+@end lisp
+@end table
 
 @node Comparing to @code{cl-loop}
 @chapter Comparing to @code{cl-loop}

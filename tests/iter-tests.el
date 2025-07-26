@@ -37,6 +37,148 @@
                    (liq (array i [0 1 2 3])
                         (collecting i))))))
 
+;;; Overrides specific to `loopy-iter'
+
+(ert-deftest iter-bare/override-conflicting-error nil
+  "Test that conflicting/repeated overrides are an error."
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (override (loopy-parsers ((cmd . fn)))
+                (loopy-parsers ((cmd . fn))))))
+   :type 'loopy-conflicting-override)
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (override (loopy-iter-bare-names ((cmd . fn)))
+                (loopy-iter-bare-names ((cmd . fn))))))
+   :type 'loopy-conflicting-override)
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (override (loopy-iter-keywords ((cmd . fn)))
+                (loopy-iter-keywords ((cmd . fn))))))
+   :type 'loopy-conflicting-override))
+
+(ert-deftest iter-keyword/override-conflicting-error nil
+  "Test that conflicting/repeated overrides are an error."
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (for override (loopy-parsers ((cmd . fn)))
+           (loopy-parsers ((cmd . fn))))))
+   :type 'loopy-conflicting-override)
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (for override (loopy-iter-bare-names ((cmd . fn)))
+           (loopy-iter-bare-names ((cmd . fn))))))
+   :type 'loopy-conflicting-override)
+  (should-error
+   (macroexpand
+    '(loopy-iter
+      (for override (loopy-iter-keywords ((cmd . fn)))
+           (loopy-iter-keywords ((cmd . fn))))))
+   :type 'loopy-conflicting-override))
+
+(ert-deftest iter-bare/malformed-overrides ()
+  ;; TODO: Finish for other override symbols:
+  (should-error
+   (macroexpand `(loopy-iter (override thing-1)))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (override (loopy-iter-bare-names nil))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (override (loopy-iter-bare-names [collecting consing]))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (override (loopy-iter-keywords nil))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (override (loopy-iter-keywords [for exit]))))
+   :type 'loopy-malformed-override))
+
+(ert-deftest iter-keyword/malformed-overrides ()
+  ;; TODO: Finish for other override symbols:
+  (should-error
+   (macroexpand `(loopy-iter (for override thing-1)))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (for override (loopy-iter-bare-names nil))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (for override (loopy-iter-bare-names [collecting consing]))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (for override (loopy-iter-keywords nil))))
+   :type 'loopy-malformed-override)
+
+  (should-error
+   (macroexpand `(loopy-iter (for override (loopy-iter-keywords [for exit]))))
+   :type 'loopy-malformed-override))
+
+(cl-defun loopy-iter--override-test-my-set-parser ((_name var val))
+  "Set VAR to VAL.  _NAME is unused."
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+(defmacro loopy-iter--override-wrapper-1 (&rest body)
+  (let ((cmds (copy-hash-table loopy-parsers)))
+    (puthash 'my-set1234 'loopy-iter--override-test-my-set-parser cmds)
+    `(loopy-iter (override (loopy-parsers ,cmds))
+                 ,@body)))
+
+(ert-deftest override-loopy-iter-parsers ()
+  (should (equal 3
+                 (eval '(loopy-iter--override-wrapper-1 (for my-set1234 i 3)
+                                                        (exit returning i))
+                       t))))
+
+(defmacro loopy-iter--override-wrapper-3 (&rest body)
+  `(loopy-iter (override (loopy-iter-bare-names ,(cons 'collect loopy-iter-bare-names)))
+               ,@body))
+
+(ert-deftest iter-override-bare-names ()
+  (should (equal (list 1 2 3)
+                 (eval '(loopy-iter--override-wrapper-3 (listing i '(1 2 3))
+                                                        (collect i))
+                       t))))
+
+(defmacro loopy-iter--override-wrapper-4 (&rest body)
+  `(loopy-iter (override (loopy-iter-keywords ,(cons 'flux loopy-iter-keywords)))
+               ,@body))
+
+(ert-deftest iter-override-keywords ()
+  (should (equal (list 1 2 3)
+                 (eval '(loopy-iter--override-wrapper-4 (flux list i '(1 2 3))
+                                                        (flux collect i))
+                       t))))
+
+(defmacro loopy-iter--override-wrapper-5 (&rest body)
+  (let ((cmds (copy-hash-table loopy-parsers)))
+    (puthash 'my-set1234 'loopy-iter--override-test-my-set-parser cmds)
+    `(loopy-iter (override (loopy-parsers ,cmds)
+                           (loopy-iter-bare-names ,(cons 'my-set1234 loopy-iter-bare-names))
+                           (loopy-iter-keywords ,(cons 'flux loopy-iter-keywords)))
+                 ,@body)))
+
+(ert-deftest override-loopy-iter-multiple ()
+  (should (equal 3
+                 (eval '(loopy-iter--override-wrapper-5 (my-set1234 i 3)
+                                                        (flux return i))
+                       t))))
+
+
+;;; Testing special forms
+
 ;; A list of special-form code walkers in Iterate. In Emacs Lisp, many of these
 ;; are macros, and so we should not need to test them, as they expand to simpler
 ;; constructs.  We now use `macroexpand-all' to find loop commands, so we

@@ -707,6 +707,79 @@ writing a `seq-do' method for the custom seq."
 
 (loopy--optimized-vars-tests)
 
+;;;; Optimized Named  Accumulations
+(cl-defun loopy--override-test-my-set-parser ((_name var val))
+  "Set VAR to VAL.  _NAME is unused."
+  `((loopy--other-vars (,var nil))
+    (loopy--main-body (setq ,var ,val))))
+
+(defmacro loopy--override-wrapper-1 (&rest body)
+  (let ((cmds (copy-hash-table loopy-parsers)))
+    (puthash 'my-set1234 'loopy--override-test-my-set-parser cmds)
+    `(loopy (override (loopy-parsers ,cmds))
+            ,@body)))
+
+(ert-deftest override-loopy ()
+  (should (equal 3
+                 (eval '(loopy--override-wrapper-1 (my-set1234 i 3)
+                                                   (return i))
+                       t))))
+
+(loopy-deftest override-loopy-iter-error
+  :doc "Test that overriding `loopy-iter' features in `loopy' is an error."
+  :error loopy-iter-override-in-loopy
+  :macroexpand t
+  :repeat _sma
+  :multi-body t
+  :body [((_sma (loopy-iter-keywords blah)))
+         ((_sma (loopy-iter-bare-names blah)))]
+  :loopy ((_sma . (override overrides)))
+  ;; Does not apply:
+  ;; :iter-keyword ((_sma . (override overrrides)))
+  ;; :iter-bare ((_sma . (override overrrides)))
+  )
+
+(loopy-deftest override-malformed-error
+  :doc "Test that a malformed override is an error."
+  :error loopy-malformed-override
+  :macroexpand t
+  :multi-body t
+  :body [((override (loopy-parsers)))
+         ((override (loopy-parsers #s(thing slot1))))
+         ((override symbol))
+         ((override [var val]))]
+  :loopy t
+  :iter-keyword (override)
+  :iter-bare ((override . override)))
+
+(loopy-deftest override-unknown-error
+  :doc "Test that an unknown override is an error."
+  :error loopy-unknown-override
+  :macroexpand t
+  :body ((override (blah-unkown some-val)))
+  :loopy t
+  :iter-keyword (override)
+  :iter-bare ((override . override)))
+
+(loopy-deftest override-conflicting-error
+  :doc "Test that conflicting/repeated overrides are an error."
+  :error loopy-conflicting-override
+  :macroexpand t
+  :multi-body t
+  :body [((override (loopy-parsers ((cmd . fn))) (loopy-parsers ((cmd . fn)))))
+         ;; These tests are done in "tests/iter-tests.el" because
+         ;; using the `loopy-iter' overrides in `loopy' is a different error.
+         ;; ((override (loopy-iter-bare-names ((cmd . fn))) (loopy-iter-bare-names ((cmd . fn)))))
+         ;; ((override (loopy-iter-keywords ((cmd . fn))) (loopy-iter-keywords ((cmd . fn)))))
+         ;; ((override (loopy-iter-overwritten-parsers ((cmd . fn))) (loopy-iter-overwritten-parsers ((cmd . fn)))))
+         ;; ;; These are redundant, so we treat them as "repeated":
+         ;; ((override (loopy-parsers ((cmd . fn))) (loopy-iter-overwritten-parsers ((cmd . fn)))))
+         ]
+  :loopy t
+  ;; :iter-keyword (override)
+  ;; :iter-bare ((override . override))
+  )
+
 ;;; Loop Commands
 ;;;; Sub-loop Commands
 ;;;;; loopy command

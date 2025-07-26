@@ -79,14 +79,16 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
 - [[#destructuring-macros][Destructuring Macros]]
 - [[#the-loopy-iter-macro][The ~loopy-iter~ Macro]]
   - [[#default-bare-names-in-loopy-iter][Default Bare Names in ~loopy-iter~]]
-- [[#using-flags][Using Flags]]
-- [[#custom-aliases][Custom Aliases]]
-- [[#custom-commands][Custom Commands]]
-  - [[#background-info][Background Info]]
-  - [[#hello-world][Hello World]]
-  - [[#an-always-command][An ~always~ Command]]
-  - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
-  - [[#finding-more-examples][Finding More Examples]]
+- [[#customizing-macro-behavior][Customizing Macro Behavior]]
+  - [[#using-flags][Using Flags]]
+  - [[#custom-aliases][Custom Aliases]]
+  - [[#custom-commands][Custom Commands]]
+    - [[#background-info][Background Info]]
+    - [[#hello-world][Hello World]]
+    - [[#an-always-command][An ~always~ Command]]
+    - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
+    - [[#finding-more-examples][Finding More Examples]]
+  - [[#locally-overriding-behavior][Locally Overriding Behavior]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
 - [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
   - [[#for-clauses][For Clauses]]
@@ -4800,7 +4802,24 @@ create a list if more than one return value is given.
   - Sub-loop Commands:
     - =at=
 
-* Using Flags
+* Customizing Macro Behavior
+
+There are three ways to control behavior:
+
+1. Setting a flag ([[#flags]]), which currently controls destructuring
+2. Modifying the customizable variables like ~loopy-parsers~ and
+   ~loopy-iter-bare-names~
+3. Using the special macro argument =overrides=, which modifies the same
+   settings as the customizable variables, but only locally for the
+   current loop (and not sub-loops)
+
+A package which extends Loopy and wishes to make those extensions available to
+others would modify the customizable variables, similar to defining new
+functions and variables in Emacs Lisp's global namespace.  A package which makes
+use of Loopy internally and wishes to modify its behavior would use the
+=overrides= special macro argument within a bespoke macro that wraps Loopy.
+
+** Using Flags
 :PROPERTIES:
 :CUSTOM_ID: flags
 :DESCRIPTION: Using flags to change behavior.
@@ -4809,7 +4828,8 @@ create a list if more than one return value is given.
 #+cindex: flag
 A {{{dfn(flag)}}} is a symbol passed to the =flag= or =flags= special macro
 argument, changing the macro's behavior.  Currently, flags affect what method
-~loopy~ uses to perform destructuring (=pcase=, =seq=, =dash=, or the default)
+~loopy~ uses to perform destructuring (=pcase=, =seq=, =dash=, or the default
+method).
 
 Flags are applied in order.  If you specify =(flags seq pcase)=, then ~loopy~
 will use ~pcase-let~ for destructuring, not ~seq-let~.
@@ -4857,6 +4877,7 @@ Below are some example of using the destructuring flags.  These flags affect
 the destructuring of:
 - iteration variables
 - accumulation variables
+- variables explicitly named by the commands =set= and =set-prev=
 - variables bound by the special macro argument =with=
 
 These flags do not affect the destructuring of generalized variables
@@ -4923,7 +4944,7 @@ and produce inefficient code.
          (finally-return whole temporary?))
 #+end_src
 
-* Custom Aliases
+** Custom Aliases
 :PROPERTIES:
 :CUSTOM_ID: custom-aliases
 :DESCRIPTION: How to add one's own aliases.
@@ -4989,7 +5010,7 @@ add local command definitions that apply only to a single instance of the macro
 during expansion.
 #+end_quote
 
-* Custom Commands
+** Custom Commands
 :PROPERTIES:
 :CUSTOM_ID: adding-custom-commands
 :DESCRIPTION: Extending `loopy' with personal commands.
@@ -4998,7 +5019,7 @@ during expansion.
 This section contains information about how loop commands work and how one can
 add custom commands to ~loopy~.  Two examples are provided.
 
-** Background Info
+*** Background Info
 :PROPERTIES:
 :CUSTOM_ID: background-info
 :DESCRIPTION: The internals of `loopy'.
@@ -5355,7 +5376,7 @@ will work similar to the below example.
                 'loopy--early-return-capture))))))
 #+END_SRC
 
-** Hello World
+*** Hello World
 :PROPERTIES:
 :CUSTOM_ID: a-small-example
 :DESCRIPTION: A minimal working example.
@@ -5439,7 +5460,7 @@ you can see that it expands to do what we want, as expected.
       nil))
 #+END_SRC
 
-** An ~always~ Command
+*** An ~always~ Command
 :PROPERTIES:
 :CUSTOM_ID: always-example
 :DESCRIPTION: Adding a feature from `cl-loop'.
@@ -5628,7 +5649,7 @@ The actual definition of the =always= command can be read in the library
 includes more error checking for working with the other commands.
 
 
-** Custom commands in the ~loopy-iter~ macro
+*** Custom commands in the ~loopy-iter~ macro
 :PROPERTIES:
 :CUSTOM_ID: custom-commands-for-loopy-iter
 :END:
@@ -5709,7 +5730,7 @@ instructions (see the code for usage examples).
 These alternative command parsers are listed in
 ~loopy-iter-overwritten-command-parsers~.
 
-** Finding More Examples
+*** Finding More Examples
 :PROPERTIES:
 :CUSTOM_ID: finding-more-examples
 :END:
@@ -5718,6 +5739,130 @@ If you would like to see more examples, consider reading through the source code
 of {{{file(loopy-commands.el)}}}, which contains the code of all of the built-in
 loop commands.  You can easily find this file using {{{kbd(M-x find-library
 loopy-commands RET)}}}.
+
+** Locally Overriding Behavior
+:PROPERTIES:
+:CUSTOM_ID: override
+:DESCRIPTION: Using the `overrides' special macro argument.
+:END:
+
+The special macro argument =override= is used to override the global values of
+the customizable variables.  This is desirable when one wants to configure
+Loopy's behavior without affecting other libraries that might be using Loopy.
+For example, consider namespace collisions: a library which makes a custom
+loop command available via ~loopy-command-parsers~ might
+overwrite another definition created by some other, unknown library.  This is
+similar to what would happen if different libraries tried to use the same
+function name or variable name.  If the loop command is only meant to be used
+internally, then local overrides paired with wrapping macros can help to avoid
+the problem of unintentionally affecting other libraries.
+
+The syntax of the special macro argument =override= is similar to that of the
+special macro argument =with=.  Note, however, its arguments are not evaluated,
+but taken literally, similar to normal macro arguments.  As shown in the below
+example, this is not an issue when used with a wrapping macro, because any
+needed evaluation can occur during the execution of the wrapper.
+
+#+begin_src emacs-lisp
+  (defvar my-pkg--desired-aliases '((each . seq)
+                                    (vect . array))
+    "New names for built-in commands.")
+
+  (defmacro my-pkg--loopy (&rest args)
+    `(loopy (override (loopy-parsers
+                       ,(loopy
+                         (with (parsers (map-copy loopy-parsers)))
+                         (map (k . v) my-pkg--desired-aliases)
+                         (do (setf (map-elt parsers k) (map-elt parsers v)))
+                         (finally-return parsers))))
+            ,@args))
+
+  (my-pkg--loopy (each i some-seq)
+                 (vect j some-array)
+                 (collect (cons i j)))
+#+end_src
+
+Overrides use the name of the overridden variable.  Overrides replace the global
+definitions of variables for a particular use of a macro.  They cannot be used
+to remove entries from variable values.  They do not affect any sub-uses of the
+macro.  The following variables can be overridden:
+
+- ~loopy-parsers~ :: A =map.el=-compatible structure that maps a symbol to a
+  parsing function.  Parsing functions must be available during macro expansion.
+  See the user option ~loopy-parsers~ and see [[#adding-custom-commands]].
+
+  In both ~loopy~ and ~loopy-iter~, overriding ~loopy-parsers~ will also
+  override any effects from setting the deprecated variables
+  ~loopy-command-parsers~ and ~loopy-aliases~ to a non-~nil~ value.
+
+  #+begin_src emacs-lisp
+    (cl-defun my-set-parser ((_name var val))
+      `((loopy--other-vars (,var nil))
+        (loopy--main-body (setq ,var ,val))))
+
+    (defmacro my-loopy-wrapper (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+        `(loopy (override (loopy-parsers ,map))
+                ,@args)))
+
+    ;; => 3
+    (my-loopy-wrapper (my-set i 3)
+                      (return i))
+  #+end_src
+
+  Overriding ~loopy-parsers~ in ~loopy-iter~ will also override the effects of
+  any settings in ~loopy-iter-overwritten-parsers~.  Currently, there is no
+  override for ~loopy-iter-overwritten-parsers~.  Using the override for
+  ~loopy-parsers~ achieves the same effect.
+
+  #+begin_src emacs-lisp
+    ;; The same example as above, but for `loopy-iter':
+    (defmacro my-loopy-iter-wrapper (&rest args)
+      (let ((map (map-merge '(hash-table :test eq)
+                            loopy-parsers
+                            loopy-iter-overwritten-parsers
+                            '((my-set . my-set-parser))))
+            (list (cons 'my-set loopy-iter-bare-names)))
+        `(loopy-iter (override (loopy-iter-bare-names ,list)
+                               (loopy-parsers ,map))
+                     ,@args)))
+  #+end_src
+
+- ~loopy-iter-bare-names~ :: A list of symbols.  See the user option
+  ~loopy-iter-bare-names~ and see [[#loopy-iter]].
+
+  #+begin_src emacs-lisp
+    (cl-defun my-set-parser ((_name var val))
+      `((loopy--other-vars (,var nil))
+        (loopy--main-body (setq ,var ,val))))
+
+    (defmacro my-loopy-iter-wrapper (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser))
+            (list (cons 'my-set loopy-iter-bare-names)))
+        `(loopy-iter (override (loopy-iter-bare-names ,list)
+                                (loopy-command-parsers ,map))
+                     ,@args)))
+
+    ;; => 3
+    (my-loopy-iter-wrapper (my-set i 3)
+                           (return i))
+  #+end_src
+
+- ~loopy-iter-keywords~ :: A list of symbols.  See the user option
+  ~loopy-iter-keywords~ and see [[#loopy-iter]].
+
+  #+begin_src emacs-lisp
+    (defmacro my-loopy-iter-wrapper (&rest args)
+      (let ((list (cons 'my-keyword loopy-iter-keywords)))
+        `(loopy-iter (override (loopy-iter-keywords ,list))
+                     ,@args)))
+
+    ;; => (1 2 3)
+    (my-loopy-iter-wrapper (my-keyword list i '(1 2 3))
+                           (collecting i))
+  #+end_src
+
+
 
 * Comparing to ~cl-loop~
 :PROPERTIES:

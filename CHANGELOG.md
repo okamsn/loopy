@@ -6,6 +6,14 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 ## Unreleased
 
+### New Features
+
+- Add the `override` special macro argument, which can be used to override
+  select global settings for the current macro expansion ([#243], [#231]).  This
+  can help to avoid name collisions from package authors (separate authors of
+  separate packages) wanting to use the same command name for different purposes
+  with their respective package.
+
 ### Bug Fixes
 
 - `when` and `unless` now correctly work when aliased ([#234], [#240]).
@@ -48,12 +56,14 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 
 [#229]: https://github.com/okamsn/loopy/PR/229
+[#231]: https://github.com/okamsn/loopy/issues/231
 [#234]: https://github.com/okamsn/loopy/issues/234
 [#237]: https://github.com/okamsn/loopy/PR/237
 [#238]: https://github.com/okamsn/loopy/issues/238
 [#240]: https://github.com/okamsn/loopy/PR/240
 [#241]: https://github.com/okamsn/loopy/PR/241
 [#242]: https://github.com/okamsn/loopy/PR/242
+[#243]: https://github.com/okamsn/loopy/PR/243
 
 ## 0.14.0
 

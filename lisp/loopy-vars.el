@@ -186,6 +186,8 @@ Definition must exist.  Neither argument need be quoted."
            without            loopy--parse-without-special-macro-argument
            named              loopy--parse-named-special-macro-argument
            wrap               loopy--parse-wrap-special-macro-argument
+           override           loopy--parse-override-special-macro-argument
+           overrides          loopy--parse-override-special-macro-argument
 
            ;; Loop Commands
            accumulate        loopy--parse-accumulate-command

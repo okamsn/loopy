@@ -448,8 +448,20 @@ Variables available:
 Returns BODY without the `%s' argument."
               name name)
      (let* ((matching-args (cl-remove-if (lambda (x)
-                                           (not (eq (quote ,(intern (format "loopy--parse-%s-special-macro-argument" name)))
-                                                    (loopy--get-command-parser (car-safe x)))))
+                                           ;; If symbol, then is the loop name,
+                                           ;; which is handled by a separate
+                                           ;; processor.  Otherwise, must be a
+                                           ;; list recognized by the list of
+                                           ;; parsers.  BAsed on the argument
+                                           ;; order of the macro, just because
+                                           ;; we search for something first
+                                           ;; doesn't mean that it is the first
+                                           ;; expression that we test, so we
+                                           ;; guard against the "unknown
+                                           ;; command" error.
+                                           (or (null (car-safe x))
+                                               (not (eq (quote ,(intern (format "loopy--parse-%s-special-macro-argument" name)))
+                                                        (loopy--get-command-parser (car-safe x) :error nil)))))
                                          body)))
        (cl-case (length matching-args)
          (0 body)
@@ -542,6 +554,31 @@ Returns BODY without the `%s' argument."
 
 (loopy--def-special-processor finally-protect
   (setq loopy--final-protect arg-value)
+  (seq-remove (lambda (x) (eq (car x) arg-name)) body))
+
+(loopy--def-special-processor override
+  (let ((parsers-found nil))
+    (dolist (elem arg-value)
+      (pcase elem
+        (`(loopy-parsers ,val)
+         ;; This is meant to replace the entire value,
+         ;; so it's fine to clobber what's there.
+         (cond (parsers-found
+                (signal 'loopy-conflicting-override
+                        (list parsers-found elem)))
+               ((not (and val (mapp val)))
+                (signal 'loopy-malformed-override (list elem)))
+               (t
+                (setq loopy--parsers-internal (map-into val '(hash-table :test eq))
+                      parsers-found elem))))
+        (`(,(or 'loopy-iter-bare-names
+                'loopy-iter-keywords)
+           . ,_)
+         (signal 'loopy-iter-override-in-loopy (list elem)))
+        (`(,_ ,_)
+         (signal 'loopy-unknown-override (list elem)))
+        (_
+         (signal 'loopy-malformed-override (list elem))))))
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
 (defun loopy--clean-up-stack-vars ()
@@ -903,6 +940,7 @@ see the Info node `(loopy)' distributed with this package."
 
 ;;;;; Process the special macro arguments.
    (mapc #'loopy--apply-flag loopy-default-flags)
+   (setq body (loopy--process-special-arg-override body))
    (setq body (loopy--process-special-arg-loop-name body))
    (setq body (loopy--process-special-arg-flag body))
    (setq body (loopy--process-special-arg-with body))
