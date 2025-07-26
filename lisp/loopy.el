@@ -953,7 +953,13 @@ see the Info node `(loopy)' distributed with this package."
              (puthash alias parser loopy--parsers-internal))))))
 
 ;;;;; Process the special macro arguments.
-   (mapc #'loopy--apply-flag loopy-default-flags)
+   (when loopy-default-flags
+     (warn "`loopy-default-flags' is obsolete.  Use a wrapping macro.
+This is necessary to better support using the macro in different
+packages from different authors.  See the updated Info node
+`(loopy)Customizing Macro Behavior'.")
+     (mapc #'loopy--apply-flag loopy-default-flags))
+
    (setq body (loopy--process-special-arg-override body))
    (setq body (loopy--process-special-arg-loop-name body))
    (setq body (loopy--process-special-arg-flag body))

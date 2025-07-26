@@ -49,6 +49,9 @@ please let me know.
      commands are aliased.
    - Modifications to an implied ~loopy-result~ in =finally-do= will now be
      included in the implied return value of the macro.
+   - ~loopy-default-flags~ is made obsolete to avoid conflicts between
+     libraries.  Using a wrapping macro instead, such as the one given in
+     Changelog or the Org/Info documentation.
  - Version 0.14.0:
    - Conflicting initialization values for accumulation variables now signal
      a warning.  In the future, they will signal an error.

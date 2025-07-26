@@ -79,6 +79,43 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
          (finally-do (push 0 loopy-result)))
   ```
 
+- `loopy-default-flags` is now deprecated ([#245]).  This prevents one library
+  from breaking the macro expansions in another library.  Instead of using
+  `loopy-default-flags`, one should use a wrapping macro like the one below
+  (copied from the Info documentation).
+
+  ```emacs-lisp
+  (require 'loopy-pcase)
+  (defmacro my-loopy-flag-wrapper (&rest body)
+    "Use `loopy', but default to `pcase' destructuring."
+    (loopy (with (entry-for-flag (map-elt loopy-parsers 'flag)))
+           (list arg body)
+           (if (and (consp arg)
+                    (eq (map-elt loopy-parsers (car arg))
+                        entry-for-flag))
+               (command-do
+                (set flag-found t)
+                (collect (append arg '(pcase))))
+             (collect arg))
+           (finally-do
+            (unless flag-found
+              (push '(flag pcase) loopy-result))
+            (push 'loopy loopy-result))))
+
+  ;; => (1 2 3 4)
+  (my-loopy-flag-wrapper (list `(,i . ,j) '((1 . 2) (3 . 4)))
+                         (collect i)
+                         (collect j))
+
+  ;; Ignores the `seq' flag as expected:
+  ;;
+  ;; => ( 1 2 3 4)
+  (my-loopy-flag-wrapper (flag seq)
+                         (list `(,i . ,j) '((1 . 2) (3 . 4)))
+                         (collect i)
+                         (collect j))
+  ```
+
 ### Internal Changes
 
 - As far as the implementation is concerned, "aliases" are no longer a separate
@@ -100,6 +137,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#242]: https://github.com/okamsn/loopy/PR/242
 [#243]: https://github.com/okamsn/loopy/PR/243
 [#244]: https://github.com/okamsn/loopy/PR/244
+[#245]: https://github.com/okamsn/loopy/PR/245
 [#246]: https://github.com/okamsn/loopy/PR/246
 
 ## 0.14.0

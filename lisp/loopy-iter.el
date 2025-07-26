@@ -551,7 +551,12 @@ to use `loopy' in general.
      (setq loopy-iter--keywords-internal loopy-iter-keywords
            loopy-iter--bare-names-internal loopy-iter-bare-names)
 
-     (mapc #'loopy--apply-flag loopy-default-flags)
+     (when loopy-default-flags
+       (warn "`loopy-default-flags' is obsolete.  Use a wrapping macro.
+This is necessary to better support using the macro in different
+packages from different authors.  See the updated Info node
+`(loopy)Customizing Macro Behavior'.")
+       (mapc #'loopy--apply-flag loopy-default-flags))
 
      (setq body (thread-first body
                               loopy-iter--process-special-arg-override
