@@ -99,8 +99,40 @@ Without these keywords, one must use one of the names given in
 
 ;;;; For parsing commands
 
-(defcustom loopy-iter-bare-commands
-  '(accumulating
+(define-obsolete-variable-alias 'loopy-iter-bare-commands
+  'loopy-iter-bare-names
+  "2025-07")
+(define-obsolete-variable-alias 'loopy-iter-bare-special-macro-arguments
+  'loopy-iter-bare-names
+  "2025-07")
+(defcustom loopy-iter-bare-names
+  '(;; Bare special macro arguments
+    after-do
+    after
+    else-do
+    else
+    before-do
+    before
+    initially-do
+    initially
+    finally-do
+    finally
+    finally-return
+    finally-protect
+    finally-protected
+    flag
+    flags
+    named
+    accum-opt
+    opt-accum
+    with
+    init
+    without
+    no-with
+    no-init
+    wrap
+    ;; Bare commands
+    accumulating
     adjoining
     always
     appending
@@ -164,9 +196,11 @@ Without these keywords, one must use one of the names given in
     thereis
     unioning
     vconcating)
-  "Commands recognized in `loopy-iter' without a preceding keyword.
+  "`loopy' features recognized in `loopy-iter' without a preceeding keyword.
 
-For special marco arguments, see `loopy-iter-bare-special-macro-arguments'."
+This list includes special macro arguments as well as loop commands.
+See the Info node `(loopy)The loopy-iter Macro' and the Info node
+`(loopy)Default Bare Names in loopy-iter'."
   :type '(repeat symbol)
   :group 'loopy-iter)
 
@@ -215,7 +249,8 @@ during a second pass on the expanded code."
 
 ;;;;; Overwritten parser definitions
 
-(defcustom loopy-iter-overwritten-command-parsers
+(defvaralias 'loopy-iter-overwritten-command-parsers 'loopy-iter-overwritten-parsers)
+(defcustom loopy-iter-overwritten-parsers
   '((at       . loopy-iter--parse-at-command))
   "Overwritten command parsers.
 
@@ -258,24 +293,6 @@ These commands affect other loops higher up in the call list."
 
 ;;;; For parsing special macro arguments
 
-(defcustom loopy-iter-bare-special-macro-arguments
-  '( after-do        after else-do else
-     before-do       before initially-do initially
-     finally-do      finally
-     finally-return
-     finally-protect finally-protected
-     flag            flags
-     named
-     accum-opt       opt-accum
-     with            init
-     without         no-with no-init
-     wrap)
-  "Symbols naming recognized special macro arguments and their aliases.
-
-These should not overwrite any other macros or functions in Emacs Lisp."
-  :type '(repeat symbol)
-  :group 'loopy-iter)
-
 ;; TODO: Combine this with `loopy--def-special-processor'.
 (defmacro loopy-iter--def-special-processor (name &rest body)
   "Create a processor for the special macro argument NAME and its aliases.
@@ -306,7 +323,7 @@ Returns BODY without the `%s' argument."
                  (let ((first (cl-first expr)))
                    (or (and (memq first loopy-iter-keywords)
                             (eq ,fn-sym (loopy--get-command-parser (cl-second expr))))
-                       (and (memq first loopy-iter-bare-special-macro-arguments)
+                       (and (memq first loopy-iter-bare-names)
                             (eq ,fn-sym (loopy--get-command-parser first))))))
             (collecting matching-args expr)
           (collecting new-body expr))
@@ -338,7 +355,7 @@ Returns BODY without the `%s' argument."
                ,(pred (lambda (x) (eq 'loopy--parse-named-special-macro-argument
                                       (loopy--get-command-parser x))))
                ,name . ,rest)
-             `(,(and (pred (lambda (x) (memq x loopy-iter-bare-special-macro-arguments)))
+             `(,(and (pred (lambda (x) (memq x loopy-iter-bare-names)))
                      (pred (lambda (x) (eq 'loopy--parse-named-special-macro-argument
                                            (loopy--get-command-parser x)))))
                ,name . ,rest))
@@ -468,7 +485,7 @@ to use `loopy' in general.
              loopy-command-parsers))
 
    ;; NOTE: This one isn't obsolete but needs to happen before aliases.
-   (when loopy-iter-overwritten-command-parsers
+   (when loopy-iter-overwritten-parsers
      (map-do (lambda (k v)
                (puthash k v loopy--parsers-internal))
              loopy-iter-overwritten-command-parsers))
@@ -513,25 +530,42 @@ to use `loopy' in general.
                                           (loopy--parse-loop-command args))
                                       (push other loopy-iter--non-main-body-instructions)
                                       (macroexp-progn main))))))
-                    (loopy (list command loopy-iter-bare-commands)
-                           (collect
-                            (cons command
-                                  ;; Expanding functions do not receive the head
-                                  ;; of the expression, only the arguments, so
-                                  ;; we use a lexical lambda to include that
-                                  ;; information.
-                                  (let ((cmd command))
-                                    (lambda (&rest args)
-                                      (loopy--bind-main-body (main other)
-                                          ;; Bind here in case a command required to
-                                          ;; be in the top level is found in an
-                                          ;; expression while parsing an actual
-                                          ;; top-level command.
-                                          (let* ((loopy-iter--level (1+ loopy-iter--level))
-                                                 (loopy--in-sub-level (> loopy-iter--level 1)))
-                                            (loopy--parse-loop-command (cons cmd args)))
-                                        (push other loopy-iter--non-main-body-instructions)
-                                        (macroexp-progn main)))))))))
+                    ;; NOTE: Processing the special macro arguments removes
+                    ;; their occurences from the body, so no remaining symbol
+                    ;; should lead to one of their pseudo-functions, but we
+                    ;; check here anyway, just in case the symbol might show up
+                    ;; at a lower level in a wrapped Lisp feature.
+                    (loopy (list symbol loopy-iter-bare-names)
+                           (unless (memq (loopy--get-command-parser symbol)
+                                         '( loopy--parse-accum-opt-special-macro-argument
+                                            loopy--parse-after-do-special-macro-argument
+                                            loopy--parse-before-do-special-macro-argument
+                                            loopy--parse-finally-do-special-macro-argument
+                                            loopy--parse-finally-protect-special-macro-argument
+                                            loopy--parse-finally-return-special-macro-argument
+                                            loopy--parse-flag-special-macro-argument
+                                            loopy--parse-with-special-macro-argument
+                                            loopy--parse-without-special-macro-argument
+                                            loopy--parse-named-special-macro-argument
+                                            loopy--parse-wrap-special-macro-argument))
+                             (collect
+                              (cons symbol
+                                    ;; Expanding functions do not receive the head
+                                    ;; of the expression, only the arguments, so
+                                    ;; we use a lexical lambda to include that
+                                    ;; information.
+                                    (let ((cmd symbol))
+                                      (lambda (&rest args)
+                                        (loopy--bind-main-body (main other)
+                                            ;; Bind here in case a command required to
+                                            ;; be in the top level is found in an
+                                            ;; expression while parsing an actual
+                                            ;; top-level command.
+                                            (let* ((loopy-iter--level (1+ loopy-iter--level))
+                                                   (loopy--in-sub-level (> loopy-iter--level 1)))
+                                              (loopy--parse-loop-command (cons cmd args)))
+                                          (push other loopy-iter--non-main-body-instructions)
+                                          (macroexp-progn main))))))))))
            (common-env `(,@suppressed-expanders
                          ,@command-env
                          ,@macroexpand-all-environment))

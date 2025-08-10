@@ -3860,8 +3860,8 @@ expansion time."
                                                   #'my-loopy-sum-command1)
                                       (map-insert 'sum2
                                                   #'my-loopy-sum-command2)))
-                       (loopy-iter-bare-commands (append '(sum1 sum2)
-                                                         loopy-iter-bare-commands)))
+                       (loopy-iter-bare-names (append '(sum1 sum2)
+                                                      loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
   :multi-body t
   :body [((list i '(1 2 3 4 5))
@@ -3929,8 +3929,8 @@ expansion time."
                  (let ((loopy-parsers (thread-first loopy-parsers
                                                     (my-ht-map-insert 'sum1 #'my-loopy-sum-command1)
                                                     (my-ht-map-insert 'sum2 #'my-loopy-sum-command2)))
-                       (loopy-iter-bare-commands (append '(sum1 sum2)
-                                                         loopy-iter-bare-commands)))
+                       (loopy-iter-bare-names (append '(sum1 sum2)
+                                                      loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
   :multi-body t
   :body [((list i '(1 2 3 4 5))
@@ -6652,8 +6652,8 @@ Wrapping with another eval to make sure variables are set by expansion time."
                  (let ((loopy-command-parsers
                         (map-insert loopy-command-parsers 'target-sum
                                     #'my-loopy-sum-command))
-                       (loopy-iter-bare-commands (cons 'target-sum
-                                                       loopy-iter-bare-commands)))
+                       (loopy-iter-bare-names (cons 'target-sum
+                                                    loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
   :result 6
   :body ((target-sum my-target 1 2 3)
@@ -6672,8 +6672,8 @@ Wrapping with another eval to make sure variables are set by expansion time."
                  (let ((loopy-parsers (my-ht-map-insert loopy-parsers
                                                         'target-sum
                                                         #'my-loopy-sum-command))
-                       (loopy-iter-bare-commands (cons 'target-sum
-                                                       loopy-iter-bare-commands)))
+                       (loopy-iter-bare-names (cons 'target-sum
+                                                    loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
   :result 6
   :body ((target-sum my-target 1 2 3)
@@ -6709,8 +6709,8 @@ Otherwise, `loopy' should return t."
                  (let ((loopy-command-parsers
                         (map-insert loopy-command-parsers 'my-always
                                     #'my--loopy-always-command-parser))
-                       (loopy-iter-bare-commands (cons 'my-always
-                                                       loopy-iter-bare-commands)))
+                       (loopy-iter-bare-names (cons 'my-always
+                                                    loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
   :result t
   :body ((list i (number-sequence 1 9))
@@ -6896,8 +6896,8 @@ NOTE: This should eventually be removed."
   :result '(1)
   :wrap ((x . `(let ((loopy-parsers
                       (my-ht-map-insert loopy-parsers 'f (map-elt loopy-parsers 'flag)))
-                     (loopy-iter-bare-special-macro-arguments
-                      (cons 'f loopy-iter-bare-special-macro-arguments)))
+                     (loopy-iter-bare-names
+                      (cons 'f loopy-iter-bare-names)))
                  (eval (quote ,x) t))))
   :body ((f default)
          (list i '(1))
@@ -6911,8 +6911,8 @@ NOTE: This should eventually be removed."
 (loopy-deftest custom-alias-with
   :result 1
   :wrap ((x . `(let ((loopy-parsers (my-ht-map-insert loopy-parsers 'as (map-elt loopy-parsers 'with)))
-                     (loopy-iter-bare-special-macro-arguments
-                      (cons 'as loopy-iter-bare-special-macro-arguments)))
+                     (loopy-iter-bare-names
+                      (cons 'as loopy-iter-bare-names)))
                  (eval (quote ,x) t))))
   :body ((as (a 1))
          (return a))
@@ -6925,8 +6925,8 @@ NOTE: This should eventually be removed."
   :result 5
   :wrap ((x . `(let ((loopy-parsers
                       (my-ht-map-insert loopy-parsers 'ignore (map-elt loopy-parsers 'without)))
-                     (loopy-iter-bare-special-macro-arguments
-                      (cons 'ignore loopy-iter-bare-special-macro-arguments)))
+                     (loopy-iter-bare-names
+                      (cons 'ignore loopy-iter-bare-names)))
                  (eval  (quote (let ((a 1)
                                      (b 2))
                                  ,x
@@ -6945,8 +6945,8 @@ NOTE: This should eventually be removed."
 (loopy-deftest custom-alias-before-do
   :result 7
   :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
-                     (loopy-iter-bare-special-macro-arguments
-                      (cons 'precode loopy-iter-bare-special-macro-arguments)))
+                     (loopy-iter-bare-names
+                      (cons 'precode loopy-iter-bare-names)))
                  (loopy-defalias precode before-do)
                  (eval (quote ,x) t))))
   :body ((with (i 2))
@@ -6960,8 +6960,8 @@ NOTE: This should eventually be removed."
 (loopy-deftest custom-alias-after-do
   :result t
   :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
-                     (loopy-iter-bare-special-macro-arguments
-                      (cons 'postcode loopy-iter-bare-special-macro-arguments)))
+                     (loopy-iter-bare-names
+                      (cons 'postcode loopy-iter-bare-names)))
                  (loopy-defalias postcode after-do)
                  (eval (quote ,x) t))))
   :body ((with (my-ret nil))

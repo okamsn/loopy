@@ -157,6 +157,10 @@ Definition must exist.  Neither argument need be quoted."
   #s(hash-table
      test eq
      data (;; Special macro arguments
+           ;;
+           ;; NOTE: When editing the hash table, also edit the list of
+           ;; pseudo-functions for special macro arguments used in the
+           ;; definition of `loopy-iter'.
            accum-opt          loopy--parse-accum-opt-special-macro-argument
            opt-accum          loopy--parse-accum-opt-special-macro-argument
            after              loopy--parse-after-do-special-macro-argument
