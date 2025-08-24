@@ -88,7 +88,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#an-always-command][An ~always~ Command]]
     - [[#custom-commands-in-the-loopy-iter-macro][Custom commands in the ~loopy-iter~ macro]]
     - [[#finding-more-examples][Finding More Examples]]
-  - [[#local-custom-behavior][Local Custom Behavior]]
+  - [[#locally-overriding-behavior][Locally Overriding Behavior]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
 - [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
   - [[#for-clauses][For Clauses]]
@@ -5735,10 +5735,10 @@ of {{{file(loopy-commands.el)}}}, which contains the code of all of the built-in
 loop commands.  You can easily find this file using {{{kbd(M-x find-library
 loopy-commands RET)}}}.
 
-** Local Custom Behavior
+** Locally Overriding Behavior
 :PROPERTIES:
 :CUSTOM_ID: overrides
-:DESCRIPTION: Using the =overrides= special macro argument.
+:DESCRIPTION: Using the `overrides' special macro argument.
 :END:
 
 The special macro argument =overrides= is used to override the global values of
@@ -5777,25 +5777,101 @@ macro.  The following variables can be overridden:
 
 - ~loopy-parsers~ :: A =map.el=-compatible structure that maps a symbol to a
   parsing function.  Parsing functions must be available during macro expansion.
-  See [[#adding-custom-commands]].
+  See the user option ~loopy-parsers~ and see [[#adding-custom-commands]].
 
   #+begin_src emacs-lisp
     (cl-defun my-set-parser ((_name var val))
       `((loopy--other-vars (,var nil))
         (loopy--main-body (setq ,var ,val))))
 
+    (defmacro my-loopy-wrapper (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+        `(loopy (overrides (loopy-command-parsers ,map))
+                ,@args)))
+
     ;; => 3
-    (loopy (overrides (loopy-command-parsers ((my-set . my-set-parser))))
-           (my-set i 3)
-           (return i))
+    (my-loopy-wrapper (my-set i 3)
+                      (return i))
   #+end_src
 
 - ~loopy-iter-bare-names~ :: A list of symbols.  See the user option
-  ~loopy-bare-names~ and [[loopy-iter-bare-names][the section on its use]].
+  ~loopy-iter-bare-names~ and see [[#loopy-iter]].
 
-- ~loopy-iter-keywords~ :: A list of symbols.
+  #+begin_src emacs-lisp
+    (cl-defun my-set-parser ((_name var val))
+      `((loopy--other-vars (,var nil))
+        (loopy--main-body (setq ,var ,val))))
 
-- ~loopy-iter-bare-commands~ :: A list of symbols.
+    (defmacro my-loopy-iter-wrapper (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser))
+            (list (cons 'my-set loopy-iter-bare-names)))
+        `(loopy-iter (overrides (loopy-iter-bare-names ,list)
+                                (loopy-command-parsers ,map))
+                     ,@args)))
+
+    ;; => 3
+    (my-loopy-iter-wrapper (my-set i 3)
+                           (return i))
+  #+end_src
+
+- ~loopy-iter-keywords~ :: A list of symbols.  See the user option
+  ~loopy-iter-keywords~ and see [[#loopy-iter]].
+
+  #+begin_src emacs-lisp
+    (defmacro my-loopy-iter-wrapper (&rest args)
+      (let ((list (cons 'my-keyword loopy-iter-keywords)))
+        `(loopy-iter (overrides (loopy-iter-keywords ,list))
+                     ,@args)))
+
+    ;; => (1 2 3)
+    (my-loopy-iter-wrapper (my-keyword list i '(1 2 3))
+                           (collecting i))
+  #+end_src
+
+- ~loopy-iter-overwritten-parsers~ :: A =map.el=-compatible structure that maps
+  a symbol to a parsing function.  Parsing functions must be available during
+  macro expansion.  See the user option ~loopy-iter-overwritten-parsers~ and see
+  [[#adding-custom-commands]].
+
+  For ~loopy-iter~, this is the same as overriding ~loopy-parsers~.  This
+  overriding symbol is only provided for convenience and, for consistency, will
+  trigger an error if used in ~loopy~.
+
+  #+begin_src emacs-lisp
+    (cl-defun my-set-parser ((_name var val))
+      `((loopy--other-vars (,var nil))
+        (loopy--main-body (setq ,var ,val))))
+
+    (defmacro my-loopy-iter-wrapper-1 (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+        `(loopy-iter (overrides (loopy-iter-overwritten-parsers ,map))
+                     ,@args)))
+
+    ;; => 3
+    (my-loopy-iter-wrapper-1 (my-set i 3)
+                             (return i))
+
+    ;; Same effect as above:
+    (defmacro my-loopy-iter-wrapper-2 (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+        `(loopy-iter (overrides (loopy-iter-overwritten-parsers ,map))
+                     ,@args)))
+
+    ;; => 3
+    (my-loopy-iter-wrapper-2 (my-set i 3)
+                             (return i))
+
+    ;; Signals an error:
+    (defmacro my-loopy-erroring-wrapper (&rest args)
+      (let ((map (map-insert loopy-parsers 'my-set #'my-set-parser)))
+        `(loopy (overrides (loopy-iter-overwritten-parsers ,map))
+                ,@args)))
+
+    ;; => Error
+    (my-loopy-erroring-wrapper (my-set i 3)
+                               (return i))
+  #+end_src
+
 
 * Comparing to ~cl-loop~
 :PROPERTIES:
