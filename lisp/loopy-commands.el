@@ -3054,16 +3054,17 @@ Return a single list of instructions in the same order as
 COMMAND-LIST."
   (mapcan #'loopy--parse-loop-command command-list))
 
-(cl-defun loopy--get-command-parser (command-name)
+(cl-defun loopy--get-command-parser (command-name &key (error t))
   "Get the parsing function for COMMAND-NAME.
 
-Failing that, an error is signaled."
+Failing that, an error is signaled when ERROR is non-nil."
   (or (map-elt loopy--parsers-internal command-name)
       (when-let* ((found (map-elt loopy--obsolete-aliases command-name)))
         (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, add it to `loopy-parsers'."
               command-name found)
         (map-elt loopy--parsers-internal found))
-      (signal 'loopy-unknown-command (list command-name))))
+      (when error
+        (signal 'loopy-unknown-command (list command-name)))))
 
 (provide 'loopy-commands)
 

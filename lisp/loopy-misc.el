@@ -49,6 +49,27 @@
   "Loopy: Unknown loop target"
   'loopy-error)
 
+;;;;; Errors in the Override Special Macro Argument
+(define-error 'loopy-bad-override
+  "Loopy: Bad override argument"
+  'loopy-error)
+
+(define-error 'loopy-malformed-override
+  "Loopy: Malformed override form"
+  'loopy-bad-override)
+
+(define-error 'loopy-unknown-override
+  "Loopy: Unknown override"
+  'loopy-bad-override)
+
+(define-error 'loopy-conflicting-override
+  "Loopy: Conflicting or repeated override"
+  'loopy-bad-override)
+
+(define-error 'loopy-iter-override-in-loopy
+  "Loopy: Inapplicable `loopy-iter' override in `loopy'"
+  'loopy-bad-override)
+
 ;;;;; Errors on Command Arguments
 (define-error 'loopy-bad-command-arguments
   "Loopy: Bad command arguments"
