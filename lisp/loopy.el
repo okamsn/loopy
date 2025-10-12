@@ -265,7 +265,9 @@ The function creates quoted code that should be used by a macro."
           (cl-loop for (_ . update) in loopy--vars-final-updates
                    when update
                    collect update))
-         (accum-updates-exist (car actual-accumulation-updates)))
+         (accum-updates-exist (car actual-accumulation-updates))
+         (block-result-var (gensym "loopy--block-result"))
+         (loop-completed-var (gensym "loopy--completed")))
 
     ;; This temporary function is just for convenience.  Since it checks the
     ;; structure of `result', it should always be used like:
@@ -356,9 +358,15 @@ The function creates quoted code that should be used by a macro."
       ;; at a certain point.
       (setq result `(cl-block ,loopy--loop-name
                       ,@(get-result)
-                      ;; Be sure that the `cl-block' defaults to returning the
-                      ;; implicit return, which can be nil.  This can be
-                      ;; overridden by any call to `cl-return-from'.
+                      ;; We want to allow `finally-do' to modify an implied
+                      ;; `loopy-result', so we need to check whether the loop
+                      ;; completes to see whether we should return
+                      ;; an early return value (the value of the `cl-block')
+                      ;; or a possibly now-updated value of `loopy-result'.
+                      ,(when loopy--final-do
+                         `(setq ,loop-completed-var t))
+                      ;; This can be overridden by any call to
+                      ;; `cl-return-from'.
                       ,loopy--implicit-return)
             ;; Will always be a single expression after wrapping with
             ;; `cl-block'.
@@ -373,13 +381,19 @@ The function creates quoted code that should be used by a macro."
       (if loopy--final-return
           (if loopy--final-do
               (setq result `(,@(get-result)
-                             ,@loopy--final-do ,loopy--final-return)
+                             ,@loopy--final-do
+                             ,loopy--final-return)
                     result-is-one-expression nil)
             (setq result `(,@(get-result)
                            ,loopy--final-return)
                   result-is-one-expression nil))
         (when loopy--final-do
-          (setq result `(prog1 ,result ,@loopy--final-do)
+          (setq result `(let* ((,loop-completed-var nil)
+                               (,block-result-var ,@(get-result)))
+                          ,@loopy--final-do
+                          (if ,loop-completed-var
+                              ,loopy--implicit-return
+                            ,block-result-var))
                 result-is-one-expression t)))
 
       ;; Handle `final-protect'.  This surround the loop but is inside

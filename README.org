@@ -45,6 +45,8 @@ please let me know.
      are deprecated in favor of the single variable ~loopy-iter-bare-names~.
    - =when= and =unless= are now implemented separately, fixing when the
      commands are aliased.
+   - Modifications to an implied ~loopy-result~ in =finally-do= will now be
+     included in the implied return value of the macro.
  - Version 0.14.0:
    - Conflicting initialization values for accumulation variables now signal
      a warning.  In the future, they will signal an error.

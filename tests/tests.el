@@ -557,6 +557,47 @@ writing a `seq-do' method for the custom seq."
   :iter-bare ((_list . listing))
   :iter-keyword ((_list . list)))
 
+(loopy-deftest finally-do-modifies-implied-result-var
+  :doc "`finally-do' should be able to modify the return value by modifying
+`loopy-result', even when `loopy-result' is used as an impled return value.
+
+This case should not have to be treated differently by the user."
+  :result '(0 1 2 3)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect i)
+          (finally-do (push 0 loopy-result)))
+
+         ((list i '(2 3))
+          (collect i)
+          (after-do (push 1 loopy-result))
+          (finally-do (push 0 loopy-result)))
+
+         ((list i '(1 2 3))
+          (collect loopy-result i)
+          (finally-do (push 0 loopy-result))
+          (finally-return loopy-result))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
+(loopy-deftest finally-do-modifies-implied-result-var-early-return
+  :doc "Test the implementation required for `finally-do-modifies-implied-result-var'.
+
+Make sure that it does not break early returns."
+  :result 3
+  :body ((list i '(1 2 3))
+         (collect i)
+         (return 3)
+         ;; No guarantee that `loopy-result' is finalized here.
+         (finally-do (push 0 loopy-result)))
+  :loopy t
+  :iter-keyword (list collect return)
+  :iter-bare ((list . listing)
+              (collect . collecting)
+              (return . returning)))
+
 ;;;; Finally Protect
 (loopy-deftest finally-protect
   :result (list 1 4 '(1 2 3 4))
