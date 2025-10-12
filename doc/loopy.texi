@@ -488,6 +488,31 @@ return value of the macro.
        ;; Doesn't affect return value:
        (finally-do 999))
 @end lisp
+
+When used with @samp{finally-return}, code in @samp{finally-do} is run before code in
+@samp{finally-return}.
+
+@lisp
+;; => (-1 0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect collection i)
+       (finally-do (push 0 collection))
+       (finally-return (cons -1 collection)))
+@end lisp
+
+@samp{finally-do} has access to the variables created by the loop after the loop
+finishes, including accumulation variables that you might wish to use as a
+return value (@ref{Accumulation}).  For consistency with explicit
+accumulation variables (@ref{Optimizing Accumulations}), so long as the loop completes
+successfully, @samp{finally-do} can modify @code{loopy-result} even when it is used
+as an implied accumulation variable.
+
+@lisp
+;; => (0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i)
+       (finally-do (push 0 loopy-result)))
+@end lisp
 @end table
 
 @pindex finally-return
@@ -509,7 +534,19 @@ Specifying multiple values is the same as returning a list of those values.
 (loopy (leave) ; Leave to avoid infinite loop.
        (finally-return 1 2))
 @end lisp
+
+When used with @samp{finally-do}, code in @samp{finally-return} is run after code in
+@samp{finally-do}.
+
+@lisp
+;; => (-1 0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect collection i)
+       (finally-do (push 0 collection))
+       (finally-return (cons -1 collection)))
+@end lisp
 @end table
+
 
 @pindex finally-protect
 @pindex finally-protected
@@ -709,7 +746,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org4bf03c0
+@float Listing,org05823f8
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -898,7 +935,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,orgb7f13a8
+@float Listing,org02ede57
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -913,7 +950,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org761e883
+@float Listing,org9a7343f
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -3026,12 +3063,18 @@ Unlike @code{cl-loop}, Loopy uses a default accumulation variable, which is name
        (when (> i 5) (leave))
        (collect i)
        (finally-return (cons 0 loopy-result)))
+
+;; => (0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i)
+       (finally-do (push 0 loopy-result)))
 @end lisp
 
 In general, you should not attempt to modify or use the value of @code{loopy-result}
-during the loop, as it is not guaranteed to have a correct value when
-efficiently building sequences.  For example, it is often faster to build a list
-in reverse instead of appending to its end.  For some commands, such as those in
+during the loop when it is used as the implied accumulation variable for a
+command, as it is not guaranteed to have a correct value when efficiently
+building sequences.  For example, it is often faster to build a list in reverse
+instead of appending to its end.  For some commands, such as those in
 @ref{Numeric Accumulation} and @ref{Generic Accumulation}, this does not matter.
 
 Be aware that explicitly named accumulation variables do not affect the implied
@@ -4435,8 +4478,11 @@ finalized.
        (finally-return loopy-result))
 @end lisp
 
-As noted in @ref{Special Macro Arguments}, the special macro argument @samp{finally-do} does not
-affect the return value of the loop.
+As noted in @ref{Special Macro Arguments}, the return value of Lisp code given in the special
+macro argument @samp{finally-do} does not affect the return value of the loop.
+However, @samp{finally-do} can modify the values of variables after the loop
+completes, including @code{loopy-result} (even when used as an implied accumulation
+variable).
 
 @lisp
 ;; => (0 1 2 3 4)
@@ -4446,6 +4492,9 @@ affect the return value of the loop.
          (leave))
        (finally-do 7))
 
+;; _Does not_ modify the then-current value of `loopy-result'
+;; returned by the `return' command:
+;;
 ;; => (4 3 2 1 0)
 (loopy (numbers i :to 10)
        (if (< i 5)
@@ -4453,7 +4502,25 @@ affect the return value of the loop.
          ;; Not finalized:
          (return loopy-result))
        (finally-do
+        ;; Affects what is stored in `loopy-result',
+        ;; but because of the `return' command,
+        ;; not what the macro actually returns.
         (cl-callf2 cons 22 loopy-result)))
+
+;; _Does_ modify the value of `loopy-result' returned by the macro:
+;;
+;; => (0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect loopy-result i)
+       (finally-do (push 0 loopy-result))
+       (finally-return loopy-result))
+
+;; _Does_ modify the value of `loopy-result' returned by the macro:
+;;
+;; => (0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i)
+       (finally-do (push 0 loopy-result)))
 @end lisp
 
 As noted in @ref{Special Macro Arguments}, the special macro argument @samp{finally-return}
@@ -4940,7 +5007,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,org8d78e14
+@float Listing,orgf6ce5d7
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5341,6 +5408,11 @@ method).
 Flags are applied in order.  If you specify @samp{(flags seq pcase)}, then @code{loopy}
 will use @code{pcase-let} for destructuring, not @code{seq-let}.
 
+@vindex loopy-default-flags
+If you wish to always use a flag, you can add that flag to the list
+@code{loopy-default-flags}.  These can be overridden by any flag given in the @samp{flag}
+special macro argument.
+
 The following flags are currently supported:
 
 @cindex pcase flag
@@ -5490,7 +5562,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,org51fe987
+@float Listing,orgc46048a
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")

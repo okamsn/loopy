@@ -44,6 +44,38 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   ([#234], [#240]).  The old implementation used the name of the command in the
   generated code and was written before aliases.
 
+- `finally-do` can now modify the implied return value of a loopy by modifying
+  the implied accumulation variable, which is by default `loopy-result`
+  ([#244]).  Previously, one would have needed to use `finally-return` after
+  modifying an implied `loopy-result`.
+
+  This improves consistency by allowing treating an implied `loopy-result`
+  more like other, explicit accumulation variables inside `finally-do`.
+  The cost is switching from the use of `prog1` to an `if` expression with two
+  helper variables.  This change only applies when an implied return value is
+  used with `finally-do`.  It does not affect the macro expansion when
+  `finally-return` is used.
+
+  This is technically a breaking change for those who were modifying an implied
+  `loopy-result` but did not wish those changes to be captured in the macro's
+  implied return value nor used in `finally-return` (perhaps changing the value
+  for side effects only).
+
+  ```emacs-lisp
+  ;; Previously required way:
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect i)
+         (finally-do (push 0 loopy-result))
+         (finally-return loopy-result))
+
+  ;; Now, `finally-return' is not required:
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect i)
+         (finally-do (push 0 loopy-result)))
+  ```
+
 ### Internal Changes
 
 - As far as the implementation is concerned, "aliases" are no longer a separate
@@ -64,6 +96,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#241]: https://github.com/okamsn/loopy/PR/241
 [#242]: https://github.com/okamsn/loopy/PR/242
 [#243]: https://github.com/okamsn/loopy/PR/243
+[#244]: https://github.com/okamsn/loopy/PR/244
 
 ## 0.14.0
 

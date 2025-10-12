@@ -451,6 +451,31 @@ argument =with= is used to initialized variables.
            (finally-do 999))
   #+end_src
 
+  When used with =finally-return=, code in =finally-do= is run before code in
+  =finally-return=.
+
+  #+begin_src emacs-lisp
+    ;; => (-1 0 1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect collection i)
+           (finally-do (push 0 collection))
+           (finally-return (cons -1 collection)))
+  #+end_src
+
+  =finally-do= has access to the variables created by the loop after the loop
+  finishes, including accumulation variables that you might wish to use as a
+  return value ([[#accumulation-commands]]).  For consistency with explicit
+  accumulation variables ([[#optimized-accums]]), so long as the loop completes
+  successfully, =finally-do= can modify ~loopy-result~ even when it is used
+  as an implied accumulation variable.
+
+  #+begin_src emacs-lisp
+    ;; => (0 1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect i)
+           (finally-do (push 0 loopy-result)))
+  #+end_src
+
 #+pindex: finally-return
 - =finally-return= :: Return a value, regardless of how the loop completes.
   These arguments override any explicit return values given in commands like
@@ -468,6 +493,18 @@ argument =with= is used to initialized variables.
     (loopy (leave) ; Leave to avoid infinite loop.
            (finally-return 1 2))
   #+end_src
+
+  When used with =finally-do=, code in =finally-return= is run after code in
+  =finally-do=.
+
+  #+begin_src emacs-lisp
+    ;; => (-1 0 1 2 3)
+    (loopy (list i '(1 2 3))
+           (collect collection i)
+           (finally-do (push 0 collection))
+           (finally-return (cons -1 collection)))
+  #+end_src
+
 
 #+pindex: finally-protect
 #+pindex: finally-protected
@@ -2816,12 +2853,18 @@ Unlike ~cl-loop~, Loopy uses a default accumulation variable, which is named
          (when (> i 5) (leave))
          (collect i)
          (finally-return (cons 0 loopy-result)))
-#+end_src
+
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect i)
+         (finally-do (push 0 loopy-result)))
+  #+end_src
 
 In general, you should not attempt to modify or use the value of ~loopy-result~
-during the loop, as it is not guaranteed to have a correct value when
-efficiently building sequences.  For example, it is often faster to build a list
-in reverse instead of appending to its end.  For some commands, such as those in
+during the loop when it is used as the implied accumulation variable for a
+command, as it is not guaranteed to have a correct value when efficiently
+building sequences.  For example, it is often faster to build a list in reverse
+instead of appending to its end.  For some commands, such as those in
 [[#accum-numeric]] and [[#accum-generic]], this does not matter.
 
 Be aware that explicitly named accumulation variables do not affect the implied
@@ -4109,8 +4152,11 @@ finalized.
          (finally-return loopy-result))
 #+end_src
 
-As noted in [[#macro-arguments]], the special macro argument =finally-do= does not
-affect the return value of the loop.
+As noted in [[#macro-arguments]], the return value of Lisp code given in the special
+macro argument =finally-do= does not affect the return value of the loop.
+However, =finally-do= can modify the values of variables after the loop
+completes, including ~loopy-result~ (even when used as an implied accumulation
+variable).
 
 #+begin_src emacs-lisp
   ;; => (0 1 2 3 4)
@@ -4120,6 +4166,9 @@ affect the return value of the loop.
            (leave))
          (finally-do 7))
 
+  ;; _Does not_ modify the then-current value of `loopy-result'
+  ;; returned by the `return' command:
+  ;;
   ;; => (4 3 2 1 0)
   (loopy (numbers i :to 10)
          (if (< i 5)
@@ -4127,7 +4176,25 @@ affect the return value of the loop.
            ;; Not finalized:
            (return loopy-result))
          (finally-do
+          ;; Affects what is stored in `loopy-result',
+          ;; but because of the `return' command,
+          ;; not what the macro actually returns.
           (cl-callf2 cons 22 loopy-result)))
+
+  ;; _Does_ modify the value of `loopy-result' returned by the macro:
+  ;;
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect loopy-result i)
+         (finally-do (push 0 loopy-result))
+         (finally-return loopy-result))
+
+  ;; _Does_ modify the value of `loopy-result' returned by the macro:
+  ;;
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect i)
+         (finally-do (push 0 loopy-result)))
 #+end_src
 
 As noted in [[#macro-arguments]], the special macro argument =finally-return=
