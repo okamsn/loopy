@@ -36,6 +36,8 @@ please let me know.
 
  _Recent breaking changes:_
  - Unreleased:
+   - Loopy now requires at least Emacs version 28.1, increased from version
+     27.1.
    - =set= now warns when it is not given a value.  In the future, it will
      signal an error.
    - ~loopy-command-parsers~ and ~loopy-aliases~ are deprecated in favor of
