@@ -43,6 +43,14 @@
   :prefix "loopy-"
   :link '(url-link "https://github.com/okamsn/loopy"))
 
+(make-obsolete-variable
+ 'loopy-default-flags
+ "Use a wrapping macro.
+This is necessary to better support using the macro in different
+packages from different authors.  See the updated Info node
+`(loopy)Customizing Macro Behavior'."
+ "2025-10"
+ 'set)
 ;;;###autoload
 (defcustom loopy-default-flags nil
   "Which flags should alter the behavior of `loopy' by default.
