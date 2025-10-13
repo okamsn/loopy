@@ -39,6 +39,30 @@
     (puthash key value ht)
     ht))
 
+;; Missing in built-in version for Emacs 27?
+(when (= emacs-major-version 27)
+  (defun map--into-hash (map keyword-args)
+    "Convert MAP into a hash-table.
+KEYWORD-ARGS are forwarded to `make-hash-table'."
+    (let ((ht (apply #'make-hash-table keyword-args)))
+      (map-do (lambda (key value)
+                (puthash key value ht))
+              map)
+      ht))
+
+  (cl-defmethod map-into (map (_type (eql hash-table)))
+    "Convert MAP into a hash-table with keys compared with `equal'."
+    (map--into-hash map (list :size (map-length map) :test #'equal)))
+
+  (cl-defmethod map-into (map (type (head hash-table)))
+    "Convert MAP into a hash-table.
+TYPE is a list whose car is `hash-table' and cdr a list of
+keyword-args forwarded to `make-hash-table'.
+
+Example:
+    (map-into \\='((1 . 3)) \\='(hash-table :test eql))"
+    (map--into-hash map (cdr type))))
+
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
   (should (cl-loop for f in (directory-files ".")
