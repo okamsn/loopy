@@ -21,6 +21,9 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 ### Breaking Changes
 
+- Loopy now requires at least Emacs version 28.1, increased from version 27.1
+  ([#446]).  This allows us to remove workarounds for missing features/fixes.
+
 - `set` now warns when it is not given a value ([#229]).  Currently, `(set VAR)`
   binds `VAR` to `nil`, but since this form is indistinguishable from a mistake,
   and since `nil` is a short word to write, this behavior is deprecated.
@@ -97,6 +100,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#242]: https://github.com/okamsn/loopy/PR/242
 [#243]: https://github.com/okamsn/loopy/PR/243
 [#244]: https://github.com/okamsn/loopy/PR/244
+[#246]: https://github.com/okamsn/loopy/PR/246
 
 ## 0.14.0
 
