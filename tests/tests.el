@@ -466,6 +466,26 @@ writing a `seq-do' method for the custom seq."
   :iter-keyword t
   :repeat _after)
 
+(loopy-deftest after-do-modifies-implied-result-var
+  :doc "`after-do' should be able to modify the return value by modifying
+`loopy-result', even when `loopy-result' is used as an impled return value.
+
+This case should not have to be treated differently by the user."
+  :result '(0 1 2 3)
+  :multi-body t
+  :body [((list i '(1 2 3))
+          (collect i)
+          (after-do (push 0 loopy-result)))
+
+         ((list i '(1 2 3))
+          (collect loopy-result i)
+          (after-do (push 0 loopy-result))
+          (finally-return loopy-result))]
+  :loopy t
+  :iter-keyword (list collect)
+  :iter-bare ((list . listing)
+              (collect . collecting)))
+
 ;;;; Before and After
 (loopy-deftest basic-before-and-after-test
   :result 3

@@ -64,7 +64,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#sequence-index-iteration][Sequence Index Iteration]]
     - [[#sequence-reference-iteration][Sequence Reference Iteration]]
   - [[#accumulation][Accumulation]]
-    - [[#common-properties-of-accumulation-commands][Common Properties of Accumulation Commands]]
+    - [[#common-properties-and-arguments-of-accumulation-commands][Common Properties and Arguments of Accumulation Commands]]
     - [[#generic-accumulation][Generic Accumulation]]
     - [[#numeric-accumulation][Numeric Accumulation]]
     - [[#sequence-accumulation][Sequence Accumulation]]
@@ -2827,10 +2827,12 @@ accumulated, instead of the destructured value.
 
 #+cindex: implied accumulation results
 Like in ~cl-loop~, you do not need to supply a variable name to accumulation
-commands.  If no accumulation variable is given, then the accumulated value is
-understood to be the return value of the loop.  These implied return values can
-be overridden by using the the =return= and =return-from= loop commands or the
-=finally-return= macro argument.
+commands.  If no accumulation variable is given and the =finally-do= special
+macro argument is not used, then the accumulated value is understood to be the
+return value of the loop.  Such a return value is described in this document as
+an {{{dfn(implied return value)}}} or an {{{dfn(implicit return value)}}}.  An
+implied return value can be overridden by using the the =return= and
+=return-from= loop commands or the =finally-return= macro argument.
 
 #+begin_src emacs-lisp
   ;; => (1 2 3)
@@ -2844,7 +2846,9 @@ be overridden by using the the =return= and =return-from= loop commands or the
 
 #+vindex: loopy-result
 Unlike ~cl-loop~, Loopy uses a default accumulation variable, which is named
-~loopy-result~.  This variable can be used in the =after-do=, =finally-do=, and
+~loopy-result~.  When used this way, ~loopy-result~ is described as an
+{{{dfn(implied accumulation variable)}}} or an {{{dfn(implicit accumulation
+variable)}}}.  This variable can be used in the =after-do=, =finally-do=, and
 =finally-return= special macro arguments.
 
 #+begin_src emacs-lisp
@@ -2857,22 +2861,80 @@ Unlike ~cl-loop~, Loopy uses a default accumulation variable, which is named
   ;; => (0 1 2 3)
   (loopy (list i '(1 2 3))
          (collect i)
+         (after-do (push 0 loopy-result)))
+
+  ;; => (0 1 2 3)
+  (loopy (list i '(1 2 3))
+         (collect i)
          (finally-do (push 0 loopy-result)))
   #+end_src
 
-In general, you should not attempt to modify or use the value of ~loopy-result~
-during the loop when it is used as the implied accumulation variable for a
-command, as it is not guaranteed to have a correct value when efficiently
-building sequences.  For example, it is often faster to build a list in reverse
-instead of appending to its end.  For some commands, such as those in
-[[#accum-numeric]] and [[#accum-generic]], this does not matter.
+Like in ~cl-loop~, when multiple accumulation commands do not name an
+accumulation variable, they will all use the same implied accumulation variable
+(~loopy-result~).  As a consequence, one must explicitly name separate
+accumulation variables to be able to accumulate into separate values.  This can
+make accumulation slower, because ~loopy~ ensures that named accumulation
+variables (excluding the previously mentioned ~loopy-result~) have the correct
+value during the loop.  For example, ~loopy~ will construct named accumulation
+variables containing lists in the correct order, instead of using the more
+efficient ~push~-~nreverse~ idiom.  This behavior can be disabled by optimizing
+accumulation variables using the =accum-opt= special macro argument
+([[#optimized-accums]]).
+
+#+begin_src emacs-lisp
+  ;; Both command usages of `collect' and `append'
+  ;; use `loopy-result' as the implied accumulation variable:
+  ;;
+  ;; => (1 11 2 12 3 13)
+  (loopy (list i '(1 2 3))
+         (collect i)
+         (append (list (+ 10 i)) :at end)
+         (finally-return loopy-result))
+#+end_src
+
+In general, you should not attempt to modify or use the value of optimized
+accumulation variables during the loop, including ~loopy-result~ when it is used
+as the implied accumulation variable for a command, because they are not
+guaranteed to have a correct value when efficiently building sequences
+([[#optimized-accums]]).  For some commands, such as those listed in [[#accum-numeric]]
+and [[#accum-generic]], this does not matter.
+
+#+begin_src emacs-lisp
+  ;; See that `loopy-result' is not in the correct order during the loop
+  ;; (the exact value of an optimized accumulation variable during the loop
+  ;; is an implementation detail):
+  ;;
+  ;; => (6 5 4 3 2 1)
+  (loopy (number i :from 1 :to 10)
+         (collect i)
+         (when (> i 5)
+           (return loopy-result)))
+#+end_src
+
+Implied results are only required to be correct after the loop ends (before code
+in =else-do= is run).  Furthermore, because using a =return= or =return-from=
+command overrides implied return values, using these commands can prevent
+implied accumulation results from being finalized.  Using the =leave= command,
+which exits the loop without returning a value, does not affect the correctness
+of implied results.
+
+#+begin_src emacs-lisp
+  ;; See that the `leave' command does not prevent finalizing
+  ;; optimized accumulation variables, unlike the above `return' command:
+  ;;
+  ;; => (1 2 3 4 5 6)
+  (loopy (number i :from 1 :to 10)
+         (collect i)
+         (when (> i 5) (leave)))
+#+end_src
 
 Be aware that explicitly named accumulation variables do not affect the implied
 return value of a loop.  Such values must be returned explicitly, or they will
 be ignored when the macro returns a value.  This limitation is needed for more
 consistently handling the complexity that comes from allowing unknown kinds of
-destructuring via the alternative destructuring systems.  This may change in the
-future.
+destructuring via the alternative destructuring systems, such as the possibly
+intermediate variables that can be generated by ~pcase~ patterns.  This may
+change in the future.
 
 #+begin_src emacs-lisp
   ;; See how the variable `my-explicit-variable' is ignored when
@@ -2905,14 +2967,12 @@ accumulation results.
 #+end_src
 
 #+cindex: accumulation compatibility
-Like in ~cl-loop~, when using implied variables, multiple accumulation commands
-will use the same variable (~loopy-result~).  For _all_ accumulation variables
-used by multiple accumulation commands, you should make sure that the commands
-are actually compatible.  If not, then ~loopy~ will signal an error.
-
-For example, you should not try to accumulate =collect= results and =sum=
-results into the same variable, as you cannot use a list as a number.  On the
-other hand, =sum= and =multiply= are compatible, since they both act on numbers.
+For all accumulation variables used by multiple accumulation commands, you
+should make sure that the commands are actually compatible.  If not, then
+~loopy~ will signal an error.  For example, you should not try to accumulate
+=collect= results and =sum= results into the same variable, as you cannot use a
+list as a number.  On the other hand, =sum= and =multiply= are compatible, since
+they both act on numbers.
 
 #+begin_src emacs-lisp
   ;; Incompatible commands:
@@ -2930,12 +2990,13 @@ other hand, =sum= and =multiply= are compatible, since they both act on numbers.
 #+end_src
 
 #+cindex: accumulation initial values
-Each accumulation command has a default initialization value for the
-accumulation variable.  For most commands, this is ~nil~.  This documentation
-tries to note when it is not ~nil~.  For example, the default starting value for
-the =sum= command is ~0~ and the default starting value for the =multiply=
-command is ~1~.  The default initialization value used by an accumulation
-command can be overridden using the =with= special macro argument.
+In the same general area as accumulation command compatability, you should keep
+in mind that each accumulation command has a default initialization value for
+the accumulation variable.  For most commands, this is ~nil~.  This
+documentation tries to note when it is not ~nil~.  For example, the default
+starting value for the =sum= command is ~0~ and the default starting value for
+the =multiply= command is ~1~.  The default initialization value used by an
+accumulation command can be overridden using the =with= special macro argument.
 
 #+attr_texinfo: :tag Warning
 #+begin_quote
@@ -2963,104 +3024,7 @@ conflict, use the =with= special macro argument, as noted above.
          (finally-return my-accum))
 #+end_src
 
-One must specify separate accumulation variables to be able to accumulate into
-separate values.  This can make accumulation slower, because ~loopy~ ensures
-that named accumulation variables (excluding the previously mentioned
-~loopy-result~) have the correct value during the loop.  For example, ~loopy~
-will construct named accumulation variables containing lists in the correct
-order, instead of using the more efficient ~push~-~nreverse~ idiom.  This
-behavior can be disabled by optimizing accumulations using the =accum-opt=
-special macro argument ([[#optimized-accums]]).
-
-Below are examples of an optimized accumulation and an un-optimized
-accumulation.  See that the example expansion of the un-optimized accumulation
-is more complex and uses a slower way of building the accumulated list.
-
-#+begin_src emacs-lisp
-  ;; Optimized accumulation:
-  ;;
-  ;; => (1 3 2 6 3 9)
-  (loopy (accum-opt coll)
-         (numbers i :from 1 :to 3)
-         (collect coll i)
-         (collect coll (* i 3))
-         (finally-return coll))
-
-  ;; Optimized example expansion:
-  ;;
-  ;; => (1 3 2 6 3 9)
-  (let* ((coll nil)
-         (i 1)
-         (nums-end192 3)
-         (nums-increment191 1))
-    (cl-block nil
-      (while (<= i nums-end192)
-        (setq coll (cons i coll))
-        (setq coll (cons (* i 3) coll))
-        (setq i (1+ i)))
-      (setq coll (nreverse coll)))
-    coll)
-#+end_src
-
-#+begin_src emacs-lisp
-  ;; Unoptimized accumulation:
-  ;;
-  ;; => (1 3 2 6 3 9)
-  (loopy (numbers i :from 1 :to 3)
-         (collect coll i)
-         (collect coll (* i 3))
-         (finally-return coll))
-
-  ;; Unoptimized example expansion:
-  ;;
-  ;; => (1 3 2 6 3 9)
-  (let* ((coll nil)
-         (coll-last-link-190 coll)
-         (i 1)
-         (nums-end189 3)
-         (nums-increment188 1))
-    (cl-block nil
-      (while (<= i nums-end189)
-        (cond
-         (coll-last-link-190
-          (setcdr coll-last-link-190 (list i))
-          (setq coll-last-link-190 (cdr coll-last-link-190)))
-         (coll
-          (setq coll-last-link-190 (last coll))
-          (setcdr coll-last-link-190 (list i))
-          (setq coll-last-link-190 (cdr coll-last-link-190)))
-         (t
-          (setq coll (list i)
-                coll-last-link-190 coll)))
-        (cond
-         (coll-last-link-190
-          (setcdr coll-last-link-190 (list (* i 3)))
-          (setq coll-last-link-190 (cdr coll-last-link-190)))
-         (coll
-          (setq coll-last-link-190 (last coll))
-          (setcdr coll-last-link-190 (list (* i 3)))
-          (setq coll-last-link-190 (cdr coll-last-link-190)))
-         (t
-          (setq coll (list (* i 3))
-                coll-last-link-190 coll)))
-        (setq i (1+ i))))
-    coll)
-#+end_src
-
-#+attr_texinfo: :tag Warning
-#+begin_quote
-In general, you should not try to access implied (or optimized) accumulation
-results (for example, ~loopy-result~) while the loop is running.  Implied
-results are only required to be correct after the loop ends (before code in
-=else-do= is run), allowing for more efficient code.
-
-Furthermore, because using a =return= or =return-from= command overrides implied
-return values, using these commands can prevent implied accumulation results
-from being finalized.  Using the =leave= command, which exits the loop without
-returning a value, does not affect the correctness of implied results.
-#+end_quote
-
-*** Common Properties of Accumulation Commands
+*** Common Properties and Arguments of Accumulation Commands
 :PROPERTIES:
 :END:
 

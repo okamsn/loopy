@@ -73,7 +73,7 @@ Iteration
 
 Accumulation
 
-* Common Properties of Accumulation Commands::
+* Common Properties and Arguments of Accumulation Commands::
 * Generic Accumulation::         Accumulating function output.
 * Numeric Accumulation::         Using and returning numbers.
 * Sequence Accumulation::        Using and returning sequences.
@@ -746,7 +746,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org05823f8
+@float Listing,org572b5bd
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -935,7 +935,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org02ede57
+@float Listing,org99c53b0
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -950,7 +950,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org9a7343f
+@float Listing,org7212adc
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -3037,10 +3037,12 @@ accumulated, instead of the destructured value.
 
 @cindex implied accumulation results
 Like in @code{cl-loop}, you do not need to supply a variable name to accumulation
-commands.  If no accumulation variable is given, then the accumulated value is
-understood to be the return value of the loop.  These implied return values can
-be overridden by using the the @samp{return} and @samp{return-from} loop commands or the
-@samp{finally-return} macro argument.
+commands.  If no accumulation variable is given and the @samp{finally-do} special
+macro argument is not used, then the accumulated value is understood to be the
+return value of the loop.  Such a return value is described in this document as
+an @dfn{implied return value} or an @dfn{implicit return value}.  An
+implied return value can be overridden by using the the @samp{return} and
+@samp{return-from} loop commands or the @samp{finally-return} macro argument.
 
 @lisp
 ;; => (1 2 3)
@@ -3054,7 +3056,8 @@ be overridden by using the the @samp{return} and @samp{return-from} loop command
 
 @vindex loopy-result
 Unlike @code{cl-loop}, Loopy uses a default accumulation variable, which is named
-@code{loopy-result}.  This variable can be used in the @samp{after-do}, @samp{finally-do}, and
+@code{loopy-result}.  When used this way, @code{loopy-result} is described as an
+@dfn{implied accumulation variable} or an @dfn{implicit accumulation variable}.  This variable can be used in the @samp{after-do}, @samp{finally-do}, and
 @samp{finally-return} special macro arguments.
 
 @lisp
@@ -3067,22 +3070,80 @@ Unlike @code{cl-loop}, Loopy uses a default accumulation variable, which is name
 ;; => (0 1 2 3)
 (loopy (list i '(1 2 3))
        (collect i)
+       (after-do (push 0 loopy-result)))
+
+;; => (0 1 2 3)
+(loopy (list i '(1 2 3))
+       (collect i)
        (finally-do (push 0 loopy-result)))
 @end lisp
 
-In general, you should not attempt to modify or use the value of @code{loopy-result}
-during the loop when it is used as the implied accumulation variable for a
-command, as it is not guaranteed to have a correct value when efficiently
-building sequences.  For example, it is often faster to build a list in reverse
-instead of appending to its end.  For some commands, such as those in
-@ref{Numeric Accumulation} and @ref{Generic Accumulation}, this does not matter.
+Like in @code{cl-loop}, when multiple accumulation commands do not name an
+accumulation variable, they will all use the same implied accumulation variable
+(@code{loopy-result}).  As a consequence, one must explicitly name separate
+accumulation variables to be able to accumulate into separate values.  This can
+make accumulation slower, because @code{loopy} ensures that named accumulation
+variables (excluding the previously mentioned @code{loopy-result}) have the correct
+value during the loop.  For example, @code{loopy} will construct named accumulation
+variables containing lists in the correct order, instead of using the more
+efficient @code{push}-@code{nreverse} idiom.  This behavior can be disabled by optimizing
+accumulation variables using the @samp{accum-opt} special macro argument
+(@ref{Optimizing Accumulations}).
+
+@lisp
+;; Both command usages of `collect' and `append'
+;; use `loopy-result' as the implied accumulation variable:
+;;
+;; => (1 11 2 12 3 13)
+(loopy (list i '(1 2 3))
+       (collect i)
+       (append (list (+ 10 i)) :at end)
+       (finally-return loopy-result))
+@end lisp
+
+In general, you should not attempt to modify or use the value of optimized
+accumulation variables during the loop, including @code{loopy-result} when it is used
+as the implied accumulation variable for a command, because they are not
+guaranteed to have a correct value when efficiently building sequences
+(@ref{Optimizing Accumulations}).  For some commands, such as those listed in @ref{Numeric Accumulation}
+and @ref{Generic Accumulation}, this does not matter.
+
+@lisp
+;; See that `loopy-result' is not in the correct order during the loop
+;; (the exact value of an optimized accumulation variable during the loop
+;; is an implementation detail):
+;;
+;; => (6 5 4 3 2 1)
+(loopy (number i :from 1 :to 10)
+       (collect i)
+       (when (> i 5)
+         (return loopy-result)))
+@end lisp
+
+Implied results are only required to be correct after the loop ends (before code
+in @samp{else-do} is run).  Furthermore, because using a @samp{return} or @samp{return-from}
+command overrides implied return values, using these commands can prevent
+implied accumulation results from being finalized.  Using the @samp{leave} command,
+which exits the loop without returning a value, does not affect the correctness
+of implied results.
+
+@lisp
+;; See that the `leave' command does not prevent finalizing
+;; optimized accumulation variables, unlike the above `return' command:
+;;
+;; => (1 2 3 4 5 6)
+(loopy (number i :from 1 :to 10)
+       (collect i)
+       (when (> i 5) (leave)))
+@end lisp
 
 Be aware that explicitly named accumulation variables do not affect the implied
 return value of a loop.  Such values must be returned explicitly, or they will
 be ignored when the macro returns a value.  This limitation is needed for more
 consistently handling the complexity that comes from allowing unknown kinds of
-destructuring via the alternative destructuring systems.  This may change in the
-future.
+destructuring via the alternative destructuring systems, such as the possibly
+intermediate variables that can be generated by @code{pcase} patterns.  This may
+change in the future.
 
 @lisp
 ;; See how the variable `my-explicit-variable' is ignored when
@@ -3115,14 +3176,12 @@ accumulation results.
 @end lisp
 
 @cindex accumulation compatibility
-Like in @code{cl-loop}, when using implied variables, multiple accumulation commands
-will use the same variable (@code{loopy-result}).  For all accumulation variables
-used by multiple accumulation commands, you should make sure that the commands
-are actually compatible.  If not, then @code{loopy} will signal an error.
-
-For example, you should not try to accumulate @samp{collect} results and @samp{sum}
-results into the same variable, as you cannot use a list as a number.  On the
-other hand, @samp{sum} and @samp{multiply} are compatible, since they both act on numbers.
+For all accumulation variables used by multiple accumulation commands, you
+should make sure that the commands are actually compatible.  If not, then
+@code{loopy} will signal an error.  For example, you should not try to accumulate
+@samp{collect} results and @samp{sum} results into the same variable, as you cannot use a
+list as a number.  On the other hand, @samp{sum} and @samp{multiply} are compatible, since
+they both act on numbers.
 
 @lisp
 ;; Incompatible commands:
@@ -3140,12 +3199,13 @@ other hand, @samp{sum} and @samp{multiply} are compatible, since they both act o
 @end lisp
 
 @cindex accumulation initial values
-Each accumulation command has a default initialization value for the
-accumulation variable.  For most commands, this is @code{nil}.  This documentation
-tries to note when it is not @code{nil}.  For example, the default starting value for
-the @samp{sum} command is @code{0} and the default starting value for the @samp{multiply}
-command is @code{1}.  The default initialization value used by an accumulation
-command can be overridden using the @samp{with} special macro argument.
+In the same general area as accumulation command compatability, you should keep
+in mind that each accumulation command has a default initialization value for
+the accumulation variable.  For most commands, this is @code{nil}.  This
+documentation tries to note when it is not @code{nil}.  For example, the default
+starting value for the @samp{sum} command is @code{0} and the default starting value for
+the @samp{multiply} command is @code{1}.  The default initialization value used by an
+accumulation command can be overridden using the @samp{with} special macro argument.
 
 @quotation Warning
 Currently, a warning is raised when the default initial values of accumulation
@@ -3173,105 +3233,8 @@ conflict, use the @samp{with} special macro argument, as noted above.
        (finally-return my-accum))
 @end lisp
 
-One must specify separate accumulation variables to be able to accumulate into
-separate values.  This can make accumulation slower, because @code{loopy} ensures
-that named accumulation variables (excluding the previously mentioned
-@code{loopy-result}) have the correct value during the loop.  For example, @code{loopy}
-will construct named accumulation variables containing lists in the correct
-order, instead of using the more efficient @code{push}-@code{nreverse} idiom.  This
-behavior can be disabled by optimizing accumulations using the @samp{accum-opt}
-special macro argument (@ref{Optimizing Accumulations}).
-
-Below are examples of an optimized accumulation and an un-optimized
-accumulation.  See that the example expansion of the un-optimized accumulation
-is more complex and uses a slower way of building the accumulated list.
-
-@lisp
-;; Optimized accumulation:
-;;
-;; => (1 3 2 6 3 9)
-(loopy (accum-opt coll)
-       (numbers i :from 1 :to 3)
-       (collect coll i)
-       (collect coll (* i 3))
-       (finally-return coll))
-
-;; Optimized example expansion:
-;;
-;; => (1 3 2 6 3 9)
-(let* ((coll nil)
-       (i 1)
-       (nums-end192 3)
-       (nums-increment191 1))
-  (cl-block nil
-    (while (<= i nums-end192)
-      (setq coll (cons i coll))
-      (setq coll (cons (* i 3) coll))
-      (setq i (1+ i)))
-    (setq coll (nreverse coll)))
-  coll)
-@end lisp
-
-@lisp
-;; Unoptimized accumulation:
-;;
-;; => (1 3 2 6 3 9)
-(loopy (numbers i :from 1 :to 3)
-       (collect coll i)
-       (collect coll (* i 3))
-       (finally-return coll))
-
-;; Unoptimized example expansion:
-;;
-;; => (1 3 2 6 3 9)
-(let* ((coll nil)
-       (coll-last-link-190 coll)
-       (i 1)
-       (nums-end189 3)
-       (nums-increment188 1))
-  (cl-block nil
-    (while (<= i nums-end189)
-      (cond
-       (coll-last-link-190
-        (setcdr coll-last-link-190 (list i))
-        (setq coll-last-link-190 (cdr coll-last-link-190)))
-       (coll
-        (setq coll-last-link-190 (last coll))
-        (setcdr coll-last-link-190 (list i))
-        (setq coll-last-link-190 (cdr coll-last-link-190)))
-       (t
-        (setq coll (list i)
-              coll-last-link-190 coll)))
-      (cond
-       (coll-last-link-190
-        (setcdr coll-last-link-190 (list (* i 3)))
-        (setq coll-last-link-190 (cdr coll-last-link-190)))
-       (coll
-        (setq coll-last-link-190 (last coll))
-        (setcdr coll-last-link-190 (list (* i 3)))
-        (setq coll-last-link-190 (cdr coll-last-link-190)))
-       (t
-        (setq coll (list (* i 3))
-              coll-last-link-190 coll)))
-      (setq i (1+ i))))
-  coll)
-@end lisp
-
-@quotation Warning
-In general, you should not try to access implied (or optimized) accumulation
-results (for example, @code{loopy-result}) while the loop is running.  Implied
-results are only required to be correct after the loop ends (before code in
-@samp{else-do} is run), allowing for more efficient code.
-
-Furthermore, because using a @samp{return} or @samp{return-from} command overrides implied
-return values, using these commands can prevent implied accumulation results
-from being finalized.  Using the @samp{leave} command, which exits the loop without
-returning a value, does not affect the correctness of implied results.
-
-@end quotation
-
 @menu
-* Common Properties of Accumulation Commands::
+* Common Properties and Arguments of Accumulation Commands::
 * Generic Accumulation::         Accumulating function output.
 * Numeric Accumulation::         Using and returning numbers.
 * Sequence Accumulation::        Using and returning sequences.
@@ -3279,8 +3242,8 @@ returning a value, does not affect the correctness of implied results.
 * Optimizing Accumulations::     Producing efficient accumulations.
 @end menu
 
-@node Common Properties of Accumulation Commands
-@subsection Common Properties of Accumulation Commands
+@node Common Properties and Arguments of Accumulation Commands
+@subsection Common Properties and Arguments of Accumulation Commands
 
 You will notice that each accumulation command has an alias of the command name
 in the present participle form (the ``-ing'' form).  For example, instead of
@@ -5007,7 +4970,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,orgf6ce5d7
+@float Listing,org0175e90
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5408,11 +5371,6 @@ method).
 Flags are applied in order.  If you specify @samp{(flags seq pcase)}, then @code{loopy}
 will use @code{pcase-let} for destructuring, not @code{seq-let}.
 
-@vindex loopy-default-flags
-If you wish to always use a flag, you can add that flag to the list
-@code{loopy-default-flags}.  These can be overridden by any flag given in the @samp{flag}
-special macro argument.
-
 The following flags are currently supported:
 
 @cindex pcase flag
@@ -5504,29 +5462,55 @@ yet provide the required functionality.
        (finally-return (+ sum1 v1) (+ sum2 v2)))
 @end lisp
 
+@quotation Warning
+For accumulation commands, there is no guarantee that a variable that was used
+in destructuring was meant to be user-facing.  Destructuring systems can create
+new variables as they please, which can be interpreted as accumulation
+variables.
+
+@end quotation
+
+Consider the below example in which a hypothetical @code{pcase} pattern creates the
+variable @code{temporary?} for destructuring.  Loopy has no way of knowing whether it
+was the user who create the variable, or the destructuring system.  As a result,
+@code{temporary?} is treated as an accumulation variable.  Such cases can be unwanted
+and produce inefficient code.
+
+@lisp
+;; Possibly unexpected behavior:
+;;
+;; => ((1 2 3) (2 4 6))
+(loopy (flag +pcase)
+       (list i '(1 2 3))
+       (collect (and whole
+                     (let temporary? (* 2 whole)))
+                i)
+       (finally-return whole temporary?))
+@end lisp
+
 If you wish to always use one of the destructuring flags, you can use a wrapping
 macro around @code{loopy} or @code{loopy-iter}.  The @samp{flag} special macro argument is
-identified by its entry in the customizable variable @code{loopy-parsers}.  Hence,
-uses of @samp{flag}, including aliases, can be identified by checking @code{loopy-parsers}
-(so long as the entry for @samp{flag} itself has not been changed).
+identified by its entry in the customizable variable @code{loopy-parsers}.
+Therefore, uses of @samp{flag}, including aliases, can be identified by checking
+@code{loopy-parsers} (so long as the entry for @samp{flag} itself has not been changed).
 
 @lisp
 (require 'loopy-pcase)
 (defmacro my-loopy-flag-wrapper (&rest body)
   "Use `loopy', but default to `pcase' destructuring."
-  (loopy (with (flag-found nil))
+  (loopy (with (entry-for-flag (map-elt loopy-parsers 'flag)))
          (list arg body)
-         (collect (if (and (consp arg)
-                           (eq (map-elt loopy-parsers (car arg))
-                               (map-elt loopy-parsers 'flag)))
-                      (progn
-                        (setq flag-found t)
-                        (append arg '(pcase)))
-                    arg))
-         (finally-return
-          `(loopy ,@@(unless flag-found
-                      '((flag pcase)))
-                  ,@@loopy-result))))
+         (if (and (consp arg)
+                  (eq (map-elt loopy-parsers (car arg))
+                      entry-for-flag))
+             (command-do
+              (set flag-found t)
+              (collect (append arg '(pcase))))
+           (collect arg))
+         (finally-do
+          (unless flag-found
+            (push '(flag pcase) loopy-result))
+          (push 'loopy loopy-result))))
 
 ;; => (1 2 3 4)
 (my-loopy-flag-wrapper (list `(,i . ,j) '((1 . 2) (3 . 4)))
@@ -5540,35 +5524,6 @@ uses of @samp{flag}, including aliases, can be identified by checking @code{loop
                        (list `(,i . ,j) '((1 . 2) (3 . 4)))
                        (collect i)
                        (collect j))
-@end lisp
-
-
-@quotation Warning
-For accumulation commands, there is no guarantee that a variable that was used
-in destructuring was meant to be user-facing.  Destructuring systems can create
-new variables as they please, which can be interpreted as accumulation
-variables.
-
-@end quotation
-
-
-Consider the below example in which a hypothetical @code{pcase} pattern creates the
-variable @code{temporary?} for destructuring.  Loopy has no way of knowing whether it
-was the user who create the variable, or the destructuring system.  As a result,
-@code{temporary?} is treated as an accumulation variable.  Such cases can be unwanted
-and produce inefficient code.
-
-
-@lisp
-;; Possibly unexpected behavior:
-;;
-;; => ((1 2 3) (2 4 6))
-(loopy (flag +pcase)
-       (list i '(1 2 3))
-       (collect (and whole
-                     (let temporary? (* 2 whole)))
-                i)
-       (finally-return whole temporary?))
 @end lisp
 
 @node Custom Aliases
@@ -5597,7 +5552,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,orgc46048a
+@float Listing,org7c76d17
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")

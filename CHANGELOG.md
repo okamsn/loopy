@@ -47,22 +47,25 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   ([#234], [#240]).  The old implementation used the name of the command in the
   generated code and was written before aliases.
 
-- `finally-do` can now modify the implied return value of a loopy by modifying
-  the implied accumulation variable, which is by default `loopy-result`
-  ([#244]).  Previously, one would have needed to use `finally-return` after
-  modifying an implied `loopy-result`.
+- The macro by default now uses the value of `loopy-result` as the implied
+  return value when `loopy-result` is used as an implied accumulation variable
+  and `finally-do` is used ([#244]).  Previously, the macro would store the
+  implied return value in `loopy-result` when `loopy-result` was used as an
+  implied accumulation variable, but any further changes made to `loopy-result`
+  after the loop completed in the `finally-do` special macro argument
+  would not be included in the macro's ultimate return value.
 
-  This improves consistency by allowing treating an implied `loopy-result`
-  more like other, explicit accumulation variables inside `finally-do`.
-  The cost is switching from the use of `prog1` to an `if` expression with two
-  helper variables.  This change only applies when an implied return value is
-  used with `finally-do`.  It does not affect the macro expansion when
-  `finally-return` is used.
+  This was inconsistent with modifying `loopy-result` in the `after-do` special
+  macro argument, in which case the modification /was/ included in the implied
+  return value.
 
-  This is technically a breaking change for those who were modifying an implied
-  `loopy-result` but did not wish those changes to be captured in the macro's
-  implied return value nor used in `finally-return` (perhaps changing the value
-  for side effects only).
+  The new behavior should be less confusing in the event that a user does modify
+  `loopy-result` in `finally-do`. Previously, one would have needed to use
+  `finally-return` after modifying an implied `loopy-result`. The cost is
+  switching from the use of `prog1` to an `if` expression with two helper
+  variables.  This change only applies when an implied return value is used with
+  `finally-do`.  It does not affect the macro expansion when `finally-return` is
+  used.
 
   ```emacs-lisp
   ;; Previously required way:
@@ -78,6 +81,11 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
          (collect i)
          (finally-do (push 0 loopy-result)))
   ```
+
+  This is technically a breaking change for those who were modifying an implied
+  `loopy-result` but did not wish those changes to be captured in the macro's
+  implied return value nor used in `finally-return` (perhaps changing the value
+  for side effects only).
 
 - `loopy-default-flags` is now deprecated ([#245]).  This prevents one library
   from breaking the macro expansions in another library.  Instead of using
