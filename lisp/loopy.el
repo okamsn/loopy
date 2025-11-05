@@ -363,7 +363,12 @@ The function creates quoted code that should be used by a macro."
                       ;; completes to see whether we should return
                       ;; an early return value (the value of the `cl-block')
                       ;; or a possibly now-updated value of `loopy-result'.
-                      ,(when loopy--final-do
+                      ;;
+                      ;; We don't need to check whether it completed
+                      ;; when there is a `finally-return' because we
+                      ;; know that we are not using an implied return value.
+                      ,(when (and loopy--final-do
+                                  (not loopy--final-return))
                          `(setq ,loop-completed-var t))
                       ;; This can be overridden by any call to
                       ;; `cl-return-from'.
