@@ -266,78 +266,74 @@ Type is one of `list' or `array'."
         (default)
         (supplied)
         (len))
-    (loopy--pcase-let-workaround (var2 def2 sup2)
-      (pcase form
-        ;; Uses `nil' if not long enough.
-        ((and (seq var2 def2 sup2) form2) (setq var var2
-                                                default def2
-                                                supplied sup2
-                                                len (seq-length form2)))
-        (form2 (setq var form2
-                     len 0))))
+    (pcase form
+      ;; Uses `nil' if not long enough.
+      ((and (seq var2 def2 sup2) form2) (setq var var2
+                                              default def2
+                                              supplied sup2
+                                              len (seq-length form2)))
+      (form2 (setq var form2
+                   len 0)))
     (list var default supplied len)))
 
 (defun loopy--get-&key-spec (var-form)
   "Get the spec of `&key' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
-  (loopy--pcase-let-workaround (key var default supplied)
-    (pcase-let (((or (or (seq (seq key var) default supplied)
-                         (seq (seq key var) default)
-                         (seq (seq key var)))
-                     (and (or (seq var default supplied)
-                              (seq var default)
-                              (seq var)
-                              (and (pred symbolp)
-                                   var))
-                          ;; Strip a leading underscore, since it
-                          ;; only means that this argument is
-                          ;; unused, but shouldn't affect the
-                          ;; key's name (bug#12367).
-                          (let key (if (seqp var)
-                                       (signal 'loopy-&key-key-from-sequence
-                                               (list var-form))
-                                     (intern
-                                      (format ":%s"
-                                              (let ((name (symbol-name var)))
-                                                (if (eq ?_ (aref name 0))
-                                                    (substring name 1)
-                                                  name))))))))
-                 var-form))
-      (unless var
-        (signal 'loopy-&key-var-malformed
-                (list var-form)))
-      (list key var default supplied))))
+  (pcase-let (((or (or (seq (seq key var) default supplied)
+                       (seq (seq key var) default)
+                       (seq (seq key var)))
+                   (and (or (seq var default supplied)
+                            (seq var default)
+                            (seq var)
+                            (and (pred symbolp)
+                                 var))
+                        ;; Strip a leading underscore, since it
+                        ;; only means that this argument is
+                        ;; unused, but shouldn't affect the
+                        ;; key's name (bug#12367).
+                        (let key (if (seqp var)
+                                     (signal 'loopy-&key-key-from-sequence
+                                             (list var-form))
+                                   (intern
+                                    (format ":%s"
+                                            (let ((name (symbol-name var)))
+                                              (if (eq ?_ (aref name 0))
+                                                  (substring name 1)
+                                                name))))))))
+               var-form))
+    (unless var
+      (signal 'loopy-&key-var-malformed
+              (list var-form)))
+    (list key var default supplied)))
 
 (defun loopy--get-&map-spec (var-form)
   "Get the spec of `&map' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
-  (loopy--pcase-let-workaround (key var default supplied)
-    (pcase-let (((or (seq key var default supplied)
-                     (seq key var default)
-                     (seq key var)
-                     (and (or (seq var)
-                              (and (pred symbolp)
-                                   var))
-                          (let key
-                            (if (seqp var-form)
-                                (signal 'loopy-&map-key-from-sequence
-                                        (list var-form))
-                              `(quote ,var)))))
-                 var-form))
-      (unless var
-        (signal 'loopy-&map-var-malformed
-                (list var-form)))
-      (list key var default supplied))))
+  (pcase-let (((or (seq key var default supplied)
+                   (seq key var default)
+                   (seq key var)
+                   (and (or (seq var)
+                            (and (pred symbolp)
+                                 var))
+                        (let key
+                          (if (seqp var-form)
+                              (signal 'loopy-&map-key-from-sequence
+                                      (list var-form))
+                            `(quote ,var)))))
+               var-form))
+    (unless var
+      (signal 'loopy-&map-var-malformed
+              (list var-form)))
+    (list key var default supplied)))
 
 (defun loopy--get-&aux-spec (var-form)
   "Get the spec of `&aux' VAR-FORM as (VAR VAL)."
-  (loopy--pcase-let-workaround (var val)
-    (pcase-let (((or (seq var val)
-                     (seq var)
-                     (and (pred symbolp)
-                          var))
-                 var-form))
-      (unless var
-        (signal 'loopy-&aux-malformed-var (list var-form)))
-      (list var val))))
+  (pcase-let (((or (seq var val)
+                   (seq var)
+                   (and (pred symbolp)
+                        var))
+               var-form))
+    (unless var
+      (signal 'loopy-&aux-malformed-var (list var-form)))
+    (list var val)))
 
 (defun loopy--get-var-list (var-seq)
   "Get the variables in VAR-SEQ as a flat, unordered list."
@@ -347,28 +343,24 @@ Type is one of `list' or `array'."
                               (dolist (val2 (loopy--get-var-list val))
                                 (cl-pushnew val2 result :test #'eq))
                             (cl-pushnew val result)))
-                (opt-fn (val) (loopy--pcase-let-workaround (var supplied)
-                                (seq-let [var _ supplied _]
-                                    (loopy--get-&optional-spec val)
-                                  (fn var)
-                                  (when supplied
-                                    (fn supplied)))))
-                (key-fn (val) (loopy--pcase-let-workaround (var supplied)
-                                (seq-let [_ var _ supplied]
-                                    (loopy--get-&key-spec val)
-                                  (fn var)
-                                  (when supplied
-                                    (fn supplied)))))
-                (map-fn (val) (loopy--pcase-let-workaround (var supplied)
-                                (seq-let [_ var _ supplied]
-                                    (loopy--get-&map-spec val)
-                                  (fn var)
-                                  (when supplied
-                                    (fn supplied)))))
-                (aux-fn (val) (loopy--pcase-let-workaround (var)
-                                (seq-let [var _]
-                                    (loopy--get-&map-spec val)
-                                  (fn var)))))
+                (opt-fn (val) (seq-let [var _ supplied _]
+                                  (loopy--get-&optional-spec val)
+                                (fn var)
+                                (when supplied
+                                  (fn supplied))))
+                (key-fn (val) (seq-let [_ var _ supplied]
+                                  (loopy--get-&key-spec val)
+                                (fn var)
+                                (when supplied
+                                  (fn supplied))))
+                (map-fn (val) (seq-let [_ var _ supplied]
+                                  (loopy--get-&map-spec val)
+                                (fn var)
+                                (when supplied
+                                  (fn supplied))))
+                (aux-fn (val) (seq-let [var _]
+                                  (loopy--get-&map-spec val)
+                                (fn var))))
       (map-do (lambda (k v)
                 (when v
                   (pcase k
@@ -385,6 +377,10 @@ Type is one of `list' or `array'."
 
 ;;;; Pcase pattern
 
+(defmacro loopy--pcase-flip-1 (fn arg2 arg1)
+  "Copied from now obsolete `pcase--flip' for older versions of Emacs."
+  `(,fn ,arg1 ,arg2))
+
 (defun loopy--pcase-flip (fn arg2)
   "Wrapper macro for compatibility with obsoletion of `pcase--flip'.
 
@@ -392,7 +388,7 @@ FN is the function.  ARG2 is the argument to move to the second
 position of the call to FN in the pattern."
   (static-if (>= emacs-major-version 30)
       `(,fn _ ,arg2)
-    `(pcase--flip ,fn ,arg2)))
+    `(loopy--pcase-flip-1 ,fn ,arg2)))
 
 (defun loopy--get-var-pattern (var)
   "Get the correct variable pattern.
@@ -431,22 +427,21 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
                    (app cdr-safe ,(loopy--pcase-pat-positional-list-pattern
                                    (cdr pos-vars) opt-vars
                                    rest-var map-or-key-vars))))
-   (opt-vars (loopy--pcase-let-workaround (var default supplied)
-               (pcase-let* ((`(,var ,default ,supplied ,_length)
-                             (loopy--get-&optional-spec (car opt-vars)))
-                            (var2 (loopy--get-var-pattern var)))
-                 `(and (pred listp)
-                       (app car-safe (or (and (pred null)
-                                              ,@(when supplied
-                                                  `((let ,supplied nil)))
-                                              (let ,var2 ,default))
-                                         ,(if supplied
-                                              `(and (let ,supplied t)
-                                                    ,var2)
-                                            var2)))
-                       (app cdr-safe ,(loopy--pcase-pat-positional-list-pattern
-                                       nil (cdr opt-vars)
-                                       rest-var map-or-key-vars))))))
+   (opt-vars (pcase-let* ((`(,var ,default ,supplied ,_length)
+                           (loopy--get-&optional-spec (car opt-vars)))
+                          (var2 (loopy--get-var-pattern var)))
+               `(and (pred listp)
+                     (app car-safe (or (and (pred null)
+                                            ,@(when supplied
+                                                `((let ,supplied nil)))
+                                            (let ,var2 ,default))
+                                       ,(if supplied
+                                            `(and (let ,supplied t)
+                                                  ,var2)
+                                          var2)))
+                     (app cdr-safe ,(loopy--pcase-pat-positional-list-pattern
+                                     nil (cdr opt-vars)
+                                     rest-var map-or-key-vars)))))
    (rest-var (loopy--get-var-pattern rest-var))
    ;; `pcase' allows `(,a ,b) to match (1 2 3), so we need to make
    ;; sure there aren't more values left.  However, if we are using
@@ -677,11 +672,10 @@ holding the property list."
   ;; then we can use simpler patterns since we don't need to store the
   ;; value of the key.
   (cl-flet ((get-var-data (var-form)
-              (loopy--pcase-let-workaround (key var default supplied)
-                (pcase-let ((`(,key ,var ,default ,supplied)
-                             (loopy--get-&key-spec var-form)))
-                  (list key (loopy--get-var-pattern var)
-                        default supplied)))))
+              (pcase-let ((`(,key ,var ,default ,supplied)
+                           (loopy--get-&key-spec var-form)))
+                (list key (loopy--get-var-pattern var)
+                      default supplied))))
     (if allow-other-keys
         `(and ,@(mapcar (lambda (var-form)
                           (pcase-let ((`(,key ,var ,default ,supplied) (get-var-data var-form))
@@ -761,34 +755,33 @@ holding the property list."
   "Build a `pcase' pattern for the `&map' variables MAP-VARS."
   (let ((mapsym (gensym "map")))
     `(and (pred mapp)
-          ,@(mapcar (loopy--pcase-let-workaround (key var default supplied)
-                      (lambda (var-form)
-                        (pcase-let ((`(,key ,var ,default ,supplied)
-                                     (loopy--get-&map-spec var-form)))
-                          (unless var
-                            (signal 'loopy-&map-var-malformed (list var-form)))
-                          (setq var (loopy--get-var-pattern var))
-                          (cond
-                           (supplied
-                            `(app (lambda (,mapsym)
-                                    ;; The default implementations of `map-elt'
-				    ;; uses `map-contains-key' (which might be
-				    ;; expensive) when given a default value, so
-				    ;; we use a generated default to avoid
-				    ;; calling it twice.
-                                    ,(let ((defsym (list 'quote (gensym "loopy--map-contains-test")))
-					   (valsym (gensym "loopy--map-elt")))
-				       (macroexp-let2* nil ((keysym key))
-					 `(let ((,valsym (map-elt ,mapsym ,keysym ,defsym)))
-					    (if (equal ,valsym ,defsym)
-						(cons nil ,default)
-					      (cons t ,valsym))))))
-                                  (,'\` ((,'\, ,supplied) . (,'\, ,var)))))
-                           (default
-                            `(app (lambda (,mapsym) (map-elt ,mapsym ,key ,default))
-                                  ,var))
-                           (t
-                            `(app ,(loopy--pcase-flip 'map-elt key) ,var))))))
+          ,@(mapcar (lambda (var-form)
+                      (pcase-let ((`(,key ,var ,default ,supplied)
+                                   (loopy--get-&map-spec var-form)))
+                        (unless var
+                          (signal 'loopy-&map-var-malformed (list var-form)))
+                        (setq var (loopy--get-var-pattern var))
+                        (cond
+                         (supplied
+                          `(app (lambda (,mapsym)
+                                  ;; The default implementations of `map-elt'
+				  ;; uses `map-contains-key' (which might be
+				  ;; expensive) when given a default value, so
+				  ;; we use a generated default to avoid
+				  ;; calling it twice.
+                                  ,(let ((defsym (list 'quote (gensym "loopy--map-contains-test")))
+					 (valsym (gensym "loopy--map-elt")))
+				     (macroexp-let2* nil ((keysym key))
+				       `(let ((,valsym (map-elt ,mapsym ,keysym ,defsym)))
+					  (if (equal ,valsym ,defsym)
+					      (cons nil ,default)
+					    (cons t ,valsym))))))
+                                (,'\` ((,'\, ,supplied) . (,'\, ,var)))))
+                         (default
+                          `(app (lambda (,mapsym) (map-elt ,mapsym ,key ,default))
+                                ,var))
+                         (t
+                          `(app ,(loopy--pcase-flip 'map-elt key) ,var)))))
                     map-vars))))
 
 (defun loopy--pcase-pat-&aux-pattern (aux-vars)
@@ -885,6 +878,15 @@ See the Info node `(loopy)Basic Destructuring'."
                      (loopy--pcase-pat-&aux-pattern aux-vars))))))))
 
 ;;;; Destructuring for Iteration and Accumulation Commands
+(defun loopy--pcase-make-erroring-branch (pattern)
+  "Create a branch for `pcase-compile-patterns' that reports an error for PATTERN."
+  ;; It looks like Pcase provides only a single variable matching the symbol
+  ;; in VARVALS, but we use `alist-get' just to be sure.
+  (cons 'loopy--pcase-unmatched
+        (lambda (varvals &rest _)
+          `(signal 'loopy-bad-run-time-destructuring
+                   (list (quote ,pattern)
+                         ,(car (alist-get 'loopy--pcase-unmatched varvals)))))))
 
 (cl-defun loopy--pcase-destructure-for-iteration (var val &key error)
   "Destructure VAL according to VAR as by `pcase-let'.
@@ -900,65 +902,19 @@ the pattern doesn't match."
   (if (symbolp var)
       `((setq ,var ,val)
         ,var)
-    (let ((var-list)
-          (destructuring-expression)
-          (val-holder (gensym "loopy--pcase-workaround")))
-      (cl-flet ((signaler (&rest _)
-                  `(signal 'loopy-bad-run-time-destructuring
-                           (list (quote ,var)
-                                 ,val-holder))))
-        ;; This sets `destructuring-expression' and `var-list'.
-        (setq destructuring-expression
-              ;; This holding variable seems to be needed for the older method,
-              ;; before the introduction of `pcase-compile-patterns'.  In some cases,
-              ;; it just evaluates `VAL' repeatedly, which is bad for functions
-              ;; that work with state and bad for efficiency.
-              ;;
-              ;; Regardless, we also use it to report the value that caused the
-              ;; error.
-              `(let ((,val-holder ,val))
-                 ,(if (fboundp 'pcase-compile-patterns)
-                      (pcase-compile-patterns
-                       val-holder
-                       (remq nil
-                             (list (cons var
-                                         (lambda (varvals &rest _)
-                                           (cons 'setq (mapcan (cl-function
-                                                                (lambda ((var val &rest rest))
-                                                                  (push var var-list)
-                                                                  (list var val)))
-                                                               varvals))))
-                                   (when error
-                                     (cons '_ #'signaler)))))
-                    ;; NOTE: In Emacs versions less than 28, this functionality
-                    ;;       technically isn't public, but this is what the developers
-                    ;;       recommend.
-                    (pcase--u
-                     (remq
-                      nil
-                      (list (list (pcase--match val-holder
-                                                (pcase--macroexpand
-                                                 (if error
-                                                     var
-                                                   `(or ,var pcase--dontcare))))
-                                  (lambda (vars)
-                                    (cons 'setq
-                                          (mapcan (lambda (v)
-                                                    (let ((destr-var (car v))
-                                                          ;; Use `cadr' for Emacs 28+, `cdr' for less.
-                                                          (destr-val (funcall (eval-when-compile
-                                                                                (if (version< emacs-version "28")
-                                                                                    #'cdr
-                                                                                  #'cadr))
-                                                                              v)))
-                                                      (push destr-var var-list)
-                                                      (list destr-var destr-val)))
-                                                  vars))))
-                            (when error
-                              (list (pcase--match val-holder
-                                                  (pcase--macroexpand '_))
-                                    #'signaler)))))))))
-      (list destructuring-expression
+    (let* ((var-list nil)
+           (always-used-cases
+            (cons var (lambda (varvals &rest _)
+                        (cons 'setq (mapcan (pcase-lambda (`(,var ,val . ,rest))
+                                              (push var var-list)
+                                              (list var val))
+                                            varvals))))))
+      (list (pcase-compile-patterns
+             val
+             (if error
+                 (list always-used-cases
+                       (loopy--pcase-make-erroring-branch var))
+               (list always-used-cases)))
             (seq-uniq var-list #'eq)))))
 
 (defun loopy--pcase-destructure-for-with-vars (bindings)
@@ -978,98 +934,39 @@ or, if using implicit variables, a value .  VAL is a value, and
 should only be used if VAR-OR-VAL is a variable.  ERROR is when
 an error should be signaled if the pattern doesn't match."
   (let* ((instructions)
-         (full-main-body)
-         ;; This holding variable seems to be needed for the older method,
-         ;; before the introduction of `pcase-compile-patterns'.  In some cases,
-         ;; it just evaluates `VAL' repeatedly, which is bad for functions
-         ;; that work with state and bad for efficiency.
-         (value-holder (gensym "loopy--pcase-workaround")))
-    (cl-flet ((signaler (&rest _)
-                `(signal 'loopy-bad-run-time-destructuring
-                         (list (quote ,var)
-                               ,value-holder))))
-      (if (fboundp 'pcase-compile-patterns)
-          (setq full-main-body
-                (pcase-compile-patterns
-                 value-holder
-                 (remq nil
-                       (list (cons var
-                                   (lambda (varvals &rest _)
-                                     (let ((destr-main-body nil))
-                                       (dolist (varval varvals)
-                                         (let ((destr-var (cl-first varval))
-                                               (destr-val (cl-second varval)))
-                                           (loopy--bind-main-body (main-body other-instructions)
-                                               (loopy--parse-loop-command
-                                                `(,name ,destr-var ,destr-val ,@args))
-                                             ;; Just push the other instructions, but
-                                             ;; gather the main body expressions.
-                                             (dolist (instr other-instructions)
-                                               (push instr instructions))
-                                             (push main-body destr-main-body))))
-                                       ;; The lambda returns the destructured main body,
-                                       ;; which needs to be wrapped by Pcase's
-                                       ;; destructured bindings.
-                                       ;;
-                                       ;; We keep these in the order returned by
-                                       ;; Pcase just in case Pcase uses state
-                                       ;; (such as push and pop).  It does not
-                                       ;; appear to use state, but we do it
-                                       ;; anyway.
-                                       (thread-last destr-main-body
-                                                    nreverse
-                                                    (apply #'append)
-                                                    macroexp-progn))))
-                             (when error
-                               (cons '_ #'signaler))))))
-        ;; NOTE: In Emacs versions less than 28, this functionality technically
-        ;; isn't public, but this is what the developers recommend.
-        (setq full-main-body
-              (pcase--u
-               (remq nil `((,(pcase--match value-holder
-                                           (pcase--macroexpand
-                                            (if error
-                                                var
-                                              `(or ,var pcase--dontcare))))
-                            ,(lambda (vars)
-                               (let ((destr-main-body nil))
-                                 (dolist (v vars)
-                                   (let ((destr-var (car v))
-                                         ;; Use `cadr' for Emacs 28+, `cdr' for less.
-                                         (destr-val (funcall (eval-when-compile
-                                                               (if (version< emacs-version "28")
-                                                                   #'cdr
-                                                                 #'cadr))
-                                                             v)))
-                                     (loopy--bind-main-body (main-body other-instructions)
-                                         (loopy--parse-loop-command
-                                          `(,name ,destr-var ,destr-val ,@args))
-                                       ;; Just push the other instructions, but
-                                       ;; gather the main body expressions.
-                                       (dolist (instr other-instructions)
-                                         (push instr instructions))
-                                       (push main-body destr-main-body))))
-                                 ;; The lambda returns the destructured main body,
-                                 ;; which needs to be wrapped by Pcase's
-                                 ;; destructured bindings.
-                                 ;;
-                                 ;; We keep these in the order returned by
-                                 ;; Pcase just in case Pcase uses state
-                                 ;; (such as push and pop).  It does not
-                                 ;; appear to use state, but we do it
-                                 ;; anyway.
-                                 (thread-last destr-main-body
-                                              nreverse
-                                              (apply #'append)
-                                              macroexp-progn))))
-                           ,(when error
-                              (list (pcase--match value-holder (pcase--macroexpand '_))
-                                    #'signaler))))))))
+         (always-used-cases
+          (cons var
+                (lambda (varvals &rest _)
+                  (let ((destr-main-body nil))
+                    (pcase-dolist (`(,destr-var ,destr-val) varvals)
+                      (loopy--bind-main-body (main-body other-instructions)
+                          (loopy--parse-loop-command
+                           `(,name ,destr-var ,destr-val ,@args))
+                        ;; Just push the other instructions, but
+                        ;; gather the main body expressions.
+                        (dolist (instr other-instructions)
+                          (push instr instructions))
+                        (push main-body destr-main-body)))
+                    ;; The lambda returns the destructured main body,
+                    ;; which needs to be wrapped by Pcase's
+                    ;; destructured bindings.
+                    ;;
+                    ;; We keep these in the order returned by
+                    ;; Pcase just in case Pcase uses state
+                    ;; (such as push and pop).  It does not
+                    ;; appear to use state, but we do it
+                    ;; anyway.
+                    (thread-last destr-main-body
+                                 nreverse
+                                 (apply #'append)
+                                 macroexp-progn))))))
     ;; Finally, return the instructions.
-    ;; We don't know all of the cases when the value holder is needed,
-    ;; so we just always use it.
-    `((loopy--main-body (let ((,value-holder ,val))
-                          ,full-main-body))
+    `((loopy--main-body ,(pcase-compile-patterns
+                          val
+                          (if error
+                              (list always-used-cases
+                                    (loopy--pcase-make-erroring-branch var))
+                            (list always-used-cases))))
       ,@(nreverse instructions))))
 
 ;;;; Destructuring Generalized Variables

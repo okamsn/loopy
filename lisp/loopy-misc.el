@@ -418,19 +418,5 @@ KEY transforms those elements and ELEMENT."
       ('eq    `(memq   ,element ,list))
       (_ form))))
 
-(cl-defmacro loopy--pcase-let-workaround (variables form)
-  "Wrap FORM in a `let' with VARIABLES bound to nil on Emacs less than 28.
-
-Prior to Emacs 28, it was not guaranteed that `pcase-let' bound
-unmatched variables."
-  (declare (indent 1))
-  (static-if (< emacs-major-version 28)
-      `(let ,(mapcar (lambda (sym) `(,sym nil))
-                     variables)
-         ,(cons 'ignore variables)
-         ,form)
-    (ignore variables)
-    form))
-
 (provide 'loopy-misc)
 ;;; loopy-misc.el ends here

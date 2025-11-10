@@ -658,21 +658,20 @@ macro `loopy' itself."
        ;; Don't want to accidentally rebind variables to `nil'
        ;; or to accidentally mis-use commands that need
        ;; different initial values.
-       (loopy--pcase-let-workaround (var new-val)
-         (pcase-let ((`(,var ,new-val) instruction-value))
-           (pcase var
-             ((pred loopy--with-bound-p) nil)
-             ((and (app loopy--command-bound-p `(,_place . ,old-val))
-                   (guard (not (equal new-val old-val))))
-              ;; TODO: Switch from raising a warning to raising an error.
-              ;; (signal 'loopy-incompatible-accumulation-initializations
-              ;;         (list :in place :var var :old old-val :new new-val))
-              (display-warning
-               'loopy
-               (format "loopy: Conflicting accumulation starting values: `%s', %s, %s\nThis will be an error in the future.  To resolve this error, use `with' to explicitly specify a starting value."
-                       var old-val new-val)
-               :warning))
-             (_ (push instruction-value loopy--accumulation-vars))))))
+       (pcase-let ((`(,var ,new-val) instruction-value))
+         (pcase var
+           ((pred loopy--with-bound-p) nil)
+           ((and (app loopy--command-bound-p `(,_place . ,old-val))
+                 (guard (not (equal new-val old-val))))
+            ;; TODO: Switch from raising a warning to raising an error.
+            ;; (signal 'loopy-incompatible-accumulation-initializations
+            ;;         (list :in place :var var :old old-val :new new-val))
+            (display-warning
+             'loopy
+             (format "loopy: Conflicting accumulation starting values: `%s', %s, %s\nThis will be an error in the future.  To resolve this error, use `with' to explicitly specify a starting value."
+                     var old-val new-val)
+             :warning))
+           (_ (push instruction-value loopy--accumulation-vars)))))
 
       (loopy--other-vars
        (loopy--validate-binding instruction-value)
@@ -1043,7 +1042,8 @@ instead of this macro.
   (declare (debug (&rest [sexp form])))
   (macroexp-progn
    (cl-loop for (var val) on args by #'cddr
-            collect (car (loopy--destructure-for-iteration-default var val)))))
+            collect (car (loopy--pcase-destructure-for-iteration
+                          `(loopy ,var) val :error t)))))
 
 ;;;###autoload
 (defmacro loopy-let* (bindings &rest body)
@@ -1055,25 +1055,18 @@ you wish to use `pcase' destructuring, you should use `pcase-let'
 instead of this macro."
   (declare (debug ((&rest [sexp form]) body))
            (indent 1))
-  ;; Because Emacs versions less than 28 weren't guaranteed to bind all
-  ;; variables in Pcase, we need to use the same approach we do for
-  ;; destructuring `with' bindings, instead of just passing the bindings to
-  ;; `pcase' directly.
-  (let ((new-binds))
-    (dolist (bind bindings)
-      (cl-destructuring-bind (var val)
-          bind
-        (if (symbolp var)
-            (push bind new-binds)
-          (let ((sym (gensym)))
-            (push `(,sym ,val) new-binds)
-            (cl-destructuring-bind (var-set-expr var-list)
-                (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
-              (dolist (var var-list)
-                (push var new-binds))
-              (push `(_ ,var-set-expr) new-binds))))))
-    `(let* ,(nreverse new-binds)
-       ,@body)))
+  ;; NOTE: We don't use `pcase-let*' here because we want to keep
+  ;;       the signal of `loopy-bad-run-time-destructuring'.
+  (cl-flet ((pcase-maker ((var val) body)
+              `(pcase ,val
+                 ((loopy ,var) ,body)
+                 (fail (signal 'loopy-bad-run-time-destructuring
+                               (list (quote (loopy ,var)) fail))))))
+    (cl-loop with rev = (reverse bindings)
+             with result = (pcase-maker (car rev) (macroexp-progn body))
+             for bind in (cdr rev)
+             do (setq result (pcase-maker bind result))
+             finally return result)))
 
 ;;;###autoload
 (defmacro loopy-ref (bindings &rest body)
