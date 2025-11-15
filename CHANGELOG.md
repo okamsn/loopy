@@ -4,6 +4,17 @@ This document describes the user-facing changes to Loopy.
 
 For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
+## Unreleased
+
+### Bug Fixes
+
+- When destructuring for accumulation commands, don't assume that `pcase` binds
+  the final variable to a value already stored in a temporary variable ([#251]).
+  More specifically, keep the same order returned by `pcase` for the binding of
+  those final variables.
+
+[#251]: https://github.com/okamsn/loopy/PR/251
+
 ## 0.15.0
 
 ### New Features

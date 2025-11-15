@@ -995,7 +995,7 @@ an error should be signaled if the pattern doesn't match."
                  (remq nil
                        (list (cons var
                                    (lambda (varvals &rest _)
-                                     (let ((destr-main-body))
+                                     (let ((destr-main-body nil))
                                        (dolist (varval varvals)
                                          (let ((destr-var (cl-first varval))
                                                (destr-val (cl-second varval)))
@@ -1010,7 +1010,16 @@ an error should be signaled if the pattern doesn't match."
                                        ;; The lambda returns the destructured main body,
                                        ;; which needs to be wrapped by Pcase's
                                        ;; destructured bindings.
-                                       (macroexp-progn (apply #'append destr-main-body)))))
+                                       ;;
+                                       ;; We keep these in the order returned by
+                                       ;; Pcase just in case Pcase uses state
+                                       ;; (such as push and pop).  It does not
+                                       ;; appear to use state, but we do it
+                                       ;; anyway.
+                                       (thread-last destr-main-body
+                                                    nreverse
+                                                    (apply #'append)
+                                                    macroexp-progn))))
                              (when error
                                (cons '_ #'signaler))))))
         ;; NOTE: In Emacs versions less than 28, this functionality technically
@@ -1023,7 +1032,7 @@ an error should be signaled if the pattern doesn't match."
                                                 var
                                               `(or ,var pcase--dontcare))))
                             ,(lambda (vars)
-                               (let ((destr-main-body))
+                               (let ((destr-main-body nil))
                                  (dolist (v vars)
                                    (let ((destr-var (car v))
                                          ;; Use `cadr' for Emacs 28+, `cdr' for less.
@@ -1043,7 +1052,16 @@ an error should be signaled if the pattern doesn't match."
                                  ;; The lambda returns the destructured main body,
                                  ;; which needs to be wrapped by Pcase's
                                  ;; destructured bindings.
-                                 (macroexp-progn (apply #'append destr-main-body)))))
+                                 ;;
+                                 ;; We keep these in the order returned by
+                                 ;; Pcase just in case Pcase uses state
+                                 ;; (such as push and pop).  It does not
+                                 ;; appear to use state, but we do it
+                                 ;; anyway.
+                                 (thread-last destr-main-body
+                                              nreverse
+                                              (apply #'append)
+                                              macroexp-progn))))
                            ,(when error
                               (list (pcase--match value-holder (pcase--macroexpand '_))
                                     #'signaler))))))))
