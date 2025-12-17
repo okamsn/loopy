@@ -2997,6 +2997,8 @@ documentation tries to note when it is not ~nil~.  For example, the default
 starting value for the =sum= command is ~0~ and the default starting value for
 the =multiply= command is ~1~.  The default initialization value used by an
 accumulation command can be overridden using the =with= special macro argument.
+If two commands use different initial values and the =with= special
+macro argument is not used, an error is signaled.
 
 #+attr_texinfo: :tag Warning
 #+begin_quote
@@ -3006,9 +3008,8 @@ conflict, use the =with= special macro argument, as noted above.
 #+end_quote
 
 #+begin_src emacs-lisp
-  ;; Raises a warning. Will raise an error in the future.
+  ;; Signals an error:
   ;;
-  ;; => 27
   (loopy (numbers i :from 1 :to 3)
          (sum my-accum i) ; Defaults to 0.
          (multiply my-accum i) ; Defaults to 1.

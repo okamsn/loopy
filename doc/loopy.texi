@@ -746,7 +746,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org572b5bd
+@float Listing,orga23c8aa
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -935,7 +935,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org99c53b0
+@float Listing,orgea50e00
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -950,7 +950,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org7212adc
+@float Listing,org5e2a634
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -3206,6 +3206,8 @@ documentation tries to note when it is not @code{nil}.  For example, the default
 starting value for the @samp{sum} command is @code{0} and the default starting value for
 the @samp{multiply} command is @code{1}.  The default initialization value used by an
 accumulation command can be overridden using the @samp{with} special macro argument.
+If two commands use different initial values and the @samp{with} special
+macro argument is not used, an error is signaled.
 
 @quotation Warning
 Currently, a warning is raised when the default initial values of accumulation
@@ -3215,9 +3217,8 @@ conflict, use the @samp{with} special macro argument, as noted above.
 @end quotation
 
 @lisp
-;; Raises a warning. Will raise an error in the future.
+;; Signals an error:
 ;;
-;; => 27
 (loopy (numbers i :from 1 :to 3)
        (sum my-accum i) ; Defaults to 0.
        (multiply my-accum i) ; Defaults to 1.
@@ -4970,7 +4971,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,org0175e90
+@float Listing,orge907358
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5552,7 +5553,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,org7c76d17
+@float Listing,org3b20adc
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")

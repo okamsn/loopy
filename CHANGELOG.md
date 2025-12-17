@@ -13,6 +13,13 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   More specifically, keep the same order returned by `pcase` for the binding of
   those final variables.
 
+### Breaking Changes
+
+- Using accumulation commands with different initial values for the same
+  variable now signals an error instead of a warning ([#169], [#254]).
+
+[#169]: https://github.com/okamsn/loopy/issues/169
+[#254]: https://github.com/okamsn/loopy/PR/254
 [#251]: https://github.com/okamsn/loopy/PR/251
 
 ## 0.15.0
