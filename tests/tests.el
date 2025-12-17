@@ -1074,7 +1074,7 @@ Make sure that it does not break early returns."
    (cl-loop with list = '((1 2) (3 4) (5 6) (7 8))
             for num from 1 to (length list)
             for subseq = (cl-subseq list 0 num)
-            collect `(loopy-deftest ,(intern (format "expr-destr-%d-value" num))
+            collect `(loopy-deftest ,(intern (format "set-destr-%d-value" num))
                        :result (quote ,subseq)
                        :repeat _set
                        :body ((cycle ,num)
@@ -1082,11 +1082,11 @@ Make sure that it does not break early returns."
                                                      collect `(quote ,i)))
                               (collect coll (list i j))
                               (finally-return coll))
-                       :loopy ((_set . (set expr)))
+                       :loopy ((_set . (set)))
                        :iter-bare ((_set . (setting))
                                    (collect . collecting)
                                    (cycle . cycling))
-                       :iter-keyword ((_set . (set expr))
+                       :iter-keyword ((_set . (set))
                                       (collect . collect)
                                       (cycle . cycle))))))
 
@@ -1100,18 +1100,18 @@ Make sure that it does not break early returns."
             for num in '(1 2 3 5)
             for subseq = (cl-subseq list 0 num)
             for result = (append subseq (make-list (- len num) num))
-            collect `(loopy-deftest ,(intern (format "expr-%d-values" num))
+            collect `(loopy-deftest ,(intern (format "set-%d-values" num))
                        :result (quote ,result)
                        :repeat _set
                        :body ((cycle ,len)
                               (_set i ,@subseq)
                               (collect coll i)
                               (finally-return coll))
-                       :loopy ((_set . (set expr)))
+                       :loopy ((_set . (set)))
                        :iter-bare ((_set . (setting))
                                    (collect . collecting)
                                    (cycle . cycling))
-                       :iter-keyword ((_set . (set expr))
+                       :iter-keyword ((_set . (set))
                                       (collect . collect)
                                       (cycle . cycle))))))
 
@@ -1155,13 +1155,13 @@ Make sure that it does not break early returns."
          (_set-prev j i)
          (collect j))
   :repeat _set-prev
-  :loopy ((_set-prev . (set-prev prev-set prev-expr)))
+  :loopy ((_set-prev . (set-prev prev-set)))
   :iter-bare ((list . listing)
               (collect . collecting)
               (_set-prev . (setting-prev)))
   :iter-keyword ((list . list)
                  (collect . collect)
-                 (_set-prev . (set-prev prev-set prev-expr))))
+                 (_set-prev . (set-prev prev-set))))
 
 (loopy-deftest set-prev-keyword-back
   :result '(nil nil nil 1 2)
@@ -1262,13 +1262,13 @@ Make sure that it does not break early returns."
                      :iter-keyword ((_cmd . ,plain-cmds))
                      :body ,body))
 
-       (loopy-deftest iteration-sub-level-group
-         :doc "Don't test `group' for `iter-bare'."
+       (loopy-deftest iteration-sub-level-command-do
+         :doc "Don't test `command-do' for `iter-bare'."
          :error loopy-iteration-in-sub-level
          :repeat _cmd
          :loopy ((_cmd . ,plain-cmds))
          :iter-keyword ((_cmd . ,plain-cmds))
-         :body  ((group (_cmd i '(1))) (finally-return t))))))
+         :body  ((command-do (_cmd i '(1))) (finally-return t))))))
 
 (test--iteration-sub-level)
 
@@ -1471,8 +1471,8 @@ Using numbers directly will use less variables and more efficient code."
          (do (setf i ?a))
          (finally-return my-str))
   :repeat _cmd
-  :loopy ((_cmd . (array-ref string-ref arrayf stringf)))
-  :iter-keyword ((_cmd . (array-ref string-ref arrayf stringf))
+  :loopy ((_cmd . (array-ref string-ref)))
+  :iter-keyword ((_cmd . (array-ref string-ref))
                  (do . do))
   :iter-bare ((_cmd . (arraying-ref stringing-ref))
               (do . ignore)))
@@ -2114,8 +2114,8 @@ Using numbers directly will use less variables and more efficient code."
          (do (cl-incf i 7))
          (finally-return map))
   :repeat _cmd
-  :loopy ((_cmd . (map-ref mapf mapping-ref)))
-  :iter-keyword ((_cmd . (map-ref mapf mapping-ref))
+  :loopy ((_cmd . (map-ref mapping-ref)))
+  :iter-keyword ((_cmd . (map-ref mapping-ref))
                  (do . do))
   :iter-bare ((_cmd . (mapping-ref))
               (do . ignore)))
@@ -2123,13 +2123,13 @@ Using numbers directly will use less variables and more efficient code."
 (loopy-deftest map-ref-:key
   :result '([17 18 19 20 21] (0 1 2 3 4))
   :body ((with (map (vector 10 11 12 13 14)))
-         (mapf i map :key my-key)
+         (map-ref i map :key my-key)
          (do (cl-incf i 7))
          (collect my-key)
          (finally-return map loopy-result))
   :loopy t
-  :iter-keyword (mapf do collect)
-  :iter-bare ((mapf . mapping-ref)
+  :iter-keyword (do collect map-ref)
+  :iter-bare ((map-ref . mapping-ref)
               (do . ignore)
               (collect . collecting)))
 
@@ -2214,14 +2214,14 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((map-ref . mapping-ref)
               (do . ignore)))
 
-;;;;; Nums
+;;;;; Numbers
 (loopy-deftest numbers
   :result '(1 2 3 4 5)
   :repeat _cmd
   :body ((_cmd i :from 1 :to 5)
          (collect i))
-  :loopy ((_cmd . (nums numbers num number)))
-  :iter-keyword ((_cmd . (nums numbers num number))
+  :loopy ((_cmd . (numbers number)))
+  :iter-keyword ((_cmd . (numbers number))
                  (collect . collect))
   :iter-bare ((_cmd . (numbering))
               (collect . collecting)))
@@ -2476,28 +2476,28 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((collect . collecting)
               (numbers . numbering)))
 
-;;;;; Nums-Down
+;;;;; Numbers-Down
 (loopy-deftest numbers-down
   :result '(10 8 6 4 2)
   :multi-body t
   :body [((_cmd i 10 1 :by 2) (collect i))
          ((_cmd i 10 1 2) (collect i))]
   :repeat _cmd
-  :loopy ((_cmd . (nums-down numsdown numbers-down)))
-  :iter-keyword ((_cmd . (nums-down numsdown numbers-down))
+  :loopy ((_cmd . (numbers-down)))
+  :iter-keyword ((_cmd . (numbers-down))
                  (collect . collect))
   :iter-keyword ((_cmd . (numbering-down))
                  (collect . collecting)))
 
-;;;;; Nums-Up
+;;;;; Numbers-Up
 (loopy-deftest numbers-up
   :result '(1 3 5 7 9)
   :multi-body t
   :body [((_cmd i 1 10 :by 2) (collect i))
          ((_cmd i 1 10 2) (collect i))]
   :repeat _cmd
-  :loopy ((_cmd . (nums-up numsup numbers-up)))
-  :iter-keyword ((_cmd . (nums-up numsup numbers-up))
+  :loopy ((_cmd . (numbers-up)))
+  :iter-keyword ((_cmd . (numbers-up))
                  (collect . collect))
   :iter-keyword ((_cmd . (numbering-up))
                  (collect . collecting)))
@@ -2567,8 +2567,8 @@ Using numbers directly will use less variables and more efficient code."
              (return nil))
          (finally-return t))
   :repeat _cmd
-  :loopy ((_cmd . (sequence sequencing elements)))
-  :iter-keyword ((_cmd . (sequence sequencing elements))
+  :loopy ((_cmd . (sequence sequencing)))
+  :iter-keyword ((_cmd . (sequence sequencing))
                  (return . return))
   :iter-bare ((sequence . (sequencing))
               (return . returning)))
@@ -3125,17 +3125,17 @@ are records, which are sequences, so they still work in that way."
          ((with (my-seq "abc"))       (_cmd i my-seq) (collect (elt my-seq i)))
          ((with (my-seq '(97 98 99))) (_cmd i my-seq) (collect (elt my-seq i)))]
   :repeat _cmd
-  :loopy ((_cmd . ( array-index arraying-index arrayi
-                    list-index listing-index listi
-                    string-index stringing-index stringi
+  :loopy ((_cmd . ( array-index arraying-index
+                    list-index listing-index
+                    string-index stringing-index
                     sequence-index sequencing-index
-                    sequencei seqi seqing-index))
+                    seqing-index))
           (collect . collect))
-  :iter-keyword ((_cmd . ( array-index arraying-index arrayi
-                           list-index listing-index listi
-                           string-index stringing-index stringi
+  :iter-keyword ((_cmd . ( array-index arraying-index
+                           list-index listing-index
+                           string-index stringing-index
                            sequence-index sequencing-index
-                           sequencei seqi seqing-index))
+                           seqing-index))
                  (collect . collect))
   :iter-bare ((_cmd . ( arraying-index listing-index stringing-index
                         sequencing-index seqing-index))
@@ -3332,8 +3332,8 @@ are records, which are sequences, so they still work in that way."
          (do (setf i 7))
          (finally-return my-seq))
   :repeat _cmd
-  :loopy ((_cmd . (sequence-ref sequencef sequence-ref)))
-  :iter-keyword ((_cmd . (sequence-ref sequencef sequence-ref))
+  :loopy ((_cmd . (sequence-ref sequence-ref)))
+  :iter-keyword ((_cmd . (sequence-ref sequence-ref))
                  (do . do))
   :iter-bare ((_cmd . (sequencing-ref))
               (do . ignore)))
@@ -3547,8 +3547,8 @@ are records, which are sequences, so they still work in that way."
          (do (setf i 7))
          (finally-return my-seq))
   :repeat _cmd
-  :loopy ((_cmd . (seq-ref seqing-ref seqf)))
-  :iter-keyword ((_cmd . (seq-ref seqing-ref seqf))
+  :loopy ((_cmd . (seq-ref seqing-ref)))
+  :iter-keyword ((_cmd . (seq-ref seqing-ref))
                  (do . do))
   :iter-bare ((_cmd . (seqing-ref))
               (do . ignore)))
@@ -7003,25 +7003,6 @@ This assumes that you're on guix."
               (set . setting)))
 
 ;;; Custom Aliases
-(loopy-deftest custom-alias-obsolete-list-array
-  :doc "Test aliasing to obsolete command names.
-NOTE: This should eventually be removed."
-  :result '((1 . 4) (2 . 5) (3 . 6))
-  :wrap ((x . `(let ((loopy-aliases (map-copy loopy-aliases))
-                     (loopy-iter-bare-commands
-                      (append (list 'my-list2 'my-array2) loopy-iter-bare-commands)))
-                 (loopy-defalias my-list2 in)
-                 (loopy-defalias my-array2 'across)
-                 (eval (quote ,x)
-                       t))))
-  :body ((my-list2 i '(1 2 3))
-         (my-array2 j [4 5 6])
-         (collect (cons i j)))
-  :loopy t
-  :iter-keyword (my-list2 my-array2 collect)
-  :iter-bare ((my-list2 . my-list2)
-              (my-array2 . my-array2)
-              (collect . collecting)))
 
 (loopy-deftest custom-alias-flag
   :doc "Test with `default' flag, which is essentially a no-op."

@@ -229,7 +229,7 @@
 (ert-deftest wrap-catch ()
   (should (= 5 (eval (quote (loopy-iter (for list i '(1 2 3 4 5 6 7))
                                         (when (catch (progn
-                                                       (for expr tag 'my-tag)
+                                                       (for set tag 'my-tag)
                                                        tag)
                                                 (for set j (1+ i))
                                                 (if (> j 5)
@@ -423,32 +423,32 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
 
 
 (ert-deftest dont-expand-quoted ()
-  (should (equal '((for expr i 2))
+  (should (equal '((for set i 2))
                  (eval
                   (quote
                    (loopy-iter (for cycle 1)
-                               (let ((j '(for expr i 2)))
+                               (let ((j '(for set i 2)))
                                  (accum collect j)))))))
 
-  (should (equal '((for expr i 2))
+  (should (equal '((for set i 2))
                  (eval
                   (quote
                    (loopy-iter (cycling 1)
-                               (let ((j '(for expr i 2)))
+                               (let ((j '(for set i 2)))
                                  (collecting j)))))))
 
-  (should (equal '((for expr i 2))
+  (should (equal '((for set i 2))
                  (eval
                   (quote
                    (loopy-iter (for cycle 1)
-                               (let ((j (quote (for expr i 2))))
+                               (let ((j (quote (for set i 2))))
                                  (accum collect j)))))))
 
-  (should (equal '((for expr i 2))
+  (should (equal '((for set i 2))
                  (eval
                   (quote
                    (loopy-iter (cycling 1)
-                               (let ((j (quote (for expr i 2))))
+                               (let ((j (quote (for set i 2))))
                                  (collecting j))))))))
 
 
@@ -484,9 +484,9 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                              j))
                                    (collecting (cons a b)))))))
 
-  (should (equal '((for expr i 2) (for expr i 2) (for expr i 2))
+  (should (equal '((for set i 2) (for set i 2) (for set i 2))
                  (eval (quote (loopy-iter (listing elem '(1 2 3))
-                                          (setq a '(for expr i 2))
+                                          (setq a '(for set i 2))
                                           (collecting a))))))
 
   (should
@@ -500,9 +500,9 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
                                              j))
                                    (accum collect (cons a b)))))))
 
-  (should (equal '((for expr i 2) (for expr i 2) (for expr i 2))
+  (should (equal '((for set i 2) (for set i 2) (for set i 2))
                  (eval (quote (loopy-iter (for list elem '(1 2 3))
-                                          (setq a '(for expr i 2))
+                                          (setq a '(for set i 2))
                                           (accum collect a)))))))
 
 
@@ -612,7 +612,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
           (eval
            (quote
             (loopy-iter (let ((a (progn
-                                   ;; NOTE: No restriction on placement of `expr'.
+                                   ;; NOTE: No restriction on placement of `set'.
                                    (setting j 8 (1+ j))
                                    (when (> j 12)
                                      ;; Leave loop but don't force return value,
@@ -626,7 +626,7 @@ E.g., \"(let ((for list)) ...)\" should not try to operate on the
           (eval
            (quote
             (loopy-iter (let ((a (progn
-                                   ;; NOTE: No restriction on placement of `expr'.
+                                   ;; NOTE: No restriction on placement of `set'.
                                    (for set j 8 (1+ j))
                                    (when (> j 12)
                                      ;; Leave loop but don't force return value,

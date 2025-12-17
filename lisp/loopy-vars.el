@@ -71,11 +71,7 @@ function in the variable `loopy--flag-settings'."
                         when (memq definition aliases)
                         return orig)
                (and (map-contains-key loopy-parsers definition)
-                    definition)
-               (when-let* ((orig (gethash definition loopy--obsolete-aliases)))
-                 (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, add it to `loopy-parsers'."
-                       definition orig)
-                 orig))))
+                    definition))))
       (if (eq alias true-name)
           (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
                  alias definition true-name)
@@ -101,50 +97,6 @@ function in the variable `loopy--flag-settings'."
 Definition must exist.  Neither argument need be quoted."
   `(loopy--defalias-1 (quote ,(loopy--get-quoted-symbol alias))
                       (quote ,(loopy--get-quoted-symbol definition))))
-
-(defvar loopy--obsolete-aliases
-  #s(hash-table
-     test eq
-     data ( across        array
-            arrayf        array-ref
-            arrayingf     array-ref
-            stringf       array-ref
-            stringingf    array-ref
-            across-ref    array-ref
-            group         command-do
-            on            cons
-            in            list
-            listf         list-ref
-            listingf      list-ref
-            in-ref        list-ref
-            mapf          map-ref
-            mappingf      map-ref
-            num           numbers
-            nums          numbers
-            nums-down     numbers-down
-            numdown       numbers-down
-            num-down      numbers-down
-            numsdown      numbers-down
-            nums-up       numbers-up
-            numup         numbers-up
-            num-up        numbers-up
-            numsup        numbers-up
-            exprs         set
-            expr          set
-            prev          set-prev
-            prev-expr     set-prev
-            elements      sequence
-            sequencei     sequence-index
-            seqi          sequence-index
-            listi         sequence-index
-            arrayi        sequence-index
-            stringi       sequence-index
-            seqf          seq-ref
-            seqingf       seq-ref
-            sequencef     sequence-ref
-            sequencingf   sequence-ref
-            elements-ref  sequence-ref))
-  "Aliases to be removed from the documentation.")
 
 (defun loopy--expression-parser-map-p (obj)
   "Return when OBJ has the correct data for `loopy-expression-parsers'."
