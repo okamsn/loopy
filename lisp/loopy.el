@@ -661,16 +661,10 @@ macro `loopy' itself."
        (pcase-let ((`(,var ,new-val) instruction-value))
          (pcase var
            ((pred loopy--with-bound-p) nil)
-           ((and (app loopy--command-bound-p `(,_place . ,old-val))
+           ((and (app loopy--command-bound-p `(,place . ,old-val))
                  (guard (not (equal new-val old-val))))
-            ;; TODO: Switch from raising a warning to raising an error.
-            ;; (signal 'loopy-incompatible-accumulation-initializations
-            ;;         (list :in place :var var :old old-val :new new-val))
-            (display-warning
-             'loopy
-             (format "loopy: Conflicting accumulation starting values: `%s', %s, %s\nThis will be an error in the future.  To resolve this error, use `with' to explicitly specify a starting value."
-                     var old-val new-val)
-             :warning))
+            (signal 'loopy-incompatible-accumulation-initializations
+                    (list :in place :var var :old old-val :new new-val)))
            (_ (push instruction-value loopy--accumulation-vars)))))
 
       (loopy--other-vars

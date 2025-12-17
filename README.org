@@ -35,6 +35,9 @@ please let me know.
 -----
 
  _Recent breaking changes:_
+ - Unreleased:
+   - Using accumulation commands with different initial values for the same
+     variable now signals an error instead of a warning.
  - Version 0.15.0:
    - Loopy now requires at least Emacs version 28.1, increased from version
      27.1.
