@@ -1052,10 +1052,17 @@ instead of this macro."
   ;; NOTE: We don't use `pcase-let*' here because we want to keep
   ;;       the signal of `loopy-bad-run-time-destructuring'.
   (cl-flet ((pcase-maker ((var val) body)
-              `(pcase ,val
-                 ((loopy ,var) ,body)
-                 (fail (signal 'loopy-bad-run-time-destructuring
-                               (list (quote (loopy ,var)) fail))))))
+              ;; Using `(loopy SYMBOL)' as a pattern still triggers
+              ;; the warning for shadowing the all-matching pattern `fail',
+              ;; so instead we use a `let' binding when VAR is a symbol
+              ;; to avoid `pcase'.
+              (if (symbolp var)
+                  `(let ((,var ,val))
+                     ,body)
+                `(pcase ,val
+                   ((loopy ,var) ,body)
+                   (fail (signal 'loopy-bad-run-time-destructuring
+                                 (list (quote (loopy ,var)) fail)))))))
     (cl-loop with rev = (reverse bindings)
              with result = (pcase-maker (car rev) (macroexp-progn body))
              for bind in (cdr rev)
