@@ -30,15 +30,6 @@
   "`loopy' quote: Quote a use of `loopy'."
   `(eval (quote (loopy ,@body)) t))
 
-;; This was added in commit d925121b1e1cdf953705a5da43f8092f2a6e1d8c, in 2021
-;; March, whose changes do not seem to be included in the Emacs 27 branch.
-;; Adding the method does not seem to fix the tests, so we use a separate
-;; function.
-(defun my-ht-map-insert (hash-table key value)
-  (let ((ht (copy-hash-table hash-table)))
-    (puthash key value ht)
-    ht))
-
 ;;; Check for ELC files, which can mess up testing.
 (ert-deftest no-elc-in-cwd ()
   (should (cl-loop for f in (directory-files ".")
@@ -1790,17 +1781,13 @@ Using numbers directly will use less variables and more efficient code."
                (iter i gen :close some-val)
                (leave) ; Should not preventing closing or final updates.
                (finally-return
-                ;; Older versions of Emacs don't have the `:success' clause,
-                ;; so we work around it.
-                (let ((val (condition-case err
-                               (iter-next gen)
-                             (iter-end-of-sequence 'fail)
-                             (error
-                              (signal (car err) (cdr err))))))
-                  (if (eq val 'fail)
-                      nil
-                    (iter-close gen)
-                    t))))
+                (condition-case err
+                    (iter-next gen)
+                  (iter-end-of-sequence 'mistakenly-closed)
+                  (:success (progn
+                              (iter-close gen)
+                              t))
+                  (error (signal (car err) (cdr err))))))
   :loopy t
   :iter-keyword (iter leave)
   :iter-bare ((iter . iterating)
@@ -4061,8 +4048,8 @@ expansion time."
                  ;; TODO: Update this for `loopy-parsers' after
                  ;; `loopy-command-parsers' fully removed.
                  (let ((loopy-parsers (thread-first loopy-parsers
-                                                    (my-ht-map-insert 'sum1 #'my-loopy-sum-command1)
-                                                    (my-ht-map-insert 'sum2 #'my-loopy-sum-command2)))
+                                                    (map-insert 'sum1 #'my-loopy-sum-command1)
+                                                    (map-insert 'sum2 #'my-loopy-sum-command2)))
                        (loopy-iter-bare-names (append '(sum1 sum2)
                                                       loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
@@ -6133,7 +6120,7 @@ Multiple of 3: 6"
   :doc "Make sure aliases don't show up in `when' instead of the symbol `when'."
   :result 1
   :wrap ((x . `(let ((loopy-parsers
-                      (my-ht-map-insert loopy-parsers 'w (map-elt loopy-parsers 'when))))
+                      (map-insert loopy-parsers 'w (map-elt loopy-parsers 'when))))
                  (eval (quote ,x) t))))
   :body ((w t (return 1)))
   :loopy t)
@@ -6164,7 +6151,7 @@ Not multiple of 3: 7"
   :doc "Make sure aliases don't show up in `unless' instead of the symbol `unless'."
   :result 1
   :wrap ((x . `(let ((loopy-parsers
-                      (my-ht-map-insert loopy-parsers 'u (map-elt loopy-parsers 'unless))))
+                      (map-insert loopy-parsers 'u (map-elt loopy-parsers 'unless))))
                  (eval (quote ,x) t))))
   :body ((u nil (return 1)))
   :loopy t)
@@ -6801,9 +6788,9 @@ Wrapping with another eval to make sure variables are set by expansion time."
                              "Set TARGET to the sum of ITEMS."
                              `((loopy--iteration-vars (,target nil))
                                (loopy--main-body (setq ,target (apply #'+ (list ,@items)))))))
-                 (let ((loopy-parsers (my-ht-map-insert loopy-parsers
-                                                        'target-sum
-                                                        #'my-loopy-sum-command))
+                 (let ((loopy-parsers (map-insert loopy-parsers
+                                                  'target-sum
+                                                  #'my-loopy-sum-command))
                        (loopy-iter-bare-names (cons 'target-sum
                                                     loopy-iter-bare-names)))
                    (eval (quote ,x) t)))))
@@ -6872,7 +6859,7 @@ Otherwise, `loopy' should return t."
                                ,@(cl-loop
                                   for condition in conditions
                                   collect `(loopy--post-conditions ,condition)))))
-                 (let ((loopy-parsers (my-ht-map-insert loopy-parsers 'my-always #'my--loopy-always-command-parser))
+                 (let ((loopy-parsers (map-insert loopy-parsers 'my-always #'my--loopy-always-command-parser))
                        (loopy-iter-bare-commands (cons 'my-always
                                                        loopy-iter-bare-commands)))
                    (eval (quote ,x) t)))))
@@ -6942,7 +6929,7 @@ Otherwise, `loopy' should return t."
                                ,@(cl-loop
                                   for condition in conditions
                                   collect `(loopy--post-conditions ,condition)))))
-                 (let ((loopy-parsers (my-ht-map-insert loopy-parsers 'my-always #'my--loopy-always-command-parser))
+                 (let ((loopy-parsers (map-insert loopy-parsers 'my-always #'my--loopy-always-command-parser))
                        (loopy-iter-bare-commands (cons 'my-always
                                                        loopy-iter-bare-commands)))
                    (eval (quote ,x) t)))))
@@ -6960,12 +6947,6 @@ Otherwise, `loopy' should return t."
 ;; This was an odd case reported by a user. See:
 ;; https://github.com/okamsn/loopy/issues/17
 (ert-deftest evaluate-function-twice ()
-  ;; Emacs 27 had a byte-compilation error that was fixed in
-  ;; commit a0f60293d79cda858c033db4ae074e5e5560aab2.
-  ;; See: https://git.savannah.gnu.org/cgit/emacs.git/commit/?id=a0f60293d97cda858c033db4ae074e5e5560aab2.
-  :expected-result (static-if (= emacs-major-version 27)
-                       :failed
-                     :passed)
   (should
    (progn
      (defun mu4e:other-path ()
@@ -7008,7 +6989,7 @@ This assumes that you're on guix."
   :doc "Test with `default' flag, which is essentially a no-op."
   :result '(1)
   :wrap ((x . `(let ((loopy-parsers
-                      (my-ht-map-insert loopy-parsers 'f (map-elt loopy-parsers 'flag)))
+                      (map-insert loopy-parsers 'f (map-elt loopy-parsers 'flag)))
                      (loopy-iter-bare-names
                       (cons 'f loopy-iter-bare-names)))
                  (eval (quote ,x) t))))
@@ -7023,7 +7004,7 @@ This assumes that you're on guix."
 
 (loopy-deftest custom-alias-with
   :result 1
-  :wrap ((x . `(let ((loopy-parsers (my-ht-map-insert loopy-parsers 'as (map-elt loopy-parsers 'with)))
+  :wrap ((x . `(let ((loopy-parsers (map-insert loopy-parsers 'as (map-elt loopy-parsers 'with)))
                      (loopy-iter-bare-names
                       (cons 'as loopy-iter-bare-names)))
                  (eval (quote ,x) t))))
@@ -7037,7 +7018,7 @@ This assumes that you're on guix."
 (loopy-deftest custom-alias-without
   :result 5
   :wrap ((x . `(let ((loopy-parsers
-                      (my-ht-map-insert loopy-parsers 'ignore (map-elt loopy-parsers 'without)))
+                      (map-insert loopy-parsers 'ignore (map-elt loopy-parsers 'without)))
                      (loopy-iter-bare-names
                       (cons 'ignore loopy-iter-bare-names)))
                  (eval  (quote (let ((a 1)
