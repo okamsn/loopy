@@ -38,6 +38,8 @@ please let me know.
  - Unreleased:
    - Using accumulation commands with different initial values for the same
      variable now signals an error instead of a warning.
+   - Aliases made obsolete in version 0.14.0 have been removed.  They can still
+     be added manually to ~loopy-parsers~.
  - Version 0.15.0:
    - Loopy now requires at least Emacs version 28.1, increased from version
      27.1.

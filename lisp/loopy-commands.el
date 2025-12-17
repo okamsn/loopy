@@ -3059,10 +3059,6 @@ COMMAND-LIST."
 
 Failing that, an error is signaled when ERROR is non-nil."
   (or (map-elt loopy--parsers-internal command-name)
-      (when-let* ((found (map-elt loopy--obsolete-aliases command-name)))
-        (warn "`loopy': `%s' is an obsolete built-in alias of `%s'.  It will be removed in the future.  To add it as a custom alias, add it to `loopy-parsers'."
-              command-name found)
-        (map-elt loopy--parsers-internal found))
       (when error
         (signal 'loopy-unknown-command (list command-name)))))
 
