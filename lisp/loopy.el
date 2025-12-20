@@ -156,69 +156,34 @@ this means that an explicit \"nil\" is always required."
     (error "Invalid binding in `loopy' expansion: %s" binding)))
 
 (defun loopy--destructure-for-with-vars (bindings)
-  "Destructure BINDINGS into bindings suitable for something like `let*'.
+  "Get function to wrap code and destructure values in BINDINGS.
 
 This function named by this variables receives the bindings given
 to the `with' macro argument and should usually return a list of
 two elements:
 
-1. A function/macro that works like `let*' and can be used to wrap
-   the expanded macro code.
-2. The bindings that will be given to this macro.
-
-For example, an acceptable return value might be something like
-
-    (list \\='pcase-let* BINDINGS)
-
-which will be used to wrap the loop and other code."
+1. A list of symbols being all the variables to be bound in BINDINGS.
+2. A function to be called with the code to be wrapped, which
+  should produce wrapped code appropriate for BINDINGS,
+  such as a `let*' form."
   (funcall (or loopy--destructuring-for-with-vars-function
                #'loopy--destructure-for-with-vars-default)
            bindings))
 
 (defun loopy--destructure-for-with-vars-default (bindings)
-  "Destructure BINDINGS into bindings suitable for something like `let*'.
+  "Get function to wrap code and destructure values in BINDINGS.
 
 Returns a list of two elements:
-1. The symbol `pcase-let*'.
-2. A new list of bindings."
-  ;; We do this instead of passing to `pcase-let*' so that:
-  ;; 1) We sure that variables are bound even when unmatched.
-  ;; 2) We can signal an error if the pattern doesn't match a value.
-  ;; This keeps the behavior of the old implementation.
-  ;;
-  ;; Note: Binding the found variables to `nil' would overwrite any values that
-  ;;       we might try to access while binding, so we can't do that like we do
-  ;;       for iteration commands in which we already know the scope.
-  ;; (let ((new-binds)
-  ;;       (all-set-exprs))
-  ;;   (dolist (bind bindings)
-  ;;     (cl-destructuring-bind (var val)
-  ;;         bind
-  ;;       (if (symbolp var)
-  ;;           (push `(,var ,val) new-binds)
-  ;;         (let ((sym (gensym)))
-  ;;           (push `(,sym ,val) new-binds)
-  ;;           (cl-destructuring-bind (set-expr found-vars)
-  ;;               (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
-  ;;             (dolist (v found-vars)
-  ;;               (push `(,v nil) new-binds))
-  ;;             (push set-expr all-set-exprs))))))
-  ;;   (list 'let* (nreverse new-binds) (macroexp-progn (nreverse
-  ;;                                                     all-set-exprs))))
-  (let ((new-binds))
-    (dolist (bind bindings)
-      (cl-destructuring-bind (var val)
-          bind
-        (if (symbolp var)
-            (push `(,var ,val) new-binds)
-          (let ((sym (gensym)))
-            (push `(,sym ,val) new-binds)
-            (cl-destructuring-bind (set-expr found-vars)
-                (loopy--pcase-destructure-for-iteration `(loopy ,var) sym :error t)
-              (dolist (v found-vars)
-                (push `(,v nil) new-binds))
-              (push `(_ ,set-expr) new-binds))))))
-    (list 'let* (nreverse new-binds))))
+1. A list of symbols being all the variables to be bound in BINDINGS.
+2. A function to be called with the code to be wrapped, which
+  should produce wrapped code appropriate for BINDINGS,
+  such as a `let*' form."
+  (loopy--pcase-destructure-for-with-vars (cl-loop for b in bindings
+                                                   for (var val) = b
+                                                   collect (if (symbolp var)
+                                                               b
+                                                             `((loopy ,var) ,val)))
+                                          :error t))
 
 ;;;; The Macro Itself
 (defun loopy--expand-to-loop ()
@@ -426,8 +391,7 @@ The function creates quoted code that should be used by a macro."
 
       ;; Declare the With variables.
       (when loopy--with-vars
-        (setq result `(,@(loopy--destructure-for-with-vars loopy--with-vars)
-                       ,@(get-result))
+        (setq result (funcall (cl-second loopy--with-vars) (get-result))
               result-is-one-expression t))
 
       ;; Declare the symbol macros.
@@ -527,14 +491,13 @@ Returns BODY without the `%s' argument."
 
 (loopy--def-special-processor with
   (setq loopy--with-vars
-        ;; Note: These values don't have to be used literally, due to
-        ;;       destructuring.
-        (mapcar (lambda (binding)
-                  (cond ((symbolp binding)      (list binding nil))
-                        ((= 1 (length binding)) (list (cl-first binding)
-                                                      nil))
-                        (t                       binding)))
-                arg-value))
+        (loopy--destructure-for-with-vars
+         (mapcar (lambda (binding)
+                   (cond ((symbolp binding)      (list binding nil))
+                         ((= 1 (length binding)) (list (cl-first binding)
+                                                       nil))
+                         (t                       binding)))
+                 arg-value)))
   (seq-remove (lambda (x) (eq (car x) arg-name)) body))
 
 (loopy--def-special-processor without

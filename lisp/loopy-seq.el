@@ -85,9 +85,18 @@
   "Return a way to destructure BINDINGS as if by a `seq-let*'.
 
 Returns a list of two elements:
-1. The symbol `loopy-seq--seq-let*'.
-2. A new list of bindings."
-  (list 'loopy-seq--seq-let* bindings))
+1. A list of symbols being all the variables to be bound in BINDINGS.
+2. A function to be called with the code to be wrapped, which
+  should produce wrapped code appropriate for BINDINGS,
+  such as a `let*' form."
+  (loopy--pcase-destructure-for-with-vars
+   (cl-loop for b in bindings
+            for (var val) = b
+            collect (if (seqp var)
+                        `(,(loopy-seq--make-pcase-pattern var)
+                          ,val)
+                      b))
+   :error nil))
 
 (defmacro loopy-seq--seq-let* (bindings &rest body)
   "Bind variables in BINDINGS according via `seq-let' and `let'.

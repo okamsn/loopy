@@ -389,7 +389,8 @@ Returns BODY without the `%s' argument."
                 ((= 1 (length binding)) (list (cl-first binding) nil))
                 (t                       binding)))
          (finally-do
-          (setq loopy--with-vars loopy-result))))
+          (setq loopy--with-vars (loopy--destructure-for-with-vars
+                                  loopy-result)))))
 
 
 (loopy-iter--def-special-processor finally-return
