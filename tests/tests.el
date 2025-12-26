@@ -41,7 +41,7 @@
       args doc repeat body multi-body
       repeat-loopy repeat-iter-bare repeat-iter-keyword
       wrap
-      macroexpand
+      (macroexpand nil macroexpand-provided)
       (loopy nil loopy-provided)
       (iter-bare nil iter-bare-provided)
       (iter-keyword nil iter-keyword-provided)
@@ -98,7 +98,7 @@ prefix the items in LOOPY or ITER-BARE."
   (declare (indent 1))
 
   (unless (or result-provided error-provided should-provided)
-    (error "Must include `result' or `error'"))
+    (error "Must include `result', `error', or `should' (even for `macroexpand')"))
   (unless (or loopy iter-bare iter-keyword)
     (error "Must include `loopy' or `iter-bare'"))
   (unless body
@@ -138,7 +138,9 @@ prefix the items in LOOPY or ITER-BARE."
        (output-wrap (x) (cond (should-provided `(should ,x))
                               (result-provided `(should (equal ,result ,x)))
                               (error-provided  `(should-error ,x :type
-                                                              (quote ,error)))))
+                                                              (quote ,error)))
+                              (t
+                               (error "Didn't specify how to wrap output (`result', `should', etc.)"))))
        ;; Replace given placeholder command names with actual names,
        ;; maybe including the `for' keyword for `loopy-iter'.
        (translate (group-alist this-body &optional keyword)
@@ -395,6 +397,22 @@ writing a `seq-do' method for the custom seq."
                     (- e f))))
   :loopy t
   :iter-bare ((return . returning)))
+
+(loopy-deftest with-var-destructured-still-detected
+  :doc "Make sure destructured `with' variables are still detected by other commands.
+For example, make sure we don't see an error for incompatible accumulations
+since we are binding `acc' in `with'."
+  :result 45
+  :body ((with ((acc b) '(3 4)))
+         (list i '(1 2 3))
+         (sum acc i)
+         (multiply acc i)
+         (finally-return acc))
+  :loopy t
+  :iter-keyword (list sum multiply)
+  :iter-bare ((list . listing)
+              (sum . summing)
+              (multiply . multiplying)))
 
 ;;;; Without
 (loopy-deftest without

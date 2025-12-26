@@ -425,14 +425,20 @@ This is used to check for errors with the `at' command.")
 (defvar loopy--with-vars nil
   "With Forms are variables explicitly created using the `with' keyword.
 
-This is a list of ((VAR1 VAL1) (VAR2 VAL2) ...).  If VAR is a
-sequence, then it will be destructured.  How VAR and VAL are
-used, as well as how the bindings are expanded into the loop's
-surrounding code, is determined by the destructuring system being
-used.
+This is a list of the form (VARIABLES BINDING-FUNCTION).  VARIABLES
+is a list of symbols naming which variables are found in the bindings,
+including destructured bindings.  BINDING-FUNCTION is a function
+that will receive code to be wrapped in a `let'-like form
+and should return an expression binding the VARIABLES and setting
+their values.
 
 They are created by passing (with (VAR1 VAL1) (VAR2 VAL2) ...) to
-`loopy'.")
+`loopy'.
+
+Because it can affect expansion of the loop commands,
+`loopy--with-vars' is by `loopy--process-special-arg-with',
+which uses `loopy--destructure-for-with-vars' and the destructuring
+flags found by `loopy--process-special-arg-flag'.")
 
 (defvar loopy--without-vars nil
   "A list of variables that `loopy' won't try to initialize.
@@ -739,12 +745,8 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 Some iteration commands (e.g., `reduce') will change their behavior
 depending on whether the accumulation variable is given an initial
 value."
-  (or (cl-loop for (var val) in loopy--with-vars
-               when (eq var var-name)
-               return (cons 'with val))
-      (cl-loop for x in loopy--without-vars
-               when (eq x var-name)
-               return (cons 'without nil))))
+  (or (memq var-name (car-safe loopy--with-vars))
+      (memq var-name loopy--without-vars)))
 
 (defun loopy--command-bound-p (var-name)
   "Whether VAR-NAME was bound by a command (and not a special macro argument).

@@ -114,3 +114,15 @@
   (should-not loopy--destructuring-for-with-vars-function)
   (should-not loopy--destructuring-for-iteration-function)
   (should-not loopy--destructuring-accumulation-parser))
+
+(ert-deftest seq-with-var-destructured-still-detected ()
+  "Make sure destructured `with' variables are still detected by other commands.
+For example, make sure we don't see an error for incompatible accumulations
+since we are binding `acc' in `with'."
+  (should (= 45 (eval '(loopy (flag seq)
+                              (with ([acc b] '(3 4)))
+                              (list i '(1 2 3))
+                              (sum acc i)
+                              (multiply acc i)
+                              (finally-return acc))
+                      t))))

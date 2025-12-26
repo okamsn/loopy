@@ -900,12 +900,12 @@ Returns a list.  The elements are:
 If ERROR is non-nil, then signal an error in the produced code if
 the pattern doesn't match."
   (if (symbolp var)
-      `((setq ,var ,val)
-        ,var)
+      (list `(setq ,var ,val)
+            (list var))
     (let* ((var-list nil)
            (always-used-cases
             (cons var (lambda (varvals &rest _)
-                        (cons 'setq (mapcan (pcase-lambda (`(,var ,val . ,rest))
+                        (cons 'setq (mapcan (pcase-lambda (`(,var ,val . ,_rest))
                                               (push var var-list)
                                               (list var val))
                                             varvals))))))
@@ -917,13 +917,52 @@ the pattern doesn't match."
                (list always-used-cases)))
             (seq-uniq var-list #'eq)))))
 
-(defun loopy--pcase-destructure-for-with-vars (bindings)
-  "Return a way to destructure BINDINGS by `pcase-let*'.
+(cl-defun loopy--pcase-destructure-for-with-vars (bindings &key error)
+  "Get function to wrap code and destructure values in BINDINGS.
+
+Each binding in BINDINGS is a (VARIABLE VALUE) pair, where VARIABLE is a
+symbol or a `pcase' pattern.  If VARIABLE is a symbol, then it is used
+directly.  If ERROR is non-nil, then `loopy-bad-run-time-destructuring'
+is signaled if a binding does not match.
 
 Returns a list of two elements:
-1. The symbol `pcase-let*'.
-2. A new list of bindings."
-  (list 'pcase-let* bindings))
+1. A list of symbols being all the variables to be bound in BINDINGS.
+2. A function to be called with the code to be wrapped, which
+  should produce wrapped code appropriate for BINDINGS,
+  such as a `let*' form."
+  (let ((new-bindings nil)
+        (all-vars nil))
+    (pcase-dolist (`(,var ,val) bindings)
+      (if (symbolp var)
+          (progn
+            (cl-callf2 cl-adjoin var all-vars :test #'eq)
+            (push `(nil (,var ,val))
+                  new-bindings))
+        ;; `loopy--pcase-destructure-for-iteration' does not return any capture
+        ;; variables that `pcase' might use, so we need to `let' bind our own
+        ;; capture variable before we `let' bind the found variables, to avoid
+        ;; hiding any needed variable values when binding the found variables to
+        ;; `nil'.
+        (let ((capture-var (gensym "loopy--with-capture")))
+          (pcase-let ((`(,setter ,found-vars)
+                       (loopy--pcase-destructure-for-iteration
+                        var capture-var
+                        :error error)))
+            (cl-callf cl-union all-vars found-vars :test #'eq)
+            (push `(,setter
+                    (,capture-var ,val)
+                    ,@(cl-loop for v in found-vars
+                               collect `(,v nil)))
+                  new-bindings)))))
+    (list all-vars
+          (lambda (body)
+            (let ((result (macroexp-progn body)))
+              (dolist (b new-bindings)
+                (setq result
+                      `(let ,(cdr b)
+                         ,(car b)
+                         ,result)))
+              result)))))
 
 (cl-defun loopy--pcase-parse-for-destructuring-accumulation-command
     ((name var val &rest args) &key error)
