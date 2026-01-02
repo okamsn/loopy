@@ -2076,9 +2076,6 @@ you can use in the instructions:
           (progn
             (loopy--check-accumulation-compatibility loop var 'list cmd)
             `(,@(if (eq pos 'start)
-                    ;; TODO: Is there a better way of appending to the beginning
-                    ;;       of a list?
-                    ;; `append' doesn't copy the last argument.
                     `((loopy--main-body (setq ,var (append ,val ,var))))
                   (loopy--produce-multi-item-end-tracking var val))
               (loopy--vars-final-updates (,var . nil))))
@@ -2110,9 +2107,6 @@ you can use in the instructions:
       (loopy--check-accumulation-compatibility loopy--loop-name var 'list cmd)
       `((loopy--accumulation-vars (,var nil))
         ,@(pcase pos
-            ;; TODO: Is there a better way of appending to the beginning
-            ;;       of a list?
-            ;; `append' doesn't copy the last argument.
             ('start `((loopy--main-body (setq ,var (append ,val ,var)))))
             ('end (loopy--produce-multi-item-end-tracking var val))
             (_ (signal 'loopy-bad-position-command-argument (list pos cmd))))
