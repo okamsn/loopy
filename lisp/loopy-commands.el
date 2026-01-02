@@ -191,9 +191,6 @@ handled by `loopy-iter'."
             (setq ,value-selector (1+ ,value-selector)))))))))
 
 ;;;;;; Prev Expr
-;; TODO: Use body of when with-bound and destructuring to allow for `back' not
-;;       being known at compile time (but still only being evaluated once.)
-;;       (#194)
 (cl-defun loopy--parse-set-prev-command
     ((_ var val &key (back 1)))
   "Parse the `set-prev' command as (set-prev VAR VAL &key back).
@@ -626,7 +623,7 @@ CMD is the command usage for error reporting."
         :inclusive ,inclusive))))
 
 ;;;;;; Array
-(defmacro loopy--distribute-array-elements (&rest arrays)
+(defun loopy--distribute-array-elements (&rest arrays)
   "Distribute the elements of the ARRAYS into an array of lists.
 
 For example, [1 2] and [3 4] gives [(1 3) (1 4) (2 3) (2 4)]."
@@ -676,8 +673,8 @@ using the function `loopy--distribute-array-elements'."
       (loopy--find-start-by-end-dir-vals opts)
     (loopy--instr-let-const* ((value-holder (if (null other-vals)
                                                 val
-                                              `(loopy--distribute-array-elements
-                                                ,val ,@other-vals)))
+                                              (apply #'loopy--distribute-array-elements
+                                                     val other-vals)))
                               (end-holder (or key-end
                                               (if decreasing
                                                   0
@@ -821,8 +818,7 @@ and is a value."
                                    (iter-close ,obj-holder))))))))))))
 
 ;;;;;; List
-;; TODO: Make this a normal function.
-(defmacro loopy--distribute-list-elements (&rest lists)
+(defun loopy--distribute-list-elements (&rest lists)
   "Distribute the elements of LISTS into a list of lists.
 
 For example, (1 2) and (3 4) would give ((1 3) (1 4) (2 3) (2 4))."
@@ -857,8 +853,8 @@ using the function `loopy--distribute-list-elements'."
       loopy--iteration-vars
     (loopy--instr-let-var* ((list-val (if (null other-vals)
                                           val
-                                        `(loopy--distribute-list-elements
-                                          ,val ,@other-vals))))
+                                        (apply #'loopy--distribute-list-elements
+                                               val other-vals))))
         loopy--iteration-vars
       `(;; NOTE: The benchmarks show that `consp' is faster than no `consp',
         ;;       at least for some commands.
@@ -1176,8 +1172,7 @@ distributed using the function `loopy--distribute-seq-elements'."
                              ,seq-index ,by))))))))
 
 ;;;;;; Sequence
-;; TODO: Turn this into a function.
-(defmacro loopy--distribute-sequence-elements (&rest sequences)
+(defun loopy--distribute-sequence-elements (&rest sequences)
   "Distribute the elements of SEQUENCES into a vector of lists.
 
 For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
@@ -1241,8 +1236,8 @@ distributed using the function `loopy--distribute-sequence-elements'."
                                 (test test))
           loopy--iteration-vars
         (loopy--instr-let-var* ((temp-val (if other-vals
-                                              `(loopy--distribute-sequence-elements
-                                                ,val ,@other-vals)
+                                              (apply #'loopy--distribute-sequence-elements
+                                                     val other-vals)
                                             val))
                                 (is-list (if optimize
                                              `(consp ,temp-val)
