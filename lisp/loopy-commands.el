@@ -3035,8 +3035,6 @@ This function gets the parser, and passes the command to that parser."
         (signal 'loopy-parser-instructions-missing
                 (list command parser)))))
 
-;; TODO: Allow for commands to return single instructions, instead of requiring
-;; list of instructions.
 (defun loopy--parse-loop-commands (command-list)
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
