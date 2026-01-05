@@ -355,17 +355,6 @@ If not, then it is possible that FORM is a variable."
            (eq (car form-or-symbol) 'function)
            (eq (car form-or-symbol) 'cl-function))))
 
-;; TODO: Byte optimization for `funcall' with a quoted argument
-;;       should expand to (FUNC ARGS...), so we shouldn't need
-;;       this function.
-(defun loopy--apply-function (func &rest args)
-  "Return an expansion to appropriately apply FUNC to ARGS.
-
-This expansion can apply FUNC directly or via `funcall'."
-  (if (loopy--quoted-form-p func)
-      `(,(loopy--get-function-symbol func) ,@args)
-    `(funcall ,func ,@args)))
-
 
 ;;;; Membership
 
