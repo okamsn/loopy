@@ -542,28 +542,25 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 
 (defun loopy--seq-length= (seq n)
   "Check whether the length of SEQ is equal to N."
-  ;; TODO: Simplify when `stream.el' is updated and streams are no longer
-  ;; implemented as lists.  See also `loopy--seq-length>'.
   (cond
+   ((sequencep seq)
+    (length= seq n))
    ((streamp seq)
     ;; Avoid traversing long streams.
     (let ((s (seq-drop seq (1- n))))
       (and (not (stream-empty-p s))
            (stream-empty-p (stream-rest s)))))
-   ((listp seq)
-    (compat-call length= seq n))
    (t
     (= (seq-length seq) n))))
 
 (defun loopy--seq-length> (seq n)
   "Check whether the length of SEQ is greater than to N."
   (cond
-   ;; Test streams first, because version 2.3.0 of `stream.el' implements
-   ;; streams as lists. Take advantage of lazy evaluation of streams.
-   ((streamp seq) (not (stream-empty-p (seq-drop seq n))))
+   ((sequencep seq) (length> seq n))
+   ;; Take advantage of lazy evaluation of streams.
+   ((streamp seq)  (not (stream-empty-p (seq-drop seq n))))
    ;; `length>' only seems to matter for lists, based on its definition.
-   ((listp seq)   (compat-call length> seq n))
-   (t             (> (seq-length seq) n))))
+   (t              (> (seq-length seq) n))))
 
 (defun loopy--pcase-pat-positional-&seq-pattern (pos-vars opt-vars rest-var map-or-key-vars)
   "Build a pattern for the positional, `&optional', and `&rest' variables.

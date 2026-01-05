@@ -321,11 +321,13 @@ Returns BODY without the `%s' argument."
                 name name)
        (loopy
         (accum-opt matching-args new-body)
+        (with (first-is-keyword nil))
         (listing expr body)
         (if (and (consp expr)
                  (let ((first (cl-first expr)))
                    (or (and (memq first loopy-iter--keywords-internal)
-                            (eq ,fn-sym (loopy--get-command-parser (cl-second expr) :error nil)))
+                            (eq ,fn-sym (loopy--get-command-parser (cl-second expr) :error nil))
+                            (setq first-is-keyword t))
                        (and (memq first loopy-iter--bare-names-internal)
                             (eq ,fn-sym (loopy--get-command-parser first :error nil))))))
             (collecting matching-args expr)
@@ -336,9 +338,7 @@ Returns BODY without the `%s' argument."
                         (let ((arg (car matching-args))
                               (arg-name)
                               (arg-value))
-                          ;; TODO: Probably a better way to do this that doesn't
-                          ;; involve checking twice.
-                          (if (memq (cl-first arg) loopy-iter-keywords)
+                          (if first-is-keyword
                               (loopy-setq (_ arg-name . arg-value) arg)
                             (loopy-setq (arg-name . arg-value) arg))
                           (ignore arg-name)
