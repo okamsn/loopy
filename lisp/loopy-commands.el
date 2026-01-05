@@ -1970,12 +1970,12 @@ you can use in the instructions:
               (loopy--check-accumulation-compatibility loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 (setq ,var ,(loopy--apply-function (cl-third args) val var)))))
+                 (setq ,var (funcall ,(cl-third args) ,val ,var)))))
   :implicit (progn
               (loopy--check-accumulation-compatibility loopy--loop-name var 'generic cmd)
               `((loopy--accumulation-vars (,var nil))
                 (loopy--main-body
-                 (setq ,var ,(loopy--apply-function (cl-second args) val var)))
+                 (setq ,var (funcall ,(cl-second args) ,val ,var)))
                 (loopy--implicit-return ,var))))
 
 ;;;;;;; Adjoin
@@ -2597,7 +2597,7 @@ by `cl-reduce'."
   :implicit `(,@(cond
                  ((loopy--with-bound-p var)
                   `((loopy--main-body
-                     (setq ,var ,(loopy--apply-function (cl-second args) var val)))))
+                     (setq ,var (funcall ,(cl-second args) ,var ,val)))))
                  (t
                   (let ((first-time (gensym "first-time")))
                     `((loopy--accumulation-vars (,var nil))
@@ -2606,12 +2606,12 @@ by `cl-reduce'."
                        (if ,first-time
                            (setq ,first-time nil
                                  ,var ,val)
-                         (setq ,var ,(loopy--apply-function (cl-second args) var val))))))))
+                         (setq ,var (funcall ,(cl-second args) ,var ,val))))))))
               (loopy--implicit-return ,var))
   :explicit `(,@(cond
                  ((loopy--with-bound-p var)
                   `((loopy--main-body
-                     (setq ,var ,(loopy--apply-function (cl-third args) var val)))))
+                     (setq ,var (funcall ,(cl-third args) ,var ,val)))))
                  (t
                   (let ((first-time (gensym "first-time")))
                     `((loopy--accumulation-vars (,var nil))
@@ -2620,7 +2620,7 @@ by `cl-reduce'."
                        (if ,first-time
                            (setq ,first-time nil
                                  ,var ,val)
-                         (setq ,var ,(loopy--apply-function (cl-third args) var val))))))))))
+                         (setq ,var (funcall ,(cl-third args) ,var ,val))))))))))
 
 ;;;;;;; Sum
 (loopy--defaccumulation sum
