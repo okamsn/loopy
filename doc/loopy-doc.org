@@ -3648,13 +3648,6 @@ Sequence accumulation commands are used to join lists (such as =union= and
 
   This command also has the alias =finding=.
 
-  If the loop is left early and =TEST= was never non-nil, this is the same as a
-  normal failure and =VAR= will be set to the value of =ON-FAILURE=, if
-  provided.
-
-  To be consistent with other commands, =ON-FAILURE= is evaluated at the
-  start of the loop, even though that is not necessarily where it is used.
-
   #+BEGIN_SRC emacs-lisp
     ;; => (13 (1 2))
     (loopy (list i '(1 2 3 4 5 6 7 8))
@@ -3670,15 +3663,37 @@ Sequence accumulation commands are used to join lists (such as =union= and
     (loopy (list i '(1 2 3 4 5 6))
            (find i (> i 12) :on-failure 27))
 
-    ;; => 27
-    (loopy (list i '(1 2 3 4 5 6))
-           (while (< i 3))
-           (find i (> i 12) :on-failure 27))
-
     ;; => nil
     (loopy (list i '(1 2 3 4 5 6))
            (find nil (> i 3) :on-failure 27))
+  #+END_SRC
 
+  If the loop is left early and =TEST= was never non-nil, then this is the same
+  as a normal failure and =VAR= will be set to the value of =ON-FAILURE=, if
+  provided.
+
+  #+begin_src emacs-lisp
+  ;; => 27
+  (loopy (list i '(1 2 3 4 5 6))
+         (while (< i 3))
+         (find i (> i 12) :on-failure 27))
+  #+end_src
+
+  Like in Common Lisp's Iterate package, if =TEST= is a sharp-quoted symbol,
+  such as ~#'cl-evenp~, then the test expression is treated as applying that
+  function to the value of =EXPR=.
+
+  #+begin_src emacs-lisp
+    ;; => 2
+    (loopy (list i '(1 2 3 4 5 6))
+           ;; (find i (cl-evenp i))
+           (find i #'cl-evenp))
+  #+end_src
+
+  To be consistent with other commands, =ON-FAILURE= is evaluated at the
+  start of the loop, even though that is not necessarily where it is used.
+
+  #+BEGIN_SRC emacs-lisp
     ;; Value of `:on-failure' gotten at the start of the loop:
     ;; => 27
     (loopy (with (on-fail 27))
@@ -5225,11 +5240,10 @@ makes use of more convenient Emacs Lisp libraries and can be seen in the library
                 (cons 'progn (nreverse if-true-main-body))))
 
         ;; Return the new, full list of instructions.
-        (cons `(loopy--main-body
-                . (if ,condition
-                      ,if-true-main-body
-                    ,@(nreverse if-false-main-body)))
-              (nreverse full-instructions)))))
+        `((loopy--main-body (if ,condition
+                                ,if-true-main-body
+                              ,@(nreverse if-false-main-body)))
+          ,@(nreverse full-instructions)))))
 #+END_SRC
 
 In general, the code of command parsers is not complicated.  The hardest part of
