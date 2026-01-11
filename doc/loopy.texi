@@ -97,6 +97,11 @@ Customizing Macro Behavior
 * Custom Commands::              Extending `loopy' with personal commands.
 * Locally Overriding Behavior::  Using the `overrides' special macro argument.
 
+Using Flags
+
+* Destructuring Flags::          Using different destructuring systems.
+* The @samp{no-loop} Flag::      Avoiding the loop.
+
 Custom Commands
 
 * Background Info::              The internals of `loopy'.
@@ -746,7 +751,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,orgb677e2e
+@float Listing,org96b983b
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -935,7 +940,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org1e2c3e4
+@float Listing,org86f1547
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -950,7 +955,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org3b108b1
+@float Listing,org18a3b65
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -4986,7 +4991,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,org50bbb64
+@float Listing,org0ab40f0
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5382,7 +5387,7 @@ use of Loopy internally and wishes to modify its behavior would use the
 A @dfn{flag} is a symbol passed to the @samp{flag} or @samp{flags} special macro
 argument, changing the macro's behavior.  Currently, flags affect what method
 @code{loopy} uses to perform destructuring (@samp{pcase}, @samp{seq}, @samp{dash}, or the default
-method).
+method) and whether @code{loopy} expands with or without the default @code{while}-loop.
 
 Flags are applied in order.  If you specify @samp{(flags seq pcase)}, then @code{loopy}
 will use @code{pcase-let} for destructuring, not @code{seq-let}.
@@ -5390,24 +5395,23 @@ will use @code{pcase-let} for destructuring, not @code{seq-let}.
 The following flags are currently supported:
 
 @cindex pcase flag
+@cindex seq flag
+@cindex dash flag
+@cindex no-loop flag
+@cindex default flag
 @table @asis
 @item @samp{pcase}
 Use @code{pcase-let} for destructuring
 (@ref{Destructuring with pcase Patterns,,,elisp,}).
-@end table
-@cindex seq flag
-@table @asis
 @item @samp{seq}
 Use @code{seq-let} for destructuring (@ref{seq-let,,,elisp,}).
-@end table
-@cindex dash flag
-@table @asis
 @item @samp{dash}
 Use the style of destructuring found in the @samp{dash} library
 (@ref{-let,,,dash,}).
-@end table
-@cindex default flag
-@table @asis
+@item @samp{no-loop} 
+Expand the looping macros without creating a @code{while}-loop.  This
+is intended for wrapping macros that don't want to work around the default
+@code{while}-loop.
 @item @samp{default}
 Use the default behavior for all options.
 @end table
@@ -5423,6 +5427,32 @@ in the list.  Similarly, @samp{(flags -dash dash)} and @samp{(flags -dash +dash)
 @samp{dash} destructuring enabled, and @samp{(flags +dash -dash)} disables @samp{dash}
 destructuring and uses the default behavior.
 
+The flags are described in more detail in the following subsections.
+
+@menu
+* Destructuring Flags::          Using different destructuring systems.
+* The @samp{no-loop} Flag::      Avoiding the loop.
+@end menu
+
+@node Destructuring Flags
+@subsection Destructuring Flags
+
+There are four flags that change the destructuring system used by Loopy:
+
+@table @asis
+@item @samp{pcase}
+Use @code{pcase-let} for destructuring
+(@ref{Destructuring with pcase Patterns,,,elisp,}).
+@item @samp{seq}
+Use @code{seq-let} for destructuring (@ref{seq-let,,,elisp,}).
+@item @samp{dash}
+Use the style of destructuring found in the @samp{dash} library
+(@ref{-let,,,dash,}).
+@item @samp{default}
+Use the default behavior for all options.
+@end table
+
+
 @cindex loopy-dash
 @cindex loopy-pcase
 @cindex loopy-seq
@@ -5430,7 +5460,7 @@ The destructuring flags (@samp{pcase}, @samp{seq}, and @samp{dash}) are separate
 (respectively, @samp{loopy-pcase}, @samp{loopy-seq}, and @samp{loopy-dash}) that must be
 loaded after @samp{loopy}.  Currently, @samp{loopy-dash} is a separate package.
 
-Below are some example of using the destructuring flags.  These flags affect
+Below are some examples of using the destructuring flags.  These flags affect
 the destructuring of:
 @itemize
 @item
@@ -5486,11 +5516,11 @@ variables.
 
 @end quotation
 
-Consider the below example in which a hypothetical @code{pcase} pattern creates the
-variable @code{temporary?} for destructuring.  Loopy has no way of knowing whether it
-was the user who create the variable, or the destructuring system.  As a result,
-@code{temporary?} is treated as an accumulation variable.  Such cases can be unwanted
-and produce inefficient code.
+For the warning, consider the below example in which a hypothetical @code{pcase}
+pattern creates the variable @code{temporary?} for destructuring.  Loopy has no way
+of knowing whether it was the user or the destructuring system that created the
+variable.  As a result, @code{temporary?} is treated as a user-facing accumulation
+variable.  Such cases can be unwanted and produce inefficient code.
 
 @lisp
 ;; Possibly unexpected behavior:
@@ -5535,11 +5565,89 @@ Therefore, uses of @samp{flag}, including aliases, can be identified by checking
 
 ;; Ignores the `seq' flag as expected:
 ;;
-;; => ( 1 2 3 4)
+;; => (1 2 3 4)
 (my-loopy-flag-wrapper (flag seq)
                        (list `(,i . ,j) '((1 . 2) (3 . 4)))
                        (collect i)
                        (collect j))
+@end lisp
+
+@node The @samp{no-loop} Flag
+@subsection The @samp{no-loop} Flag
+
+Some users of Loopy's macros may prefer using Loopy's non-looping constructs
+(such as accumulation commands) inside Emacs Lisp's default looping features
+(such as @code{dolist} or @code{mapc}).  By default, Loopy creates an infinite
+@code{while}-loop, which can interfere with this approach.
+
+One way of avoiding the infinite @code{while}-loop is to use a command like @samp{cycle}
+or @samp{leave}, as in the below examples.  This does not prevent the creation of the
+@code{while}-loop; it just causes Loopy to exit the loop after one step.
+
+@lisp
+;; => 10
+(loopy-iter (cycling 1)
+            (dolist (i '(1 2 3 4))
+              (summing i)))
+
+;; => 10
+(loopy-iter (dolist (i '(1 2 3 4))
+              (summing i))
+            (leaving))
+@end lisp
+
+@cindex no-loop flag
+Another way to avoid the @code{while}-loop is to use the flag @samp{no-loop}.  The benefit
+of using the @samp{no-loop} flag is that, because its meaning is clear during macro
+expansion, it can trigger additional error checking.  Currently, the @samp{no-loop}
+flag will cause Loopy to signal an error when used with the following features:
+@itemize
+@item
+Iteration commands like @samp{list} or @samp{array}
+@item
+Commands like @samp{skip}
+@end itemize
+
+@lisp
+;; `listing' doesn't make sense with `no-loop', so Loopy
+;; signals an error here:
+;;
+(loopy-iter (flag no-loop)
+            (listing i '(1 2 3 4))
+            (summing i))
+@end lisp
+
+Currently, all other Loopy features can be used with the @samp{no-loop} flag,
+including:
+@itemize
+@item
+Special macro arguments
+@item
+Accumulation commands, such as @samp{sum} and @samp{collect}
+@item
+Early-exit commands, such as @samp{leave} and @samp{return}
+@item
+sub-loop commands
+@end itemize
+
+One might wish to use this feature to implement something like @code{cl-block} using
+@code{loopy-iter}, as in the below example.
+
+@lisp
+(defmacro my-loopy-block (&rest args)
+  `(loopy-iter (flag no-loop)
+               ,@@(butlast args)
+               (finally-return ,(last args))))
+
+;; => 6
+(my-loopy-block (dolist (i '(1 2 3))
+                  (summing i))
+                loopy-result)
+
+;; => 6
+(my-loopy-block (mapc (lambda (i) (summing i))
+                      '(1 2 3))
+                loopy-result)
 @end lisp
 
 @node Custom Aliases
@@ -5568,7 +5676,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,org23481af
+@float Listing,org70362c3
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")

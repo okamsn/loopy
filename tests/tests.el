@@ -648,6 +648,113 @@ Make sure that it does not break early returns."
                  (_collect . collect)
                  (_do . do)))
 
+;;;; Flag No-Loop
+
+(loopy-deftest flag-no-loop
+  :doc "Test that flag `no-loop' prevents creating the `while' loop."
+  :result 1
+  :body ((flag no-loop)
+         (with (i 0))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do)
+  :iter-bare ((set . setting)
+              (do . progn)))
+
+(loopy-deftest flag-no-loop-skip-errors
+  :doc "Using `skip' with `no-loop' is illogical and should error."
+  :error loopy-no-loop-skip
+  :macroexpand t
+  :body ((flag no-loop)
+         (with (i 0))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (skip)
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do skip)
+  :iter-bare ((set . setting)
+              (skip . skipping)
+              (do . progn)))
+
+(loopy-deftest flag-no-loop-iterate-errors
+  :doc "Using iteration commands with `no-loop' are illogical and should error."
+  :error loopy-no-loop-iteration
+  :macroexpand t
+  :body ((flag no-loop)
+         (with (i 0))
+         (list x '(1 2 3))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do list)
+  :iter-bare ((set . setting)
+              (do . progn)
+              (list . listing)))
+
+(loopy-deftest flag-no-loop-accumulate-works
+  :doc "Accumulation commands should work with `no-loop'."
+  :result 3
+  :body ((flag no-loop)
+         (with (i 1))
+         (sum i)
+         (sum i)
+         (sum i))
+  :loopy t
+  :iter-keyword (sum)
+  :iter-bare ((sum . summing)))
+
+(loopy-deftest flag-no-loop-find-works
+  :doc "`find' command should work with `no-loop'.
+The `find' command uses a non-returning exit, like `leave'."
+  :result '(27 nil)
+  :body ((flag no-loop)
+         (with (a nil)
+               (b nil))
+         (set a 3)
+         (find 27 (> a 2))
+         (set b 45)
+         (finally-return loopy-result b))
+  :loopy t
+  :iter-keyword (set find)
+  :iter-bare ((set . setting)
+              (find . finding)))
+
+(loopy-deftest flag-no-loop-leave-works
+  :doc "`leave' command should work with `no-loop'.
+The `leave' command uses a non-returning exit."
+  :result 6
+  :body ((flag no-loop)
+         (dolist (a '(1 2 3 4 5))
+           (if (> a 3) (leave))
+           (sum a)))
+  :loopy nil
+  :iter-keyword (sum leave)
+  :iter-bare ((sum . summing)
+              (leave . leaving)))
+
+(ert-deftest flag-no-loop-wrapping-example ()
+  "Test the example from the documentation of the `no-loop' flag."
+  (eval (quote (cl-macrolet ((my-loopy-block (&rest args)
+                               `(loopy-iter (flag no-loop)
+                                            ,@(butlast args)
+                                            (finally-return ,(car (last args))))))
+
+                 (should (equal 6 (my-loopy-block (dolist (i '(1 2 3))
+                                                    (summing i))
+                                                  loopy-result)))
+
+                 (should (equal 6 (my-loopy-block (dolist (i '(1 2 3))
+                                                    (summing i))
+                                                  loopy-result)))))
+        t))
+
 ;;;; Changing the order of macro arguments.
 (loopy-deftest change-order-of-commands
   :result 7

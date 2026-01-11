@@ -81,6 +81,8 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
   - [[#default-bare-names-in-loopy-iter][Default Bare Names in ~loopy-iter~]]
 - [[#customizing-macro-behavior][Customizing Macro Behavior]]
   - [[#using-flags][Using Flags]]
+    - [[#destructuring-flags][Destructuring Flags]]
+    - [[#the-no-loop-flag][The =no-loop= Flag]]
   - [[#custom-aliases][Custom Aliases]]
   - [[#custom-commands][Custom Commands]]
     - [[#background-info][Background Info]]
@@ -4876,7 +4878,7 @@ use of Loopy internally and wishes to modify its behavior would use the
 A {{{dfn(flag)}}} is a symbol passed to the =flag= or =flags= special macro
 argument, changing the macro's behavior.  Currently, flags affect what method
 ~loopy~ uses to perform destructuring (=pcase=, =seq=, =dash=, or the default
-method).
+method) and whether ~loopy~ expands with or without the default ~while~-loop.
 
 Flags are applied in order.  If you specify =(flags seq pcase)=, then ~loopy~
 will use ~pcase-let~ for destructuring, not ~seq-let~.
@@ -4884,14 +4886,18 @@ will use ~pcase-let~ for destructuring, not ~seq-let~.
 The following flags are currently supported:
 
 #+cindex: pcase flag
+#+cindex: seq flag
+#+cindex: dash flag
+#+cindex: no-loop flag
+#+cindex: default flag
 - =pcase= :: Use ~pcase-let~ for destructuring
   ([[info:elisp#Destructuring with pcase Patterns]]).
-#+cindex: seq flag
 - =seq= :: Use ~seq-let~ for destructuring ([[info:elisp#seq-let]]).
-#+cindex: dash flag
 - =dash= :: Use the style of destructuring found in the =dash= library
  ([[info:dash#-let]]).
-#+cindex: default flag
+- =no-loop=  :: Expand the looping macros without creating a ~while~-loop.  This
+  is intended for wrapping macros that don't want to work around the default
+  ~while~-loop.
 - =default= :: Use the default behavior for all options.
 
 
@@ -4905,6 +4911,24 @@ in the list.  Similarly, =(flags -dash dash)= and =(flags -dash +dash)= leave
 =dash= destructuring enabled, and =(flags +dash -dash)= disables =dash=
 destructuring and uses the default behavior.
 
+The flags are described in more detail in the following subsections.
+
+*** Destructuring Flags
+:PROPERTIES:
+:CUSTOM_ID: destructuring-flags
+:DESCRIPTION: Using different destructuring systems.
+:END:
+
+There are four flags that change the destructuring system used by Loopy:
+
+- =pcase= :: Use ~pcase-let~ for destructuring
+  ([[info:elisp#Destructuring with pcase Patterns]]).
+- =seq= :: Use ~seq-let~ for destructuring ([[info:elisp#seq-let]]).
+- =dash= :: Use the style of destructuring found in the =dash= library
+ ([[info:dash#-let]]).
+- =default= :: Use the default behavior for all options.
+
+
 #+cindex: loopy-dash
 #+cindex: loopy-pcase
 #+cindex: loopy-seq
@@ -4912,7 +4936,7 @@ The destructuring flags (=pcase=, =seq=, and =dash=) are separate libraries
 (respectively, =loopy-pcase=, =loopy-seq=, and =loopy-dash=) that must be
 loaded after =loopy=.  Currently, =loopy-dash= is a separate package.
 
-Below are some example of using the destructuring flags.  These flags affect
+Below are some examples of using the destructuring flags.  These flags affect
 the destructuring of:
 - iteration variables
 - accumulation variables
@@ -4962,11 +4986,11 @@ new variables as they please, which can be interpreted as accumulation
 variables.
 #+end_quote
 
-Consider the below example in which a hypothetical ~pcase~ pattern creates the
-variable ~temporary?~ for destructuring.  Loopy has no way of knowing whether it
-was the user who create the variable, or the destructuring system.  As a result,
-~temporary?~ is treated as an accumulation variable.  Such cases can be unwanted
-and produce inefficient code.
+For the warning, consider the below example in which a hypothetical ~pcase~
+pattern creates the variable ~temporary?~ for destructuring.  Loopy has no way
+of knowing whether it was the user or the destructuring system that created the
+variable.  As a result, ~temporary?~ is treated as a user-facing accumulation
+variable.  Such cases can be unwanted and produce inefficient code.
 
 #+begin_src emacs-lisp
   ;; Possibly unexpected behavior:
@@ -5011,11 +5035,83 @@ Therefore, uses of =flag=, including aliases, can be identified by checking
 
   ;; Ignores the `seq' flag as expected:
   ;;
-  ;; => ( 1 2 3 4)
+  ;; => (1 2 3 4)
   (my-loopy-flag-wrapper (flag seq)
                          (list `(,i . ,j) '((1 . 2) (3 . 4)))
                          (collect i)
                          (collect j))
+#+end_src
+
+
+*** The =no-loop= Flag
+:PROPERTIES:
+:CUSTOM_ID: no-loop-flag
+:DESCRIPTION: Avoiding creating the loop.
+:END:
+
+Some users of Loopy's macros may prefer using Loopy's non-looping constructs
+(such as accumulation commands) inside Emacs Lisp's default looping features
+(such as ~dolist~ or ~mapc~).  By default, Loopy creates an infinite
+~while~-loop, which can interfere with this approach.
+
+One way of avoiding the infinite ~while~-loop is to use a command like =cycle=
+or =leave=, as in the below examples.  This does not prevent the creation of the
+~while~-loop; it just causes Loopy to exit the loop after one step.
+
+#+begin_src emacs-lisp
+  ;; => 10
+  (loopy-iter (cycling 1)
+              (dolist (i '(1 2 3 4))
+                (summing i)))
+
+  ;; => 10
+  (loopy-iter (dolist (i '(1 2 3 4))
+                (summing i))
+              (leaving))
+#+end_src
+
+#+cindex: no-loop flag
+Another way to avoid the ~while~-loop is to use the flag =no-loop=.  The benefit
+of using the =no-loop= flag is that, because its meaning is clear during macro
+expansion, it can trigger additional error checking.  Currently, the =no-loop=
+flag will cause Loopy to signal an error when used with the following features:
+- Iteration commands like =list= or =array=
+- Commands like =skip=
+
+#+begin_src emacs-lisp
+  ;; `listing' doesn't make sense with `no-loop', so Loopy
+  ;; signals an error here:
+  ;;
+  (loopy-iter (flag no-loop)
+              (listing i '(1 2 3 4))
+              (summing i))
+#+end_src
+
+Currently, all other Loopy features can be used with the =no-loop= flag,
+including:
+- Special macro arguments
+- Accumulation commands, such as =sum= and =collect=
+- Early-exit commands, such as =leave= and =return=
+- sub-loop commands
+
+One might wish to use this feature to implement something like ~cl-block~ using
+~loopy-iter~, as in the below example.
+
+#+begin_src emacs-lisp
+  (defmacro my-loopy-block (&rest args)
+    `(loopy-iter (flag no-loop)
+                 ,@(butlast args)
+                 (finally-return ,(car (last args)))))
+
+  ;; => 6
+  (my-loopy-block (dolist (i '(1 2 3))
+                    (summing i))
+                  loopy-result)
+
+  ;; => 6
+  (my-loopy-block (mapc (lambda (i) (summing i))
+                        '(1 2 3))
+                  loopy-result)
 #+end_src
 
 ** Custom Aliases
