@@ -357,6 +357,14 @@ true names and lists of aliases.
 
 ;;;; Flags
 ;;;;; Variables that can be set by flags
+(defvar loopy--no-loop nil
+  "Whether to avoid the `while' loop in `loopy--expand-to-loop'.
+
+When this is non-`nil', Loopy macros will not use a `while' loop
+and some features that interact with the loop,
+such as iteration commands and commands like `skip' and `leave'
+will trigger an error when used.")
+
 (defvar loopy--destructuring-for-with-vars-function nil
   "The function used for destructuring `with' variables.
 
@@ -730,6 +738,7 @@ known to fall into the first group.")
       loopy--in-sub-level
 
       ;; -- Flag Variables --
+      loopy--no-loop
       loopy--destructuring-for-with-vars-function
       loopy--destructuring-for-iteration-function
       loopy--destructuring-accumulation-parser)

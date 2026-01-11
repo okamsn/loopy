@@ -272,8 +272,21 @@
   'loopy-error)
 
 (define-error 'loopy-bad-quoted-form
-  "Loopy: Unrecognized quoted form"
-  'loopy-error)
+              "Loopy: Unrecognized quoted form"
+              'loopy-error)
+
+;;;;; Errors on No-Loop Expansions
+(define-error 'loopy-no-loop-skip
+              "Loopy: `skip'-like commands with `no-loop' flag are not allowed (no loop step to skip)"
+              'loopy-error)
+
+(define-error 'loopy-no-loop-leave
+              "Loopy: `leave'-like commands with `no-loop' flag are not allowed (no loop to leave)"
+              'loopy-error)
+
+(define-error 'loopy-no-loop-iteration
+              "Loopy: Iteration commands with `no-loop' flag are not allowed"
+              'loopy-error)
 
 
 ;;;; List Processing
