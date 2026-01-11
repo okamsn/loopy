@@ -648,6 +648,85 @@ Make sure that it does not break early returns."
                  (_collect . collect)
                  (_do . do)))
 
+;;;; Flag No-Loop
+
+(loopy-deftest flag-no-loop
+  :doc "Test that flag `no-loop' prevents creating the `while' loop."
+  :result 1
+  :body ((flag no-loop)
+         (with (i 0))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do)
+  :iter-bare ((set . setting)
+              (do . progn)))
+
+(loopy-deftest flag-no-loop-skip-error
+  :doc "Using `skip' with `no-loop' is illogical and should error."
+  :error loopy-no-loop-skip
+  :macroexpand t
+  :body ((flag no-loop)
+         (with (i 0))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (skip)
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do skip)
+  :iter-bare ((set . setting)
+              (skip . skipping)
+              (do . progn)))
+
+(loopy-deftest flag-no-loop-leave-error
+  :doc "Using `leave' with `no-loop' is illogical and should error."
+  :error loopy-no-loop-leave
+  :macroexpand t
+  :body ((flag no-loop)
+         (with (i 0))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (leave)
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do leave)
+  :iter-bare ((set . setting)
+              (leave . leaving)
+              (do . progn)))
+
+(loopy-deftest flag-no-loop-iterate-error
+  :doc "Using iteration commands with `no-loop' are illogical and should error."
+  :error loopy-no-loop-iteration
+  :macroexpand t
+  :body ((flag no-loop)
+         (with (i 0))
+         (list x '(1 2 3))
+         (if (< i 5)
+             (set i (1+ i))
+           (do (error "Looping in `no-loop' flag.")))
+         (finally-return i))
+  :loopy t
+  :iter-keyword (set do list)
+  :iter-bare ((set . setting)
+              (do . progn)
+              (list . listing)))
+
+(loopy-deftest flag-no-loop-accumulate
+  :doc "Accumulation commands should work with `no-loop'."
+  :result 3
+  :body ((flag no-loop)
+         (with (i 1))
+         (sum i)
+         (sum i)
+         (sum i))
+  :loopy t
+  :iter-keyword (sum)
+  :iter-bare ((sum . summing)))
+
 ;;;; Changing the order of macro arguments.
 (loopy-deftest change-order-of-commands
   :result 7
