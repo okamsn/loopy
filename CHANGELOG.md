@@ -6,6 +6,15 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 ## Unreleased
 
+### New Features
+
+- Add the `no-loop` flag ([#265]).  This stops the looping macros from creating
+  the `while`-loop and causes an error to be signalled when used with features
+  that only make sense with the `while`-loop, such as iteration commands.  The
+  intended use is wrapping macros don't need the default `while`-loop but would
+  still like access to other features, such as accumulation commands.
+
+
 ### Bug Fixes
 
 - When destructuring for accumulation commands, don't assume that `pcase` binds
@@ -25,6 +34,7 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#254]: https://github.com/okamsn/loopy/PR/254
 [#251]: https://github.com/okamsn/loopy/PR/251
 [#256]: https://github.com/okamsn/loopy/PR/256
+[#265]: https://github.com/okamsn/loopy/PR/265
 
 ## 0.15.0
 

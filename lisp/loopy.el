@@ -141,9 +141,23 @@
   (setq loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
-        #'loopy--parse-destructuring-accumulation-command-default))
+        #'loopy--parse-destructuring-accumulation-command-default
+        loopy--no-loop nil))
 
 (cl-callf map-insert loopy--flag-settings 'default #'loopy--enable-flag-default)
+
+;;;;;; No-Loop
+(defun loopy--enable-flag-no-loop ()
+  "Set `loopy--no-loop' to `t'."
+  (setq loopy--no-loop t))
+
+(defun loopy--disable-flag-no-loop ()
+  "Set `loopy--no-loop' to `nil'."
+  (setq loopy--no-loop nil))
+
+(cl-callf map-insert loopy--flag-settings 'no-loop #'loopy--enable-flag-no-loop)
+(cl-callf map-insert loopy--flag-settings '+no-loop #'loopy--enable-flag-no-loop)
+(cl-callf map-insert loopy--flag-settings '-no-loop #'loopy--disable-flag-no-loop)
 
 ;;;; Miscellaneous and Utility Functions
 (defun loopy--validate-binding (binding)
@@ -245,34 +259,43 @@ The function creates quoted code that should be used by a macro."
             result-is-one-expression (zerop (length result)))
 
       (when (eq loopy--skip-used loopy--skip-tag-name)
-        (setq result `(catch (quote ,loopy--skip-tag-name) ,@result)
-              result-is-one-expression t))
+        (if loopy--no-loop
+            (signal 'loopy-no-loop-skip (list loopy--loop-name))
+          (setq result `(catch (quote ,loopy--skip-tag-name) ,@result)
+                result-is-one-expression t)))
 
       (when loopy--latter-body
-        (setq result `(,@(get-result) ,@loopy--latter-body)
-              result-is-one-expression nil))
+        (if loopy--no-loop
+            (signal 'loopy-no-loop-iteration (list loopy--loop-name))
+          (setq result `(,@(get-result) ,@loopy--latter-body)
+                result-is-one-expression nil)))
 
       (when loopy--post-conditions
-        (setq result
-              (append result
-                      `((unless ,(cl-case (length loopy--post-conditions)
-                                   (0 t)
-                                   (1 (car loopy--post-conditions))
-                                   (t (cons 'and loopy--post-conditions)))
-                          ;; If the loop exits early, we should still use the
-                          ;; implicit return.  That isn't a problem for the
-                          ;; `while' loop, but we need to be more explicit
-                          ;; here.
-                          (cl-return-from ,loopy--loop-name
-                            ,loopy--implicit-return))))))
+        (if loopy--no-loop
+            (signal 'loopy-no-loop-iteration (list loopy--loop-name))
+          (setq result
+                (append result
+                        `((unless ,(cl-case (length loopy--post-conditions)
+                                     (0 t)
+                                     (1 (car loopy--post-conditions))
+                                     (t (cons 'and loopy--post-conditions)))
+                            ;; If the loop exits early, we should still use the
+                            ;; implicit return.  That isn't a problem for the
+                            ;; `while' loop, but we need to be more explicit
+                            ;; here.
+                            (cl-return-from ,loopy--loop-name
+                              ,loopy--implicit-return)))))))
 
-      ;; Now wrap loop body in the `while' form.
-      (setq result `(while ,(cl-case (length loopy--pre-conditions)
-                              (0 t)
-                              (1 (car loopy--pre-conditions))
-                              (t (cons 'and loopy--pre-conditions)))
-                      ,@(get-result))
-            result-is-one-expression t)
+      ;; Now, if looping, wrap loop body in the `while' form.
+      (if loopy--no-loop
+          (when loopy--pre-conditions
+            (signal 'loopy-no-loop-iteration (list loopy--loop-name)))
+        (setq result `(while ,(cl-case (length loopy--pre-conditions)
+                                (0 t)
+                                (1 (car loopy--pre-conditions))
+                                (t (cons 'and loopy--pre-conditions)))
+                        ,@(get-result))
+              result-is-one-expression t))
 
       ;; Make sure that the implicit accumulation variable is correctly
       ;; updated after the loop, if need be.  Note that to avoid errors,
@@ -377,8 +400,10 @@ The function creates quoted code that should be used by a macro."
 
       ;; Declare the loop variables.
       (when loopy--iteration-vars
-        (setq result `(let* ,loopy--iteration-vars ,@(get-result))
-              result-is-one-expression t))
+        (if loopy--no-loop
+            (signal 'loopy-no-loop-iteration (list loopy--loop-name))
+          (setq result `(let* ,loopy--iteration-vars ,@(get-result))
+                result-is-one-expression t)))
 
       (when loopy--other-vars
         (setq result `(let* ,loopy--other-vars ,@(get-result))
