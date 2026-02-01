@@ -92,7 +92,7 @@ libraries =seq= ([[info:elisp#Sequence Functions]]) and =cl-lib= ([[info:cl]])).
     - [[#finding-more-examples][Finding More Examples]]
   - [[#locally-overriding-behavior][Locally Overriding Behavior]]
 - [[#comparing-to-cl-loop][Comparing to ~cl-loop~]]
-- [[#translating-to-and-from-cl-loop][Translating to and from =cl-loop=]]
+- [[#translating-to-and-from-cl-loop][Translating to and from ~cl-loop~]]
   - [[#for-clauses][For Clauses]]
   - [[#iteration-clauses][Iteration Clauses]]
   - [[#accumulation-clauses][Accumulation Clauses]]
@@ -4856,17 +4856,18 @@ create a list if more than one return value is given.
 There are three ways to control behavior:
 
 1. Setting a flag ([[#flags]]), which currently controls destructuring
+   and whether the generated code uses a ~while~-loop.
 2. Modifying the customizable variables like ~loopy-parsers~ and
    ~loopy-iter-bare-names~
-3. Using the special macro argument =overrides=, which modifies the same
+3. Using the special macro argument =override=, which modifies the same
    settings as the customizable variables, but only locally for the
-   current loop (and not sub-loops)
+   current loop (and not for sub-loops)
 
 A package which extends Loopy and wishes to make those extensions available to
 others would modify the customizable variables, similar to defining new
 functions and variables in Emacs Lisp's global namespace.  A package which makes
 use of Loopy internally and wishes to modify its behavior would use the
-=overrides= special macro argument within a bespoke macro that wraps Loopy.
+=override= special macro argument within a bespoke macro that wraps Loopy.
 
 ** Using Flags
 :PROPERTIES:
@@ -4875,13 +4876,13 @@ use of Loopy internally and wishes to modify its behavior would use the
 :END:
 
 #+cindex: flag
-A {{{dfn(flag)}}} is a symbol passed to the =flag= or =flags= special macro
-argument, changing the macro's behavior.  Currently, flags affect what method
-~loopy~ uses to perform destructuring (=pcase=, =seq=, =dash=, or the default
-method) and whether ~loopy~ expands with or without the default ~while~-loop.
+A {{{dfn(flag)}}} is a symbol passed to the =flag= special macro argument,
+changing the macro's behavior.  Currently, flags affect what method ~loopy~ uses
+to perform destructuring (=pcase=, =seq=, =dash=, or the default method) and
+whether ~loopy~ expands with or without the default ~while~-loop.
 
 Flags are applied in order.  If you specify =(flags seq pcase)=, then ~loopy~
-will use ~pcase-let~ for destructuring, not ~seq-let~.
+will use destructuring like ~pcase-let~, not like ~seq-let~.
 
 The following flags are currently supported:
 
@@ -4981,7 +4982,7 @@ yet provide the required functionality.
 #+attr_texinfo: :tag Warning
 #+begin_quote
 For accumulation commands, there is no guarantee that a variable that was used
-in destructuring was meant to be user-facing.  Destructuring systems can create
+in destructuring was meant to be user facing.  Destructuring systems can create
 new variables as they please, which can be interpreted as accumulation
 variables.
 #+end_quote
@@ -5122,9 +5123,9 @@ One might wish to use this feature to implement something like ~cl-block~ using
 
 #+cindex: custom aliases
 An {{{dfn(alias)}}} is another name for a loop command ([[#loop-commands]]) or
-special macro argument ([[#macro-arguments][Special Macro Arguments]]).  ~loopy~ comes with several
-built-in aliases, such as =string= for the command =array= or =else= for the
-special macro argument =after-do=.
+special macro argument ([[#macro-arguments]]).  ~loopy~ comes with several built-in
+aliases, such as the alias =string= for the command =array= and the alias =else=
+for the special macro argument =after-do=.
 
 | Command or Special Macro Argument | Built-In Aliases           |
 |-----------------------------------+----------------------------|
@@ -5149,7 +5150,7 @@ definition rather than to suggest a difference in the code.
          (collect (char-to-string i)))
 #+end_src
 
-#+findex: aliases in loopy-parsers
+#+cindex: aliases in loopy-parsers
 Users can define a new name for a command or special macro argument by adding an
 entry to the customizable variable ~loopy-parsers~ with the appropriate parsing
 function.  Using an alias does not change the fact that special macro arguments
@@ -5175,9 +5176,8 @@ of creating aliases.
 #+begin_quote
 For portability reasons, you should not globally override any of the existing
 names, as that might create conflicts during macro expansion with other code
-that uses the macro and relies on those names.  In the future, one will able to
-add local command definitions that apply only to a single instance of the macro
-during expansion.
+that uses the macro and relies on those names.  Instead, use the
+special macro argument =override= ([[#override]]) to create local aliases.
 #+end_quote
 
 ** Custom Commands
@@ -5912,7 +5912,7 @@ loopy-commands RET)}}}.
 ** Locally Overriding Behavior
 :PROPERTIES:
 :CUSTOM_ID: override
-:DESCRIPTION: Using the `overrides' special macro argument.
+:DESCRIPTION: Using the `override' special macro argument.
 :END:
 
 The special macro argument =override= is used to override the global values of
@@ -6094,7 +6094,7 @@ macro.  The following variables can be overridden:
 
 - When using ~loopy-iter~, the macro is more flexible in how it can be used.
 
-* Translating to and from =cl-loop=
+* Translating to and from ~cl-loop~
 :PROPERTIES:
 :CUSTOM_ID: translating-from-cl-loop
 :DESCRIPTION: Converting `cl-loop' to `loopy', and vice versa.
@@ -6243,9 +6243,6 @@ for more.
 [fn:iter] https://common-lisp.net/project/iterate/
 
 [fn:repo] [[https://github.com/okamsn/loopy]]
-
-[fn:sel-wiki]
-[[https://github.com/raxod502/selectrum/wiki/Useful-Commands#swiper-like-jumping-to-matching-lines]]
 
 # Local Variables:
 # toc-org-max-depth: 20

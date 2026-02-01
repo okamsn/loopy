@@ -43,7 +43,7 @@ libraries @samp{seq} (@ref{Sequence Functions,,,elisp,}) and @samp{cl-lib} (@ref
 * The @code{loopy-iter} Macro::  Embedding loop commands in arbitrary code.
 * Customizing Macro Behavior::
 * Comparing to @code{cl-loop}::  Why `loopy' instead of `cl-loop'.
-* Translating to and from @samp{cl-loop}:: Converting `cl-loop' to `loopy', and vice versa.
+* Translating to and from @code{cl-loop}:: Converting `cl-loop' to `loopy', and vice versa.
 * Index of Concepts::
 * Index of Variables::
 * Index of Functions and Macros::
@@ -95,12 +95,12 @@ Customizing Macro Behavior
 * Using Flags::                  Using flags to change behavior.
 * Custom Aliases::               How to add one's own aliases.
 * Custom Commands::              Extending `loopy' with personal commands.
-* Locally Overriding Behavior::  Using the `overrides' special macro argument.
+* Locally Overriding Behavior::  Using the `override' special macro argument.
 
 Using Flags
 
 * Destructuring Flags::          Using different destructuring systems.
-* The @samp{no-loop} Flag::      Avoiding the loop.
+* The @samp{no-loop} Flag::      Avoiding creating the loop.
 
 Custom Commands
 
@@ -110,7 +110,7 @@ Custom Commands
 * Custom commands in the @code{loopy-iter} macro::
 * Finding More Examples::
 
-Translating to and from @samp{cl-loop}
+Translating to and from @code{cl-loop}
 
 * For Clauses::
 * Iteration Clauses::
@@ -751,7 +751,7 @@ You should keep in mind that commands are evaluated in order.  This means that
 attempting something like the below example might not do what you expect, as @samp{i}
 is assigned a value from the list after collecting @samp{i} into @samp{coll}.
 
-@float Listing,org96b983b
+@float Listing,orgbfae1b0
 @lisp
 ;; => (nil 1 2)
 (loopy (collect coll i)
@@ -940,7 +940,7 @@ the flag @samp{dash} provided by the package @samp{loopy-dash}.
 
 Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 
-@float Listing,org86f1547
+@float Listing,org1ea7e62
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for (i . j) in '((1 . 2) (3 . 4))
@@ -955,7 +955,7 @@ Below are two examples of destructuring in @code{cl-loop} and @code{loopy}.
 @caption{Destructuring values in a list.}
 @end float
 
-@float Listing,org18a3b65
+@float Listing,org0304b9b
 @lisp
 ;; => (1 2 3 4)
 (cl-loop for elem in '((1 . 2) (3 . 4))
@@ -4991,7 +4991,7 @@ using the @code{let*} special form.
 This method recognizes all commands and their aliases in the user option
 @code{loopy-parsers}.
 
-@float Listing,org0ab40f0
+@float Listing,orge6e4294
 @lisp
 ;; => ((-9 -8 -7 -6 -5 -4 -3 -2 -1)
 ;;     (0)
@@ -5358,39 +5358,40 @@ There are three ways to control behavior:
 @enumerate
 @item
 Setting a flag (@ref{Using Flags}), which currently controls destructuring
+and whether the generated code uses a @code{while}-loop.
 @item
 Modifying the customizable variables like @code{loopy-parsers} and
 @code{loopy-iter-bare-names}
 @item
-Using the special macro argument @samp{overrides}, which modifies the same
+Using the special macro argument @samp{override}, which modifies the same
 settings as the customizable variables, but only locally for the
-current loop (and not sub-loops)
+current loop (and not for sub-loops)
 @end enumerate
 
 A package which extends Loopy and wishes to make those extensions available to
 others would modify the customizable variables, similar to defining new
 functions and variables in Emacs Lisp's global namespace.  A package which makes
 use of Loopy internally and wishes to modify its behavior would use the
-@samp{overrides} special macro argument within a bespoke macro that wraps Loopy.
+@samp{override} special macro argument within a bespoke macro that wraps Loopy.
 
 @menu
 * Using Flags::                  Using flags to change behavior.
 * Custom Aliases::               How to add one's own aliases.
 * Custom Commands::              Extending `loopy' with personal commands.
-* Locally Overriding Behavior::  Using the `overrides' special macro argument.
+* Locally Overriding Behavior::  Using the `override' special macro argument.
 @end menu
 
 @node Using Flags
 @section Using Flags
 
 @cindex flag
-A @dfn{flag} is a symbol passed to the @samp{flag} or @samp{flags} special macro
-argument, changing the macro's behavior.  Currently, flags affect what method
-@code{loopy} uses to perform destructuring (@samp{pcase}, @samp{seq}, @samp{dash}, or the default
-method) and whether @code{loopy} expands with or without the default @code{while}-loop.
+A @dfn{flag} is a symbol passed to the @samp{flag} special macro argument,
+changing the macro's behavior.  Currently, flags affect what method @code{loopy} uses
+to perform destructuring (@samp{pcase}, @samp{seq}, @samp{dash}, or the default method) and
+whether @code{loopy} expands with or without the default @code{while}-loop.
 
 Flags are applied in order.  If you specify @samp{(flags seq pcase)}, then @code{loopy}
-will use @code{pcase-let} for destructuring, not @code{seq-let}.
+will use destructuring like @code{pcase-let}, not like @code{seq-let}.
 
 The following flags are currently supported:
 
@@ -5431,7 +5432,7 @@ The flags are described in more detail in the following subsections.
 
 @menu
 * Destructuring Flags::          Using different destructuring systems.
-* The @samp{no-loop} Flag::      Avoiding the loop.
+* The @samp{no-loop} Flag::      Avoiding creating the loop.
 @end menu
 
 @node Destructuring Flags
@@ -5510,7 +5511,7 @@ yet provide the required functionality.
 
 @quotation Warning
 For accumulation commands, there is no guarantee that a variable that was used
-in destructuring was meant to be user-facing.  Destructuring systems can create
+in destructuring was meant to be user facing.  Destructuring systems can create
 new variables as they please, which can be interpreted as accumulation
 variables.
 
@@ -5637,7 +5638,7 @@ One might wish to use this feature to implement something like @code{cl-block} u
 (defmacro my-loopy-block (&rest args)
   `(loopy-iter (flag no-loop)
                ,@@(butlast args)
-               (finally-return ,(last args))))
+               (finally-return ,(car (last args)))))
 
 ;; => 6
 (my-loopy-block (dolist (i '(1 2 3))
@@ -5655,9 +5656,9 @@ One might wish to use this feature to implement something like @code{cl-block} u
 
 @cindex custom aliases
 An @dfn{alias} is another name for a loop command (@ref{Loop Commands}) or
-special macro argument (@ref{Special Macro Arguments}).  @code{loopy} comes with several
-built-in aliases, such as @samp{string} for the command @samp{array} or @samp{else} for the
-special macro argument @samp{after-do}.
+special macro argument (@ref{Special Macro Arguments}).  @code{loopy} comes with several built-in
+aliases, such as the alias @samp{string} for the command @samp{array} and the alias @samp{else}
+for the special macro argument @samp{after-do}.
 
 @multitable {aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa} {aaaaaaaaaaaaaaaaaaaaaaaaaa}
 @headitem Command or Special Macro Argument
@@ -5676,7 +5677,7 @@ between aliases and preferred names (which are the ones commonly used and listed
 first in this document).  We continue to use the word ``alias'' for its common
 definition rather than to suggest a difference in the code.
 
-@float Listing,org70362c3
+@float Listing,orgdef7a84
 @lisp
 ;; => ("a" "b" "c" "d")
 (loopy (array i "abcd")
@@ -5689,7 +5690,7 @@ definition rather than to suggest a difference in the code.
 @caption{`array' and `string' are different names for the same command.}
 @end float
 
-@findex aliases in loopy-parsers
+@cindex aliases in loopy-parsers
 Users can define a new name for a command or special macro argument by adding an
 entry to the customizable variable @code{loopy-parsers} with the appropriate parsing
 function.  Using an alias does not change the fact that special macro arguments
@@ -5714,9 +5715,8 @@ of creating aliases.
 @quotation Warning
 For portability reasons, you should not globally override any of the existing
 names, as that might create conflicts during macro expansion with other code
-that uses the macro and relies on those names.  In the future, one will able to
-add local command definitions that apply only to a single instance of the macro
-during expansion.
+that uses the macro and relies on those names.  Instead, use the
+special macro argument @samp{override} (@ref{Locally Overriding Behavior}) to create local aliases.
 
 @end quotation
 
@@ -6730,8 +6730,8 @@ accumulations in @code{cl-loop}, even when they don't need to be.
 When using @code{loopy-iter}, the macro is more flexible in how it can be used.
 @end itemize
 
-@node Translating to and from @samp{cl-loop}
-@chapter Translating to and from @samp{cl-loop}
+@node Translating to and from @code{cl-loop}
+@chapter Translating to and from @code{cl-loop}
 
 @code{loopy} and @code{cl-loop} use slightly different terminology.  The equivalent of
 ``for clauses'' are referred to as ``iteration commands'' in @code{loopy}, as they are

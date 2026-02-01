@@ -47,7 +47,7 @@ please let me know.
      signal an error.
    - ~loopy-command-parsers~ and ~loopy-aliases~ are deprecated in favor of
      a single hash table in the new user option ~loopy-parsers~.  This
-     simplified the code and will make adding local overrides easier.
+     simplified the code for adding the =override= special marco argument.
    - ~loopy-iter-bare-special-macro-arguments~ and ~loopy-iter-bare-commands~
      are deprecated in favor of the single variable ~loopy-iter-bare-names~.
    - =when= and =unless= are now implemented separately, fixing when the
@@ -112,8 +112,8 @@ accumulation commands like =sum= or =collect=.
 
 The ~loopy~ macro is configurable and extensible.  In addition to writing one's
 own "loop commands" (such as =list= in the example above), by using "flags", one
-can choose whether to instead use ~pcase-let~, ~seq-let~, or even the Dash
-library for destructuring.
+can choose whether to instead use destructuring via the libraries =pcase.el=,
+=seq.el=, or even =dash.el=.
 
 #+begin_src emacs-lisp
   ;; Use `pcase' to destructure array elements:
