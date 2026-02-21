@@ -312,15 +312,21 @@ keywords and variables are separate."
 
 
 ;;;; Loop Tag Names
-(defun loopy--produce-non-returning-exit-tag-name (&optional loop-name)
+(defun loopy--produce-non-returning-exit-tag-name (loop-name)
   "Produce a tag from LOOP-NAME."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or symbol null)) symbol)))
   (if loop-name
       (intern (format "loopy--%s-non-returning-exit-tag" loop-name))
     'loopy--non-returning-exit-tag))
 
 
-(defun loopy--produce-skip-tag-name (&optional loop-name)
+(defun loopy--produce-skip-tag-name (loop-name)
   "Produce a tag from LOOP-NAME."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or symbol null)) symbol)))
   (if loop-name
       (intern (format "loopy-%s-skip-tag"  loop-name))
     'loopy--skip-tag))
