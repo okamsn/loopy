@@ -105,6 +105,9 @@ CORRECT is a list of valid keywords.
 Any keyword not in CORRECT is considered invalid.  Any element
 not in a keyword position that is not a keyword is invalid.  If
 LIST does not contain an even number of elements, it is invalid."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons cons) boolean)))
   ;; `cl-loop' is broken for this use-case. See Emacs bug #72753.
   (let ((length 0))
     (let ((this-pos nil))
@@ -124,6 +127,9 @@ LIST does not contain an even number of elements, it is invalid."
   "Parse the `at' command as (at &rest COMMANDS).
 
 These commands affect other loops higher up in the call list."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--check-target-loop-name target-loop)
   (let ((loopy--loop-name target-loop)
         (loopy--in-sub-level t))
@@ -137,6 +143,9 @@ These commands affect other loops higher up in the call list."
 
 Unlike the `sub-loop' command, this command is not specially
 handled by `loopy-iter'."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   `((loopy--main-body ,(macroexpand `(loopy ,@body)))))
 
 ;;;;; Genereric Evaluation
@@ -146,6 +155,9 @@ handled by `loopy-iter'."
 
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let* ((value-selector (gensym "set-value-selector-"))
          (arg-length (length vals)))
     (cl-case arg-length
@@ -202,6 +214,9 @@ This command records the value of VAL at the end of the cycle,
 not when the command is run.
 
 This command does not wait for VAL to change before updating VAR."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (if (not (numberp back))
       ;; When we don't know ahead of time how far back we need to go, we have to
       ;;  use a queue.  This code is adapted from Irreal's blog
@@ -269,6 +284,9 @@ This command does not wait for VAL to change before updating VAR."
 BODY is one or more commands to be grouped by a `progn' form.
 This command is suitable for using as the first sub-command in an
 `if' command."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (progn-body rest)
         (loopy--parse-loop-commands body)
@@ -282,6 +300,9 @@ This command is suitable for using as the first sub-command in an
 
 Expressions are normal Lisp expressions, which are inserted into
 the loop literally (not even in a `progn')."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (mapcar (lambda (expr) (list 'loopy--main-body expr))
           expressions))
 
@@ -294,6 +315,9 @@ the loop literally (not even in a `progn')."
 - CONDITION is a Lisp expression.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (if-true-main-body true-rest)
         (loopy--parse-loop-command if-true)
@@ -315,6 +339,9 @@ loop commands.
 
 The Lisp expression and the loopy-body instructions from each
 command are inserted into a `cond' special form."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((loopy--in-sub-level t)
         (cond-body nil)
         (rest-instructions nil))
@@ -330,6 +357,9 @@ command are inserted into a `cond' special form."
 ;;;;;; When
 (cl-defun loopy--parse-when-command ((_ condition &rest body))
   "Parse `when' as (when CONDITION [COMMANDS])."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
@@ -339,6 +369,9 @@ command are inserted into a `cond' special form."
 ;;;;;; Unless
 (cl-defun loopy--parse-unless-command ((_ condition &rest body))
   "Parse `unless' as (unless CONDITION [COMMANDS])."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
@@ -486,6 +519,11 @@ instructions:
                 (when other-vals
                   '(&rest other-vals)))))
        ,doc-string
+       (declare (side-effect-free nil)
+                (important-return-value t)
+                ;; TODO: Keyword for declarations
+                ;; (ftype (function (cons) cons))
+                )
 
        (when loopy--in-sub-level
          ;; Warn with the used name and the true name.
@@ -560,6 +598,9 @@ iteration command.  The supported keywords are:
 - `:test-given' (whether `:test' was given)
 
 CMD is the command usage for error reporting."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons &optional symbol) cons)))
 
   (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
                        :to to :upto upto :downto downto
@@ -627,6 +668,9 @@ CMD is the command usage for error reporting."
   "Distribute the elements of the ARRAYS into an array of lists.
 
 For example, [1 2] and [3 4] gives [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in arrays
                        collect (gensym "array-var-")))
         (reverse-order (reverse arrays)))
@@ -822,6 +866,9 @@ and is a value."
   "Distribute the elements of LISTS into a list of lists.
 
 For example, (1 2) and (3 4) would give ((1 3) (1 4) (2 3) (2 4))."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
 
   (let ((vars (cl-loop for _ in lists
                        collect (gensym "list-var-")))
@@ -891,6 +938,9 @@ vector using the library `map.el'.
 
 NAME is used for reporting errors in case of aliases.
 If UNIQUE, filter out values for duplicated keys."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map))
   (loopy--instr-let-var* ((value-holder `(map-pairs ,val)))
@@ -935,6 +985,9 @@ Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.
 
 NAME is used for reporting errors in case of aliases."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map-ref))
   (loopy--instr-let-var* ((key-list `(map-keys ,val)))
@@ -1078,6 +1131,9 @@ This is for decreasing indices.
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided.
 NAME is the name of the command."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'cycle))
   ;; TODO: If we know at compile-time that num-steps is 1,
@@ -1099,6 +1155,9 @@ NAME is the name of the command."
   "Distribute the elements of SEQUENCES into a vector of lists.
 
 For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in sequences
                        collect (gensym "seq-var-")))
         (reverse-order (reverse sequences))
@@ -1176,6 +1235,9 @@ distributed using the function `loopy--distribute-seq-elements'."
   "Distribute the elements of SEQUENCES into a vector of lists.
 
 For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in sequences
                        collect (gensym "seq-var-")))
         (reverse-order (reverse sequences)))
@@ -1564,6 +1626,10 @@ command.
   the loop, such as `collect'.
 - `boolean-thereis' is only used by the `thereis' command.
 - `boolean-always-never' is only used by the `always' and `never' commands."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol symbol symbol cons) t)))
+
   (unless (memq category loopy--known-accumulation-categories)
     (signal 'loopy-bad-accum-category (list category)))
 
