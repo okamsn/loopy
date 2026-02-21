@@ -138,6 +138,9 @@
 ;; It doesn't make sense to allow the disabling of this one.
 (defun loopy--enable-flag-default ()
   "Set `loopy' behavior back to its default state for the loop."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function () t)))
   (setq loopy--destructuring-for-with-vars-function
         #'loopy--destructure-for-with-vars-default
         loopy--destructuring-accumulation-parser
@@ -149,10 +152,16 @@
 ;;;;;; No-Loop
 (defun loopy--enable-flag-no-loop ()
   "Set `loopy--no-loop' to `t'."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function () t)))
   (setq loopy--no-loop t))
 
 (defun loopy--disable-flag-no-loop ()
   "Set `loopy--no-loop' to `nil'."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function () t)))
   (setq loopy--no-loop nil))
 
 (cl-callf map-insert loopy--flag-settings 'no-loop #'loopy--enable-flag-no-loop)
@@ -165,6 +174,8 @@
 
 BINDING should be a list of two elements.  To avoid mistakes,
 this means that an explicit \"nil\" is always required."
+  (declare (important-return-value nil)
+           (ftype (function (t) nil)))
   (unless (and (consp binding)
                (= 2 (length binding)))
     (error "Invalid binding in `loopy' expansion: %s" binding)))
@@ -180,6 +191,8 @@ two elements:
 2. A function to be called with the code to be wrapped, which
   should produce wrapped code appropriate for BINDINGS,
   such as a `let*' form."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (funcall (or loopy--destructuring-for-with-vars-function
                #'loopy--destructure-for-with-vars-default)
            bindings))
@@ -192,6 +205,8 @@ Returns a list of two elements:
 2. A function to be called with the code to be wrapped, which
   should produce wrapped code appropriate for BINDINGS,
   such as a `let*' form."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--pcase-destructure-for-with-vars (cl-loop for b in bindings
                                                    for (var val) = b
                                                    collect (if (symbolp var)
@@ -204,7 +219,13 @@ Returns a list of two elements:
   "Create the loop body according to the variables found in `loopy--variables'.
 
 The function creates quoted code that should be used by a macro."
-
+  (declare
+   ;; All processing should have happened by this point.
+   (side-effect-free t)
+   ;; Uses dynamic variables.
+   (pure nil)
+   (important-return-value t)
+   (ftype (function () cons)))
 
   ;; Construct the expanded code from the inside out.  The result should work
   ;; something like the below code.  Unlike below, constructs are only used
@@ -455,6 +476,10 @@ Variables available:
 
 Returns BODY without the `%s' argument."
               name name)
+     (declare (important-return-value t)
+              (side-effect-free nil)
+              ;; Using `list' instead of `cons' so that it can be nil.
+              (ftype (function (list) list)))
      (let* ((matching-args (cl-remove-if (lambda (x)
                                            ;; If symbol, then is the loop name,
                                            ;; which is handled by a separate
@@ -481,6 +506,10 @@ Returns BODY without the `%s' argument."
 
 (defun loopy--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
+  (declare (important-return-value t)
+           (side-effect-free nil)
+           ;; Using `list' instead of `cons' so that it can be nil.
+           (ftype (function (list) list)))
   (let ((names)
         (new-body))
     (dolist (arg body)
@@ -593,6 +622,9 @@ Returns BODY without the `%s' argument."
 
 Some variables can't simply be `let'-bound around the expansion
 code and must instead be cleaned up manually."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           (ftype (function () t)))
   (pop loopy--known-loop-names)
   (pop loopy--accumulation-places)
   (cl-callf map-delete loopy--at-instructions loopy--loop-name)
@@ -603,6 +635,9 @@ code and must instead be cleaned up manually."
 
 (defmacro loopy--with-protected-stack (&rest body)
   "Protect the stack variables from BODY during unwind and cleanup."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           (ftype (function (&rest t) t)))
   `(unwind-protect
        ,(macroexp-progn body)
      (loopy--clean-up-stack-vars)))
@@ -617,6 +652,11 @@ In `loopy', processing instructions is stateful.  This function
 merely pushes values into the correct variables.  The proper
 ordering of those variables is handled elsewhere, such as in the
 macro `loopy' itself."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) t))
+           )
   ;; Do it this way instead of with `set', cause was getting errors
   ;; about void variables.
   (let ((instruction-type (cl-first instruction))
@@ -739,6 +779,11 @@ macro `loopy' itself."
 If any instruction is in ERRORING-INSTRUCTIONS, then an error is raised.
 
 In `loopy', processing instructions is stateful."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) t))
+           )
   (dolist (instruction instructions)
     (when (memq (cl-first instruction) erroring-instructions)
       (error "Attempted to process should-error instruction: %s"
@@ -853,6 +898,11 @@ In `loopy', processing instructions is stateful."
 - Make `loopy--implicit-return' a list value if needed.
 
 When EXCLUDE-MAIN-BODY is non-nil, don't reverse `loopy--main-body'."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) t))
+           )
   (unless exclude-main-body
     (setq loopy--main-body (nreverse loopy--main-body)))
   (setq loopy--iteration-vars (nreverse loopy--iteration-vars)

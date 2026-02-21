@@ -45,6 +45,10 @@
 ;; This better allows for things to change in the future.
 (defun loopy--var-ignored-p (var)
   "Return whether VAR should be ignored for destructuring."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (pure t)
+           (ftype (function (symbol) boolean)))
   (and (symbolp var)
        (eq (aref (symbol-name var) 0) ?_)))
 
@@ -53,215 +57,215 @@
                                         &aux  &map)
   "Symbols affecting how following elements destructure.")
 
-;; Having a single function for all categories allows us to have most of the
-;; ordering rules in once place.
-(defconst loopy--get-var-groups-cache (make-hash-table :test 'equal :size 300)
-  "Cache of variable groups in a pattern.
-See also the function `loopy--get-var-groups'.")
-
 (defun loopy--get-var-groups (var-seq)
   "Return the alist of variable groups in sequence VAR-SEQ.
 Type is one of `list' or `array'."
-  (or (gethash var-seq loopy--get-var-groups-cache nil)
-      (let* ((is-seq)
-             (whole-var) (processing-whole)
-             (pos-var)
-             (opt-var) (processing-opts)
-             (rest-var) (processing-rest) (dotted-rest-var)
-             (key-var) (processing-keys) (allow-other-keys)
-             (map-var) (processing-maps)
-             (aux-var) (processing-auxs)
-             (proper-list-p (proper-list-p var-seq))
-             (type (cl-etypecase var-seq
-                     (list 'list)
-                     (array 'array)))
-             (improper-list (and (eq type 'list)
-                                 (not proper-list-p)))
-             (remaining-seq (if improper-list
-                                (cl-copy-list var-seq)
-                              (copy-sequence var-seq))))
+  (declare (important-return-value t)
+           (pure t)
+           (ftype (function (sequence) cons)))
+  (let ((var-is-list nil))
+    (cond
+     ((listp var-seq)
+      (setq var-is-list t))
+     ((not (arrayp var-seq))
+      (error "Not array nor list: `%S'" var-seq)))
+    (let* ((is-seq)
+           (whole-var) (processing-whole)
+           (pos-var)
+           (opt-var) (processing-opts)
+           (rest-var) (processing-rest) (dotted-rest-var)
+           (key-var) (processing-keys) (allow-other-keys)
+           (map-var) (processing-maps)
+           (aux-var) (processing-auxs)
+           (remaining-seq (if var-is-list
+                              (if (proper-list-p var-seq)
+                                  ;; proper list, no dotted item
+                                  var-seq
+                                ;; Otherwise, copy improper list,
+                                ;; set `rest-var' to dotted item,
+                                ;; and return copied list sans dotted item
+                                ;; in proper form.
+                                (let ((cp (cl-copy-list var-seq)))
+                                  (cl-shiftf dotted-rest-var
+                                             (cdr (last cp))
+                                             nil)
+                                  cp))
+                            ;; If not a list, convert from array into list.
+                            (append var-seq nil))))
 
-        (when improper-list
-          (cl-shiftf dotted-rest-var
-                     (cdr (last remaining-seq))
-                     nil))
+      (cl-flet ((missing-after (seq) (or (null seq)
+                                         (memq (cl-first seq)
+                                               loopy--destructure-symbols)))
+                (stop-processing () (setq processing-whole nil
+                                          processing-opts nil
+                                          processing-rest nil
+                                          processing-keys nil
+                                          processing-maps nil)))
+        (cl-loop
+         for (first . rest) on remaining-seq
+         do
+         (pcase first
+           ;; Since `&seq' must be first, we could check for it outside of
+           ;; processing, but we keep it with the other processing for
+           ;; consistency.
+           ('&seq             (cond
+                               ((or is-seq whole-var pos-var opt-var rest-var key-var
+                                    allow-other-keys aux-var map-var)
+                                (signal 'loopy-&seq-bad-position (list var-seq)))
+                               ((seq-empty-p rest)
+                                (signal 'loopy-bad-desctructuring
+                                        (list var-seq)))
+                               (t
+                                (stop-processing)
+                                (setq is-seq t))))
+           ('&whole           (cond
+                               ;; Make sure there is a variable named.
+                               ((missing-after rest)
+                                (signal 'loopy-&whole-missing (list var-seq)))
+                               ;; Make sure `&whole' is before all else.
+                               ((or whole-var pos-var opt-var rest-var key-var
+                                    allow-other-keys aux-var map-var)
+                                (signal 'loopy-&whole-bad-position (list var-seq)))
+                               (t
+                                (stop-processing)
+                                (setq processing-whole t))))
 
-        (cl-flet ((missing-after (seq) (or (seq-empty-p seq)
-                                           (memq (seq-elt seq 0)
-                                                 loopy--destructure-symbols)))
-                  (stop-processing () (setq processing-whole nil
-                                            processing-opts nil
-                                            processing-rest nil
-                                            processing-keys nil
-                                            processing-maps nil)))
+           ('&optional        (cond
+                               ((missing-after rest)
+                                (signal 'loopy-&optional-missing
+                                        (list var-seq)))
+                               ;; Make sure `&optional' does not occur after
+                               ;; `&rest'.
+                               ((or opt-var rest-var key-var map-var aux-var)
+                                (signal 'loopy-&optional-bad-position
+                                        (list var-seq)))
+                               (t
+                                (stop-processing)
+                                (setq processing-opts t))))
 
-          ;; Use `seq' functions to support arrays now and maybe other things later.
-          (while (not (seq-empty-p remaining-seq))
-            (seq-let [first &rest rest]
-                remaining-seq
-              (pcase first
-                ;; Since `&seq' must be first, we could check for it outside of
-                ;; processing, but we keep it with the other processing for
-                ;; consistency.
-                ('&seq             (cond
-                                    ((or is-seq whole-var pos-var opt-var rest-var key-var
-                                         allow-other-keys aux-var map-var)
-                                     (signal 'loopy-&seq-bad-position (list var-seq)))
-                                    ((seq-empty-p rest)
-                                     (signal 'loopy-bad-desctructuring
-                                             (list var-seq)))
-                                    (t
-                                     (stop-processing)
-                                     (setq is-seq t))))
-                ('&whole           (cond
-                                    ;; Make sure there is a variable named.
-                                    ((missing-after rest)
-                                     (signal 'loopy-&whole-missing (list var-seq)))
-                                    ;; Make sure `&whole' is before all else.
-                                    ((or whole-var pos-var opt-var rest-var key-var
-                                         allow-other-keys aux-var map-var)
-                                     (signal 'loopy-&whole-bad-position (list var-seq)))
-                                    (t
-                                     (stop-processing)
-                                     (setq processing-whole t))))
+           ((or '&rest '&body) (cond
+                                (dotted-rest-var
+                                 (signal 'loopy-&rest-dotted
+                                         (list var-seq)))
+                                ((missing-after rest)
+                                 (signal 'loopy-&rest-missing
+                                         (list var-seq)))
+                                ((and (> (seq-length rest) 1)
+                                      (let ((after-var (seq-elt rest 1)))
+                                        (not (memq after-var loopy--destructure-symbols))))
+                                 (signal 'loopy-&rest-multiple (list var-seq)))
+                                ;; In CL Lib, `&rest' must come before `&key',
+                                ;; but we decided to allow it to come after.
+                                ((or aux-var rest-var)
+                                 (signal 'loopy-&rest-bad-position
+                                         (list var-seq)))
+                                (t
+                                 (stop-processing)
+                                 (setq processing-rest t))))
 
-                ('&optional        (cond
-                                    ((missing-after rest)
-                                     (signal 'loopy-&optional-missing
-                                             (list var-seq)))
-                                    ;; Make sure `&optional' does not occur after
-                                    ;; `&rest'.
-                                    ((or opt-var rest-var key-var map-var aux-var)
-                                     (signal 'loopy-&optional-bad-position
-                                             (list var-seq)))
-                                    (t
-                                     (stop-processing)
-                                     (setq processing-opts t))))
+           ((or '&key '&keys) (cond
+                               ((not var-is-list)
+                                (signal 'loopy-&key-array
+                                        (list var-seq)))
+                               ((missing-after rest)
+                                (signal 'loopy-&key-missing
+                                        (list var-seq)))
+                               ((or aux-var key-var)
+                                (signal 'loopy-&key-bad-position
+                                        (list var-seq)))
+                               (t
+                                (stop-processing)
+                                (setq processing-keys t))))
 
-                ((or '&rest '&body) (cond
-                                     (dotted-rest-var
-                                      (signal 'loopy-&rest-dotted
-                                              (list var-seq)))
-                                     ((missing-after rest)
-                                      (signal 'loopy-&rest-missing
-                                              (list var-seq)))
-                                     ((and (> (seq-length rest) 1)
-                                           (let ((after-var (seq-elt rest 1)))
-                                             (not (memq after-var loopy--destructure-symbols))))
-                                      (signal 'loopy-&rest-multiple (list var-seq)))
-                                     ;; In CL Lib, `&rest' must come before `&key',
-                                     ;; but we decided to allow it to come after.
-                                     ((or aux-var rest-var)
-                                      (signal 'loopy-&rest-bad-position
-                                              (list var-seq)))
-                                     (t
-                                      (stop-processing)
-                                      (setq processing-rest t))))
+           ('&allow-other-keys (cond
+                                ((not var-is-list)
+                                 (signal 'loopy-&key-array
+                                         (list var-seq)))
+                                ((not processing-keys)
+                                 (signal 'loopy-&allow-other-keys-without-&key
+                                         (list var-seq)))
+                                (t
+                                 (stop-processing)
+                                 (setq allow-other-keys t))))
 
-                ((or '&key '&keys) (cond
-                                    ((not (eq type 'list))
-                                     (signal 'loopy-&key-array
-                                             (list var-seq)))
-                                    ((missing-after rest)
-                                     (signal 'loopy-&key-missing
-                                             (list var-seq)))
-                                    ((or aux-var key-var)
-                                     (signal 'loopy-&key-bad-position
-                                             (list var-seq)))
-                                    (t
-                                     (stop-processing)
-                                     (setq processing-keys t))))
+           ('&map             (cond
+                               ((missing-after rest)
+                                (signal 'loopy-&map-missing (list var-seq)))
+                               ((or aux-var map-var)
+                                (signal 'loopy-&map-bad-position
+                                        (list var-seq)))
+                               (t
+                                (stop-processing)
+                                (setq processing-maps t))))
 
-                ('&allow-other-keys (cond
-                                     ((not (eq type 'list))
-                                      (signal 'loopy-&key-array
-                                              (list var-seq)))
-                                     ((not processing-keys)
-                                      (signal 'loopy-&allow-other-keys-without-&key
-                                              (list var-seq)))
-                                     (t
-                                      (stop-processing)
-                                      (setq allow-other-keys t))))
+           ('&aux
+            (if (or (missing-after rest)
+                    aux-var)
+                (signal 'loopy-&aux-bad-position (list var-seq))
+              (stop-processing)
+              (setq processing-auxs t)))
 
-                ('&map             (cond
-                                    ((missing-after rest)
-                                     (signal 'loopy-&map-missing (list var-seq)))
-                                    ((or aux-var map-var)
-                                     (signal 'loopy-&map-bad-position
-                                             (list var-seq)))
-                                    (t
-                                     (stop-processing)
-                                     (setq processing-maps t))))
+           ('&environment
+            (signal 'loopy-bad-desctructuring (list var-seq)))
 
-                ('&aux
-                 (if (or (missing-after rest)
-                         aux-var)
-                     (signal 'loopy-&aux-bad-position (list var-seq))
-                   (stop-processing)
-                   (setq processing-auxs t)))
+           ((guard processing-whole)
+            (cond
+             ((loopy--var-ignored-p first)
+              (signal 'loopy-&whole-missing (list var-seq)))
+             (t
+              (setq whole-var first
+                    processing-whole nil))))
 
-                ('&environment
-                 (signal 'loopy-bad-desctructuring (list var-seq)))
+           ((guard processing-rest)
+            ;; `&rest' var can be ignored for clarity,
+            ;; but it is probably an error to ignore it
+            ;; when there are no positional or optional variables.
+            (if (and (loopy--var-ignored-p first)
+                     (null pos-var)
+                     (null opt-var))
+                (signal 'loopy-&rest-missing
+                        (list var-seq))
+              (setq rest-var first
+                    processing-rest nil)))
 
-                ((guard processing-whole)
-                 (cond
-                  ((loopy--var-ignored-p first)
-                   (signal 'loopy-&whole-missing (list var-seq)))
-                  (t
-                   (setq whole-var first
-                         processing-whole nil))))
+           ((guard processing-opts)
+            (if (and (consp first)
+                     (cdr first)
+                     (loopy--var-ignored-p (car first)))
+                (signal 'loopy-&optional-ignored-default-or-supplied
+                        (list var-seq))
+              (push first opt-var)))
 
-                ((guard processing-rest)
-                 ;; `&rest' var can be ignored for clarity,
-                 ;; but it is probably an error to ignore it
-                 ;; when there are no positional or optional variables.
-                 (if (and (loopy--var-ignored-p first)
-                          (null pos-var)
-                          (null opt-var))
-                     (signal 'loopy-&rest-missing
-                             (list var-seq))
-                   (setq rest-var first
-                         processing-rest nil)))
+           ((guard processing-keys)
+            (push first key-var))
 
-                ((guard processing-opts)
-                 (if (and (consp first)
-                          (cdr first)
-                          (loopy--var-ignored-p (car first)))
-                     (signal 'loopy-&optional-ignored-default-or-supplied
-                             (list var-seq))
-                   (push first opt-var)))
+           ((guard processing-maps)
+            (push first map-var))
 
-                ((guard processing-keys)
-                 (push first key-var))
+           ((guard processing-auxs)
+            (push first aux-var))
 
-                ((guard processing-maps)
-                 (push first map-var))
+           (_
+            (if (or opt-var rest-var key-var map-var aux-var
+                    allow-other-keys)
+                (signal 'loopy-bad-desctructuring (list var-seq))
+              (push first pos-var))))))
 
-                ((guard processing-auxs)
-                 (push first aux-var))
-
-                (_
-                 (if (or opt-var rest-var key-var map-var aux-var
-                         allow-other-keys)
-                     (signal 'loopy-bad-desctructuring (list var-seq))
-                   (push first pos-var)))))
-
-            (setq remaining-seq (seq-rest remaining-seq))))
-
-        (let ((val `((whole . ,whole-var)
-                     (pos . ,(nreverse pos-var))
-                     (opt . ,(nreverse opt-var))
-                     (rest . ,(or dotted-rest-var rest-var))
-                     (key . ,(nreverse key-var))
-                     (allow-other-keys . ,allow-other-keys)
-                     (map . ,(nreverse map-var))
-                     (aux . ,(nreverse aux-var))
-                     (seq . ,is-seq))))
-          (puthash var-seq val loopy--get-var-groups-cache)
-          val))))
+      (let ((val `((whole . ,whole-var)
+                   (pos . ,(nreverse pos-var))
+                   (opt . ,(nreverse opt-var))
+                   (rest . ,(or dotted-rest-var rest-var))
+                   (key . ,(nreverse key-var))
+                   (allow-other-keys . ,allow-other-keys)
+                   (map . ,(nreverse map-var))
+                   (aux . ,(nreverse aux-var))
+                   (seq . ,is-seq))))
+        val))))
 
 (defun loopy--get-&optional-spec (form)
   "Get the spec of the `&optional' variable FORM as (VAR DEFAULT SUPPLIED LEN)."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (let ((var)
         (default)
         (supplied)
@@ -278,6 +282,8 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&key-spec (var-form)
   "Get the spec of `&key' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (or (seq (seq key var) default supplied)
                        (seq (seq key var) default)
                        (seq (seq key var)))
@@ -307,6 +313,8 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&map-spec (var-form)
   "Get the spec of `&map' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (seq key var default supplied)
                    (seq key var default)
                    (seq key var)
@@ -326,6 +334,8 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&aux-spec (var-form)
   "Get the spec of `&aux' VAR-FORM as (VAR VAL)."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (seq var val)
                    (seq var)
                    (and (pred symbolp)
@@ -337,6 +347,8 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-var-list (var-seq)
   "Get the variables in VAR-SEQ as a flat, unordered list."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (let ((groups (loopy--get-var-groups var-seq))
         (result nil))
     (cl-labels ((fn (val) (if (seqp val)
@@ -386,6 +398,9 @@ Type is one of `list' or `array'."
 
 FN is the function.  ARG2 is the argument to move to the second
 position of the call to FN in the pattern."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((function (t t) t) t) cons)))
   (static-if (>= emacs-major-version 30)
       `(,fn _ ,arg2)
     `(loopy--pcase-flip-1 ,fn ,arg2)))
@@ -396,6 +411,9 @@ position of the call to FN in the pattern."
 If VAR is ignored according to `loopy--var-ignored-p', return
 `_'.  Otherwise, if VAR is a sequence according to `seqp',
 return `(loopy VAR)'.  In all other cases, VAR is returned."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol))
+                            (or cons symbol))))
   (cond
    ((loopy--var-ignored-p var) '_)
    ((seqp var) `(loopy ,var))
@@ -404,6 +422,9 @@ return `(loopy VAR)'.  In all other cases, VAR is returned."
 ;; TODO: Use this in `list' pattern.
 (defun loopy--pcase-let-nil-list (pat)
   "Return a list of patterns binding variables in PAT to nil."
+  (declare (important-return-value t)
+           (ftype (function ((or sequence symbol))
+                            (or cons symbol))))
   ;; Need to quote `nil' for it to be a `pcase' pattern.
   (pcase pat
     (`(loopy ,(and (pred seqp) seq))
@@ -418,6 +439,9 @@ return `(loopy VAR)'.  In all other cases, VAR is returned."
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   ;; A modified version of the back-quote pattern to better work with
   ;; optional values.
   (cond
@@ -458,6 +482,9 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   (let ((pos-len (length pos-vars))
         (opt-len (length opt-vars)))
     ;; We allow the variable form to be shorter than the
@@ -542,6 +569,8 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 
 (defun loopy--seq-length= (seq n)
   "Check whether the length of SEQ is equal to N."
+  (declare (important-return-value t)
+           (ftype (function (seq integer) boolean)))
   (cond
    ((sequencep seq)
     (length= seq n))
@@ -555,6 +584,8 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 
 (defun loopy--seq-length> (seq n)
   "Check whether the length of SEQ is greater than to N."
+  (declare (important-return-value t)
+           (ftype (function (seq integer) boolean)))
   (cond
    ((sequencep seq) (length> seq n))
    ;; Take advantage of lazy evaluation of streams.
@@ -572,6 +603,9 @@ destructured value.
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   (let ((pos-len (length pos-vars))
         (opt-len (length opt-vars)))
     (cl-labels ((make-pos-pats ()
@@ -665,6 +699,8 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 KEY-VARS are the forms of the key variables.  ALLOW-OTHER-KEYS is
 whether `&allow-other-keys' was used.  PLIST-VAR is the variable
 holding the property list."
+  (declare (important-return-value t)
+           (ftype (function (cons boolean) cons)))
   ;; If we aren't checking whether all keys in EXPVAL were given,
   ;; then we can use simpler patterns since we don't need to store the
   ;; value of the key.
@@ -750,6 +786,8 @@ holding the property list."
 
 (defun loopy--pcase-pat-&map-pattern (map-vars)
   "Build a `pcase' pattern for the `&map' variables MAP-VARS."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((mapsym (gensym "map")))
     `(and (pred mapp)
           ,@(mapcar (lambda (var-form)
@@ -785,6 +823,8 @@ holding the property list."
   "Build `pcase' pattern for `&aux' variables.
 
 AUX-VARS is the list of bindings."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   `(and ,@(cl-loop
            for bind in aux-vars
            for (var val) = (loopy--get-&aux-spec bind)
@@ -877,6 +917,9 @@ See the Info node `(loopy)Basic Destructuring'."
 ;;;; Destructuring for Iteration and Accumulation Commands
 (defun loopy--pcase-make-erroring-branch (pattern)
   "Create a branch for `pcase-compile-patterns' that reports an error for PATTERN."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (t) cons)))
   ;; It looks like Pcase provides only a single variable matching the symbol
   ;; in VARVALS, but we use `alist-get' just to be sure.
   (cons 'loopy--pcase-unmatched
@@ -896,6 +939,13 @@ Returns a list.  The elements are:
 
 If ERROR is non-nil, then signal an error in the produced code if
 the pattern doesn't match."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function ((or symbol sequence) t (member :error) boolean)
+           ;;                      cons)
+           ;;            (function ((or symbol sequence) t)
+           ;;                      cons)))
+           )
   (if (symbolp var)
       (list `(setq ,var ,val)
             (list var))
@@ -927,6 +977,11 @@ Returns a list of two elements:
 2. A function to be called with the code to be wrapped, which
   should produce wrapped code appropriate for BINDINGS,
   such as a `let*' form."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (cons (member :error) boolean) cons)
+           ;;            (function (cons) cons)))
+           )
   (let ((new-bindings nil)
         (all-vars nil))
     (pcase-dolist (`(,var ,val) bindings)
@@ -969,6 +1024,11 @@ NAME is the name of the command.  VAR-OR-VAL is a variable name
 or, if using implicit variables, a value .  VAL is a value, and
 should only be used if VAR-OR-VAL is a variable.  ERROR is when
 an error should be signaled if the pattern doesn't match."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (cons (member :error) boolean) cons)
+           ;;            (function (cons) cons)))
+           )
   (let* ((instructions)
          (always-used-cases
           (cons var
@@ -1072,7 +1132,9 @@ an error should be signaled if the pattern doesn't match."
                                    ,(funcall msetter
                                              `(map-insert ,mgetter ,key ,v))
                                    ;; Always return the value.
-                                   ,v))))))))))
+                                   ,v)))))))))
+           (ftype (function (t t &optional t) t))
+           (important-return-value t))
   (inline-letevals (map key default)
     (inline-quote (map-elt ,map ,key ,default))))
 
@@ -1091,7 +1153,9 @@ an error should be signaled if the pattern doesn't match."
                                `(progn
                                   (setf (aref ,seq ,idx) ,v)
                                   ,(funcall setter seq)
-                                  ,v)))))))))
+                                  ,v))))))))
+           (ftype (function (array (integer 0 *)) t))
+           (important-return-value t))
   (inline-letevals (sequence idx)
     (inline-quote (aref ,sequence ,idx))))
 
@@ -1110,7 +1174,9 @@ an error should be signaled if the pattern doesn't match."
                                `(progn
                                   (setf (seq-elt ,seq ,idx) ,v)
                                   ,(funcall setter seq)
-                                  ,v)))))))))
+                                  ,v))))))))
+           (ftype (function (t (integer 0 *)) t))
+           (important-return-value t))
   (inline-letevals (sequence idx)
     (inline-quote (seq-elt ,sequence ,idx))))
 
@@ -1128,12 +1194,16 @@ an error should be signaled if the pattern doesn't match."
                                   ,(funcall setter
                                             `(loopy--destructure-seq-replace
                                               ,getter ,v ,n))
-                                  ,v)))))))))
+                                  ,v))))))))
+           (ftype (function (t (integer 0 *)) t))
+           (important-return-value t))
   (inline-letevals (sequence n)
     (inline-quote (seq-drop ,sequence ,n))))
 
 (cl-defgeneric loopy--destructure-seq-replace (sequence replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  (declare (ftype (function (seq seq (integer 0 *)) seq))
+           (important-return-value t))
   ;; For a generic sequence, there doesn't seem to be a good way
   ;; to avoid calculating the length of the original sequence.
   (let ((len-old (seq-length sequence)))
@@ -1149,6 +1219,7 @@ an error should be signaled if the pattern doesn't match."
 
 (cl-defmethod loopy--destructure-seq-replace ((sequence array) replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  ;; TODO: No `declare' form for `cl-defmethod'?
   (let ((len-old (length sequence)))
     (cl-block loop
       (seq-map-indexed (lambda (new-elt idx)
@@ -1161,6 +1232,7 @@ an error should be signaled if the pattern doesn't match."
 
 (cl-defmethod loopy--destructure-seq-replace ((sequence list) replacements start)
   "Replace elements of SEQUENCE from START with elements of REPLACEMENTS."
+  ;; TODO: No `declare' form for `cl-defmethod'?
   (let ((repped-seq (nthcdr start sequence)))
     (cl-block loop
       (seq-map (lambda (new-elt)
@@ -1192,7 +1264,9 @@ This definition might not be necessary, but we use it just in case."
                                `(progn
                                   ,(funcall setter
                                             `(cl-replace ,getter ,v :start1 ,n))
-                                  ,v)))))))))
+                                  ,v))))))))
+           (ftype (function (sequence (integer 0 *)) sequence))
+           (important-return-value t))
   (inline-letevals (sequence n)
     (inline-quote (cl-subseq ,sequence ,n))))
 
@@ -1331,6 +1405,8 @@ IDX to a large value for the super-list."
 VALUE-EXPRESSION should itself be a `setf'-able place.
 
 Returns a list of bindings suitable for `cl-symbol-macrolet'."
+  (declare (ftype (function ((or symbol sequence) t) cons))
+           (important-return-value t))
   (pcase var
     ((pred symbolp) (unless (loopy--var-ignored-p var)
                       `((,var ,value-expression))))
@@ -1354,6 +1430,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 - `&optional' is not supported.
 - `&map' references the values in the map.
 - `&key' references the values in the property list."
+  (declare (ftype (function (sequence t) cons))
+           (important-return-value t))
   (map-let (('whole whole-var)
             ('pos   pos-vars)
             ('opt   opt-vars)
@@ -1434,6 +1512,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 - `&map' references the values in the map.
 - `&key' references the values in the property list,
   which is an error for arrays."
+  (declare (ftype (function (array t) cons))
+           (important-return-value t))
   (map-let (('whole whole-var)
             ('pos   pos-vars)
             ('opt   opt-vars)
@@ -1500,6 +1580,8 @@ Returns a list of bindings suitable for `cl-symbol-macrolet'.
 
 (cl-defun loopy--destructure-generalized-list (var-form value-expression)
   "Destructure list VALUE-EXPRESSION with generalized variables via VAR-FORM."
+  (declare (ftype (function (cons t) cons))
+           (important-return-value t))
   (map-let (('whole whole-var)
             ('pos   pos-vars)
             ('opt   opt-vars)

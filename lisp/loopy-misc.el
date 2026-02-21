@@ -127,10 +127,14 @@
 
 (defun loopy--signal-bad-iter (used-name true-name)
   "Signal an error for USED-NAME that is really TRUE-NAME."
+  (declare (ftype (function (symbol symbol) t))
+           (important-return-value nil))
   (signal 'loopy-iteration-in-sub-level (list used-name true-name)))
 
 (defun loopy--signal-must-be-top-level (command-name)
   "Signal an error for COMMAND-NAME."
+  (declare (ftype (function (symbol) t))
+           (important-return-value nil))
   (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
 
 ;;;;; Errors on Destructuring
@@ -312,15 +316,23 @@ keywords and variables are separate."
 
 
 ;;;; Loop Tag Names
-(defun loopy--produce-non-returning-exit-tag-name (&optional loop-name)
+(defun loopy--produce-non-returning-exit-tag-name (loop-name)
   "Produce a tag from LOOP-NAME."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (pure t)
+           (ftype (function ((or symbol null)) symbol)))
   (if loop-name
       (intern (format "loopy--%s-non-returning-exit-tag" loop-name))
     'loopy--non-returning-exit-tag))
 
 
-(defun loopy--produce-skip-tag-name (&optional loop-name)
+(defun loopy--produce-skip-tag-name (loop-name)
   "Produce a tag from LOOP-NAME."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (pure t)
+           (ftype (function ((or symbol null)) symbol)))
   (if loop-name
       (intern (format "loopy-%s-skip-tag"  loop-name))
     'loopy--skip-tag))
@@ -333,6 +345,9 @@ keywords and variables are separate."
 When a quoted argument is passed to a macro, it can appear
 as `(quote my-var)' or `(function my-func)' inside the body.  For
 expansion, we generally only want the actual symbol."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) symbol)))
   (pcase function-form
     ((or (pred symbolp) `(lambda ,_))           function-form)
     ;; This could be something like "(function (lambda () ...))".
@@ -348,6 +363,9 @@ When quoted symbols are passed to the macro, these can show up as
 \"(quote SYMBOL)\", where we only want SYMBOL.
 
 For functions, use `loopy--get-function-symbol'."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) symbol)))
   (pcase quoted-form
     ((pred symbolp) quoted-form)
     (`(quote ,form) form)
@@ -357,7 +375,9 @@ For functions, use `loopy--get-function-symbol'."
   "Whether FORM-OR-SYMBOL is quoted via `quote' or `function'.
 
 If not, then it is possible that FORM is a variable."
-
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) boolean)))
   (and (listp form-or-symbol)
        (= 2 (length form-or-symbol))
        (or (eq (car form-or-symbol) 'quote)
@@ -381,7 +401,13 @@ first and ELEMENT second."
   ;; `cl-member-if' with a custom predicate instead.
   ;;
   ;; The CLHS is wrong in how `adjoin' works.  See #170.
-  (declare (compiler-macro loopy--member-p-comp))
+  (declare (compiler-macro loopy--member-p-comp)
+           (side-effect-free nil) ; Can't know because of TEST.
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons t &key (function (t t) boolean))
+           ;;                  boolean))
+           )
   (setq test (or test #'equal))
   (if key
       (cl-loop with test-val = (funcall key element)
@@ -400,6 +426,11 @@ first and ELEMENT second."
 FORM is the original use of the function.  LIST is the sequence
 in which ELEMENT is sought.  TEST compare the elements of LIST and ELEMENT.
 KEY transforms those elements and ELEMENT."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons t t &key (function (t t) boolean))
+           ;;                  boolean))
+           )
   (if key
       (cl-with-gensyms (test-val seq-val)
         `(cl-loop with ,test-val = (funcall ,key ,element)

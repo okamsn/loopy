@@ -244,6 +244,9 @@ accumulated value.
 To avoid an infinite loop, this function replaces the `loopy--optimized-accum'
 in the expression with `loopy--optimized-accum-2', which is then processed
 during a second pass on the expanded code."
+  (declare (important-return-value t)
+           (side-effect-free nil) ; arbitrary macro expansion
+           (ftype (function (cons) cons)))
   (loopy (with (plist (cadr arg)))
          (cons (k v) plist :by #'cddr)
          (collect k)
@@ -276,6 +279,11 @@ need to be tweaked."
   "Parse the `at' command as (at &rest COMMANDS).
 
 These commands affect other loops higher up in the call list."
+  (declare (important-return-value t)
+           (side-effect-free nil) ; `loopy' uses global variables
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (loopy--check-target-loop-name target-loop)
   ;; We need to capture all non-main-body instructions into a new `at'
   ;; instruction, so we just temporarily `let'-bind
@@ -302,6 +310,11 @@ These commands affect other loops higher up in the call list."
 
 ;;;; For parsing special macro arguments
 
+(defvar loopy-iter--bare-names-internal nil
+  "Internal value of `loopy-iter-bare-names' for overrides." )
+(defvar loopy-iter--keywords-internal nil
+  "Internal value of `loopy-iter-keywords' for overrides." )
+
 ;; TODO: Combine this with `loopy--def-special-processor'.
 (defmacro loopy-iter--def-special-processor (name &rest body)
   "Create a processor for the special macro argument NAME and its aliases.
@@ -325,6 +338,10 @@ Variables available:
 
 Returns BODY without the `%s' argument."
                 name name)
+       (declare (important-return-value t)
+                ;; Using `list' instead of `cons' becuase we allow it to be nil
+                ;; here.
+                (ftype (function (list) list)))
        (loopy
         (accum-opt matching-args new-body)
         (with (first-is-keyword nil))
@@ -354,6 +371,10 @@ Returns BODY without the `%s' argument."
 
 (defun loopy-iter--process-special-arg-loop-name (body)
   "Process BODY and the loop name listed therein."
+  (declare (important-return-value t)
+           ;; Using `list' instead of `cons' becuase we allow it to be nil
+           ;; here.
+           (ftype (function (list) list)))
   (let* ((names)
          (new-body))
     (dolist (arg body)
@@ -686,6 +707,11 @@ packages from different authors.  See the updated Info node
   "Parse the `loopy-iter' command as (loopy-iter &rest BODY).
 
 See the info node `(loopy)The loopy-iter Macro' for more."
+  (declare (important-return-value t)
+           (side-effect-free nil)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   `((loopy--main-body ,(macroexpand `(loopy-iter ,@body)))))
 
 (puthash 'loopy-iter
