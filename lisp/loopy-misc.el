@@ -339,6 +339,9 @@ keywords and variables are separate."
 When a quoted argument is passed to a macro, it can appear
 as `(quote my-var)' or `(function my-func)' inside the body.  For
 expansion, we generally only want the actual symbol."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) symbol)))
   (pcase function-form
     ((or (pred symbolp) `(lambda ,_))           function-form)
     ;; This could be something like "(function (lambda () ...))".
@@ -354,6 +357,9 @@ When quoted symbols are passed to the macro, these can show up as
 \"(quote SYMBOL)\", where we only want SYMBOL.
 
 For functions, use `loopy--get-function-symbol'."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) symbol)))
   (pcase quoted-form
     ((pred symbolp) quoted-form)
     (`(quote ,form) form)
@@ -363,7 +369,9 @@ For functions, use `loopy--get-function-symbol'."
   "Whether FORM-OR-SYMBOL is quoted via `quote' or `function'.
 
 If not, then it is possible that FORM is a variable."
-
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or symbol cons)) boolean)))
   (and (listp form-or-symbol)
        (= 2 (length form-or-symbol))
        (or (eq (car form-or-symbol) 'quote)
@@ -387,7 +395,11 @@ first and ELEMENT second."
   ;; `cl-member-if' with a custom predicate instead.
   ;;
   ;; The CLHS is wrong in how `adjoin' works.  See #170.
-  (declare (compiler-macro loopy--member-p-comp))
+  (declare (compiler-macro loopy--member-p-comp)
+           (side-effect-free nil) ; Can't know because of TEST.
+           (important-return-value t)
+           (ftype (function (cons t &key (function (t t) boolean))
+                            boolean)))
   (setq test (or test #'equal))
   (if key
       (cl-loop with test-val = (funcall key element)
