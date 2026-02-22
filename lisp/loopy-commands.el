@@ -3074,6 +3074,9 @@ Stop the loop when CONDITION is nil.
 
 CONDITION is a required condition.  CONDITIONS is the remaining optional
 conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (when conditions
     (warn "`loopy': `while' will only support one argument in the future.
 To keep the old behavior, wrap multiple conditions with `and'."))
@@ -3093,6 +3096,9 @@ Stop the loop when CONDITION is non-nil.
 
 CONDITION is a required condition.  CONDITIONS is the remaining optional
 conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (when conditions
     (warn "`loopy': `until' will only support one argument in the future.
 To keep the old behavior, wrap multiple conditions with `and'."))
@@ -3112,6 +3118,9 @@ To keep the old behavior, wrap multiple conditions with `and'."))
 
 NAME is `while' or `until'.  CONDITION is a required condition.
 CONDITIONS is the remaining optional conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name))
         (condition (if (zerop (length conditions))
                        condition
@@ -3131,6 +3140,9 @@ Return a list of instructions for naming these `setf'-able places.
 
 VAR are the variables into to which to destructure the value of
 VALUE-EXPRESSION."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (let ((destructurings
          (loopy--destructure-generalized-sequence var value-expression))
         (instructions nil))

@@ -45,6 +45,9 @@
 ;; This better allows for things to change in the future.
 (defun loopy--var-ignored-p (var)
   "Return whether VAR should be ignored for destructuring."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol) boolean)))
   (and (symbolp var)
        (eq (aref (symbol-name var) 0) ?_)))
 
@@ -62,6 +65,9 @@ See also the function `loopy--get-var-groups'.")
 (defun loopy--get-var-groups (var-seq)
   "Return the alist of variable groups in sequence VAR-SEQ.
 Type is one of `list' or `array'."
+  (declare (side-effect-free nil) ; Cache
+           (important-return-value t)
+           (ftype (function (sequence) cons)))
   (or (gethash var-seq loopy--get-var-groups-cache nil)
       (let* ((is-seq)
              (whole-var) (processing-whole)
@@ -262,6 +268,9 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&optional-spec (form)
   "Get the spec of the `&optional' variable FORM as (VAR DEFAULT SUPPLIED LEN)."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (let ((var)
         (default)
         (supplied)
@@ -278,6 +287,9 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&key-spec (var-form)
   "Get the spec of `&key' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (or (seq (seq key var) default supplied)
                        (seq (seq key var) default)
                        (seq (seq key var)))
@@ -307,6 +319,9 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&map-spec (var-form)
   "Get the spec of `&map' VAR-FORM as (KEY VAR DEFAULT SUPPLIED)."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (seq key var default supplied)
                    (seq key var default)
                    (seq key var)
@@ -326,6 +341,9 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-&aux-spec (var-form)
   "Get the spec of `&aux' VAR-FORM as (VAR VAL)."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (pcase-let (((or (seq var val)
                    (seq var)
                    (and (pred symbolp)
@@ -337,6 +355,9 @@ Type is one of `list' or `array'."
 
 (defun loopy--get-var-list (var-seq)
   "Get the variables in VAR-SEQ as a flat, unordered list."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol)) cons)))
   (let ((groups (loopy--get-var-groups var-seq))
         (result nil))
     (cl-labels ((fn (val) (if (seqp val)
