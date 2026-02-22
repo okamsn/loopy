@@ -1875,19 +1875,22 @@ second pass of macro expansion."
            `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
           (macroexp-progn main-body))))))
 
-(cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
+(cl-defun loopy--update-accum-place-count (loop var place)
   "Keep track of where things are being placed.
 
 LOOP is the current loop.  VAR is the accumulation variable.
-PLACE is one of `start' or `end'.  VALUE is the integer by which
-to increment the count (default 1)."
+PLACE is one of `start' or `end'."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol symbol symbol)
+                            t)))
   (loopy--check-target-loop-name loop)
   (loopy--check-position-name place)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
-    (cl-incf (map-elt (map-elt loop-map var) place) value)))
+    (cl-incf (map-elt (map-elt loop-map var) place))))
 
 ;;;;;; Commands
 (cl-defmacro loopy--defaccumulation (name
