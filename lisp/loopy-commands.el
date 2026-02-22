@@ -2987,7 +2987,10 @@ returned."
 
 (cl-defun loopy--parse-return-from-command ((_ loop-name &rest values))
   "Parse the `return-from' command as (return-from LOOP-NAME [VALUES])."
-  ;; (loopy--check-target-loop-name loop-name)
+  (declare (side-effect-free nil) ; Name check.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
+  (loopy--check-target-loop-name loop-name)
   `((loopy--main-body
      (cl-return-from ,loop-name
        ,(cond
