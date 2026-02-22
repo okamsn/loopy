@@ -407,6 +407,9 @@ Type is one of `list' or `array'."
 
 FN is the function.  ARG2 is the argument to move to the second
 position of the call to FN in the pattern."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (function) cons)))
   (static-if (>= emacs-major-version 30)
       `(,fn _ ,arg2)
     `(loopy--pcase-flip-1 ,fn ,arg2)))
@@ -417,6 +420,10 @@ position of the call to FN in the pattern."
 If VAR is ignored according to `loopy--var-ignored-p', return
 `_'.  Otherwise, if VAR is a sequence according to `seqp',
 return `(loopy VAR)'.  In all other cases, VAR is returned."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol))
+                            (or cons symbol))))
   (cond
    ((loopy--var-ignored-p var) '_)
    ((seqp var) `(loopy ,var))
@@ -425,6 +432,10 @@ return `(loopy VAR)'.  In all other cases, VAR is returned."
 ;; TODO: Use this in `list' pattern.
 (defun loopy--pcase-let-nil-list (pat)
   "Return a list of patterns binding variables in PAT to nil."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function ((or sequence symbol))
+                            (or cons symbol))))
   ;; Need to quote `nil' for it to be a `pcase' pattern.
   (pcase pat
     (`(loopy ,(and (pred seqp) seq))
@@ -439,6 +450,10 @@ return `(loopy VAR)'.  In all other cases, VAR is returned."
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   ;; A modified version of the back-quote pattern to better work with
   ;; optional values.
   (cond
@@ -479,6 +494,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   (let ((pos-len (length pos-vars))
         (opt-len (length opt-vars)))
     ;; We allow the variable form to be shorter than the
@@ -563,6 +582,9 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 
 (defun loopy--seq-length= (seq n)
   "Check whether the length of SEQ is equal to N."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (seq integer) boolean)))
   (cond
    ((sequencep seq)
     (length= seq n))
@@ -576,6 +598,9 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 
 (defun loopy--seq-length> (seq n)
   "Check whether the length of SEQ is greater than to N."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (seq integer) boolean)))
   (cond
    ((sequencep seq) (length> seq n))
    ;; Take advantage of lazy evaluation of streams.
@@ -593,6 +618,10 @@ destructured value.
 POS-VARS is the list of the positional variables.  OPT-VARS is the list of
 the optional variables.  REST-VAR is the `&rest' variable.
 MAP-OR-KEY-VARS is whether there are map or key variables."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons cons symbol boolean)
+                            cons)))
   (let ((pos-len (length pos-vars))
         (opt-len (length opt-vars)))
     (cl-labels ((make-pos-pats ()
@@ -686,6 +715,10 @@ MAP-OR-KEY-VARS is whether there are map or key variables."
 KEY-VARS are the forms of the key variables.  ALLOW-OTHER-KEYS is
 whether `&allow-other-keys' was used.  PLIST-VAR is the variable
 holding the property list."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons boolean)
+                            cons)))
   ;; If we aren't checking whether all keys in EXPVAL were given,
   ;; then we can use simpler patterns since we don't need to store the
   ;; value of the key.
