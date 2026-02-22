@@ -288,8 +288,8 @@ Definition must exist.  Neither argument need be quoted."
            vconcating        loopy--parse-vconcat-command
            unless            loopy--parse-unless-command
            when              loopy--parse-when-command
-           until             loopy--parse-while-until-commands
-           while             loopy--parse-while-until-commands
+           until             loopy--parse-until-command
+           while             loopy--parse-while-command
            loopy-iter        loopy-iter--parse-loopy-iter-command))
   "Map of symbols to parsing functions.
 

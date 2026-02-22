@@ -40,6 +40,8 @@ please let me know.
      variable now signals an error instead of a warning.
    - Aliases made obsolete in version 0.14.0 have been removed.  They can still
      be added manually to ~loopy-parsers~.
+   - =while= and =until= now signal a warning when receiving multiple
+     conditions.  In the future, this will be an error.
  - Version 0.15.0:
    - Loopy now requires at least Emacs version 28.1, increased from version
      27.1.

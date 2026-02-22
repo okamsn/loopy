@@ -6488,6 +6488,16 @@ Not multiple of 3: 7"
   :iter-keyword (list while collect)
   :iter-bare nil)
 
+(loopy-deftest while-alias
+  :doc "Make sure aliases don't show up in `while' instead of the symbol `while'."
+  :result 1
+  :wrap ((x . `(let ((loopy-parsers
+                      (map-insert loopy-parsers 'w (map-elt loopy-parsers 'while))))
+                 (eval (quote ,x) t))))
+  :body ((w nil)
+         (finally-return 1))
+  :loopy t)
+
 ;;;;; Until
 (loopy-deftest until
   :result '(1 2 3)
@@ -6498,6 +6508,15 @@ Not multiple of 3: 7"
   :iter-keyword (list until collect)
   :iter-bare nil)
 
+(loopy-deftest until-alias
+  :doc "Make sure aliases don't show up in `until' instead of the symbol `until'."
+  :result 1
+  :wrap ((x . `(let ((loopy-parsers
+                      (map-insert loopy-parsers 'u (map-elt loopy-parsers 'until))))
+                 (eval (quote ,x) t))))
+  :body ((u t)
+         (finally-return 1))
+  :loopy t)
 
 ;;;;; Always
 (loopy-deftest always-pass

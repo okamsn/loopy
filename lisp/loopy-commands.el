@@ -2909,6 +2909,46 @@ returned."
       (loopy--main-body (throw (quote ,tag-name) t)))))
 
 ;;;;;; While Until
+(cl-defun loopy--parse-while-command ((_name condition &rest conditions))
+  "Parse the `while' command as (while CONDITION).
+
+Stop the loop when CONDITION is nil.
+
+CONDITION is a required condition.  CONDITIONS is the remaining optional
+conditions."
+  (when conditions
+    (warn "`loopy': `while' will only support one argument in the future.
+To keep the old behavior, wrap multiple conditions with `and'."))
+  (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name))
+        (condition (if (zerop (length conditions))
+                       condition
+                     `(and ,condition ,@conditions))))
+    `((loopy--non-returning-exit-used ,tag-name)
+      (loopy--main-body (if ,condition
+                            nil
+                          (throw (quote ,tag-name) t))))))
+
+(cl-defun loopy--parse-until-command ((_name condition &rest conditions))
+  "Parse the `until' command as (until CONDITION).
+
+Stop the loop when CONDITION is non-nil.
+
+CONDITION is a required condition.  CONDITIONS is the remaining optional
+conditions."
+  (when conditions
+    (warn "`loopy': `until' will only support one argument in the future.
+To keep the old behavior, wrap multiple conditions with `and'."))
+  (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name))
+        (condition (if (zerop (length conditions))
+                       condition
+                     `(and ,condition ,@conditions))))
+    `((loopy--non-returning-exit-used ,tag-name)
+      (loopy--main-body (if ,condition
+                            (throw (quote ,tag-name) t))))))
+
+(make-obsolete 'loopy--parse-while-until-commands
+               "use `loopy--parse-while-command' or `loopy--parse-until-command'"
+               "2026-03")
 (cl-defun loopy--parse-while-until-commands ((name condition &rest conditions))
   "Parse the `while' and `until' commands.
 

@@ -22,19 +22,28 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   More specifically, keep the same order returned by `pcase` for the binding of
   those final variables.
 
+- `while` and `until` now correctly work when aliased ([#267]).
+
 ### Breaking Changes
 
 - Using accumulation commands with different initial values for the same
   variable now signals an error instead of a warning ([#169], [#254]).
+
 - Aliases made obsolete in version 0.14.0 of this package have been removed (see
   release notes for that version below) ([#256]).  They can still be added
   manually to `loopy-parsers`.
+
+- Passing multiple conditions to `while` and `until` now signals a warning
+  ([#267]).  To be consistent with `never` and `always`, in the future, the
+  `while` and `until` commands will only accept a single condition.  To keep the
+  old behavior, wrap multiple conditions in `and`.
 
 [#169]: https://github.com/okamsn/loopy/issues/169
 [#254]: https://github.com/okamsn/loopy/PR/254
 [#251]: https://github.com/okamsn/loopy/PR/251
 [#256]: https://github.com/okamsn/loopy/PR/256
 [#265]: https://github.com/okamsn/loopy/PR/265
+[#267]: https://github.com/okamsn/loopy/PR/267
 
 ## 0.15.0
 
