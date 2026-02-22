@@ -1656,6 +1656,9 @@ keep track of a list's last link.
 
 This function uses `loopy--accumulation-list-end-vars' to store
 end-tracking variables."
+  (declare (side-effect-free nil)
+           (important-return-value t)
+           (ftype (function (symbol symbol) symbol)))
   (let ((key (cons loop var)))
     (or (alist-get key loopy--accumulation-list-end-vars nil nil #'equal)
         ;; `map-put!' would fail here, since the association doesn't exist
@@ -1675,6 +1678,9 @@ commands like `collect'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (side-effect-free nil) ; Because of `loopy--get-accumulation-list-end-var'.
+           (important-return-value t)
+           (ftype (function (symbol symbol) cons)))
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1705,6 +1711,13 @@ accumulation commands like `adjoin'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (side-effect-free nil) ; Because of `loopy--get-accumulation-list-end-var'.
+           (important-return-value t)
+           (ftype (function ( symbol symbol
+                              &key
+                              (function (t t) boolean)
+                              (function (t) t))
+                            cons)))
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1743,6 +1756,9 @@ accumulation commands like `append' and `nconc'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (side-effect-free nil) ; `loopy--get-accumulation-list-end-var'
+           (important-return-value t)
+           (ftype (function (symbol symbol &optional boolean) cons)))
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var))
@@ -1774,6 +1790,14 @@ This is used in accumulation commands like `union' and `nunion'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (side-effect-free nil) ; `loopy--get-accumulation-list-end-var'
+           (important-return-value t)
+           (ftype (function ( symbol symbol
+                              &key
+                              (function (t t) boolean)
+                              (function (t) t)
+                              boolean)
+                            cons)))
   ;; End tracking is a bit slower than `nconc' for short
   ;; lists, but much faster for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1804,7 +1828,7 @@ more efficient than repeatedly traversing the list."
                              ,last-link (last ,var))))))))))))
 
 ;;;;;; Test Methods
-(cl-defun loopy--get-union-test-method (var &key key test)
+(cl-defun loopy--get-union-test-method (var &key test key)
   "Get a function testing for values in VAR in `union' and `nunion'.
 
 This function is fed to `cl-remove-if' or `cl-delete-if'.  See
@@ -1812,6 +1836,12 @@ the definitions of those commands for more context.
 
 TEST is use to check for equality (default `equal').  KEY modifies
 the inputs to test."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol &key
+                                    (function (t t) boolean)
+                                    (function (t) t))
+                            cons)))
   ;;  KEY applies to the value being tested as well as the elements in the list.
   (cl-with-gensyms (arg)
     `(lambda (,arg)
@@ -1831,6 +1861,9 @@ Then entire plist is passed to the constructor found in
 `loopy--optimized-accum' is a fake function.  It only used in a
 second pass of macro expansion."
   ;; Data is quoted to prevent recursive macro expansion.
+  (declare (side-effect-free nil) ; Don't know what calling the function will do.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((plist (cl-second arg)))
     (loopy--plist-bind (:name name :loop loop :opt-accum-fn fn)
         plist
