@@ -1937,7 +1937,12 @@ you can use in the instructions:
 - `val' is the value to be accumulated.
 - `opts' is the list of optional arguments that were given.  These are the
   arguments after those described as basic by NUM-ARGS."
-  (declare (indent defun) (doc-string 2))
+  (declare (indent defun)
+           (doc-string 2)
+           (side-effect-free nil)
+           (important-return-value nil)
+           ;; (ftype (function (cons) cons))
+           )
 
   (unless explicit
     (error "Key-argument `explicit' not optional"))
@@ -1960,6 +1965,9 @@ you can use in the instructions:
   `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
        ((&whole cmd name &rest parser-args))
      ,doc-string
+     (declare (side-effect-free nil)
+              (important-return-value t)
+              (ftype (function (cons) cons)))
      ,(let ((explicit-num-args num-args)
             (implicit-num-args (1- num-args))
             (explicit-category)
@@ -2083,6 +2091,9 @@ you can use in the instructions:
 ;;;;;;; Adjoin
 (defun loopy--construct-accum-adjoin (plist)
   "Construct optimized accumulation for `adjoin' from PLIST."
+  (declare (side-effect-free nil) ; End join tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :test test :key key :at pos)
       plist
@@ -2166,6 +2177,9 @@ you can use in the instructions:
 ;;;;;;; Append
 (defun loopy--construct-accum-append (plist)
   "Produce accumulation code for `append' from PLIST."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop
                        :var var :val val
                        :at (pos 'end))
@@ -2228,6 +2242,9 @@ you can use in the instructions:
 ;;;;;;; Collect
 (defun loopy--construct-accum-collect (plist)
   "Construct an optimized `collect' accumulation from PLIST."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
     `((loopy--accumulation-vars (,var nil))
@@ -2293,6 +2310,9 @@ you can use in the instructions:
   "Create accumulation code for `concat' from PLIST.
 
 This function is called by `loopy--expand-optimized-accum'."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
@@ -2495,6 +2515,9 @@ EXPR is the value to bind to VAR."
 ;;;;;;; Nconc
 (defun loopy--construct-accum-nconc (plist)
   "Create accumulation code for PLIST."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind (:cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
     (map-let (('start start)
@@ -2557,6 +2580,9 @@ EXPR is the value to bind to VAR."
   "Create accumulation code for `nunion' from PLIST.
 
 This function is used by `loopy--expand-optimized-accum'."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2659,6 +2685,9 @@ This function is used by `loopy--expand-optimized-accum'."
   "Parse the `prepend' command as (append VAR VAL :at start).
 
 ARG is the entire loop command."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
@@ -2671,6 +2700,9 @@ ARG is the entire loop command."
   "Parse the `push-into' command as (collect VAR VAL :at start).
 
 ARG is the entire loop command."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
@@ -2745,6 +2777,9 @@ by `cl-reduce'."
   "Create accumulation code for `nunion' from PLIST.
 
 This function is used by `loopy--expand-optimized-accum'."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2847,6 +2882,9 @@ This function is used by `loopy--expand-optimized-accum'."
   "Create accumulation code for `vconcat' from PLIST.
 
 This function is called by `loopy--expand-optimized-accum'."
+  (declare (side-effect-free nil) ; End tracking.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
@@ -2963,12 +3001,18 @@ returned."
 ;;;;;; Leave
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name)))
     `((loopy--non-returning-exit-used ,tag-name)
       (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-leave-from-command ((_ target-loop))
   "Parse the `leave-from' command."
+  (declare (side-effect-free nil) ; Name check.
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--check-target-loop-name target-loop)
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
@@ -2978,6 +3022,9 @@ returned."
 ;;;;;; Return
 (cl-defun loopy--parse-return-command ((_ &rest values))
   "Parse the `return' command as (return [VALUES])."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   `((loopy--main-body
      (cl-return-from ,loopy--loop-name
        ,(cond
@@ -3001,12 +3048,18 @@ returned."
 ;;;;;; Skip
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((tag-name (loopy--produce-skip-tag-name loopy--loop-name)))
     `((loopy--skip-used ,tag-name)
       (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-skip-from-command ((_ target-loop))
   "Parse the `skip-from' loop command as (skip-from LOOP-NAME)."
+  (declare (side-effect-free nil) ; Name check
+           (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--check-target-loop-name target-loop)
   (let ((tag-name (loopy--produce-skip-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
