@@ -60,6 +60,10 @@ function in the variable `loopy--flag-settings'."
   :type '(repeat symbol))
 
 (defun loopy--defalias-1 (alias definition)
+  "Create ALIAS for DEFINITION."
+  (declare (side-effect-free nil) ; Modify parsers.
+           (important-return-value nil)
+           (ftype (function (symbol symbol) t)))
   (if (eq alias definition)
       (error "Can't alias name to itself: `%s' -> `%s'"
              alias definition)
@@ -95,11 +99,17 @@ function in the variable `loopy--flag-settings'."
   "Add alias ALIAS for loop command DEFINITION.
 
 Definition must exist.  Neither argument need be quoted."
+  (declare (side-effect-free nil) ; Modify parsers.
+           (important-return-value nil)
+           (ftype (function (symbol symbol) t)))
   `(loopy--defalias-1 (quote ,(loopy--get-quoted-symbol alias))
                       (quote ,(loopy--get-quoted-symbol definition))))
 
 (defun loopy--expression-parser-map-p (obj)
   "Return when OBJ has the correct data for `loopy-expression-parsers'."
+  (declare (side-effect-free t) ; Modify parsers.
+           (important-return-value t)
+           (ftype (function (t) boolean)))
   (and (mapp obj)
        (map-every-p (lambda (k v)
                       (and (symbolp k)
@@ -679,6 +689,10 @@ Generally, this is used with commands that produce lists, such as
 (defun loopy--get-accum-counts (loop var cmd-name)
   "Get the count of accumulation places for VAR in LOOP.
 CMD-NAME is used for signaling errors."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol symbol symbol)
+                            (integer 0 *))))
   (or (map-nested-elt loopy--accumulation-places (list loop var))
       (signal 'loopy-missing-accum-counters (list cmd-name))))
 
@@ -754,6 +768,9 @@ This list is mainly fed to the macro `loopy--wrap-variables-around-body'."))
 Some iteration commands (e.g., `reduce') will change their behavior
 depending on whether the accumulation variable is given an initial
 value."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol) boolean)))
   (or (memq var-name (car-safe loopy--with-vars))
       (memq var-name loopy--without-vars)))
 
@@ -765,6 +782,9 @@ The variable can exist in `loopy--iteration-vars',
 `set'), or `loopy--generalized-vars'.
 
 Re-initializing an iteration variable is an error."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol) cons)))
   (or (cl-loop for (var val) in loopy--iteration-vars
                when (eq var var-name)
                return (cons 'iteration val))
@@ -785,6 +805,9 @@ This can happen when multiple loop commands refer to the same
 variable, or when a variable is introduced via `with'.
 
 See also `loopy--with-bound-p' and `loopy--command-bound-p'."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (symbol) boolean)))
   (or (loopy--with-bound-p var-name)
       (loopy--command-bound-p var-name)))
 
@@ -793,10 +816,16 @@ See also `loopy--with-bound-p' and `loopy--command-bound-p'."
 
 Accumulation commands can operate on the same variable, and we
   don't want that variable to appear more than once as an implied return."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (t) boolean)))
   (member expression loopy--implicit-return))
 
 (defun loopy--check-target-loop-name (target)
   "Signal an error whether TARGET is not a valid loop name."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol) t)))
   (unless (memq target loopy--known-loop-names)
     (signal 'loopy-unknown-loop-target (list target))))
 
@@ -810,10 +839,17 @@ Accepted places are the quoted symbols `start' or `end'.  The place
 
 For example, the `collect' command can add items at the beginning or end
 of a sequence."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol) t)))
   (unless (member pos '(start end))
     (signal 'loopy-bad-position-command-argument (list pos))))
 
 (defun loopy--normalize-position-name (pos)
+  "Normalize POS to standard values."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol) (member start end))))
   (pcase pos
     ((or 'beginning '(quote beginning) 'start '(quote start))
      'start)
@@ -830,6 +866,9 @@ of a sequence."
 
 (defun loopy--apply-flag (flag)
   "Apply the effects of the FLAG."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol) t)))
   (if-let ((func (map-elt loopy--flag-settings flag)))
       (funcall func)
     (error "Loopy: Flag not defined: %s" flag)))
