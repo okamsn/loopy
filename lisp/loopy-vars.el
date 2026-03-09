@@ -63,32 +63,33 @@ function in the variable `loopy--flag-settings'."
   (if (eq alias definition)
       (error "Can't alias name to itself: `%s' -> `%s'"
              alias definition)
-    (let ((true-name
-           ;; Now that `loopy-aliases' is nil, we know that it can only
-           ;; contain the true name by user intervention, in which
-           ;; case it should have priority over `loopy-parsers'.
-           (or (cl-loop for (orig . aliases) in loopy-aliases
-                        when (memq definition aliases)
-                        return orig)
-               (and (map-contains-key loopy-parsers definition)
-                    definition))))
-      (if (eq alias true-name)
-          (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
-                 alias definition true-name)
-        (if-let* ((fn (gethash true-name loopy-parsers)))
-            (progn
-              ;; Remove previous uses of that alias from all other names.
-              ;; We don't want to trigger the setting warning unless we must,
-              ;; so we check first.
-              (when (map-some (lambda (_ v) (memq alias v))
-                              loopy-aliases)
-                (setq loopy-aliases (map-apply (lambda (k v)
-                                                 (cons k (remq alias v)))
-                                               loopy-aliases)))
-              ;; Add the alias for the new target name.
-              (puthash alias fn loopy-parsers))
-          (error "Ultimate command `%S' for alias `%S' to `%S' is not a known command"
-                 true-name alias definition))))))
+    (with-suppressed-warnings ((obsolete loopy-aliases))
+      (let ((true-name
+             ;; Now that `loopy-aliases' is nil, we know that it can only
+             ;; contain the true name by user intervention, in which
+             ;; case it should have priority over `loopy-parsers'.
+             (or (cl-loop for (orig . aliases) in loopy-aliases
+                          when (memq definition aliases)
+                          return orig)
+                 (and (map-contains-key loopy-parsers definition)
+                      definition))))
+        (if (eq alias true-name)
+            (error "Can't alias name to itself: `%s' -> `%s' -> ... -> `%s'"
+                   alias definition true-name)
+          (if-let* ((fn (gethash true-name loopy-parsers)))
+              (progn
+                ;; Remove previous uses of that alias from all other names.
+                ;; We don't want to trigger the setting warning unless we must,
+                ;; so we check first.
+                (when (map-some (lambda (_ v) (memq alias v))
+                                loopy-aliases)
+                  (setq loopy-aliases (map-apply (lambda (k v)
+                                                   (cons k (remq alias v)))
+                                                 loopy-aliases)))
+                ;; Add the alias for the new target name.
+                (puthash alias fn loopy-parsers))
+            (error "Ultimate command `%S' for alias `%S' to `%S' is not a known command"
+                   true-name alias definition)))))))
 
 ;;;###autoload
 (defmacro loopy-defalias (alias definition)
