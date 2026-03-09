@@ -215,6 +215,12 @@ variable.  The contents of main-body instructions are inserted
 into the expanded body in the command's place during macro
 expansion.")
 
+(defvar loopy-iter--bare-names-internal nil
+  "Internal value of `loopy-iter-bare-names' for overrides." )
+
+(defvar loopy-iter--keywords-internal nil
+  "Internal value of `loopy-iter-keywords' for overrides." )
+
 ;;;;; Expanders
 
 (defvar loopy-iter--level nil
@@ -430,11 +436,6 @@ Returns BODY without the `%s' argument."
 
 (loopy-iter--def-special-processor finally-protect
   (setq loopy--final-protect arg-value))
-
-(defvar loopy-iter--bare-names-internal nil
-  "Internal value of `loopy-iter-bare-names' for overrides." )
-(defvar loopy-iter--keywords-internal nil
-  "Internal value of `loopy-iter-keywords' for overrides." )
 
 (loopy-iter--def-special-processor override
   (let ((parsers-found nil)
