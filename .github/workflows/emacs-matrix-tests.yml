@@ -57,4 +57,14 @@ jobs:
       run: emacs -batch --eval='(package-activate-all)' -l ert -l loopy-dash/tests/dash-tests.el -f ert-run-tests-batch-and-exit
     - name: Miscellaneous tests
       run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
+    - name: Byte Compilation test
+      run: emacs -batch --eval='(package-activate-all)' -f batch-byte-compile ~/.emacs.d/elpa/loopy*/*.el
+    - name: Native Compilation test
+      # if: (matrix.emacs-version > 29)
+      run: |
+        if [[ t = $(emacs -batch --eval="(prin1 (and (fboundp 'batch-native-compile) (funcall 'native-comp-available-p)))")  ]]; then
+            emacs -batch --eval='(package-activate-all)' -f batch-native-compile ~/.emacs.d/elpa/loopy*/*.el
+        else
+           echo Not running due to not having native compilation installed.
+        fi
     - run: echo "🍏 This job's status is ${{ job.status }}."
