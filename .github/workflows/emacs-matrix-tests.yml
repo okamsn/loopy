@@ -8,6 +8,7 @@ on:
     branches:
       - main
       - master
+permissions: {}
 jobs:
   test:
     name: 'Install and Test'
@@ -15,14 +16,15 @@ jobs:
     strategy:
       matrix:
         emacs-version:
-          # - '28.1'
           - '28.2'
           - '29.2'
           - '30.2'
           - 'release-snapshot'
           # - 'snapshot'
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
     - uses: purcell/setup-emacs@master
       with:
         version: ${{ matrix.emacs-version }}
@@ -60,7 +62,6 @@ jobs:
     - name: Byte Compilation test
       run: emacs -batch --eval='(package-activate-all)' -f batch-byte-compile ~/.emacs.d/elpa/loopy*/*.el
     - name: Native Compilation test
-      # if: (matrix.emacs-version > 29)
       run: |
         if [[ t = $(emacs -batch --eval="(prin1 (and (fboundp 'batch-native-compile) (funcall 'native-comp-available-p)))")  ]]; then
             emacs -batch --eval='(package-activate-all)' -f batch-native-compile ~/.emacs.d/elpa/loopy*/*.el
