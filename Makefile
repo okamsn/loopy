@@ -9,17 +9,20 @@ version:
 	$(eval VERSION = $(shell $(EMACS) -Q -batch --eval="(progn (require 'lisp-mnt) (with-temp-buffer (insert-file-contents \"lisp/loopy.el\") (princ (or (lm-header \"package-version\") (lm-header \"version\")))))"))
 	@echo Package version is $(VERSION)
 
+TEMPDIR =
+.PHONY: tempdir
+
 tempdir:
 	@echo Creating temporary user directory.
-	$(eval USERDIR = $(shell mktemp --directory))
-	@echo Temporary user directory is "$(USERDIR)".
-	mkdir "$(USERDIR)/elpa"
-	mkdir "$(USERDIR)/eln-cache"
+	$(eval TEMPDIR = $(shell mktemp --directory))
+	@echo Temporary user directory is "$(TEMPDIR)".
+	mkdir "$(TEMPDIR)/elpa"
+	mkdir "$(TEMPDIR)/eln-cache"
 
 .PHONY: test-install
 
 test-install: version tempdir
-	$(EMACS) -Q --init-directory="$(USERDIR)" -batch \
+	$(EMACS) -Q --init-directory="$(TEMPDIR)" -batch \
 		--eval="(progn (package-refresh-contents) \
 			  (package-install-file \"loopy-$(VERSION).tar\"))"
 
@@ -48,22 +51,27 @@ seq-tests:
 misc-tests:
 	$(EMACS) -Q -batch -l ert -l tests/load-path.el -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
 
-.PHONY: byte-comp
-
-byte-comp-tests:
-	$(EMACS) -Q -batch -l ert -l tests/load-path.el -f batch-byte-compile ./lisp/*.el
-
 .PHONY: native-comp-tests
 
-# Native compilation seems to want the package to have already been
-# installed, so we do that using a temporary folder.
-native-comp-tests: version tempdir test-install
-	$(EMACS) -Q --init-directory="$(USERDIR)" -batch \
+native-comp-tests:
+	$(EMACS) -Q -batch -l ert -l tests/load-path.el -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
+
+.PHONY: byte-comp
+
+byte-comp:
+	$(EMACS) -Q -batch -l ert -l tests/load-path.el -f batch-byte-compile ./lisp/*.el
+
+.PHONY: native-comp
+
+# native-comp:
+# 	$(EMACS) -Q -batch -l ert -l tests/load-path.el -f batch-native-compile ./lisp/*.el
+native-comp: version tempdir test-install
+	$(EMACS) -Q --init-directory="$(TEMPDIR)" -batch \
 		-l comp \
 		--eval="(package-activate-all)" \
-		--eval="(setq native-comp-eln-load-path (append native-comp-eln-load-path (list \"$(USERDIR)/eln-cache\")))" \
+		--eval="(setq native-comp-eln-load-path (append native-comp-eln-load-path (list \"$(TEMPDIR)/eln-cache\")))" \
 		-f batch-native-compile \
-		$(USERDIR)/elpa/loopy-$(VERSION)/*.el
+		$(TEMPDIR)/elpa/loopy-$(VERSION)/*.el
 
 .PHONY: all-tests
 

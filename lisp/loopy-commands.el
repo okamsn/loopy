@@ -105,6 +105,11 @@ CORRECT is a list of valid keywords.
 Any keyword not in CORRECT is considered invalid.  Any element
 not in a keyword position that is not a keyword is invalid.  If
 LIST does not contain an even number of elements, it is invalid."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons cons) boolean))
+           )
   ;; `cl-loop' is broken for this use-case. See Emacs bug #72753.
   (let ((length 0))
     (let ((this-pos nil))
@@ -124,6 +129,10 @@ LIST does not contain an even number of elements, it is invalid."
   "Parse the `at' command as (at &rest COMMANDS).
 
 These commands affect other loops higher up in the call list."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (loopy--check-target-loop-name target-loop)
   (let ((loopy--loop-name target-loop)
         (loopy--in-sub-level t))
@@ -137,6 +146,10 @@ These commands affect other loops higher up in the call list."
 
 Unlike the `sub-loop' command, this command is not specially
 handled by `loopy-iter'."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   `((loopy--main-body ,(macroexpand `(loopy ,@body)))))
 
 ;;;;; Genereric Evaluation
@@ -146,6 +159,10 @@ handled by `loopy-iter'."
 
 - VAR is the variable to assign.
 - VALS are the values to assign to VAR."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let* ((value-selector (gensym "set-value-selector-"))
          (arg-length (length vals)))
     (cl-case arg-length
@@ -202,6 +219,10 @@ This command records the value of VAL at the end of the cycle,
 not when the command is run.
 
 This command does not wait for VAL to change before updating VAR."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (if (not (numberp back))
       ;; When we don't know ahead of time how far back we need to go, we have to
       ;;  use a queue.  This code is adapted from Irreal's blog
@@ -269,6 +290,10 @@ This command does not wait for VAL to change before updating VAR."
 BODY is one or more commands to be grouped by a `progn' form.
 This command is suitable for using as the first sub-command in an
 `if' command."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (progn-body rest)
         (loopy--parse-loop-commands body)
@@ -282,6 +307,11 @@ This command is suitable for using as the first sub-command in an
 
 Expressions are normal Lisp expressions, which are inserted into
 the loop literally (not even in a `progn')."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (mapcar (lambda (expr) (list 'loopy--main-body expr))
           expressions))
 
@@ -294,6 +324,10 @@ the loop literally (not even in a `progn')."
 - CONDITION is a Lisp expression.
 - IF-TRUE is the first sub-command of the `if' command.
 - IF-FALSE are all the other sub-commands."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (if-true-main-body true-rest)
         (loopy--parse-loop-command if-true)
@@ -315,6 +349,10 @@ loop commands.
 
 The Lisp expression and the loopy-body instructions from each
 command are inserted into a `cond' special form."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((loopy--in-sub-level t)
         (cond-body nil)
         (rest-instructions nil))
@@ -330,6 +368,10 @@ command are inserted into a `cond' special form."
 ;;;;;; When
 (cl-defun loopy--parse-when-command ((_ condition &rest body))
   "Parse `when' as (when CONDITION [COMMANDS])."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
@@ -339,6 +381,10 @@ command are inserted into a `cond' special form."
 ;;;;;; Unless
 (cl-defun loopy--parse-unless-command ((_ condition &rest body))
   "Parse `unless' as (unless CONDITION [COMMANDS])."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((loopy--in-sub-level t))
     (loopy--bind-main-body (main other)
         (loopy--parse-loop-commands body)
@@ -486,6 +532,10 @@ instructions:
                 (when other-vals
                   '(&rest other-vals)))))
        ,doc-string
+       (declare (important-return-value t)
+                ;; TODO: `ftype' for `cl-defun'?
+                ;; (ftype (function (cons) cons))
+                )
 
        (when loopy--in-sub-level
          ;; Warn with the used name and the true name.
@@ -560,6 +610,8 @@ iteration command.  The supported keywords are:
 - `:test-given' (whether `:test' was given)
 
 CMD is the command usage for error reporting."
+  (declare (important-return-value t)
+           (ftype (function (cons &optional symbol) cons)))
 
   (loopy--plist-bind ( :from from :upfrom upfrom :downfrom downfrom
                        :to to :upto upto :downto downto
@@ -627,6 +679,9 @@ CMD is the command usage for error reporting."
   "Distribute the elements of the ARRAYS into an array of lists.
 
 For example, [1 2] and [3 4] gives [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in arrays
                        collect (gensym "array-var-")))
         (reverse-order (reverse arrays)))
@@ -822,6 +877,9 @@ and is a value."
   "Distribute the elements of LISTS into a list of lists.
 
 For example, (1 2) and (3 4) would give ((1 3) (1 4) (2 3) (2 4))."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
 
   (let ((vars (cl-loop for _ in lists
                        collect (gensym "list-var-")))
@@ -891,6 +949,10 @@ vector using the library `map.el'.
 
 NAME is used for reporting errors in case of aliases.
 If UNIQUE, filter out values for duplicated keys."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map))
   (loopy--instr-let-var* ((value-holder `(map-pairs ,val)))
@@ -935,6 +997,10 @@ Uses `map-elt' as a `setf'-able place, iterating through the
 map's keys.
 
 NAME is used for reporting errors in case of aliases."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'map-ref))
   (loopy--instr-let-var* ((key-list `(map-keys ,val)))
@@ -1078,6 +1144,10 @@ This is for decreasing indices.
 VAR-OR-COUNT is a variable name or an integer.  Optional COUNT is
 an integer, to be used if a variable name is provided.
 NAME is the name of the command."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'cycle))
   ;; TODO: If we know at compile-time that num-steps is 1,
@@ -1099,6 +1169,9 @@ NAME is the name of the command."
   "Distribute the elements of SEQUENCES into a vector of lists.
 
 For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in sequences
                        collect (gensym "seq-var-")))
         (reverse-order (reverse sequences))
@@ -1176,6 +1249,9 @@ distributed using the function `loopy--distribute-seq-elements'."
   "Distribute the elements of SEQUENCES into a vector of lists.
 
 For example, [1 2] and (3 4) give [(1 3) (1 4) (2 3) (2 4)]."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (ftype (function (&rest t) cons)))
   (let ((vars (cl-loop for _ in sequences
                        collect (gensym "seq-var-")))
         (reverse-order (reverse sequences)))
@@ -1564,6 +1640,10 @@ command.
   the loop, such as `collect'.
 - `boolean-thereis' is only used by the `thereis' command.
 - `boolean-always-never' is only used by the `always' and `never' commands."
+  (declare (side-effect-free nil)
+           (important-return-value nil)
+           (ftype (function (symbol symbol symbol cons) t)))
+
   (unless (memq category loopy--known-accumulation-categories)
     (signal 'loopy-bad-accum-category (list category)))
 
@@ -1590,6 +1670,8 @@ keep track of a list's last link.
 
 This function uses `loopy--accumulation-list-end-vars' to store
 end-tracking variables."
+  (declare (important-return-value t)
+           (ftype (function (symbol symbol) symbol)))
   (let ((key (cons loop var)))
     (or (alist-get key loopy--accumulation-list-end-vars nil nil #'equal)
         ;; `map-put!' would fail here, since the association doesn't exist
@@ -1609,6 +1691,8 @@ commands like `collect'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (important-return-value t)
+           (ftype (function (symbol symbol) cons)))
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1639,6 +1723,20 @@ accumulation commands like `adjoin'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (symbol symbol) cons)
+           ;;            (function (symbol symbol (member :test) (function (t t) boolean)) cons)
+           ;;            (function (symbol symbol (member :key) (function (t) t)) cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :key) (function (t) t))
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :test) (function (t t) boolean))
+           ;;                      cons)))
+           )
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1677,6 +1775,8 @@ accumulation commands like `append' and `nconc'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (important-return-value t)
+           (ftype (function (symbol symbol &optional boolean) cons)))
   ;; End tracking is a bit slower than `nconc' for short lists, but much faster
   ;; for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var))
@@ -1708,6 +1808,43 @@ This is used in accumulation commands like `union' and `nunion'.
 For efficiency, accumulation commands use references to track the
 end location of the results list.  For larger lists, this is much
 more efficient than repeatedly traversing the list."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (symbol symbol) cons)
+           ;;            (function (symbol symbol (member :test) (function (t t) boolean)) cons)
+           ;;            (function (symbol symbol (member :key) (function (t) t)) cons)
+           ;;            (function (symbol symbol (member :destructive) boolean) cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :destructive) boolean)
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :destructive) boolean
+           ;;                        (member :key) (function (t) t))
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :destructive) boolean
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :key) (function (t) t))
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :destructive) boolean
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :test) (function (t t) boolean))
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :destructive) boolean
+           ;;                        (member :test) (function (t t) boolean))
+           ;;                      cons)
+           ;;            (function ( symbol symbol
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :destructive) boolean)
+           ;;                      cons)))
+           )
   ;; End tracking is a bit slower than `nconc' for short
   ;; lists, but much faster for longer lists.
   (let ((last-link (loopy--get-accumulation-list-end-var loopy--loop-name var)))
@@ -1738,7 +1875,7 @@ more efficient than repeatedly traversing the list."
                              ,last-link (last ,var))))))))))))
 
 ;;;;;; Test Methods
-(cl-defun loopy--get-union-test-method (var &key key test)
+(cl-defun loopy--get-union-test-method (var &key test key)
   "Get a function testing for values in VAR in `union' and `nunion'.
 
 This function is fed to `cl-remove-if' or `cl-delete-if'.  See
@@ -1746,6 +1883,21 @@ the definitions of those commands for more context.
 
 TEST is use to check for equality (default `equal').  KEY modifies
 the inputs to test."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (symbol) cons)
+           ;;            (function (symbol (member :test) (function (t t) boolean)) cons)
+           ;;            (function (symbol (member :key) (function (t) t)) cons)
+           ;;            (function ( symbol
+           ;;                        (member :test) (function (t t) boolean)
+           ;;                        (member :key) (function (t) t))
+           ;;                      cons)
+           ;;            (function ( symbol
+           ;;                        (member :key) (function (t) t)
+           ;;                        (member :test) (function (t t) boolean))
+           ;;                      cons)))
+           )
   ;;  KEY applies to the value being tested as well as the elements in the list.
   (cl-with-gensyms (arg)
     `(lambda (,arg)
@@ -1765,6 +1917,8 @@ Then entire plist is passed to the constructor found in
 `loopy--optimized-accum' is a fake function.  It only used in a
 second pass of macro expansion."
   ;; Data is quoted to prevent recursive macro expansion.
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (let ((plist (cl-second arg)))
     (loopy--plist-bind (:name name :loop loop :opt-accum-fn fn)
         plist
@@ -1776,19 +1930,25 @@ second pass of macro expansion."
            `((loopy--at-instructions (,loop ,@(remq nil other-instrs)))))
           (macroexp-progn main-body))))))
 
-(cl-defun loopy--update-accum-place-count (loop var place &optional (value 1))
+(defun loopy--update-accum-place-count (loop var place &optional value)
   "Keep track of where things are being placed.
 
 LOOP is the current loop.  VAR is the accumulation variable.
-PLACE is one of `start' or `end'.  VALUE is the integer by which
-to increment the count (default 1)."
+PLACE is one of `start' or `end'.
+
+VALUE is used when `accum-opt' biases a location to be favored."
+  (declare (important-return-value nil)
+           (side-effect-free nil)
+           (ftype (function ( symbol symbol symbol
+                              &optional (member 1 1.0 1.0e+INF))
+                            t)))
   (loopy--check-target-loop-name loop)
   (loopy--check-position-name place)
   (cl-symbol-macrolet ((loop-map (map-elt loopy--accumulation-places loop)))
     (unless (map-elt loop-map var)
       (setf (map-elt loop-map var)
             (list (cons 'start 0) (cons 'end 0))))
-    (cl-incf (map-elt (map-elt loop-map var) place) value)))
+    (cl-incf (map-elt (map-elt loop-map var) place) (or value 1))))
 
 ;;;;;; Commands
 (cl-defmacro loopy--defaccumulation (name
@@ -1835,7 +1995,10 @@ you can use in the instructions:
 - `val' is the value to be accumulated.
 - `opts' is the list of optional arguments that were given.  These are the
   arguments after those described as basic by NUM-ARGS."
-  (declare (indent defun) (doc-string 2))
+  (declare (indent defun)
+           (doc-string 2)
+           (side-effect-free nil)
+           (important-return-value nil))
 
   (unless explicit
     (error "Key-argument `explicit' not optional"))
@@ -1858,6 +2021,10 @@ you can use in the instructions:
   `(cl-defun ,(intern (format "loopy--parse-%s-command" name))
        ((&whole cmd name &rest parser-args))
      ,doc-string
+     (declare (important-return-value t)
+              ;; TODO: `ftype' for `cl-defun'
+              ;; (ftype (function (cons) cons))
+              )
      ,(let ((explicit-num-args num-args)
             (implicit-num-args (1- num-args))
             (explicit-category)
@@ -1981,6 +2148,8 @@ you can use in the instructions:
 ;;;;;;; Adjoin
 (defun loopy--construct-accum-adjoin (plist)
   "Construct optimized accumulation for `adjoin' from PLIST."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :test test :key key :at pos)
       plist
@@ -2064,6 +2233,8 @@ you can use in the instructions:
 ;;;;;;; Append
 (defun loopy--construct-accum-append (plist)
   "Produce accumulation code for `append' from PLIST."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop
                        :var var :val val
                        :at (pos 'end))
@@ -2126,6 +2297,8 @@ you can use in the instructions:
 ;;;;;;; Collect
 (defun loopy--construct-accum-collect (plist)
   "Construct an optimized `collect' accumulation from PLIST."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
     `((loopy--accumulation-vars (,var nil))
@@ -2191,6 +2364,8 @@ you can use in the instructions:
   "Create accumulation code for `concat' from PLIST.
 
 This function is called by `loopy--expand-optimized-accum'."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
@@ -2393,6 +2568,8 @@ EXPR is the value to bind to VAR."
 ;;;;;;; Nconc
 (defun loopy--construct-accum-nconc (plist)
   "Create accumulation code for PLIST."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind (:cmd cmd :loop loop :var var :val val :at (pos 'end))
       plist
     (map-let (('start start)
@@ -2455,6 +2632,8 @@ EXPR is the value to bind to VAR."
   "Create accumulation code for `nunion' from PLIST.
 
 This function is used by `loopy--expand-optimized-accum'."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2557,6 +2736,8 @@ This function is used by `loopy--expand-optimized-accum'."
   "Parse the `prepend' command as (append VAR VAL :at start).
 
 ARG is the entire loop command."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
@@ -2569,6 +2750,8 @@ ARG is the entire loop command."
   "Parse the `push-into' command as (collect VAR VAL :at start).
 
 ARG is the entire loop command."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (unless (member (length arg) '(2 3))
     (error "`%s': Wrong number of arguments: %s"
            (car arg) arg))
@@ -2643,6 +2826,8 @@ by `cl-reduce'."
   "Create accumulation code for `nunion' from PLIST.
 
 This function is used by `loopy--expand-optimized-accum'."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val :at (pos 'end)
                        :key key :test test)
       plist
@@ -2745,6 +2930,8 @@ This function is used by `loopy--expand-optimized-accum'."
   "Create accumulation code for `vconcat' from PLIST.
 
 This function is called by `loopy--expand-optimized-accum'."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (loopy--plist-bind ( :cmd cmd :loop loop :var var :val val
                        :at (pos 'end))
       plist
@@ -2861,12 +3048,24 @@ returned."
 ;;;;;; Leave
 (cl-defun loopy--parse-leave-command (_)
   "Parse the `leave' command."
+  (declare (side-effect-free t)
+           (pure nil) ; loop name
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name)))
     `((loopy--non-returning-exit-used ,tag-name)
       (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-leave-from-command ((_ target-loop))
   "Parse the `leave-from' command."
+  (declare (side-effect-free nil) ; Name check.
+           (pure nil)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (loopy--check-target-loop-name target-loop)
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
@@ -2876,6 +3075,12 @@ returned."
 ;;;;;; Return
 (cl-defun loopy--parse-return-command ((_ &rest values))
   "Parse the `return' command as (return [VALUES])."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (pure nil) ; loop name
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   `((loopy--main-body
      (cl-return-from ,loopy--loop-name
        ,(cond
@@ -2885,7 +3090,12 @@ returned."
 
 (cl-defun loopy--parse-return-from-command ((_ loop-name &rest values))
   "Parse the `return-from' command as (return-from LOOP-NAME [VALUES])."
-  ;; (loopy--check-target-loop-name loop-name)
+  (declare (side-effect-free nil) ; Name check.
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
+  (loopy--check-target-loop-name loop-name)
   `((loopy--main-body
      (cl-return-from ,loop-name
        ,(cond
@@ -2896,12 +3106,23 @@ returned."
 ;;;;;; Skip
 (cl-defun loopy--parse-skip-command (_)
   "Parse the `skip' loop command."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           (pure nil) ; loop name
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((tag-name (loopy--produce-skip-tag-name loopy--loop-name)))
     `((loopy--skip-used ,tag-name)
       (loopy--main-body (throw (quote ,tag-name) t)))))
 
 (cl-defun loopy--parse-skip-from-command ((_ target-loop))
   "Parse the `skip-from' loop command as (skip-from LOOP-NAME)."
+  (declare (side-effect-free nil) ; Name check
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (loopy--check-target-loop-name target-loop)
   (let ((tag-name (loopy--produce-skip-tag-name target-loop)))
     `((loopy--at-instructions (,target-loop
@@ -2916,6 +3137,11 @@ Stop the loop when CONDITION is nil.
 
 CONDITION is a required condition.  CONDITIONS is the remaining optional
 conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (when conditions
     (warn "`loopy': `while' will only support one argument in the future.
 To keep the old behavior, wrap multiple conditions with `and'."))
@@ -2935,6 +3161,11 @@ Stop the loop when CONDITION is non-nil.
 
 CONDITION is a required condition.  CONDITIONS is the remaining optional
 conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (when conditions
     (warn "`loopy': `until' will only support one argument in the future.
 To keep the old behavior, wrap multiple conditions with `and'."))
@@ -2954,6 +3185,11 @@ To keep the old behavior, wrap multiple conditions with `and'."))
 
 NAME is `while' or `until'.  CONDITION is a required condition.
 CONDITIONS is the remaining optional conditions."
+  (declare (side-effect-free t)
+           (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (let ((tag-name (loopy--produce-non-returning-exit-tag-name loopy--loop-name))
         (condition (if (zerop (length conditions))
                        condition
@@ -2973,6 +3209,8 @@ Return a list of instructions for naming these `setf'-able places.
 
 VAR are the variables into to which to destructure the value of
 VALUE-EXPRESSION."
+  (declare (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (let ((destructurings
          (loopy--destructure-generalized-sequence var value-expression))
         (instructions nil))
@@ -2990,6 +3228,8 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
+  (declare (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (let ((res (loopy--pcase-destructure-for-iteration `(loopy ,var) val :error t)))
     (if (null (cl-second res))
         (signal 'loopy-destructure-vars-missing (list var val))
@@ -3003,6 +3243,8 @@ Returns a list.  The elements are:
    in VAL.
 2. A list of variables which exist outside of this expression and
    need to be `let'-bound."
+  (declare (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (pcase-let ((`(,expr ,vars)
                (funcall (or loopy--destructuring-for-iteration-function
                             #'loopy--destructure-for-iteration-default)
@@ -3021,6 +3263,8 @@ variables (`setf'-able places).  For that, see the function
 
 Return a list of instructions for initializing the variables and
 destructuring into them in the loop body."
+  (declare (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (if (symbolp var)
       `((loopy--iteration-vars (,var nil))
         (loopy--main-body (setq ,var ,value-expression)))
@@ -3041,6 +3285,8 @@ Return a list of instructions for initializing the variables and
 destructuring into them in the loop body.
 
 A wrapper around `loopy--destructure-for-iteration-command'."
+  (declare (important-return-value t)
+           (ftype (function ((or symbol sequence) t) cons)))
   (cl-loop
    for binding in (loopy--destructure-for-iteration-command var value-expression)
    if (eq (car binding) 'loopy--iteration-vars)
@@ -3057,6 +3303,10 @@ Unlike `loopy--destructure-for-iteration-command', this function
 does destructuring and returns instructions.
 
 NAME is the name of the command.  VAR is a variable name.  VAL is a value."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (function (cons) cons))
+           )
   (loopy--pcase-parse-for-destructuring-accumulation-command
    `(,name (loopy ,var) ,val ,@args)
    :error t))
@@ -3069,6 +3319,8 @@ To allow for some flexibility in the command parsers, any nil
 instructions are removed.
 
 This function gets the parser, and passes the command to that parser."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (let* ((parser (loopy--get-command-parser (cl-first command)))
          (instructions (remq nil (funcall parser command))))
     (or instructions
@@ -3079,12 +3331,19 @@ This function gets the parser, and passes the command to that parser."
   "Parse commands in COMMAND-LIST via `loopy--parse-loop-command'.
 Return a single list of instructions in the same order as
 COMMAND-LIST."
+  (declare (important-return-value t)
+           (ftype (function (cons) cons)))
   (mapcan #'loopy--parse-loop-command command-list))
 
 (cl-defun loopy--get-command-parser (command-name &key (error t))
   "Get the parsing function for COMMAND-NAME.
 
 Failing that, an error is signaled when ERROR is non-nil."
+  (declare (important-return-value t)
+           ;; TODO: `ftype' for `cl-defun'
+           ;; (ftype (or (function (symbol (member :error) boolean) function)
+           ;;            (function (symbol) function)))
+           )
   (or (map-elt loopy--parsers-internal command-name)
       (when error
         (signal 'loopy-unknown-command (list command-name)))))
