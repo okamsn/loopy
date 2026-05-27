@@ -1568,9 +1568,9 @@ command.
     (signal 'loopy-bad-accum-category (list category)))
 
   (let ((key (cons loop-name variable)))
-    (if-let ((existing-description
-              (alist-get key loopy--accumulation-variable-info
-                         nil nil #'equal)))
+    (if-let* ((existing-description
+               (alist-get key loopy--accumulation-variable-info
+                          nil nil #'equal)))
         (cl-destructuring-bind (existing-category existing-command)
             existing-description
           (unless (eq category existing-category)
@@ -1717,14 +1717,14 @@ more efficient than repeatedly traversing the list."
             loopy--accumulation-vars
           `((loopy--main-body
              ,(cl-with-gensyms (new-items)
-                `(if-let ((,new-items
-                           (cl-delete-if ,(loopy--get-union-test-method
-                                           var
-                                           :test test-val
-                                           :key key-val)
-                                         ,(if destructive
-                                              val
-                                            `(copy-sequence ,val)))))
+                `(if-let* ((,new-items
+                            (cl-delete-if ,(loopy--get-union-test-method
+                                            var
+                                            :test test-val
+                                            :key key-val)
+                                          ,(if destructive
+                                               val
+                                             `(copy-sequence ,val)))))
                      (cond
                       (,last-link
                        (setcdr ,last-link ,new-items)

@@ -831,7 +831,7 @@ of a sequence."
 
 (defun loopy--apply-flag (flag)
   "Apply the effects of the FLAG."
-  (if-let ((func (map-elt loopy--flag-settings flag)))
+  (if-let* ((func (map-elt loopy--flag-settings flag)))
       (funcall func)
     (error "Loopy: Flag not defined: %s" flag)))
 
