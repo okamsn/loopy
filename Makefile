@@ -90,9 +90,17 @@ all-tests:
 .PHONY: info
 
 info:
+	@echo Checking makeinfo is installed
+	if ! command -v makeinfo >/dev/null 2>&1; then \
+	echo 'ERROR makeinfo not installed'; \
+	fi
 	@echo Making Info file from Texinfo file
 	makeinfo --verbose --output=doc/loopy.info doc/loopy.texi
 	test -f doc/loopy.info
+	@echo Checking install-info is installed
+	if ! command -v install-info >/dev/null 2>&1; then \
+	echo 'ERROR install-info not installed'; \
+	fi
 	@echo Making Info dir file using Loopy Info file
 	install-info --debug --dir-file doc/dir --info-file doc/loopy.info
 	test -f doc/dir
