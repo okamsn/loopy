@@ -1,0 +1,85 @@
+name: Test Emacs Matrix
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+permissions: {}
+jobs:
+  test:
+    name: 'Install and Test'
+    runs-on: codeberg-medium
+    strategy:
+      matrix:
+        emacs-version:
+          - '28.2'
+          - '29.2'
+          - '30.2'
+          - 'release-snapshot'
+          # - 'snapshot'
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        persist-credentials: false
+    # Use full URL to GitHub so that this doesn't resolve to
+    # https://data.forgejo.org/purcell/setup-emacs
+    - uses: https://github.com/purcell/setup-emacs@master
+      with:
+        version: ${{ matrix.emacs-version }}
+    - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+    - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+    - name: Print working directory
+      run: echo "Current working directory is $PWD"
+    - name: List files in the repository
+      run: |
+        ls ${{ github.workspace }}
+    - name: Make config dir to guarantee location.  Do it before we run Emacs the first time.
+      run: mkdir ~/.emacs.d
+    - name: Check Emacs version
+      run: emacs --version
+    - name: 'Install "makeinfo" ("Texinfo") if not installed'
+      run: |
+        if ! command -v makeinfo >/dev/null 2>&1; then
+        echo 'Install "makeinfo" ("Texinfo") since not already installed.'
+        apt-get update && apt-get --quiet --yes install texinfo
+        fi
+    - name: 'Install "install-info" if not installed'
+      run: |
+        if ! command -v install-info >/dev/null 2>&1; then
+        echo 'Install "install-info" since not already installed.'
+        apt-get update && apt-get --quiet --yes install install-info
+        fi
+    - name: Make Tar file of base package
+      run: make tar
+    - name: Get Loopy Dash from new repo
+      run: git clone 'https://github.com/okamsn/loopy-dash.git' ./loopy-dash
+    - name: Install package Loopy
+      run: emacs -batch -l tests/install-script.el
+    - name: Test accessing Info data
+      run: emacs -batch --eval='(progn (package-activate-all) (info "(loopy)Top"))'
+    - name: Basic tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/tests.el -f ert-run-tests-batch-and-exit
+    - name: Seq tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/seq-tests.el -f ert-run-tests-batch-and-exit
+    - name: Pcase tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/pcase-tests.el -f ert-run-tests-batch-and-exit
+    - name: Iter tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/iter-tests.el -f ert-run-tests-batch-and-exit
+    - name: Dash tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l loopy-dash/tests/dash-tests.el -f ert-run-tests-batch-and-exit
+    - name: Miscellaneous tests
+      run: emacs -batch --eval='(package-activate-all)' -l ert -l tests/misc-tests.el -f ert-run-tests-batch-and-exit
+    - name: Byte Compilation test
+      run: emacs -batch --eval='(package-activate-all)' -f batch-byte-compile ~/.emacs.d/elpa/loopy*/*.el
+    - name: Native Compilation test
+      run: |
+        if [[ t = $(emacs -batch --eval="(prin1 (and (fboundp 'batch-native-compile) (funcall 'native-comp-available-p)))")  ]]; then
+            emacs -batch --eval='(package-activate-all)' -f batch-native-compile ~/.emacs.d/elpa/loopy*/*.el
+        else
+           echo Not running due to not having native compilation installed.
+        fi
+    - run: echo "🍏 This job's status is ${{ job.status }}."
