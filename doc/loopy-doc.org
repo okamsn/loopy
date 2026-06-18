@@ -6041,8 +6041,8 @@ macro.  The following variables can be overridden:
 
 ~loopy~ is a better version of ~cl-loop~, judging by the following:
 
-- It generally as fast or faster than ~cl-loop~, though some optimizations are
-  more explicit.
+- It is generally as fast or faster than ~cl-loop~, though some optimizations
+  are more explicit.
 
 - Loop commands are always evaluated in order.
 
