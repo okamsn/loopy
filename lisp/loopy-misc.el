@@ -138,6 +138,10 @@
   (user-error "Can't use \"%s\" in `loopy' outside top-level" command-name))
 
 ;;;;; Errors on Destructuring
+(define-error 'loopy-unsupported-destructuring
+              "Loopy: This feature does not support destructuring"
+              'loopy-error)
+
 (define-error 'loopy-bad-desctructuring
               "Loopy: Bad destructuring"
               'loopy-error)

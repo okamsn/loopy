@@ -24,6 +24,8 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
 - `while` and `until` now correctly work when aliased ([#267]).
 
+- `cycle` now signals an error when trying to destructure ([#272], [#279]).
+
 ### Breaking Changes
 
 - Using accumulation commands with different initial values for the same
@@ -44,6 +46,8 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 [#256]: https://github.com/okamsn/loopy/PR/256
 [#265]: https://github.com/okamsn/loopy/PR/265
 [#267]: https://github.com/okamsn/loopy/PR/267
+[#272]: https://codeberg.org/okamsn/loopy/issues/272
+[#279]: https://codeberg.org/okamsn/loopy/pulls/279
 
 ## 0.15.0
 

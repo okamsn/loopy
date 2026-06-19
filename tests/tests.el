@@ -2668,6 +2668,15 @@ Using numbers directly will use less variables and more efficient code."
   :iter-bare ((collect . collecting)
               (cycle . cycling)))
 
+(loopy-deftest cycle-destructuring-error
+  :doc "`cycle' does not support destructuring."
+  :error loopy-unsupported-destructuring
+  :macroexpand t
+  :body ((cycle [a b] 2))
+  :loopy t
+  :iter-keyword (cycle)
+  :iter-bare ((cycle . cycling)))
+
 ;;;;; Sequence
 (loopy-deftest sequence
   :result t

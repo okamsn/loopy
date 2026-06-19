@@ -1150,6 +1150,8 @@ NAME is the name of the command."
            )
   (when loopy--in-sub-level
     (loopy--signal-bad-iter name 'cycle))
+  (when (and count-given (not (symbolp var-or-count)))
+    (signal 'loopy-unsupported-destructuring (list name var-or-count)))
   ;; TODO: If we know at compile-time that num-steps is 1,
   ;;       can we avoid creating the loop?
   (loopy--instr-let-const* ((num-steps (if count-given
