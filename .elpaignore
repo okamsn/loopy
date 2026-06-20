@@ -3,6 +3,7 @@ Makefile
 examples
 .git
 .github
+.forgejo
 .gitignore
 .elpaignore
 doc/loopy.info

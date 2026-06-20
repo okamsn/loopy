@@ -12,7 +12,7 @@ permissions: {}
 jobs:
   test:
     name: 'Install and Test'
-    runs-on: codeberg-medium
+    runs-on: codeberg-medium-lazy
     strategy:
       matrix:
         emacs-version:
@@ -41,18 +41,8 @@ jobs:
       run: mkdir ~/.emacs.d
     - name: Check Emacs version
       run: emacs --version
-    - name: 'Install "makeinfo" ("Texinfo") if not installed'
-      run: |
-        if ! command -v makeinfo >/dev/null 2>&1; then
-        echo 'Install "makeinfo" ("Texinfo") since not already installed.'
-        apt-get update && apt-get --quiet --yes install texinfo
-        fi
-    - name: 'Install "install-info" if not installed'
-      run: |
-        if ! command -v install-info >/dev/null 2>&1; then
-        echo 'Install "install-info" since not already installed.'
-        apt-get update && apt-get --quiet --yes install install-info
-        fi
+    - name: 'Install "makeinfo" ("Texinfo") and "install-info"'
+      run: apt-get update && apt-get --quiet --yes install texinfo install-info
     - name: Make Tar file of base package
       run: make tar
     - name: Get Loopy Dash from new repo
