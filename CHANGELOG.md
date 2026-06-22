@@ -4,7 +4,7 @@ This document describes the user-facing changes to Loopy.
 
 For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
 
-## Unreleased
+## 0.16.0
 
 ### New Features
 
@@ -13,7 +13,6 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   that only make sense with the `while`-loop, such as iteration commands.  The
   intended use is wrapping macros don't need the default `while`-loop but would
   still like access to other features, such as accumulation commands.
-
 
 ### Bug Fixes
 
