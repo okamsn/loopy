@@ -311,7 +311,7 @@ optimize for at-start accumulations or at-end accumulations.
 
 
 All that being said@comma{} Loopy is not yet feature complete.  Please request features
-or report problems in this project’s @uref{https://github.com/okamsn/loopy/issues, issues tracker}.
+or report problems in this project’s @uref{https://codeberg.org/okamsn/loopy/issues, issues tracker}.
 
 @node Basic Concepts
 @chapter Basic Concepts
@@ -5083,7 +5083,7 @@ while @code{loopy-iter} expands its loop commands.  Once @code{loopy-iter} outpu
 code@comma{} Emacs will attempt to further expand any macros in the outputted code.
 
 Ideally@comma{} such problematic macros are uncommon.  Please report such cases on
-this project's @uref{https://github.com/okamsn/loopy/issues, issues tracker} so that they can be added to
+this project's @uref{https://codeberg.org/okamsn/loopy/issues, issues tracker} so that they can be added to
 @code{loopy-iter-suppressed-macros} by default.
 @end enumerate
 

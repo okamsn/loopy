@@ -7098,7 +7098,7 @@ Otherwise, `loopy' should return t."
 ;;; Repeated evaluation of macro
 
 ;; This was an odd case reported by a user. See:
-;; https://github.com/okamsn/loopy/issues/17
+;; https://codeberg.org/okamsn/loopy/issues/17
 (ert-deftest evaluate-function-twice ()
   (should
    (progn

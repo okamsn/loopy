@@ -282,7 +282,7 @@ Some other things to note are:
 
 
 All that being said, Loopy is not yet feature complete.  Please request features
-or report problems in this project’s [[https://github.com/okamsn/loopy/issues][issues tracker]].
+or report problems in this project’s [[https://codeberg.org/okamsn/loopy/issues][issues tracker]].
 
 * Basic Concepts
 :PROPERTIES:
@@ -4714,7 +4714,7 @@ Finally, there are a few things to keep in mind when using ~loopy-iter~:
    code, Emacs will attempt to further expand any macros in the outputted code.
 
    Ideally, such problematic macros are uncommon.  Please report such cases on
-   this project's [[https://github.com/okamsn/loopy/issues][issues tracker]] so that they can be added to
+   this project's [[https://codeberg.org/okamsn/loopy/issues][issues tracker]] so that they can be added to
    ~loopy-iter-suppressed-macros~ by default.
 
 ** Default Bare Names in ~loopy-iter~
@@ -6242,7 +6242,7 @@ for more.
 
 [fn:iter] https://common-lisp.net/project/iterate/
 
-[fn:repo] [[https://github.com/okamsn/loopy]]
+[fn:repo] [[https://codeberg.org/okamsn/loopy]]
 
 # Local Variables:
 # toc-org-max-depth: 20

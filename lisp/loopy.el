@@ -4,7 +4,7 @@
 
 ;; Author: Earl Hyatt
 ;; Created: November 2020
-;; URL: https://github.com/okamsn/loopy
+;; URL: https://codeberg.org/okamsn/loopy
 ;; Version: 0.16.0
 ;; Package-Requires: ((emacs "28.1") (map "3.3.1") (seq "2.22") (compat "29.1.3") (stream "2.4.0"))
 ;; Keywords: extensions
@@ -109,7 +109,7 @@
 ;;
 ;; That being said, Loopy is not yet feature complete.  Please request features
 ;; or report problems in this project’s issues tracker
-;; (<https://github.com/okamsn/loopy/issues>).  While most cases are covered,
+;; (<https://codeberg.org/okamsn/loopy/issues>).  While most cases are covered,
 ;; full feature parity with some of the more niche uses of `cl-loop' is still
 ;; being worked on.
 ;;

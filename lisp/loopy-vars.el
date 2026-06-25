@@ -41,7 +41,7 @@
   "A looping and iteration macro."
   :group 'tools
   :prefix "loopy-"
-  :link '(url-link "https://github.com/okamsn/loopy"))
+  :link '(url-link "https://codeberg.org/okamsn/loopy"))
 
 (make-obsolete-variable
  'loopy-default-flags

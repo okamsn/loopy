@@ -4,7 +4,7 @@
 
 ;; Author: Earl Hyatt
 ;; Created: November 2020
-;; URL: https://github.com/okamsn/loopy
+;; URL: https://codeberg.org/okamsn/loopy
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "25.1") (selectrum "1.0"))
 

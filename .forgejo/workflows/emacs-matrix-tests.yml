@@ -46,7 +46,7 @@ jobs:
     - name: Make Tar file of base package
       run: make tar
     - name: Get Loopy Dash from new repo
-      run: git clone 'https://github.com/okamsn/loopy-dash.git' ./loopy-dash
+      run: git clone 'https://codeberg.org/okamsn/loopy-dash.git' ./loopy-dash
     - name: Install package Loopy
       run: emacs -batch -l tests/install-script.el
     - name: Test accessing Info data

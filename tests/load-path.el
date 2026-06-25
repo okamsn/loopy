@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Add installed packages to load path.
-;; This is for testing locally, not for testing in the GitHub actions.
+;; This is for testing locally, not for testing in the GitHub/Forgejo Actions.
 ;; in the GH actions, we test the version of the package that we install
 ;; during the action (testing also the installation of the package).
 ;;

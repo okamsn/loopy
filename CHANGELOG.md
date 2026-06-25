@@ -2,7 +2,7 @@
 
 This document describes the user-facing changes to Loopy.
 
-For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
+For Loopy Dash, see <https://codeberg.org/okamsn/loopy-dash>.
 
 ## 0.16.0
 
@@ -39,12 +39,12 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
   `while` and `until` commands will only accept a single condition.  To keep the
   old behavior, wrap multiple conditions in `and`.
 
-[#169]: https://github.com/okamsn/loopy/issues/169
-[#254]: https://github.com/okamsn/loopy/PR/254
-[#251]: https://github.com/okamsn/loopy/PR/251
-[#256]: https://github.com/okamsn/loopy/PR/256
-[#265]: https://github.com/okamsn/loopy/PR/265
-[#267]: https://github.com/okamsn/loopy/PR/267
+[#169]: https://codeberg.org/okamsn/loopy/issues/169
+[#254]: https://codeberg.org/okamsn/loopy/pulls/254
+[#251]: https://codeberg.org/okamsn/loopy/pulls/251
+[#256]: https://codeberg.org/okamsn/loopy/pulls/256
+[#265]: https://codeberg.org/okamsn/loopy/pulls/265
+[#267]: https://codeberg.org/okamsn/loopy/pulls/267
 [#272]: https://codeberg.org/okamsn/loopy/issues/272
 [#279]: https://codeberg.org/okamsn/loopy/pulls/279
 
@@ -179,18 +179,18 @@ For Loopy Dash, see <https://github.com/okamsn/loopy-dash>.
     exist.
 
 
-[#229]: https://github.com/okamsn/loopy/PR/229
-[#231]: https://github.com/okamsn/loopy/issues/231
-[#234]: https://github.com/okamsn/loopy/issues/234
-[#237]: https://github.com/okamsn/loopy/PR/237
-[#238]: https://github.com/okamsn/loopy/issues/238
-[#240]: https://github.com/okamsn/loopy/PR/240
-[#241]: https://github.com/okamsn/loopy/PR/241
-[#242]: https://github.com/okamsn/loopy/PR/242
-[#243]: https://github.com/okamsn/loopy/PR/243
-[#244]: https://github.com/okamsn/loopy/PR/244
-[#245]: https://github.com/okamsn/loopy/PR/245
-[#246]: https://github.com/okamsn/loopy/PR/246
+[#229]: https://codeberg.org/okamsn/loopy/pulls/229
+[#231]: https://codeberg.org/okamsn/loopy/issues/231
+[#234]: https://codeberg.org/okamsn/loopy/issues/234
+[#237]: https://codeberg.org/okamsn/loopy/pulls/237
+[#238]: https://codeberg.org/okamsn/loopy/issues/238
+[#240]: https://codeberg.org/okamsn/loopy/pulls/240
+[#241]: https://codeberg.org/okamsn/loopy/pulls/241
+[#242]: https://codeberg.org/okamsn/loopy/pulls/242
+[#243]: https://codeberg.org/okamsn/loopy/pulls/243
+[#244]: https://codeberg.org/okamsn/loopy/pulls/244
+[#245]: https://codeberg.org/okamsn/loopy/pulls/245
+[#246]: https://codeberg.org/okamsn/loopy/pulls/246
 
 ## 0.14.0
 
@@ -327,26 +327,26 @@ version is needed for generic sequences.
 - Correctly signal an error when attempting to destructure a stream for more
   values than it actually contains ([#217]).
 
-[#126]: https://github.com/okamsn/loopy/issues/126
-[#136]: https://github.com/okamsn/loopy/issues/136
-[#150]: https://github.com/okamsn/loopy/issues/150
-[#168]: https://github.com/okamsn/loopy/issues/168
-[#169]: https://github.com/okamsn/loopy/issues/169
-[#179]: https://github.com/okamsn/loopy/issues/179
-[#184]: https://github.com/okamsn/loopy/issues/184
-[#203]: https://github.com/okamsn/loopy/pull/203
-[#204]: https://github.com/okamsn/loopy/issues/204
-[#205]: https://github.com/okamsn/loopy/pull/205
-[#206]: https://github.com/okamsn/loopy/pull/206
-[#207]: https://github.com/okamsn/loopy/pull/207
-[#209]: https://github.com/okamsn/loopy/pull/209
-[#210]: https://github.com/okamsn/loopy/issues/210
-[#211]: https://github.com/okamsn/loopy/pull/211
-[#212]: https://github.com/okamsn/loopy/pull/212
-[#213]: https://github.com/okamsn/loopy/pull/213
-[#215]: https://github.com/okamsn/loopy/pull/215
-[#217]: https://github.com/okamsn/loopy/pull/217
-[#226]: https://github.com/okamsn/loopy/pull/226
+[#126]: https://codeberg.org/okamsn/loopy/issues/126
+[#136]: https://codeberg.org/okamsn/loopy/issues/136
+[#150]: https://codeberg.org/okamsn/loopy/issues/150
+[#168]: https://codeberg.org/okamsn/loopy/issues/168
+[#169]: https://codeberg.org/okamsn/loopy/issues/169
+[#179]: https://codeberg.org/okamsn/loopy/issues/179
+[#184]: https://codeberg.org/okamsn/loopy/issues/184
+[#203]: https://codeberg.org/okamsn/loopy/pulls/203
+[#204]: https://codeberg.org/okamsn/loopy/issues/204
+[#205]: https://codeberg.org/okamsn/loopy/pulls/205
+[#206]: https://codeberg.org/okamsn/loopy/pulls/206
+[#207]: https://codeberg.org/okamsn/loopy/pulls/207
+[#209]: https://codeberg.org/okamsn/loopy/pulls/209
+[#210]: https://codeberg.org/okamsn/loopy/issues/210
+[#211]: https://codeberg.org/okamsn/loopy/pulls/211
+[#212]: https://codeberg.org/okamsn/loopy/pulls/212
+[#213]: https://codeberg.org/okamsn/loopy/pulls/213
+[#215]: https://codeberg.org/okamsn/loopy/pulls/215
+[#217]: https://codeberg.org/okamsn/loopy/pulls/217
+[#226]: https://codeberg.org/okamsn/loopy/pulls/226
 
 ## 0.13.0
 
@@ -387,11 +387,11 @@ version is needed for generic sequences.
   steams as implemented by `stream.el` in ELPA ([#199]).
 
 
-[#195]: https://github.com/okamsn/loopy/pull/195
-[#196]: https://github.com/okamsn/loopy/pull/196
-[#197]: https://github.com/okamsn/loopy/pull/197
-[#199]: https://github.com/okamsn/loopy/pull/199
-[#202]: https://github.com/okamsn/loopy/pull/202
+[#195]: https://codeberg.org/okamsn/loopy/pulls/195
+[#196]: https://codeberg.org/okamsn/loopy/pulls/196
+[#197]: https://codeberg.org/okamsn/loopy/pulls/197
+[#199]: https://codeberg.org/okamsn/loopy/pulls/199
+[#202]: https://codeberg.org/okamsn/loopy/pulls/202
 
 ## 0.12.2
 
@@ -638,25 +638,25 @@ version is needed for generic sequences.
 - To reduce the maintenance burden, destructuring was re-implemented using
   `pcase` ([#182]).
 
-[#144]: https://github.com/okamsn/loopy/issue/142
-[#144]: https://github.com/okamsn/loopy/pull/144
-[#145]: https://github.com/okamsn/loopy/issue/145
-[#146]: https://github.com/okamsn/loopy/issue/146
-[#154]: https://github.com/okamsn/loopy/issue/154
-[#160]: https://github.com/okamsn/loopy/pull/160
-[#161]: https://github.com/okamsn/loopy/pull/161
-[#162]: https://github.com/okamsn/loopy/pull/162
-[#163]: https://github.com/okamsn/loopy/pull/163
-[#164]: https://github.com/okamsn/loopy/pull/164
-[#165]: https://github.com/okamsn/loopy/pull/165
-[#170]: https://github.com/okamsn/loopy/issues/170
-[#171]: https://github.com/okamsn/loopy/pull/171
-[#172]: https://github.com/okamsn/loopy/pull/172
-[#173]: https://github.com/okamsn/loopy/pull/173
-[#176]: https://github.com/okamsn/loopy/issues/176
-[#177]: https://github.com/okamsn/loopy/pull/177
-[#180]: https://github.com/okamsn/loopy/pull/180
-[#182]: https://github.com/okamsn/loopy/pull/182
+[#144]: https://codeberg.org/okamsn/loopy/issues/142
+[#144]: https://codeberg.org/okamsn/loopy/pulls/144
+[#145]: https://codeberg.org/okamsn/loopy/issues/145
+[#146]: https://codeberg.org/okamsn/loopy/issues/146
+[#154]: https://codeberg.org/okamsn/loopy/issues/154
+[#160]: https://codeberg.org/okamsn/loopy/pulls/160
+[#161]: https://codeberg.org/okamsn/loopy/pulls/161
+[#162]: https://codeberg.org/okamsn/loopy/pulls/162
+[#163]: https://codeberg.org/okamsn/loopy/pulls/163
+[#164]: https://codeberg.org/okamsn/loopy/pulls/164
+[#165]: https://codeberg.org/okamsn/loopy/pulls/165
+[#170]: https://codeberg.org/okamsn/loopy/issues/170
+[#171]: https://codeberg.org/okamsn/loopy/pulls/171
+[#172]: https://codeberg.org/okamsn/loopy/pulls/172
+[#173]: https://codeberg.org/okamsn/loopy/pulls/173
+[#176]: https://codeberg.org/okamsn/loopy/issues/176
+[#177]: https://codeberg.org/okamsn/loopy/pulls/177
+[#180]: https://codeberg.org/okamsn/loopy/pulls/180
+[#182]: https://codeberg.org/okamsn/loopy/pulls/182
 
 ## 0.11.2
 
@@ -700,8 +700,8 @@ Released 2023-03-13.
   feature was added in Emacs 28, which we had been creating if not found.  It is
   better to let Compat do this for us.
 
-[#152]: https://github.com/okamsn/loopy/pull/152
-[#157]: https://github.com/okamsn/loopy/pull/157
+[#152]: https://codeberg.org/okamsn/loopy/pulls/152
+[#157]: https://codeberg.org/okamsn/loopy/pulls/157
 
 ## 0.11.0
 
@@ -857,21 +857,21 @@ Released 2022-11-25.
   in `loopy-iter`.  See issue [#123] and PR [#132].
 
 
-[#104]: https://github.com/okamsn/loopy/issues/104
-[#117]: https://github.com/okamsn/loopy/pull/117
-[#118]: https://github.com/okamsn/loopy/pull/118
-[#119]: https://github.com/okamsn/loopy/pull/119
-[#123]: https://github.com/okamsn/loopy/issues/123
-[#124]: https://github.com/okamsn/loopy/issues/124
-[#125]: https://github.com/okamsn/loopy/issues/125
-[#127]: https://github.com/okamsn/loopy/issues/127
-[#129]: https://github.com/okamsn/loopy/pull/129
-[#130]: https://github.com/okamsn/loopy/pull/130
-[#131]: https://github.com/okamsn/loopy/pull/131
-[#132]: https://github.com/okamsn/loopy/pull/132
-[#134]: https://github.com/okamsn/loopy/issues/134
-[#135]: https://github.com/okamsn/loopy/pull/135
-[#136]: https://github.com/okamsn/loopy/issues/136
+[#104]: https://codeberg.org/okamsn/loopy/issues/104
+[#117]: https://codeberg.org/okamsn/loopy/pulls/117
+[#118]: https://codeberg.org/okamsn/loopy/pulls/118
+[#119]: https://codeberg.org/okamsn/loopy/pulls/119
+[#123]: https://codeberg.org/okamsn/loopy/issues/123
+[#124]: https://codeberg.org/okamsn/loopy/issues/124
+[#125]: https://codeberg.org/okamsn/loopy/issues/125
+[#127]: https://codeberg.org/okamsn/loopy/issues/127
+[#129]: https://codeberg.org/okamsn/loopy/pulls/129
+[#130]: https://codeberg.org/okamsn/loopy/pulls/130
+[#131]: https://codeberg.org/okamsn/loopy/pulls/131
+[#132]: https://codeberg.org/okamsn/loopy/pulls/132
+[#134]: https://codeberg.org/okamsn/loopy/issues/134
+[#135]: https://codeberg.org/okamsn/loopy/pulls/135
+[#136]: https://codeberg.org/okamsn/loopy/issues/136
 
 
 ## 0.10.1
@@ -935,12 +935,12 @@ Released 2022-03-29.
   the preferred name of `prev-expr` is no `set-prev`.  `prev-expr` is now an
   alias of `set-prev`, which also gained the alias `prev-set`.
 
-[#89]: https://github.com/okamsn/loopy/issues/89
-[#96]: https://github.com/okamsn/loopy/pull/96
-[#100]: https://github.com/okamsn/loopy/issues/100
-[#101]: https://github.com/okamsn/loopy/issues/101
-[#102]: https://github.com/okamsn/loopy/pull/102
-[#105]: https://github.com/okamsn/loopy/pull/105
+[#89]: https://codeberg.org/okamsn/loopy/issues/89
+[#96]: https://codeberg.org/okamsn/loopy/pulls/96
+[#100]: https://codeberg.org/okamsn/loopy/issues/100
+[#101]: https://codeberg.org/okamsn/loopy/issues/101
+[#102]: https://codeberg.org/okamsn/loopy/pulls/102
+[#105]: https://codeberg.org/okamsn/loopy/pulls/105
 
 ## 0.9.1
 
@@ -973,9 +973,9 @@ Released 2021-09-06.
 - List `seq.el` in the package requirements.  See [#87].
 
 
-[#70]: https://github.com/okamsn/loopy/issues/70
-[#83]: https://github.com/okamsn/loopy/issues/83
-[#87]: https://github.com/okamsn/loopy/pull/87
+[#70]: https://codeberg.org/okamsn/loopy/issues/70
+[#83]: https://codeberg.org/okamsn/loopy/issues/83
+[#87]: https://codeberg.org/okamsn/loopy/pulls/87
 
 ## 0.8.1
 
@@ -1089,11 +1089,11 @@ Released 2021-06-28.
 - Add the special macro argument `wrap`, which can wrap parts of the loop
   ([#68]).
 
-[#43]: https://github.com/okamsn/loopy/issues/43
-[#45]: https://github.com/okamsn/loopy/issues/45
-[#49]: https://github.com/okamsn/loopy/issues/49
-[#68]: https://github.com/okamsn/loopy/pull/68
-[#78]: https://github.com/okamsn/loopy/pull/78
+[#43]: https://codeberg.org/okamsn/loopy/issues/43
+[#45]: https://codeberg.org/okamsn/loopy/issues/45
+[#49]: https://codeberg.org/okamsn/loopy/issues/49
+[#68]: https://codeberg.org/okamsn/loopy/pulls/68
+[#78]: https://codeberg.org/okamsn/loopy/pulls/78
 
 ## 0.6.1
 
@@ -1127,5 +1127,5 @@ Released 2021-06-09.
   references to function symbols must now be quoted ([#73]).
 
 
-[#65]: https://github.com/okamsn/loopy/issues/65
-[#73]: https://github.com/okamsn/loopy/pull/73
+[#65]: https://codeberg.org/okamsn/loopy/issues/65
+[#73]: https://codeberg.org/okamsn/loopy/pulls/73
