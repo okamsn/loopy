@@ -4,6 +4,16 @@ This document describes the user-facing changes to Loopy.
 
 For Loopy Dash, see <https://codeberg.org/okamsn/loopy-dash>.
 
+## 0.16.1
+
+- Silence byte-compilation warnings regarding the absence of the
+  `declare` properties `ftype` and `important-return-value` on older
+  versions of Emacs ([#284]).  These warnings were created by
+  adding those properties in [#274].
+
+[#274]: https://codeberg.org/okamsn/loopy/pulls/274
+[#284]: https://codeberg.org/okamsn/loopy/pulls/284
+
 ## 0.16.0
 
 ### New Features
