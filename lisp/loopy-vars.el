@@ -31,6 +31,15 @@
 
 ;;; Code:
 
+(eval-when-compile
+  ;; Emacs 27 complains about `ftype' and `important-return-value' not
+  ;; being known.
+  (dolist (prop '(ftype important-return-value))
+    (unless (assq prop defun-declarations-alist)
+      (push (list prop #'ignore) defun-declarations-alist))
+    (unless (assq prop macro-declarations-alist)
+      (push (list prop #'ignore) macro-declarations-alist))))
+
 (require 'map)
 (require 'cl-lib)
 (require 'loopy-misc)

@@ -34,6 +34,15 @@
 ;;;; Variable binding for instructions
 ;; TODO: Check not using `pcase' in github errors.
 
+(eval-when-compile
+  ;; Emacs 27 complains about `ftype' and `important-return-value' not
+  ;; being known.
+  (dolist (prop '(ftype important-return-value))
+    (unless (assq prop defun-declarations-alist)
+      (push (list prop #'ignore) defun-declarations-alist))
+    (unless (assq prop macro-declarations-alist)
+      (push (list prop #'ignore) macro-declarations-alist))))
+
 (defvar loopy--iteration-vars)
 (defvar loopy--accumulation-vars)
 (defvar loopy--other-vars)
