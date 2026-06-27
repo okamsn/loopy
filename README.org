@@ -73,6 +73,9 @@ please let me know.
 - [[#real-world-examples][Real-World Examples]]
 
 * Introduction
+:PROPERTIES:
+:CUSTOM_ID: introduction
+:END:
 
 The ~loopy~ macro is used to generate code for a loop, similar to ~cl-loop~.
 Unlike ~cl-loop~, ~loopy~ uses parenthetical expressions instead of "clauses".
@@ -150,6 +153,9 @@ All of this makes ~loopy~ a useful and convenient choice for looping and
 iteration.
 
 * Similar Libraries
+:PROPERTIES:
+:CUSTOM_ID: similar-libraries
+:END:
 
 Loopy is not the only Lisp library that uses parenthetical expressions instead of
 keyword clauses (as in ~cl-loop~).  [[https://common-lisp.net/project/iterate/][Iterate]] and [[https://github.com/Shinmera/for/][For]] are two examples from
@@ -176,13 +182,16 @@ Generally, all of the packages handle basic use cases in similar ways.  One
 large difference is that ~iterate~ can embed its looping constructs in arbitrary
 code.  Loopy currently provides this feature as a separate macro,
 ~loopy-iter~, which expands looping constructs using ~macroexpand~
-(see [[*Loop Commands in Arbitrary Code][Loop Commands in Arbitrary Code]] in this README).
+(see [[#loop-commands-in-arbitrary-code][Loop Commands in Arbitrary Code]] in this README).
 
 Loopy is not yet feature complete.  Please request features or report problems
 in this project’s [[https://codeberg.org/okamsn/loopy/issues][issues tracker]].  While basic uses are covered, some of the
 more niche features of ~cl-loop~ and ~iterate~ are still being added.
 
 * How to Install
+:PROPERTIES:
+:CUSTOM_ID: how-to-install
+:END:
 
 Loopy can be installed from [[https://elpa.nongnu.org/nongnu/loopy.html][Non-GNU ELPA]] and [[https://melpa.org/#/loopy][MELPA]] as the package =loopy=.  The
 optional package =loopy-dash= can be installed to enable using the Dash library
@@ -197,8 +206,8 @@ for destructuring (instead of other methods).
     :demand t)
 #+end_src
 
-To load all of the alternative destructuring libraries (see section [[*Multiple Kinds of Destructuring][Multiple
-Kinds of Destructuring]]) and the alternative macro form (see section [[*Loop Commands in Arbitrary Code][Loop
+To load all of the alternative destructuring libraries (see section [[#multiple-kinds-of-destructuring][Multiple
+Kinds of Destructuring]]) and the alternative macro form (see section [[#loop-commands-in-arbitrary-code][Loop
 Commands in Arbitrary Code]]), use
 
 #+begin_src emacs-lisp
@@ -214,6 +223,9 @@ Commands in Arbitrary Code]]), use
 #+end_src
 
 * Multiple Kinds of Destructuring
+:PROPERTIES:
+:CUSTOM_ID: multiple-kinds-of-destructuring
+:END:
 
 The default destructuring system is a super-set of what =cl-lib= provides
 and is described in the section [[https://codeberg.org/okamsn/loopy/src/branch/master/doc/loopy-doc.org#basic-destructuring][Basic Destructuring]] in the documentation.
@@ -266,6 +278,9 @@ For more on how =dash= does destructuring, see their documentation on the [[http
 expression.
 
 * Loop Commands in Arbitrary Code
+:PROPERTIES:
+:CUSTOM_ID: loop-commands-in-arbitrary-code
+:END:
 
 The macro ~loopy-iter~ can be used to embed loop commands in arbitrary code.  It
 is similar in use to Common Lisp's Iterate macro, but it is not a port of
