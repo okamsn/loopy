@@ -7,6 +7,8 @@ assignees: ''
 
 ---
 
+(Moving to Codeberg: https://codeberg.org/okamsn/loopy/issues)
+
 Suggested content:
 
 - Problem
